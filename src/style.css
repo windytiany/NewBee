@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans:
+    "SpotifyMixUI", "CircularSp-Arab", "CircularSp-Hebr", "CircularSp-Cyrl", "CircularSp-Grek",
+    "CircularSp-Deva", "Helvetica Neue", helvetica, arial, "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", Meiryo, "MS Gothic", sans-serif;
+  --color-spotify-base: #121212;
+  --color-spotify-surface: #181818;
+  --color-spotify-interactive: #1f1f1f;
+  --color-spotify-green: #1ed760;
+  --color-spotify-muted: #b3b3b3;
+  --color-spotify-track: #4d4d4d;
+}

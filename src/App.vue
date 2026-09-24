@@ -4,10 +4,10 @@ import TopBar from "./components/TopBar.vue";
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-950 font-sans text-slate-100">
+  <div class="min-h-screen bg-spotify-base font-sans text-white">
     <TopBar />
-    <main class="grid min-h-screen place-items-center pb-20 sm:pb-10">
-      <h1 class="text-3xl font-semibold tracking-tight">Hello, NewBee!</h1>
+    <main class="grid min-h-screen place-items-center pb-20 pt-14 sm:pb-10">
+      <h1 class="text-2xl font-bold">Hello, NewBee!</h1>
     </main>
     <PlaybackBar />
   </div>
