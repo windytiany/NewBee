@@ -27,7 +27,7 @@
     <div
       v-if="isTauriApp"
       aria-label="Window controls"
-      class="flex h-full items-center justify-self-end"
+      class="absolute inset-y-0 right-0 flex h-full items-center"
       role="group"
     >
       <button
