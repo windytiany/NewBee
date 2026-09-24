@@ -10,17 +10,19 @@
       class="inline-flex items-center rounded-full bg-spotify-interactive p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
     >
       <button
-        v-for="tab in tabs"
-        :key="tab"
-        :aria-pressed="activeTab === tab"
+        v-for="pageName in pageNames"
+        :key="pageName"
+        :aria-pressed="props.activePage === pageName"
         class="rounded-full px-2 py-2 text-xs font-semibold uppercase tracking-[1px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green sm:px-4 sm:text-sm sm:tracking-[1.4px]"
         :class="
-          activeTab === tab ? 'bg-spotify-green text-black' : 'text-spotify-muted hover:text-white'
+          props.activePage === pageName
+            ? 'bg-spotify-green text-black'
+            : 'text-spotify-muted hover:text-white'
         "
         type="button"
-        @click="activeTab = tab"
+        @click="emit('update:activePage', pageName)"
       >
-        {{ tab }}
+        {{ pageName }}
       </button>
     </nav>
 
@@ -64,12 +66,15 @@
 
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
+import { pageNames, type PageName } from "../types/pages";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Maximize, Minus, X } from "@lucide/vue";
 import { onMounted, onUnmounted, ref } from "vue";
 
-const tabs = ["Playing", "Library", "Playlist"] as const;
-const activeTab = ref<(typeof tabs)[number]>("Playing");
+const props = defineProps<{ activePage: PageName }>();
+const emit = defineEmits<{
+  "update:activePage": [pageName: PageName];
+}>();
 const isTauriApp = isTauri();
 const appWindow = isTauriApp ? getCurrentWindow() : null;
 const isMaximized = ref(false);
