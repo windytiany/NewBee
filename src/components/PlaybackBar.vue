@@ -7,21 +7,21 @@
       <div class="flex items-center gap-1">
         <button
           aria-label="Previous track"
-          class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
+          class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
           type="button"
         >
           <SkipBack aria-hidden="true" class="size-4" />
         </button>
         <button
           aria-label="Play"
-          class="grid size-8 place-items-center rounded-full bg-spotify-green text-black transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
+          class="grid size-8 place-items-center rounded-full bg-spotify-green text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
           type="button"
         >
           <Play aria-hidden="true" class="size-5 fill-current" />
         </button>
         <button
           aria-label="Next track"
-          class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
+          class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
           type="button"
         >
           <SkipForward aria-hidden="true" class="size-4" />
@@ -63,14 +63,14 @@
     >
       <button
         aria-label="Repeat one"
-        class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
+        class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
         type="button"
       >
         <Repeat1 aria-hidden="true" class="size-4" />
       </button>
       <button
         aria-label="Shuffle playback"
-        class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
+        class="grid size-8 place-items-center rounded-full text-spotify-muted transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green"
         type="button"
       >
         <Shuffle aria-hidden="true" class="size-4" />
