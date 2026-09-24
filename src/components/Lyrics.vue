@@ -2,7 +2,7 @@
 <template>
   <section
     aria-label="Lyrics"
-    class="max-h-[min(68vh,40rem)] w-full overflow-y-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    class="max-h-[min(68vh,40rem)] w-full overflow-y-auto py-2 scrollbar-none [&::-webkit-scrollbar]:hidden"
   >
     <ol class="mx-auto max-w-5xl space-y-2" :class="{ 'px-6': !props.compact }">
       <li
