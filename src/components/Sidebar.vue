@@ -2,7 +2,7 @@
 <template>
   <aside
     :aria-label="side === 'left' ? '左侧边栏' : '右侧边栏'"
-    class="h-full min-h-0 min-w-0 overflow-hidden bg-spotify-base"
+    class="sidebar-scrollbars h-full min-h-0 min-w-0 overflow-hidden bg-spotify-base"
     :class="side === 'left' ? 'border-r border-white/10' : 'border-l border-white/10'"
   >
     <slot />
