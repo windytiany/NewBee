@@ -22,17 +22,12 @@
 
     <h3 class="sr-only">曲目</h3>
     <ol class="grid gap-x-8 sm:grid-cols-2">
-      <li
+      <AlbumTrack
         v-for="(track, index) in album.tracks"
         :key="track.id"
-        class="flex min-w-0 items-center gap-3 border-b border-white/10 py-2.5 text-sm"
-      >
-        <span class="text-spotify-muted w-5 shrink-0 text-right tabular-nums">
-          {{ index + 1 }}
-        </span>
-        <span class="min-w-0 flex-1 truncate font-medium">{{ track.title }}</span>
-        <span class="text-spotify-muted shrink-0 tabular-nums">{{ track.duration }}</span>
-      </li>
+        :track="track"
+        :index="index"
+      />
     </ol>
   </article>
 </template>
@@ -40,6 +35,7 @@
 <script setup lang="ts">
 import { X } from "@lucide/vue";
 import type { Album } from "../../types/album";
+import AlbumTrack from "./AlbumTrack.vue";
 
 defineProps<{
   album: Album;
