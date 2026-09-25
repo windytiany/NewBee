@@ -61,7 +61,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { useSharedRightSidebarLayout } from "../composables/useSharedRightSidebarLayout";
+import { usePersistentSidebarLayout } from "../composables/usePersistentSidebarLayout";
 import ResizeHandle from "./ResizeHandle.vue";
 import Sidebar from "./Sidebar.vue";
 
@@ -76,14 +76,27 @@ const MIN_RIGHT_BOTTOM_HEIGHT = 240;
 const INITIAL_PANE_WIDTH_RATIO = 0.17;
 const INITIAL_RIGHT_TOP_HEIGHT_RATIO = 0.4;
 
-const { rightPaneWidth: sharedRightPaneWidth, rightTopHeight: sharedRightTopHeight } =
-  useSharedRightSidebarLayout();
-const rightPaneWidth = computed(() => sharedRightPaneWidth.value ?? MIN_RIGHT_PANE_WIDTH);
-const rightTopHeight = computed(() => sharedRightTopHeight.value ?? MIN_RIGHT_TOP_HEIGHT);
+const {
+  leftPaneWidth: sharedLeftPaneWidth,
+  rightPaneWidth: sharedRightPaneWidth,
+  rightTopHeight: sharedRightTopHeight,
+} = usePersistentSidebarLayout();
+const leftPaneWidth = computed(() =>
+  clamp(sharedLeftPaneWidth.value ?? MIN_LEFT_PANE_WIDTH, MIN_LEFT_PANE_WIDTH, MAX_PANE_WIDTH),
+);
+const rightPaneWidth = computed(() =>
+  clamp(sharedRightPaneWidth.value ?? MIN_RIGHT_PANE_WIDTH, MIN_RIGHT_PANE_WIDTH, MAX_PANE_WIDTH),
+);
+const rightTopHeight = computed(() =>
+  clamp(
+    sharedRightTopHeight.value ?? MIN_RIGHT_TOP_HEIGHT,
+    MIN_RIGHT_TOP_HEIGHT,
+    MAX_RIGHT_TOP_HEIGHT,
+  ),
+);
 const layoutElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
-const leftPaneWidth = ref(MIN_LEFT_PANE_WIDTH);
 let resizeObserver: InstanceType<typeof globalThis.ResizeObserver> | null = null;
 let hasInitialLayout = false;
 
@@ -140,7 +153,7 @@ function fitPaneWidths(left: number, right: number, width: number) {
 }
 
 function resizeLeftPane(width: number) {
-  leftPaneWidth.value = clamp(width, MIN_LEFT_PANE_WIDTH, leftPaneMaxWidth.value);
+  sharedLeftPaneWidth.value = clamp(width, MIN_LEFT_PANE_WIDTH, leftPaneMaxWidth.value);
 }
 
 function resizeRightPane(width: number) {
@@ -157,7 +170,7 @@ function updateContainerSize(width: number, height: number) {
 
   if (!hasInitialLayout) {
     hasInitialLayout = true;
-    leftPaneWidth.value = clamp(
+    sharedLeftPaneWidth.value ??= clamp(
       width * INITIAL_PANE_WIDTH_RATIO,
       MIN_LEFT_PANE_WIDTH,
       MAX_PANE_WIDTH,
@@ -179,7 +192,7 @@ function updateContainerSize(width: number, height: number) {
     rightPaneWidth.value,
     width,
   );
-  leftPaneWidth.value = nextLeftPaneWidth;
+  sharedLeftPaneWidth.value = nextLeftPaneWidth;
   sharedRightPaneWidth.value = nextRightPaneWidth;
   sharedRightTopHeight.value = clamp(
     rightTopHeight.value,
