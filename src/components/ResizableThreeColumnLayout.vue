@@ -61,6 +61,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useSharedRightSidebarLayout } from "../composables/useSharedRightSidebarLayout";
 import ResizeHandle from "./ResizeHandle.vue";
 import Sidebar from "./Sidebar.vue";
 
@@ -75,12 +76,14 @@ const MIN_RIGHT_BOTTOM_HEIGHT = 240;
 const INITIAL_PANE_WIDTH_RATIO = 0.17;
 const INITIAL_RIGHT_TOP_HEIGHT_RATIO = 0.4;
 
+const { rightPaneWidth: sharedRightPaneWidth, rightTopHeight: sharedRightTopHeight } =
+  useSharedRightSidebarLayout();
+const rightPaneWidth = computed(() => sharedRightPaneWidth.value ?? MIN_RIGHT_PANE_WIDTH);
+const rightTopHeight = computed(() => sharedRightTopHeight.value ?? MIN_RIGHT_TOP_HEIGHT);
 const layoutElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
 const leftPaneWidth = ref(MIN_LEFT_PANE_WIDTH);
-const rightPaneWidth = ref(MIN_RIGHT_PANE_WIDTH);
-const rightTopHeight = ref(MIN_RIGHT_TOP_HEIGHT);
 let resizeObserver: InstanceType<typeof globalThis.ResizeObserver> | null = null;
 let hasInitialLayout = false;
 
@@ -141,11 +144,11 @@ function resizeLeftPane(width: number) {
 }
 
 function resizeRightPane(width: number) {
-  rightPaneWidth.value = clamp(width, MIN_RIGHT_PANE_WIDTH, rightPaneMaxWidth.value);
+  sharedRightPaneWidth.value = clamp(width, MIN_RIGHT_PANE_WIDTH, rightPaneMaxWidth.value);
 }
 
 function resizeRightTop(height: number) {
-  rightTopHeight.value = clamp(height, MIN_RIGHT_TOP_HEIGHT, rightTopMaxHeight.value);
+  sharedRightTopHeight.value = clamp(height, MIN_RIGHT_TOP_HEIGHT, rightTopMaxHeight.value);
 }
 
 function updateContainerSize(width: number, height: number) {
@@ -159,24 +162,26 @@ function updateContainerSize(width: number, height: number) {
       MIN_LEFT_PANE_WIDTH,
       MAX_PANE_WIDTH,
     );
-    rightPaneWidth.value = clamp(
+    sharedRightPaneWidth.value ??= clamp(
       width * INITIAL_PANE_WIDTH_RATIO,
       MIN_RIGHT_PANE_WIDTH,
       MAX_PANE_WIDTH,
     );
-    rightTopHeight.value = clamp(
+    sharedRightTopHeight.value ??= clamp(
       height * INITIAL_RIGHT_TOP_HEIGHT_RATIO,
       MIN_RIGHT_TOP_HEIGHT,
       getRightTopMaxHeight(height),
     );
   }
 
-  [leftPaneWidth.value, rightPaneWidth.value] = fitPaneWidths(
+  const [nextLeftPaneWidth, nextRightPaneWidth] = fitPaneWidths(
     leftPaneWidth.value,
     rightPaneWidth.value,
     width,
   );
-  rightTopHeight.value = clamp(
+  leftPaneWidth.value = nextLeftPaneWidth;
+  sharedRightPaneWidth.value = nextRightPaneWidth;
+  sharedRightTopHeight.value = clamp(
     rightTopHeight.value,
     MIN_RIGHT_TOP_HEIGHT,
     getRightTopMaxHeight(height),
