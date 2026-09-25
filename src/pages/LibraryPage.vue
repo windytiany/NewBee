@@ -1,11 +1,15 @@
 <template>
   <ResizableThreeColumnLayout>
     <template #left>
-      <GroupList />
+      <GroupList :selected-artist="selectedArtist" @select="selectArtist" />
     </template>
 
     <template #center>
-      <h1 class="text-2xl font-bold">Library Page</h1>
+      <AlbumBrowser
+        :artist="selectedArtist"
+        :selected-album-id="selectedAlbumId"
+        @update:selected-album-id="selectedAlbumId = $event"
+      />
     </template>
 
     <template #right-top>
@@ -19,8 +23,12 @@
 </template>
 
 <script setup lang="ts">
+import { usePersistentLibrarySelection } from "../composables/usePersistentLibrarySelection";
+import AlbumBrowser from "../components/library/AlbumBrowser.vue";
 import GroupList from "../components/GroupList.vue";
 import ResizableThreeColumnLayout from "../components/ResizableThreeColumnLayout.vue";
 import TrackInfo from "../components/TrackInfo.vue";
 import TrackList from "../components/TrackList.vue";
+
+const { selectedArtist, selectedAlbumId, selectArtist } = usePersistentLibrarySelection();
 </script>
