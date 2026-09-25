@@ -1,7 +1,7 @@
 <template>
   <div
     ref="layoutElement"
-    class="bg-spotify-base grid h-[calc(100vh-8.5rem)] w-full min-w-0 grid-cols-(--three-column-layout-columns) max-md:grid-cols-1 md:h-[calc(100vh-6rem)]"
+    class="bg-spotify-base grid h-[calc(100vh-8.5rem)] min-h-0 w-full min-w-0 grid-cols-(--three-column-layout-columns) overflow-hidden max-md:grid-cols-1 md:h-[calc(100vh-6rem)]"
     :style="{ '--three-column-layout-columns': gridColumns }"
   >
     <Sidebar side="left" class="max-md:hidden">
@@ -18,7 +18,7 @@
       @resize="resizeLeftPane"
     />
 
-    <section class="grid min-w-0 place-items-center text-white">
+    <section class="grid h-full min-h-0 min-w-0 place-items-center overflow-hidden text-white">
       <slot name="center" />
     </section>
 
