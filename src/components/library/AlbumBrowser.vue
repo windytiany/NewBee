@@ -36,7 +36,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useClickFocus } from "../../composables/useClickFocus";
-import type { Album as AlbumData, AlbumTrack } from "../../types/album";
+import type { Album as AlbumData } from "../../types/album";
+import type { Track } from "../../types/track";
 import type { Artist } from "../../types/artist";
 import AlbumDetail from "./AlbumDetail.vue";
 import Album from "./Album.vue";
@@ -132,7 +133,7 @@ function createPlaceholderTracks(
   artistName: string,
   albumNumber: number,
   albumIndex: number,
-): AlbumTrack[] {
+): Track[] {
   const trackCount = 10 + (albumIndex % 5);
 
   return Array.from({ length: trackCount }, (_, trackIndex) => {

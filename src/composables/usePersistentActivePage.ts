@@ -1,5 +1,5 @@
 import { ref, watch } from "vue";
-import { pageNames, type PageName } from "../types/pages.ts";
+import { pageNames, type PageName } from "../types/page.ts";
 
 const STORAGE_KEY = "newbee.active-page";
 const DEFAULT_PAGE: PageName = "Playing";

@@ -66,7 +66,7 @@
 
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
-import { pageNames, type PageName } from "../types/pages";
+import { pageNames, type PageName } from "../types/page";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Maximize, Minus, X } from "@lucide/vue";
 import { onMounted, onUnmounted, ref } from "vue";

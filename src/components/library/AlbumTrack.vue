@@ -16,10 +16,10 @@
 </template>
 
 <script setup lang="ts">
-import type { AlbumTrack as AlbumTrackData } from "../../types/album";
+import type { Track } from "../../types/track";
 
 defineProps<{
-  track: AlbumTrackData;
+  track: Track;
   index: number;
   isFocused: boolean;
 }>();
