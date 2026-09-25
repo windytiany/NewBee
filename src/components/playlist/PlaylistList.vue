@@ -9,10 +9,11 @@
       <ul class="space-y-0.5">
         <PlaylistListItem
           v-for="playlist in props.playlists"
-          :key="playlist.name"
+          :key="playlist.id"
           :name="playlist.name"
-          :is-focused="focusedItem === getPlaylistFocusKey(playlist.name)"
-          @select="setFocusedItem(getPlaylistFocusKey(playlist.name))"
+          :is-focused="focusedItem === getPlaylistFocusKey(playlist.id)"
+          :is-selected="props.selectedPlaylistId === playlist.id"
+          @select="selectPlaylist(playlist)"
         />
       </ul>
     </div>
@@ -21,19 +22,26 @@
 
 <script setup lang="ts">
 import { useClickFocus } from "../../composables/useClickFocus";
+import type { Playlist } from "../../types/playlist";
 import PlaylistListItem from "./PlaylistListItem.vue";
 
-type Playlist = {
-  name: string;
-};
+const props = defineProps<{
+  playlists: Playlist[];
+  selectedPlaylistId: string | null;
+}>();
+
+const emit = defineEmits<{
+  select: [playlist: Playlist];
+}>();
 
 const { focusedItem, setFocusedItem } = useClickFocus();
 
-function getPlaylistFocusKey(name: string) {
-  return `playlist:${name}`;
+function getPlaylistFocusKey(id: string) {
+  return `playlist:${id}`;
 }
 
-const props = withDefaults(defineProps<{ playlists?: Playlist[] }>(), {
-  playlists: () => [{ name: "Study With Miku" }],
-});
+function selectPlaylist(playlist: Playlist) {
+  setFocusedItem(getPlaylistFocusKey(playlist.id));
+  emit("select", playlist);
+}
 </script>

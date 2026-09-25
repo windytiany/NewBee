@@ -2,8 +2,11 @@
   <li>
     <button
       class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center rounded-md px-1 py-1.5 text-left transition-colors focus-visible:outline-2"
-      :class="isFocused ? 'bg-spotify-interactive' : 'hover:bg-white/5'"
-      :aria-current="isFocused ? 'true' : undefined"
+      :class="[
+        isSelected ? 'bg-spotify-interactive' : 'hover:bg-white/5',
+        isFocused ? 'ring-1 ring-white/20 ring-inset' : '',
+      ]"
+      :aria-current="isSelected ? 'true' : undefined"
       type="button"
       @click="emit('select')"
     >
@@ -16,6 +19,7 @@
 defineProps<{
   name: string;
   isFocused: boolean;
+  isSelected: boolean;
 }>();
 
 const emit = defineEmits<{
