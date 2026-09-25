@@ -44,7 +44,7 @@
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       <ul class="space-y-0.5">
         <GroupListItem
-          v-for="artist in libraryArtists"
+          v-for="artist in props.artists"
           :key="artist.name"
           :name="artist.name"
           :album-count="artist.albumCount"
@@ -59,11 +59,11 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
-import type { Artist } from "../types/artist";
-import { libraryArtists } from "./library/libraryArtists";
+import type { Artist } from "../../types/artist";
 import GroupListItem from "./GroupListItem.vue";
 
 const props = defineProps<{
+  artists: Artist[];
   selectedArtist: Artist | null;
 }>();
 

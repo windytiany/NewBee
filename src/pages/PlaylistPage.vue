@@ -19,8 +19,8 @@
 </template>
 
 <script setup lang="ts">
-import PlaylistList from "../components/PlaylistList.vue";
-import ResizableThreeColumnLayout from "../components/ResizableThreeColumnLayout.vue";
-import TrackInfo from "../components/TrackInfo.vue";
-import TrackList from "../components/TrackList.vue";
+import PlaylistList from "../components/playlist/PlaylistList.vue";
+import ResizableThreeColumnLayout from "../components/layout/ResizableThreeColumnLayout.vue";
+import TrackInfo from "../components/track/TrackInfo.vue";
+import TrackList from "../components/track/TrackList.vue";
 </script>

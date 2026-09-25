@@ -1,6 +1,5 @@
 import { ref, watch } from "vue";
 import type { Artist } from "../types/artist";
-import { libraryArtists } from "../components/library/libraryArtists";
 
 interface LibrarySelection {
   artist: Artist | null;
@@ -33,7 +32,7 @@ function readStoredAlbumId(value: unknown, artist: Artist): string | null {
   return value;
 }
 
-function loadLibrarySelection(): LibrarySelection {
+function loadLibrarySelection(availableArtists: Artist[]): LibrarySelection {
   try {
     const serializedSelection = globalThis.localStorage.getItem(STORAGE_KEY);
     if (serializedSelection === null) return { ...EMPTY_SELECTION };
@@ -55,16 +54,13 @@ function loadLibrarySelection(): LibrarySelection {
       return { ...EMPTY_SELECTION };
     }
 
-    const artist = libraryArtists.find(({ name }) => name === selection.artistName);
+    const artist = availableArtists.find(({ name }) => name === selection.artistName);
     if (!artist) {
       console.error("Saved library artist is no longer available; using an empty selection.");
       return { ...EMPTY_SELECTION };
     }
 
-    return {
-      artist,
-      albumId: readStoredAlbumId(selection.albumId, artist),
-    };
+    return { artist, albumId: readStoredAlbumId(selection.albumId, artist) };
   } catch (error) {
     console.error("Could not read the saved library selection; using an empty selection.", error);
     return { ...EMPTY_SELECTION };
@@ -75,27 +71,24 @@ function saveLibrarySelection(artist: Artist | null, albumId: string | null) {
   try {
     globalThis.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({
-        artistName: artist?.name ?? null,
-        albumId,
-      }),
+      JSON.stringify({ artistName: artist?.name ?? null, albumId }),
     );
   } catch (error) {
     globalThis.console.error("Could not save the library selection.", error);
   }
 }
 
-const initialSelection = loadLibrarySelection();
-const selectedArtist = ref<Artist | null>(initialSelection.artist);
-const selectedAlbumId = ref<string | null>(initialSelection.albumId);
+export function usePersistentLibrarySelection(availableArtists: Artist[]) {
+  const initialSelection = loadLibrarySelection(availableArtists);
+  const selectedArtist = ref<Artist | null>(initialSelection.artist);
+  const selectedAlbumId = ref<string | null>(initialSelection.albumId);
 
-watch(
-  [selectedArtist, selectedAlbumId],
-  ([artist, albumId]) => saveLibrarySelection(artist, albumId),
-  { flush: "sync" },
-);
+  watch(
+    [selectedArtist, selectedAlbumId],
+    ([artist, albumId]) => saveLibrarySelection(artist, albumId),
+    { flush: "sync" },
+  );
 
-export function usePersistentLibrarySelection() {
   function selectArtist(artist: Artist) {
     if (selectedArtist.value?.name !== artist.name) selectedAlbumId.value = null;
     selectedArtist.value = artist;

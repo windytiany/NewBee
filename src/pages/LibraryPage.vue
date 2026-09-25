@@ -1,7 +1,11 @@
 <template>
   <ResizableThreeColumnLayout>
     <template #left>
-      <GroupList :selected-artist="selectedArtist" @select="selectArtist" />
+      <GroupList
+        :artists="placeholderArtists"
+        :selected-artist="selectedArtist"
+        @select="selectArtist"
+      />
     </template>
 
     <template #center>
@@ -23,12 +27,35 @@
 </template>
 
 <script setup lang="ts">
+import type { Artist } from "../types/artist";
 import { usePersistentLibrarySelection } from "../composables/usePersistentLibrarySelection";
 import AlbumBrowser from "../components/library/AlbumBrowser.vue";
-import GroupList from "../components/GroupList.vue";
-import ResizableThreeColumnLayout from "../components/ResizableThreeColumnLayout.vue";
-import TrackInfo from "../components/TrackInfo.vue";
-import TrackList from "../components/TrackList.vue";
+import GroupList from "../components/library/GroupList.vue";
+import ResizableThreeColumnLayout from "../components/layout/ResizableThreeColumnLayout.vue";
+import TrackInfo from "../components/track/TrackInfo.vue";
+import TrackList from "../components/track/TrackList.vue";
 
-const { selectedArtist, selectedAlbumId, selectArtist } = usePersistentLibrarySelection();
+const placeholderArtists: Artist[] = [
+  { name: "[Singles]", albumCount: 27 },
+  { name: "American Football", albumCount: 1 },
+  { name: "Bark Psychosis", albumCount: 3 },
+  { name: "The Beatles", albumCount: 1 },
+  { name: "Bob Dylan", albumCount: 2 },
+  { name: "Chinese Football", albumCount: 2 },
+  { name: "The Clash", albumCount: 1 },
+  { name: "The Cure", albumCount: 2 },
+  { name: "Deep Purple", albumCount: 1 },
+  { name: "The Doors", albumCount: 1 },
+  { name: "Dormir", albumCount: 1 },
+  { name: "Draw the Emotional", albumCount: 2 },
+  { name: "Elliott Smith", albumCount: 3 },
+  { name: "Fiona Apple", albumCount: 2 },
+  { name: "Godspeed You! Black Emperor", albumCount: 4 },
+  { name: "Radiohead", albumCount: 9 },
+  { name: "The Smashing Pumpkins", albumCount: 6 },
+  { name: "The Strokes", albumCount: 4 },
+];
+
+const { selectedArtist, selectedAlbumId, selectArtist } =
+  usePersistentLibrarySelection(placeholderArtists);
 </script>

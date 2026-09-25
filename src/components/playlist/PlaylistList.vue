@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { useClickFocus } from "../composables/useClickFocus";
+import { useClickFocus } from "../../composables/useClickFocus";
 import PlaylistListItem from "./PlaylistListItem.vue";
 
 type Playlist = {
