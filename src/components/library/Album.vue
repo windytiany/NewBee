@@ -2,7 +2,7 @@
 <template>
   <article class="group min-w-0">
     <button
-      class="focus-visible:outline-spotify-green block w-full rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-4"
+      class="focus-visible:outline-spotify-green block w-full rounded-md text-center focus-visible:outline-2 focus-visible:outline-offset-4"
       :aria-label="`查看专辑 ${album.title}`"
       :aria-expanded="isSelected"
       type="button"
@@ -16,9 +16,7 @@
         <DiscAlbum class="size-14 text-white/70 sm:size-16" stroke-width="1.25" />
       </span>
       <span class="block truncate text-sm font-semibold text-white">{{ album.title }}</span>
-      <span class="text-spotify-muted mt-1 block truncate text-xs">
-        {{ album.artist }} · {{ album.year }}
-      </span>
+      <span class="text-spotify-muted mt-1 block truncate text-xs">{{ album.year }}</span>
     </button>
   </article>
 </template>
