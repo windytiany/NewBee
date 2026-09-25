@@ -12,3 +12,4 @@
 - Start the desktop app: `bun run tauri dev`.
 - Verify the frontend: `bun run build`.
 - When changing Rust code, verify it with `cargo check --manifest-path src-tauri/Cargo.toml`.
+- Currently in early development phase, breaking change ok, NO compatibility code.
