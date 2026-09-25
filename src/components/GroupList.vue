@@ -1,7 +1,7 @@
 <template>
   <section
     aria-label="专辑演出者列表"
-    class="flex h-[min(90vh,60rem)] min-h-96 w-80 max-w-full flex-col bg-spotify-base text-white"
+    class="flex h-full min-h-0 w-full min-w-0 flex-col bg-spotify-base text-white"
   >
     <div ref="groupingControl" class="relative z-10 shrink-0 px-2 py-1">
       <button
@@ -42,7 +42,13 @@
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-      <div class="mb-1 flex items-center gap-3 rounded-md bg-spotify-interactive px-2 py-1.5">
+      <button
+        :aria-current="focusedItem === ALL_ARTISTS_KEY ? 'true' : undefined"
+        class="mb-1 flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-spotify-green"
+        :class="focusedItem === ALL_ARTISTS_KEY ? 'bg-spotify-interactive' : 'hover:bg-white/5'"
+        type="button"
+        @click="setFocusedItem(ALL_ARTISTS_KEY)"
+      >
         <span
           aria-hidden="true"
           class="grid size-16 shrink-0 place-items-center rounded-sm bg-[#292929] text-spotify-muted"
@@ -53,7 +59,7 @@
           <span class="truncate text-base font-medium">所有演出者</span>
           <span class="text-sm text-spotify-muted">180 张专辑</span>
         </span>
-      </div>
+      </button>
 
       <ul class="space-y-0.5">
         <GroupListItem
@@ -61,6 +67,8 @@
           :key="artist.name"
           :name="artist.name"
           :album-count="artist.albumCount"
+          :is-focused="focusedItem === getArtistFocusKey(artist.name)"
+          @select="setFocusedItem(getArtistFocusKey(artist.name))"
         />
       </ul>
     </div>
@@ -70,9 +78,12 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { Check, ChevronDown, UsersRound } from "@lucide/vue";
+import { useClickFocus } from "../composables/useClickFocus";
 import GroupListItem from "./GroupListItem.vue";
 
 const isGroupingMenuOpen = ref(false);
+const { focusedItem, setFocusedItem } = useClickFocus();
+const ALL_ARTISTS_KEY = "group:all-artists";
 const groupingControl = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const groupingButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const artists = [
@@ -95,6 +106,10 @@ const artists = [
   { name: "The Smashing Pumpkins", albumCount: 6 },
   { name: "The Strokes", albumCount: 4 },
 ];
+
+function getArtistFocusKey(name: string) {
+  return `group:${name}`;
+}
 
 function closeMenuOnOutsidePointer(event: InstanceType<typeof globalThis.PointerEvent>) {
   if (event.target instanceof globalThis.Node && groupingControl.value?.contains(event.target))

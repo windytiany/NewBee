@@ -1,7 +1,7 @@
 <template>
   <section
     aria-label="曲目信息"
-    class="flex h-[min(90vh,60rem)] min-h-96 w-80 max-w-full flex-col overflow-y-auto bg-spotify-base text-white"
+    class="flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto bg-spotify-base text-white"
   >
     <h2 class="shrink-0 px-3 py-2 text-sm font-medium text-white/90">曲目信息</h2>
 

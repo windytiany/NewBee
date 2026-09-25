@@ -1,7 +1,7 @@
 <template>
   <section
     aria-label="播放列表"
-    class="flex h-[min(90vh,60rem)] min-h-96 w-80 max-w-full flex-col bg-spotify-base text-white"
+    class="flex h-full min-h-0 w-full min-w-0 flex-col bg-spotify-base text-white"
   >
     <h2 class="shrink-0 px-3 py-2 text-sm font-medium text-white/90">播放列表</h2>
 
@@ -14,6 +14,8 @@
           :album="track.album"
           :duration="track.duration"
           :is-current-track="track.id === props.currentTrackId"
+          :is-focused="focusedItem === getTrackFocusKey(track.id)"
+          @select="setFocusedItem(getTrackFocusKey(track.id))"
         />
       </ul>
     </div>
@@ -21,6 +23,7 @@
 </template>
 
 <script setup lang="ts">
+import { useClickFocus } from "../composables/useClickFocus";
 import TrackListItem from "./TrackListItem.vue";
 
 type Track = {
@@ -29,6 +32,12 @@ type Track = {
   album: string;
   duration: string;
 };
+
+const { focusedItem, setFocusedItem } = useClickFocus();
+
+function getTrackFocusKey(id: string) {
+  return `track:${id}`;
+}
 
 const props = withDefaults(
   defineProps<{
