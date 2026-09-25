@@ -42,6 +42,8 @@
           :key="track.id"
           :track="track"
           :track-number="index + 1"
+          :is-focused="focusedItem === getTrackFocusKey(track.id)"
+          @select="setFocusedItem(getTrackFocusKey(track.id))"
         />
       </ol>
     </div>
@@ -50,10 +52,17 @@
 
 <script setup lang="ts">
 import { DiscAlbum } from "@lucide/vue";
+import { useClickFocus } from "../../composables/useClickFocus";
 import type { Playlist } from "../../types/playlist";
 import PlaylistTrack from "./PlaylistTrack.vue";
 
 const props = defineProps<{
   playlist: Playlist | null;
 }>();
+
+const { focusedItem, setFocusedItem } = useClickFocus();
+
+function getTrackFocusKey(id: string) {
+  return `playlist-track:${id}`;
+}
 </script>

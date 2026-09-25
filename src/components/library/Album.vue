@@ -11,7 +11,7 @@
       <span
         aria-hidden="true"
         class="mb-3 grid aspect-square w-full place-items-center overflow-hidden rounded-md bg-linear-to-br shadow-lg transition-transform duration-200 group-hover:-translate-y-1"
-        :class="[coverPalette, isSelected ? 'ring-spotify-green ring-2' : '']"
+        :class="[coverPalette, isSelected || isFocused ? 'ring-spotify-green ring-2' : '']"
       >
         <DiscAlbum class="size-14 text-white/70 sm:size-16" stroke-width="1.25" />
       </span>
@@ -30,6 +30,7 @@ const props = defineProps<{
   album: Album;
   coverIndex: number;
   isSelected: boolean;
+  isFocused: boolean;
 }>();
 
 const emit = defineEmits<{

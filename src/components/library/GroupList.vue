@@ -48,8 +48,9 @@
           :key="artist.name"
           :name="artist.name"
           :album-count="artist.albumCount"
-          :is-focused="props.selectedArtist?.name === artist.name"
-          @select="emit('select', artist)"
+          :is-selected="props.selectedArtist?.name === artist.name"
+          :is-focused="focusedItem === getArtistFocusKey(artist.name)"
+          @select="selectArtist(artist)"
         />
       </ul>
     </div>
@@ -59,6 +60,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
+import { useClickFocus } from "../../composables/useClickFocus";
 import type { Artist } from "../../types/artist";
 import GroupListItem from "./GroupListItem.vue";
 
@@ -70,6 +72,17 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [artist: Artist];
 }>();
+
+const { focusedItem, setFocusedItem } = useClickFocus();
+
+function getArtistFocusKey(name: string) {
+  return `artist:${name}`;
+}
+
+function selectArtist(artist: Artist) {
+  setFocusedItem(getArtistFocusKey(artist.name));
+  emit("select", artist);
+}
 
 const isGroupingMenuOpen = ref(false);
 const groupingControl = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);

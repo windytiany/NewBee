@@ -3,7 +3,7 @@
     <button
       class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors focus-visible:outline-2"
       :class="isFocused ? 'bg-spotify-interactive' : 'hover:bg-white/5'"
-      :aria-current="isFocused ? 'true' : undefined"
+      :aria-current="isSelected ? 'true' : undefined"
       type="button"
       @click="emit('select')"
     >
@@ -27,6 +27,7 @@ import { UserRound } from "@lucide/vue";
 defineProps<{
   name: string;
   albumCount: number;
+  isSelected: boolean;
   isFocused: boolean;
 }>();
 

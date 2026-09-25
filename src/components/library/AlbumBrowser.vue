@@ -19,13 +19,14 @@
             :album="album"
             :cover-index="row.startIndex + index"
             :is-selected="props.selectedAlbumId === album.id"
+            :is-focused="focusedItem === getAlbumFocusKey(album.id)"
             @select="toggleAlbum(album)"
           />
         </div>
         <AlbumDetail
           v-if="row.selectedAlbum"
           :album="row.selectedAlbum"
-          @close="emit('update:selectedAlbumId', null)"
+          @close="closeAlbum(row.selectedAlbum)"
         />
       </template>
     </div>
@@ -34,6 +35,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useClickFocus } from "../../composables/useClickFocus";
 import type { Album as AlbumData, AlbumTrack } from "../../types/album";
 import type { Artist } from "../../types/artist";
 import AlbumDetail from "./AlbumDetail.vue";
@@ -61,6 +63,7 @@ const emit = defineEmits<{
 }>();
 
 const columnCount = ref(2);
+const { focusedItem, setFocusedItem } = useClickFocus();
 
 const albums = computed(() => (props.artist ? createPlaceholderAlbums(props.artist) : []));
 const albumRows = computed(() => {
@@ -97,8 +100,18 @@ onUnmounted(() => {
   globalThis.window.removeEventListener("resize", updateColumnCount);
 });
 
+function getAlbumFocusKey(id: string) {
+  return `album:${id}`;
+}
+
 function toggleAlbum(album: AlbumData) {
+  setFocusedItem(getAlbumFocusKey(album.id));
   emit("update:selectedAlbumId", props.selectedAlbumId === album.id ? null : album.id);
+}
+
+function closeAlbum(album: AlbumData) {
+  setFocusedItem(getAlbumFocusKey(album.id));
+  emit("update:selectedAlbumId", null);
 }
 
 function createPlaceholderAlbums(artist: Artist): AlbumData[] {

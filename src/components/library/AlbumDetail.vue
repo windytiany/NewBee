@@ -27,6 +27,8 @@
         :key="track.id"
         :track="track"
         :index="index"
+        :is-focused="focusedItem === getTrackFocusKey(track.id)"
+        @select="setFocusedItem(getTrackFocusKey(track.id))"
       />
     </ol>
   </article>
@@ -34,6 +36,7 @@
 
 <script setup lang="ts">
 import { X } from "@lucide/vue";
+import { useClickFocus } from "../../composables/useClickFocus";
 import type { Album } from "../../types/album";
 import AlbumTrack from "./AlbumTrack.vue";
 
@@ -44,4 +47,10 @@ defineProps<{
 const emit = defineEmits<{
   close: [];
 }>();
+
+const { focusedItem, setFocusedItem } = useClickFocus();
+
+function getTrackFocusKey(id: string) {
+  return `album-track:${id}`;
+}
 </script>
