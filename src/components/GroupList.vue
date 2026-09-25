@@ -42,25 +42,6 @@
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-      <button
-        :aria-current="focusedItem === ALL_ARTISTS_KEY ? 'true' : undefined"
-        class="mb-1 flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-spotify-green"
-        :class="focusedItem === ALL_ARTISTS_KEY ? 'bg-spotify-interactive' : 'hover:bg-white/5'"
-        type="button"
-        @click="setFocusedItem(ALL_ARTISTS_KEY)"
-      >
-        <span
-          aria-hidden="true"
-          class="grid size-16 shrink-0 place-items-center rounded-sm bg-[#292929] text-spotify-muted"
-        >
-          <UsersRound class="size-8" />
-        </span>
-        <span class="flex min-w-0 flex-col gap-0.5">
-          <span class="truncate text-base font-medium">所有演出者</span>
-          <span class="text-sm text-spotify-muted">180 张专辑</span>
-        </span>
-      </button>
-
       <ul class="space-y-0.5">
         <GroupListItem
           v-for="artist in artists"
@@ -77,13 +58,12 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
-import { Check, ChevronDown, UsersRound } from "@lucide/vue";
+import { Check, ChevronDown } from "@lucide/vue";
 import { useClickFocus } from "../composables/useClickFocus";
 import GroupListItem from "./GroupListItem.vue";
 
 const isGroupingMenuOpen = ref(false);
 const { focusedItem, setFocusedItem } = useClickFocus();
-const ALL_ARTISTS_KEY = "group:all-artists";
 const groupingControl = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const groupingButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const artists = [
