@@ -30,27 +30,37 @@
 
       <div ref="volumeControl" class="text-spotify-muted relative flex shrink-0 items-center gap-3">
         <button
-          aria-label="Volume controls"
-          aria-controls="volume-popover"
+          :aria-label="
+            isHorizontalVolumeVisible ? (volume === 0 ? 'Unmute' : 'Mute') : 'Volume controls'
+          "
+          :aria-controls="isHorizontalVolumeVisible ? undefined : 'volume-popover'"
           class="focus-visible:outline-spotify-green grid size-8 shrink-0 place-items-center rounded-full transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 lg:-mx-2"
-          :aria-expanded="isVolumePopoverOpen"
+          :aria-expanded="isHorizontalVolumeVisible ? undefined : isVolumePopoverOpen"
+          :aria-pressed="isHorizontalVolumeVisible ? volume === 0 : undefined"
           type="button"
-          @click="isVolumePopoverOpen = !isVolumePopoverOpen"
+          @click="handleVolumeButtonClick"
         >
-          <Volume2 aria-hidden="true" class="size-4" />
+          <VolumeX v-if="volume === 0" aria-hidden="true" class="size-4" />
+          <Volume2 v-else aria-hidden="true" class="size-4" />
         </button>
-        <div
-          aria-hidden="true"
-          class="bg-spotify-track relative hidden h-1 w-20 shrink-0 rounded-full lg:block"
-        >
+        <div class="bg-spotify-track relative hidden h-1 w-20 shrink-0 rounded-full lg:block">
           <div class="bg-spotify-muted h-full rounded-full" :style="{ width: `${volume}%` }" />
           <span
             class="absolute top-1/2 left-1/2 size-2 -translate-y-1/2 rounded-full bg-white"
             :style="{ left: `${volume}%` }"
           />
+          <input
+            v-model.number="volume"
+            aria-label="Volume"
+            class="absolute top-1/2 left-0 z-10 h-6 w-full -translate-y-1/2 cursor-pointer opacity-0"
+            max="100"
+            min="0"
+            step="1"
+            type="range"
+          />
         </div>
         <div
-          v-if="isVolumePopoverOpen"
+          v-if="isVolumePopoverOpen && !isHorizontalVolumeVisible"
           id="volume-popover"
           class="bg-spotify-interactive absolute bottom-full left-1/2 z-10 mb-2 flex h-36 w-10 -translate-x-1/2 items-center justify-center rounded-lg shadow-lg"
         >
@@ -70,6 +80,7 @@
               class="absolute top-0 left-1/2 h-full w-10 -translate-x-1/2 cursor-pointer opacity-0 [direction:rtl] [writing-mode:vertical-lr]"
               max="100"
               min="0"
+              step="1"
               type="range"
             />
           </div>
@@ -106,15 +117,21 @@
     >
       <button
         aria-label="Repeat one"
-        class="text-spotify-muted focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+        class="focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+        :class="isRepeatEnabled ? 'text-spotify-green' : 'text-spotify-muted hover:text-white'"
+        :aria-pressed="isRepeatEnabled"
         type="button"
+        @click="isRepeatEnabled = !isRepeatEnabled"
       >
         <Repeat1 aria-hidden="true" class="size-4" />
       </button>
       <button
         aria-label="Shuffle playback"
-        class="text-spotify-muted focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+        class="focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+        :class="isShuffleEnabled ? 'text-spotify-green' : 'text-spotify-muted hover:text-white'"
+        :aria-pressed="isShuffleEnabled"
         type="button"
+        @click="isShuffleEnabled = !isShuffleEnabled"
       >
         <Shuffle aria-hidden="true" class="size-4" />
       </button>
@@ -123,12 +140,113 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
-import { Play, Repeat1, Shuffle, SkipBack, SkipForward, Volume2 } from "@lucide/vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
+import { Play, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from "@lucide/vue";
 
-const volume = ref(50);
+const DEFAULT_VOLUME = 50;
+const VOLUME_STORAGE_KEY = "newbee.playback-volume";
+
+type PlaybackVolumeState = {
+  volume: number;
+  lastNonMutedVolume: number;
+};
+
+const DEFAULT_PLAYBACK_VOLUME = {
+  volume: DEFAULT_VOLUME,
+  lastNonMutedVolume: DEFAULT_VOLUME,
+} satisfies PlaybackVolumeState;
+
+function isVolumeLevel(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100;
+}
+
+function loadPlaybackVolume(): PlaybackVolumeState {
+  try {
+    const serializedVolume = globalThis.localStorage.getItem(VOLUME_STORAGE_KEY);
+    if (serializedVolume === null) return { ...DEFAULT_PLAYBACK_VOLUME };
+
+    const parsedVolume: unknown = JSON.parse(serializedVolume);
+    if (typeof parsedVolume !== "object" || parsedVolume === null || Array.isArray(parsedVolume)) {
+      globalThis.console.error("Saved playback volume has an invalid format; using the default.");
+      return { ...DEFAULT_PLAYBACK_VOLUME };
+    }
+
+    const storedVolume = parsedVolume as Record<string, unknown>;
+    if (
+      !isVolumeLevel(storedVolume.volume) ||
+      !isVolumeLevel(storedVolume.lastNonMutedVolume) ||
+      storedVolume.lastNonMutedVolume === 0
+    ) {
+      globalThis.console.error("Saved playback volume is invalid; using the default.");
+      return { ...DEFAULT_PLAYBACK_VOLUME };
+    }
+
+    return {
+      volume: storedVolume.volume,
+      lastNonMutedVolume:
+        storedVolume.volume > 0 ? storedVolume.volume : storedVolume.lastNonMutedVolume,
+    };
+  } catch (error) {
+    globalThis.console.error("Could not read saved playback volume; using the default.", error);
+    return { ...DEFAULT_PLAYBACK_VOLUME };
+  }
+}
+
+function savePlaybackVolume(volume: number, lastNonMutedVolume: number) {
+  try {
+    globalThis.localStorage.setItem(
+      VOLUME_STORAGE_KEY,
+      JSON.stringify({ volume, lastNonMutedVolume }),
+    );
+  } catch (error) {
+    globalThis.console.error("Could not save playback volume.", error);
+  }
+}
+
+const initialVolume = loadPlaybackVolume();
+const volume = ref(initialVolume.volume);
+const lastNonMutedVolume = ref(initialVolume.lastNonMutedVolume);
 const isVolumePopoverOpen = ref(false);
+const isHorizontalVolumeVisible = ref(false);
+const isRepeatEnabled = ref(false);
+const isShuffleEnabled = ref(false);
 const volumeControl = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
+let volumeLayoutQuery: ReturnType<typeof globalThis.matchMedia> | null = null;
+
+watch(
+  volume,
+  (nextVolume) => {
+    if (nextVolume > 0) lastNonMutedVolume.value = nextVolume;
+    savePlaybackVolume(nextVolume, lastNonMutedVolume.value);
+  },
+  { flush: "sync" },
+);
+
+function updateVolumeLayout() {
+  if (!volumeLayoutQuery) return;
+
+  isHorizontalVolumeVisible.value = volumeLayoutQuery.matches;
+  if (isHorizontalVolumeVisible.value) isVolumePopoverOpen.value = false;
+}
+
+function toggleMute() {
+  if (volume.value > 0) {
+    lastNonMutedVolume.value = volume.value;
+    volume.value = 0;
+    return;
+  }
+
+  volume.value = lastNonMutedVolume.value;
+}
+
+function handleVolumeButtonClick() {
+  if (isHorizontalVolumeVisible.value) {
+    toggleMute();
+    return;
+  }
+
+  isVolumePopoverOpen.value = !isVolumePopoverOpen.value;
+}
 
 function closeVolumePopoverOnOutsidePointer(event: InstanceType<typeof globalThis.PointerEvent>) {
   if (event.target instanceof globalThis.Node && volumeControl.value?.contains(event.target)) {
@@ -143,11 +261,15 @@ function closeVolumePopoverOnEscape(event: InstanceType<typeof globalThis.Keyboa
 }
 
 onMounted(() => {
+  volumeLayoutQuery = globalThis.matchMedia("(min-width: 64rem)");
+  updateVolumeLayout();
+  volumeLayoutQuery.addEventListener("change", updateVolumeLayout);
   globalThis.document.addEventListener("pointerdown", closeVolumePopoverOnOutsidePointer);
   globalThis.document.addEventListener("keydown", closeVolumePopoverOnEscape);
 });
 
 onUnmounted(() => {
+  volumeLayoutQuery?.removeEventListener("change", updateVolumeLayout);
   globalThis.document.removeEventListener("pointerdown", closeVolumePopoverOnOutsidePointer);
   globalThis.document.removeEventListener("keydown", closeVolumePopoverOnEscape);
 });
