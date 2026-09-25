@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
+import { usePersistentActivePage } from "./composables/usePersistentActivePage";
 import LibraryPage from "./pages/LibraryPage.vue";
 import PlayingPage from "./pages/PlayingPage.vue";
 import PlaylistPage from "./pages/PlaylistPage.vue";
-import type { PageName } from "./types/pages";
 import PlaybackBar from "./components/PlaybackBar.vue";
 import TopBar from "./components/TopBar.vue";
 
@@ -12,7 +12,7 @@ const pageComponents = {
   Library: LibraryPage,
   Playlist: PlaylistPage,
 } as const;
-const activePage = ref<PageName>("Playing");
+const { activePage } = usePersistentActivePage();
 const currentPageComponent = computed(() => pageComponents[activePage.value]);
 </script>
 
