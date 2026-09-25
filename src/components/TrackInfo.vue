@@ -1,16 +1,16 @@
 <template>
   <section
     aria-label="曲目信息"
-    class="flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto bg-spotify-base text-white"
+    class="bg-spotify-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto text-white"
   >
     <h2 class="shrink-0 px-3 py-2 text-sm font-medium text-white/90">曲目信息</h2>
 
     <div class="px-3 pb-3">
       <h1 class="truncate text-lg font-bold">{{ props.track.title }}</h1>
-      <p class="truncate text-sm text-spotify-muted">{{ props.track.album }}</p>
-      <p class="truncate text-sm text-spotify-muted">{{ props.track.artist }}</p>
-      <p class="text-sm text-spotify-muted">{{ props.track.year }}</p>
-      <p class="mt-1 text-xs leading-relaxed text-spotify-muted">
+      <p class="text-spotify-muted truncate text-sm">{{ props.track.album }}</p>
+      <p class="text-spotify-muted truncate text-sm">{{ props.track.artist }}</p>
+      <p class="text-spotify-muted text-sm">{{ props.track.year }}</p>
+      <p class="text-spotify-muted mt-1 text-xs leading-relaxed">
         {{ props.track.codecInfo }} · {{ props.track.duration }}
       </p>
 

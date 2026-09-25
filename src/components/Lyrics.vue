@@ -9,7 +9,7 @@
         v-for="(lyric, index) in lyrics"
         :key="lyric"
         :aria-current="index === activeLyricIndex ? 'true' : undefined"
-        class="font-bold leading-tight tracking-tight transition-colors"
+        class="leading-tight font-bold tracking-tight transition-colors"
         :class="[
           props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
           index === activeLyricIndex ? 'text-white' : 'text-spotify-muted/45',

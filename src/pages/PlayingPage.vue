@@ -9,7 +9,7 @@
   >
     <button
       :aria-label="nextModeLabel[presentation]"
-      class="fixed right-4 top-16 z-40 grid size-10 place-items-center rounded-full bg-spotify-interactive text-spotify-muted shadow-lg transition-colors hover:bg-[#282828] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green sm:right-6"
+      class="bg-spotify-interactive text-spotify-muted focus-visible:outline-spotify-green fixed top-16 right-4 z-40 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:bg-[#282828] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-6"
       :title="nextModeLabel[presentation]"
       type="button"
       @click="cyclePresentation"
@@ -24,7 +24,7 @@
     />
     <Lyrics
       v-if="presentation !== 'track'"
-      :class="presentation === 'both' ? 'md:min-w-0 md:max-w-none md:flex-1' : 'max-w-none'"
+      :class="presentation === 'both' ? 'md:max-w-none md:min-w-0 md:flex-1' : 'max-w-none'"
       :compact="presentation === 'both'"
     />
   </section>

@@ -1,7 +1,7 @@
 <template>
   <li :aria-current="isCurrentTrack ? 'true' : undefined">
     <button
-      class="flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors focus-visible:outline-2 focus-visible:outline-spotify-green"
+      class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors focus-visible:outline-2"
       :class="isFocused ? 'bg-spotify-interactive' : 'hover:bg-white/5'"
       type="button"
       @click="emit('select')"
@@ -15,7 +15,7 @@
       <AudioLines
         v-if="isCurrentTrack"
         aria-hidden="true"
-        class="size-4 shrink-0 text-spotify-green"
+        class="text-spotify-green size-4 shrink-0"
       />
       <span class="flex min-w-0 flex-1 flex-col gap-0.5">
         <span
@@ -24,9 +24,9 @@
         >
           {{ title }}
         </span>
-        <span class="truncate text-xs text-spotify-muted">{{ album }}</span>
+        <span class="text-spotify-muted truncate text-xs">{{ album }}</span>
       </span>
-      <span class="shrink-0 pl-1 text-xs tabular-nums text-spotify-muted">{{ duration }}</span>
+      <span class="text-spotify-muted shrink-0 pl-1 text-xs tabular-nums">{{ duration }}</span>
     </button>
   </li>
 </template>

@@ -1,19 +1,19 @@
 <template>
   <header
-    class="fixed inset-x-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center bg-spotify-base px-3 text-white sm:px-6"
+    class="bg-spotify-base fixed inset-x-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-3 text-white sm:px-6"
     @mousedown.left="startDragging"
   >
-    <span class="justify-self-start whitespace-nowrap text-base font-bold sm:text-lg">NewBee</span>
+    <span class="justify-self-start text-base font-bold whitespace-nowrap sm:text-lg">NewBee</span>
 
     <nav
       aria-label="Main navigation"
-      class="inline-flex items-center rounded-full bg-spotify-interactive p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+      class="bg-spotify-interactive inline-flex items-center rounded-full p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
     >
       <button
         v-for="pageName in pageNames"
         :key="pageName"
         :aria-pressed="props.activePage === pageName"
-        class="rounded-full px-2 py-2 text-xs font-semibold uppercase tracking-[1px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-spotify-green sm:px-4 sm:text-sm sm:tracking-[1.4px]"
+        class="focus-visible:outline-spotify-green rounded-full px-2 py-2 text-xs font-semibold tracking-[1px] uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:px-4 sm:text-sm sm:tracking-[1.4px]"
         :class="
           props.activePage === pageName
             ? 'bg-spotify-green text-black'
@@ -34,7 +34,7 @@
     >
       <button
         aria-label="Minimize window"
-        class="grid h-full w-10 place-items-center text-spotify-muted transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-spotify-green"
+        class="text-spotify-muted focus-visible:outline-spotify-green grid h-full w-10 place-items-center transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2"
         title="Minimize"
         type="button"
         @click.stop="minimizeWindow"
@@ -43,7 +43,7 @@
       </button>
       <button
         :aria-label="isMaximized ? 'Restore window' : 'Maximize window'"
-        class="grid h-full w-10 place-items-center text-spotify-muted transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-spotify-green"
+        class="text-spotify-muted focus-visible:outline-spotify-green grid h-full w-10 place-items-center transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2"
         :title="isMaximized ? 'Restore' : 'Maximize'"
         type="button"
         @click.stop="toggleMaximizeWindow"
@@ -53,7 +53,7 @@
       </button>
       <button
         aria-label="Close window"
-        class="grid h-full w-11 place-items-center text-spotify-muted transition-colors hover:bg-red-500 hover:text-white focus-visible:outline-2 focus-visible:outline-spotify-green"
+        class="text-spotify-muted focus-visible:outline-spotify-green grid h-full w-11 place-items-center transition-colors hover:bg-red-500 hover:text-white focus-visible:outline-2"
         title="Close"
         type="button"
         @click.stop="closeWindow"

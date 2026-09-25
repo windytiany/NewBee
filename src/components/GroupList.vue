@@ -1,14 +1,14 @@
 <template>
   <section
     aria-label="专辑演出者列表"
-    class="flex h-full min-h-0 w-full min-w-0 flex-col bg-spotify-base text-white"
+    class="bg-spotify-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
     <div ref="groupingControl" class="relative z-10 shrink-0 px-2 py-1">
       <button
         ref="groupingButton"
         aria-controls="grouping-options"
         aria-haspopup="menu"
-        class="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium text-white/90 transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-spotify-green"
+        class="focus-visible:outline-spotify-green flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium text-white/90 transition-colors hover:bg-white/5 focus-visible:outline-2"
         :aria-expanded="isGroupingMenuOpen"
         type="button"
         @click="isGroupingMenuOpen = !isGroupingMenuOpen"
@@ -16,7 +16,7 @@
         <span>专辑演出者</span>
         <ChevronDown
           aria-hidden="true"
-          class="size-4 text-spotify-muted transition-transform"
+          class="text-spotify-muted size-4 transition-transform"
           :class="isGroupingMenuOpen ? 'rotate-180' : ''"
         />
       </button>
@@ -24,18 +24,18 @@
       <div
         v-if="isGroupingMenuOpen"
         id="grouping-options"
-        class="absolute left-2 right-2 top-full rounded-md bg-spotify-interactive p-1 shadow-xl ring-1 ring-white/10"
+        class="bg-spotify-interactive absolute top-full right-2 left-2 rounded-md p-1 shadow-xl ring-1 ring-white/10"
         role="menu"
         aria-label="分组方式"
       >
         <button
           aria-checked="true"
-          class="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-spotify-green"
+          class="focus-visible:outline-spotify-green flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
           role="menuitemradio"
           type="button"
           @click="isGroupingMenuOpen = false"
         >
-          <Check aria-hidden="true" class="size-4 text-spotify-green" />
+          <Check aria-hidden="true" class="text-spotify-green size-4" />
           <span>专辑演出者</span>
         </button>
       </div>

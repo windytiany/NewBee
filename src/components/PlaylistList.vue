@@ -1,7 +1,7 @@
 <template>
   <section
     aria-label="播放列表浏览"
-    class="flex h-full min-h-0 w-full min-w-0 flex-col bg-spotify-base text-white"
+    class="bg-spotify-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
     <h2 class="shrink-0 px-2 py-1 text-sm font-medium text-white/90">播放列表浏览</h2>
 

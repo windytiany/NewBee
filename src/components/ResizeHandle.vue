@@ -11,7 +11,7 @@
         ? 'h-full w-1.5 cursor-col-resize'
         : 'h-1.5 w-full cursor-row-resize'
     "
-    class="touch-none select-none bg-transparent hover:bg-white/10 focus-visible:bg-white/15 focus-visible:outline focus-visible:outline-white/20 focus-visible:-outline-offset-1"
+    class="touch-none bg-transparent select-none hover:bg-white/10 focus-visible:bg-white/15 focus-visible:outline focus-visible:-outline-offset-1 focus-visible:outline-white/20"
     tabindex="0"
     @pointerdown="startPointerDrag"
     @pointermove="movePointerDrag"

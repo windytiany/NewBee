@@ -12,7 +12,7 @@
   >
     <div
       aria-label="Album cover placeholder"
-      class="grid aspect-square w-full place-items-center rounded-xl bg-linear-to-br from-spotify-interactive via-[#303030] to-spotify-surface shadow-2xl"
+      class="from-spotify-interactive to-spotify-surface grid aspect-square w-full place-items-center rounded-xl bg-linear-to-br via-[#303030] shadow-2xl"
       :class="props.horizontal ? 'max-w-md justify-self-center' : ''"
       role="img"
     >
@@ -49,8 +49,8 @@
       <p
         :class="
           props.horizontal
-            ? 'text-lg sm:text-xl text-spotify-muted/70'
-            : 'text-sm text-spotify-muted/70'
+            ? 'text-spotify-muted/70 text-lg sm:text-xl'
+            : 'text-spotify-muted/70 text-sm'
         "
       >
         Album

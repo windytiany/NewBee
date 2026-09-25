@@ -1,7 +1,7 @@
 <template>
   <div
     ref="layoutElement"
-    class="grid h-[calc(100vh-8.5rem)] w-full min-w-0 grid-cols-(--three-column-layout-columns) bg-spotify-base max-md:grid-cols-1 md:h-[calc(100vh-6rem)]"
+    class="bg-spotify-base grid h-[calc(100vh-8.5rem)] w-full min-w-0 grid-cols-(--three-column-layout-columns) max-md:grid-cols-1 md:h-[calc(100vh-6rem)]"
     :style="{ '--three-column-layout-columns': gridColumns }"
   >
     <Sidebar side="left" class="max-md:hidden">
