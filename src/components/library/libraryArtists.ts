@@ -1,6 +1,6 @@
-import type { ArtistSelection } from "../../types/album";
+import type { Artist } from "../../types/artist";
 
-export const libraryArtists: ArtistSelection[] = [
+export const libraryArtists: Artist[] = [
   { name: "[Singles]", albumCount: 27 },
   { name: "American Football", albumCount: 1 },
   { name: "Bark Psychosis", albumCount: 3 },

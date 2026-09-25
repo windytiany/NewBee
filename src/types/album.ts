@@ -1,8 +1,3 @@
-export type ArtistSelection = {
-  name: string;
-  albumCount: number;
-};
-
 export type AlbumTrack = {
   id: string;
   title: string;

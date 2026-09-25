@@ -1,9 +1,9 @@
 import { ref, watch } from "vue";
-import type { ArtistSelection } from "../types/album";
+import type { Artist } from "../types/artist";
 import { libraryArtists } from "../components/library/libraryArtists";
 
 interface LibrarySelection {
-  artist: ArtistSelection | null;
+  artist: Artist | null;
   albumId: string | null;
 }
 
@@ -13,7 +13,7 @@ const EMPTY_SELECTION: LibrarySelection = {
   albumId: null,
 };
 
-function readStoredAlbumId(value: unknown, artist: ArtistSelection): string | null {
+function readStoredAlbumId(value: unknown, artist: Artist): string | null {
   if (typeof value !== "string") return null;
 
   const prefix = `${artist.name}:`;
@@ -71,7 +71,7 @@ function loadLibrarySelection(): LibrarySelection {
   }
 }
 
-function saveLibrarySelection(artist: ArtistSelection | null, albumId: string | null) {
+function saveLibrarySelection(artist: Artist | null, albumId: string | null) {
   try {
     globalThis.localStorage.setItem(
       STORAGE_KEY,
@@ -86,7 +86,7 @@ function saveLibrarySelection(artist: ArtistSelection | null, albumId: string | 
 }
 
 const initialSelection = loadLibrarySelection();
-const selectedArtist = ref<ArtistSelection | null>(initialSelection.artist);
+const selectedArtist = ref<Artist | null>(initialSelection.artist);
 const selectedAlbumId = ref<string | null>(initialSelection.albumId);
 
 watch(
@@ -96,7 +96,7 @@ watch(
 );
 
 export function usePersistentLibrarySelection() {
-  function selectArtist(artist: ArtistSelection) {
+  function selectArtist(artist: Artist) {
     if (selectedArtist.value?.name !== artist.name) selectedAlbumId.value = null;
     selectedArtist.value = artist;
   }

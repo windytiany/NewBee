@@ -59,16 +59,16 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
-import type { ArtistSelection } from "../types/album";
+import type { Artist } from "../types/artist";
 import { libraryArtists } from "./library/libraryArtists";
 import GroupListItem from "./GroupListItem.vue";
 
 const props = defineProps<{
-  selectedArtist: ArtistSelection | null;
+  selectedArtist: Artist | null;
 }>();
 
 const emit = defineEmits<{
-  select: [artist: ArtistSelection];
+  select: [artist: Artist];
 }>();
 
 const isGroupingMenuOpen = ref(false);

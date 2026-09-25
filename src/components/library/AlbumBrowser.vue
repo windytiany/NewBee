@@ -34,9 +34,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import type { Album as AlbumData, AlbumTrack, ArtistSelection } from "../../types/album";
+import type { Album as AlbumData, AlbumTrack } from "../../types/album";
+import type { Artist } from "../../types/artist";
 import AlbumDetail from "./AlbumDetail.vue";
 import Album from "./Album.vue";
+
+type ArtistSelection = Artist | null;
 
 type AlbumBrowserRow = {
   id: string;
@@ -49,7 +52,7 @@ const SMALL_SCREEN_BREAKPOINT = 640;
 const WIDE_SCREEN_BREAKPOINT = 1280;
 
 const props = defineProps<{
-  artist: ArtistSelection | null;
+  artist: ArtistSelection;
   selectedAlbumId: string | null;
 }>();
 
@@ -98,7 +101,7 @@ function toggleAlbum(album: AlbumData) {
   emit("update:selectedAlbumId", props.selectedAlbumId === album.id ? null : album.id);
 }
 
-function createPlaceholderAlbums(artist: ArtistSelection): AlbumData[] {
+function createPlaceholderAlbums(artist: Artist): AlbumData[] {
   return Array.from({ length: artist.albumCount }, (_, albumIndex) => {
     const albumNumber = albumIndex + 1;
 
