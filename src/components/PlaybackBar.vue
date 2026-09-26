@@ -13,11 +13,14 @@
           <SkipBack aria-hidden="true" class="size-4" />
         </button>
         <button
-          aria-label="Play"
-          class="bg-spotify-green focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2"
+          :aria-label="playbackStatus.isPlaying ? 'Pause' : 'Play'"
+          class="bg-spotify-green focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="isPlaybackCommandPending || isSeeking"
           type="button"
+          @click="togglePlayback"
         >
-          <Play aria-hidden="true" class="size-5 fill-current" />
+          <Pause v-if="playbackStatus.isPlaying" aria-hidden="true" class="size-5 fill-current" />
+          <Play v-else aria-hidden="true" class="size-5 fill-current" />
         </button>
         <button
           aria-label="Next track"
@@ -89,25 +92,49 @@
     </div>
 
     <section
-      class="col-span-full row-start-2 min-w-0 sm:absolute sm:top-0 sm:left-1/2 sm:col-auto sm:row-auto sm:flex sm:h-full sm:w-[min(24rem,calc(100vw-22.5rem))] sm:-translate-x-1/2 sm:flex-col sm:py-1 md:w-[max(24rem,calc(100vw-41rem))]"
+      class="relative col-span-full row-start-2 min-w-0 sm:absolute sm:top-0 sm:left-1/2 sm:col-auto sm:row-auto sm:flex sm:h-full sm:w-[min(24rem,calc(100vw-22.5rem))] sm:-translate-x-1/2 sm:flex-col sm:py-1 md:w-[max(24rem,calc(100vw-41rem))]"
     >
+      <p
+        v-if="playbackError"
+        class="bg-spotify-interactive absolute right-0 bottom-full z-20 mb-2 max-w-[min(22rem,calc(100vw-2rem))] rounded-lg px-3 py-2 text-left text-xs text-red-200 shadow-lg"
+        role="alert"
+      >
+        {{ playbackError }}
+      </p>
       <div class="flex items-center justify-end text-xs sm:h-5">
-        <span class="text-spotify-muted text-right tabular-nums">0:00/0:00</span>
+        <span class="text-spotify-muted text-right tabular-nums">
+          {{ formatTime(sliderPositionMs) }}/{{ formatTime(playbackStatus.durationMs) }}
+        </span>
       </div>
       <span
         class="pointer-events-none absolute top-10 left-1/2 max-w-56 -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-1"
       >
         Title - Artist
       </span>
-      <div
-        aria-label="Playback progress"
-        aria-valuemax="100"
-        aria-valuemin="0"
-        aria-valuenow="0"
-        class="bg-spotify-track mt-1 h-1 rounded-full sm:mb-1"
-        role="progressbar"
-      >
-        <div class="bg-spotify-green h-full w-0 rounded-full" />
+      <div class="bg-spotify-track relative mt-1 h-1 rounded-full sm:mb-1">
+        <div
+          class="bg-spotify-green h-full rounded-full"
+          :style="{ width: `${progressPercent}%` }"
+        />
+        <span
+          class="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+          :style="{ left: `${progressPercent}%` }"
+        />
+        <input
+          aria-label="Playback progress"
+          :aria-valuetext="`${formatTime(sliderPositionMs)} of ${formatTime(playbackStatus.durationMs)}`"
+          class="focus-visible:outline-spotify-green absolute top-1/2 left-0 z-10 h-6 w-full -translate-y-1/2 cursor-pointer opacity-0 focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-not-allowed"
+          :disabled="
+            !playbackStatus.hasAudio || playbackStatus.durationMs === 0 || isPlaybackCommandPending
+          "
+          :max="Math.max(playbackStatus.durationMs, 1)"
+          min="0"
+          step="1"
+          :value="sliderPositionMs"
+          type="range"
+          @input="handleSeekInput"
+          @change="commitSeek"
+        />
       </div>
     </section>
 
@@ -140,8 +167,23 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
-import { Play, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from "@lucide/vue";
+import { invoke } from "@tauri-apps/api/core";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  Pause,
+  Play,
+  Repeat1,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from "@lucide/vue";
+
+// Temporary local file path. Replace this with the audio file path on your computer.
+const TEMP_AUDIO_PATH =
+  "D:/Music/American Football/American Football/01 - American Football - Never Meant.flac";
+const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
 
 const DEFAULT_VOLUME = 50;
 const VOLUME_STORAGE_KEY = "newbee.playback-volume";
@@ -150,6 +192,20 @@ type PlaybackVolumeState = {
   volume: number;
   lastNonMutedVolume: number;
 };
+
+type PlaybackStatus = {
+  hasAudio: boolean;
+  isPlaying: boolean;
+  positionMs: number;
+  durationMs: number;
+};
+
+const EMPTY_PLAYBACK_STATUS = {
+  hasAudio: false,
+  isPlaying: false,
+  positionMs: 0,
+  durationMs: 0,
+} satisfies PlaybackStatus;
 
 const DEFAULT_PLAYBACK_VOLUME = {
   volume: DEFAULT_VOLUME,
@@ -210,8 +266,24 @@ const isVolumePopoverOpen = ref(false);
 const isHorizontalVolumeVisible = ref(false);
 const isRepeatEnabled = ref(false);
 const isShuffleEnabled = ref(false);
+const playbackStatus = ref<PlaybackStatus>({ ...EMPTY_PLAYBACK_STATUS });
+const playbackError = ref("");
+const isPlaybackCommandPending = ref(false);
+const isSeeking = ref(false);
+const selectedPositionMs = ref(0);
+const sliderPositionMs = computed(() =>
+  isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
+);
+const progressPercent = computed(() =>
+  playbackStatus.value.durationMs > 0
+    ? (sliderPositionMs.value / playbackStatus.value.durationMs) * 100
+    : 0,
+);
 const volumeControl = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 let volumeLayoutQuery: ReturnType<typeof globalThis.matchMedia> | null = null;
+let playbackStatusPoll: ReturnType<typeof globalThis.setInterval> | null = null;
+let statusRequestsInFlight = 0;
+let statusRequestVersion = 0;
 
 watch(
   volume,
@@ -221,6 +293,93 @@ watch(
   },
   { flush: "sync" },
 );
+
+function formatTime(milliseconds: number): string {
+  const totalSeconds = Math.floor(Math.max(0, milliseconds) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return typeof error === "string" ? error : "Unknown error";
+}
+
+async function refreshPlaybackStatus(force = false): Promise<boolean> {
+  if (statusRequestsInFlight > 0 && !force) return false;
+
+  statusRequestsInFlight += 1;
+  const requestVersion = ++statusRequestVersion;
+  try {
+    const status = await invoke<PlaybackStatus>("playback_status");
+    if (requestVersion !== statusRequestVersion) return false;
+
+    playbackStatus.value = status;
+    if (playbackError.value.startsWith("Playback status unavailable:")) playbackError.value = "";
+    return true;
+  } catch (error) {
+    if (requestVersion === statusRequestVersion) {
+      playbackError.value = `Playback status unavailable: ${errorMessage(error)}`;
+    }
+    return false;
+  } finally {
+    statusRequestsInFlight -= 1;
+  }
+}
+
+async function togglePlayback() {
+  if (isPlaybackCommandPending.value || isSeeking.value) return;
+
+  isPlaybackCommandPending.value = true;
+  try {
+    if (!(await refreshPlaybackStatus(true))) return;
+    const status = playbackStatus.value;
+    if (
+      !status.hasAudio ||
+      (!status.isPlaying && status.durationMs > 0 && status.positionMs >= status.durationMs)
+    ) {
+      await invoke("play", { path: TEMP_AUDIO_PATH });
+    } else if (status.isPlaying) {
+      await invoke("pause");
+    } else {
+      await invoke("resume");
+    }
+
+    playbackError.value = "";
+    await refreshPlaybackStatus(true);
+  } catch (error) {
+    playbackError.value = `Playback command failed: ${errorMessage(error)}`;
+    await refreshPlaybackStatus(true);
+  } finally {
+    isPlaybackCommandPending.value = false;
+  }
+}
+
+function handleSeekInput(event: InstanceType<typeof globalThis.Event>) {
+  selectedPositionMs.value = Number(
+    (event.target as InstanceType<typeof globalThis.HTMLInputElement>).value,
+  );
+  isSeeking.value = true;
+}
+
+async function commitSeek() {
+  if (!isSeeking.value || isPlaybackCommandPending.value) return;
+
+  isPlaybackCommandPending.value = true;
+  try {
+    await invoke("seek_to", { positionMs: selectedPositionMs.value });
+    playbackError.value = "";
+    await refreshPlaybackStatus(true);
+  } catch (error) {
+    playbackError.value = `Seek failed: ${errorMessage(error)}`;
+    await refreshPlaybackStatus(true);
+  } finally {
+    isSeeking.value = false;
+    selectedPositionMs.value = playbackStatus.value.positionMs;
+    isPlaybackCommandPending.value = false;
+  }
+}
 
 function updateVolumeLayout() {
   if (!volumeLayoutQuery) return;
@@ -266,9 +425,16 @@ onMounted(() => {
   volumeLayoutQuery.addEventListener("change", updateVolumeLayout);
   globalThis.document.addEventListener("pointerdown", closeVolumePopoverOnOutsidePointer);
   globalThis.document.addEventListener("keydown", closeVolumePopoverOnEscape);
+  void refreshPlaybackStatus();
+  playbackStatusPoll = globalThis.setInterval(
+    () => void refreshPlaybackStatus(),
+    PLAYBACK_STATUS_POLL_INTERVAL_MS,
+  );
 });
 
 onUnmounted(() => {
+  if (playbackStatusPoll !== null) globalThis.clearInterval(playbackStatusPoll);
+  statusRequestVersion += 1;
   volumeLayoutQuery?.removeEventListener("change", updateVolumeLayout);
   globalThis.document.removeEventListener("pointerdown", closeVolumePopoverOnOutsidePointer);
   globalThis.document.removeEventListener("keydown", closeVolumePopoverOnEscape);
