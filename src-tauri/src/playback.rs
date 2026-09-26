@@ -7,9 +7,18 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::State;
 
-#[derive(Default)]
 pub struct PlaybackState {
     active: Mutex<Option<ActivePlayback>>,
+    volume: Mutex<u8>,
+}
+
+impl Default for PlaybackState {
+    fn default() -> Self {
+        Self {
+            active: Mutex::new(None),
+            volume: Mutex::new(100),
+        }
+    }
 }
 
 struct ActivePlayback {
@@ -38,6 +47,10 @@ pub fn play(path: String, state: State<'_, PlaybackState>) -> Result<(), String>
 
     let output = DeviceSinkBuilder::open_default_sink()
         .map_err(|error| format!("Could not open audio output: {error}"))?;
+    let volume = state
+        .volume
+        .lock()
+        .map_err(|_| "Playback state is unavailable".to_owned())?;
     let mut active = state
         .active
         .lock()
@@ -45,6 +58,7 @@ pub fn play(path: String, state: State<'_, PlaybackState>) -> Result<(), String>
     active.take();
 
     let player = Player::connect_new(output.mixer());
+    player.set_volume(*volume as f32 / 100.0);
     player.append(source);
     *active = Some(ActivePlayback {
         player,
@@ -52,6 +66,29 @@ pub fn play(path: String, state: State<'_, PlaybackState>) -> Result<(), String>
         path,
         duration,
     });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_volume(volume: u8, state: State<'_, PlaybackState>) -> Result<(), String> {
+    if volume > 100 {
+        return Err("Volume must be between 0 and 100".to_owned());
+    }
+
+    let mut current_volume = state
+        .volume
+        .lock()
+        .map_err(|_| "Playback state is unavailable".to_owned())?;
+    *current_volume = volume;
+
+    let active = state
+        .active
+        .lock()
+        .map_err(|_| "Playback state is unavailable".to_owned())?;
+    if let Some(playback) = active.as_ref() {
+        playback.player.set_volume(volume as f32 / 100.0);
+    }
 
     Ok(())
 }

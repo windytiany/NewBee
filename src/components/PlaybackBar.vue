@@ -95,11 +95,11 @@
       class="relative col-span-full row-start-2 min-w-0 sm:absolute sm:top-0 sm:left-1/2 sm:col-auto sm:row-auto sm:flex sm:h-full sm:w-[min(24rem,calc(100vw-22.5rem))] sm:-translate-x-1/2 sm:flex-col sm:py-1 md:w-[max(24rem,calc(100vw-41rem))]"
     >
       <p
-        v-if="playbackError"
+        v-if="playbackFeedback"
         class="bg-spotify-interactive absolute right-0 bottom-full z-20 mb-2 max-w-[min(22rem,calc(100vw-2rem))] rounded-lg px-3 py-2 text-left text-xs text-red-200 shadow-lg"
         role="alert"
       >
-        {{ playbackError }}
+        {{ playbackFeedback }}
       </p>
       <div class="flex items-center justify-end text-xs sm:h-5">
         <span class="text-spotify-muted text-right tabular-nums">
@@ -268,11 +268,16 @@ const isRepeatEnabled = ref(false);
 const isShuffleEnabled = ref(false);
 const playbackStatus = ref<PlaybackStatus>({ ...EMPTY_PLAYBACK_STATUS });
 const playbackError = ref("");
+const volumeError = ref("");
+const isVolumeSyncReady = ref(false);
 const isPlaybackCommandPending = ref(false);
 const isSeeking = ref(false);
 const selectedPositionMs = ref(0);
 const sliderPositionMs = computed(() =>
   isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
+);
+const playbackFeedback = computed(() =>
+  [playbackError.value, volumeError.value].filter(Boolean).join(" "),
 );
 const progressPercent = computed(() =>
   playbackStatus.value.durationMs > 0
@@ -284,12 +289,17 @@ let volumeLayoutQuery: ReturnType<typeof globalThis.matchMedia> | null = null;
 let playbackStatusPoll: ReturnType<typeof globalThis.setInterval> | null = null;
 let statusRequestsInFlight = 0;
 let statusRequestVersion = 0;
+let queuedVolume: number | null = null;
+let inFlightVolume: number | null = null;
+let synchronizedVolume: number | null = null;
+let volumeSyncWorker: Promise<void> | null = null;
 
 watch(
   volume,
   (nextVolume) => {
     if (nextVolume > 0) lastNonMutedVolume.value = nextVolume;
     savePlaybackVolume(nextVolume, lastNonMutedVolume.value);
+    void synchronizeVolume(nextVolume);
   },
   { flush: "sync" },
 );
@@ -304,6 +314,70 @@ function formatTime(milliseconds: number): string {
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return typeof error === "string" ? error : "Unknown error";
+}
+
+async function flushVolumeSyncQueue(): Promise<void> {
+  while (queuedVolume !== null) {
+    const requestedVolume = queuedVolume;
+    queuedVolume = null;
+    inFlightVolume = requestedVolume;
+
+    try {
+      await invoke("set_volume", { volume: requestedVolume });
+      synchronizedVolume = requestedVolume;
+      if (queuedVolume === null && volume.value === requestedVolume) {
+        isVolumeSyncReady.value = true;
+        volumeError.value = "";
+      }
+    } catch (error) {
+      synchronizedVolume = null;
+      isVolumeSyncReady.value = false;
+      volumeError.value = `Volume update failed: ${errorMessage(error)}`;
+    } finally {
+      inFlightVolume = null;
+    }
+  }
+}
+
+function synchronizeVolume(nextVolume: number): Promise<void> {
+  if (
+    volumeSyncWorker === null &&
+    queuedVolume === null &&
+    isVolumeSyncReady.value &&
+    synchronizedVolume === nextVolume
+  ) {
+    return Promise.resolve();
+  }
+  if (volumeSyncWorker !== null && queuedVolume === null && inFlightVolume === nextVolume) {
+    return volumeSyncWorker;
+  }
+
+  queuedVolume = nextVolume;
+  isVolumeSyncReady.value = false;
+  if (volumeSyncWorker !== null) return volumeSyncWorker;
+
+  const worker = flushVolumeSyncQueue();
+  volumeSyncWorker = worker;
+  void worker.finally(() => {
+    if (volumeSyncWorker === worker) volumeSyncWorker = null;
+    if (queuedVolume !== null) void synchronizeVolume(queuedVolume);
+  });
+  return worker;
+}
+
+async function ensureCurrentVolumeIsSynchronized(): Promise<boolean> {
+  while (true) {
+    await synchronizeVolume(volume.value);
+    if (
+      isVolumeSyncReady.value &&
+      synchronizedVolume === volume.value &&
+      queuedVolume === null &&
+      volumeSyncWorker === null
+    ) {
+      return true;
+    }
+    if (queuedVolume === null && volumeSyncWorker === null) return false;
+  }
 }
 
 async function refreshPlaybackStatus(force = false): Promise<boolean> {
@@ -339,6 +413,7 @@ async function togglePlayback() {
       !status.hasAudio ||
       (!status.isPlaying && status.durationMs > 0 && status.positionMs >= status.durationMs)
     ) {
+      if (!(await ensureCurrentVolumeIsSynchronized())) return;
       await invoke("play", { path: TEMP_AUDIO_PATH });
     } else if (status.isPlaying) {
       await invoke("pause");
@@ -420,6 +495,7 @@ function closeVolumePopoverOnEscape(event: InstanceType<typeof globalThis.Keyboa
 }
 
 onMounted(() => {
+  void synchronizeVolume(volume.value);
   volumeLayoutQuery = globalThis.matchMedia("(min-width: 64rem)");
   updateVolumeLayout();
   volumeLayoutQuery.addEventListener("change", updateVolumeLayout);

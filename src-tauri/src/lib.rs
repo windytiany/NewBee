@@ -16,6 +16,7 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             playback::play,
+            playback::set_volume,
             playback::pause,
             playback::resume,
             playback::seek_to,
