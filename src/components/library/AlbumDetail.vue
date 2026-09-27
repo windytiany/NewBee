@@ -4,7 +4,6 @@
   >
     <header class="mb-5 flex items-start justify-between gap-4">
       <div class="min-w-0">
-        <p class="text-spotify-muted mb-1 text-xs font-medium tracking-wide uppercase">专辑曲目</p>
         <div class="flex min-w-0 items-center gap-3">
           <h2 class="min-w-0 flex-1 truncate text-xl font-bold sm:text-2xl">
             {{ props.album.album ?? "未知专辑" }}

@@ -43,11 +43,12 @@
 
     <template #right-bottom>
       <TrackInfo
-        :details="selectedTrackDetails"
-        :is-loading="isLoadingTrackDetails"
-        :error="trackDetailsError"
-        :artwork-url="selectedTrackArtworkUrl"
-        :artwork-error="trackArtworkError"
+        :details="currentTrackDetails"
+        :is-loading="isLoadingCurrentTrackDetails"
+        :error="currentTrackDetailsError"
+        :artwork-url="currentTrackArtworkUrl"
+        :artwork-error="currentTrackArtworkError"
+        empty-message="开始播放后显示当前曲目信息和封面。"
       />
     </template>
   </ResizableThreeColumnLayout>
@@ -55,7 +56,7 @@
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { usePersistentLibrarySelection } from "../composables/usePersistentLibrarySelection";
 import { usePlaybackState } from "../composables/usePlaybackState";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
@@ -83,11 +84,11 @@ const artistsError = ref("");
 const albumsError = ref("");
 const tracksError = ref("");
 const selectedTrackId = ref<number | null>(null);
-const selectedTrackDetails = ref<TrackDetails | null>(null);
-const selectedTrackArtworkUrl = ref<string | null>(null);
-const isLoadingTrackDetails = ref(false);
-const trackDetailsError = ref("");
-const trackArtworkError = ref("");
+const currentTrackDetails = ref<TrackDetails | null>(null);
+const currentTrackArtworkUrl = ref<string | null>(null);
+const isLoadingCurrentTrackDetails = ref(false);
+const currentTrackDetailsError = ref("");
+const currentTrackArtworkError = ref("");
 const libraryTracks = computed(() =>
   tracks.value.map((track) => ({
     id: track.id,
@@ -110,8 +111,8 @@ let isMounted = false;
 let artistsRequestGeneration = 0;
 let albumsRequestGeneration = 0;
 let tracksRequestGeneration = 0;
-let trackDetailsRequestGeneration = 0;
-let trackArtworkRequestGeneration = 0;
+let currentTrackDetailsRequestGeneration = 0;
+let currentTrackArtworkRequestGeneration = 0;
 
 function sameGroup(left: AlbumArtistSummary | null, right: AlbumArtistSummary | null) {
   return left?.albumArtist === right?.albumArtist;
@@ -129,112 +130,112 @@ function errorMessage(error: unknown) {
   return typeof error === "string" ? error : "未知错误";
 }
 
-function revokeSelectedArtwork() {
-  const artworkUrl = selectedTrackArtworkUrl.value;
+function revokeCurrentTrackArtwork() {
+  const artworkUrl = currentTrackArtworkUrl.value;
   if (artworkUrl) globalThis.URL.revokeObjectURL(artworkUrl);
-  selectedTrackArtworkUrl.value = null;
+  currentTrackArtworkUrl.value = null;
 }
 
 function resetSelectedTrackState(clearSelection: boolean) {
-  ++trackDetailsRequestGeneration;
-  ++trackArtworkRequestGeneration;
   if (clearSelection) selectedTrackId.value = null;
-
-  selectedTrackDetails.value = null;
-  isLoadingTrackDetails.value = !clearSelection && selectedTrackId.value !== null;
-  trackDetailsError.value = "";
-  trackArtworkError.value = "";
-  revokeSelectedArtwork();
 }
 
-async function loadTrackDetails(trackId: number) {
-  const generation = ++trackDetailsRequestGeneration;
-  isLoadingTrackDetails.value = true;
-  trackDetailsError.value = "";
+function syncCurrentTrackInfo(trackId: number | null) {
+  ++currentTrackDetailsRequestGeneration;
+  ++currentTrackArtworkRequestGeneration;
+  currentTrackDetails.value = null;
+  isLoadingCurrentTrackDetails.value = trackId !== null;
+  currentTrackDetailsError.value = "";
+  currentTrackArtworkError.value = "";
+  revokeCurrentTrackArtwork();
+
+  if (trackId === null) return;
+  void loadCurrentTrackDetails(trackId);
+  void loadCurrentTrackArtwork(trackId);
+}
+
+async function loadCurrentTrackDetails(trackId: number) {
+  const generation = ++currentTrackDetailsRequestGeneration;
+  isLoadingCurrentTrackDetails.value = true;
+  currentTrackDetailsError.value = "";
 
   try {
     const result = await invoke<TrackDetails | null>("get_track", { trackId });
     if (
-      !isMounted ||
-      generation !== trackDetailsRequestGeneration ||
-      selectedTrackId.value !== trackId
+      generation !== currentTrackDetailsRequestGeneration ||
+      currentTrack.value?.trackId !== trackId
     ) {
       return;
     }
 
     if (!result) {
-      resetSelectedTrackState(true);
-      trackDetailsError.value = "未找到所选曲目的详情。";
+      currentTrackDetailsError.value = "未找到正在播放曲目的详情。";
       return;
     }
     if (result.id !== trackId) {
-      resetSelectedTrackState(true);
-      trackDetailsError.value = "返回的曲目详情与当前选择不匹配。";
+      currentTrackDetailsError.value = "返回的曲目详情与当前播放曲目不匹配。";
       return;
     }
 
-    selectedTrackDetails.value = result;
+    currentTrackDetails.value = result;
   } catch (error) {
     if (
-      !isMounted ||
-      generation !== trackDetailsRequestGeneration ||
-      selectedTrackId.value !== trackId
+      generation !== currentTrackDetailsRequestGeneration ||
+      currentTrack.value?.trackId !== trackId
     ) {
       return;
     }
-    trackDetailsError.value = `读取曲目详情失败：${errorMessage(error)}`;
+    currentTrackDetailsError.value = `读取曲目详情失败：${errorMessage(error)}`;
   } finally {
     if (
-      isMounted &&
-      generation === trackDetailsRequestGeneration &&
-      selectedTrackId.value === trackId
+      generation === currentTrackDetailsRequestGeneration &&
+      currentTrack.value?.trackId === trackId
     ) {
-      isLoadingTrackDetails.value = false;
+      isLoadingCurrentTrackDetails.value = false;
     }
   }
 }
 
-async function loadTrackArtwork(trackId: number) {
-  const generation = ++trackArtworkRequestGeneration;
-  revokeSelectedArtwork();
-  trackArtworkError.value = "";
+async function loadCurrentTrackArtwork(trackId: number) {
+  const generation = ++currentTrackArtworkRequestGeneration;
+  revokeCurrentTrackArtwork();
+  currentTrackArtworkError.value = "";
 
   try {
     const artwork = await invoke<TrackArtwork | null>("get_track_artwork", { trackId });
     if (
-      !isMounted ||
-      generation !== trackArtworkRequestGeneration ||
-      selectedTrackId.value !== trackId
+      generation !== currentTrackArtworkRequestGeneration ||
+      currentTrack.value?.trackId !== trackId
     ) {
       return;
     }
 
     if (!artwork || artwork.status !== "available") {
-      revokeSelectedArtwork();
+      revokeCurrentTrackArtwork();
       return;
     }
 
     const imageBlob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
       type: artwork.mimeType,
     });
-    selectedTrackArtworkUrl.value = globalThis.URL.createObjectURL(imageBlob);
+    currentTrackArtworkUrl.value = globalThis.URL.createObjectURL(imageBlob);
   } catch (error) {
     if (
-      !isMounted ||
-      generation !== trackArtworkRequestGeneration ||
-      selectedTrackId.value !== trackId
+      generation !== currentTrackArtworkRequestGeneration ||
+      currentTrack.value?.trackId !== trackId
     ) {
       return;
     }
-    revokeSelectedArtwork();
-    trackArtworkError.value = `读取封面失败，已显示占位图：${errorMessage(error)}`;
+    revokeCurrentTrackArtwork();
+    currentTrackArtworkError.value = `读取封面失败，已显示占位图：${errorMessage(error)}`;
   }
 }
+
+watch(() => currentTrack.value?.trackId ?? null, syncCurrentTrackInfo, { immediate: true });
 
 async function refreshLibrary() {
   if (!isMounted) return;
 
-  resetSelectedTrackState(false);
   const generation = ++artistsRequestGeneration;
   ++albumsRequestGeneration;
   ++tracksRequestGeneration;
@@ -263,10 +264,6 @@ async function refreshLibrary() {
     if (!isMounted || generation !== artistsRequestGeneration) return;
     artistsError.value = `读取专辑演出者失败：${errorMessage(error)}`;
     isLoadingTracks.value = false;
-    if (selectedTrackId.value !== null) {
-      isLoadingTrackDetails.value = false;
-      trackDetailsError.value = `刷新曲目列表失败：${errorMessage(error)}`;
-    }
   } finally {
     if (isMounted && generation === artistsRequestGeneration) {
       isLoadingArtists.value = false;
@@ -279,7 +276,6 @@ async function loadAlbums(group: AlbumArtistSummary) {
 
   const generation = ++albumsRequestGeneration;
   ++tracksRequestGeneration;
-  resetSelectedTrackState(false);
   albums.value = [];
   tracks.value = [];
   isLoadingTracks.value = selectedAlbum.value !== null;
@@ -312,10 +308,6 @@ async function loadAlbums(group: AlbumArtistSummary) {
     if (!isMounted || generation !== albumsRequestGeneration) return;
     albumsError.value = `读取专辑失败：${errorMessage(error)}`;
     isLoadingTracks.value = false;
-    if (selectedTrackId.value !== null) {
-      isLoadingTrackDetails.value = false;
-      trackDetailsError.value = `刷新曲目详情失败：${errorMessage(error)}`;
-    }
   } finally {
     if (isMounted && generation === albumsRequestGeneration) {
       isLoadingAlbums.value = false;
@@ -347,10 +339,7 @@ async function loadTracks(selection: { albumArtist: string | null; album: string
     tracks.value = result;
     const trackId = selectedTrackId.value;
     if (trackId !== null) {
-      if (result.some((track) => track.id === trackId)) {
-        void loadTrackDetails(trackId);
-        void loadTrackArtwork(trackId);
-      } else {
+      if (!result.some((track) => track.id === trackId)) {
         resetSelectedTrackState(true);
       }
     }
@@ -363,10 +352,6 @@ async function loadTracks(selection: { albumArtist: string | null; album: string
       return;
     }
     tracksError.value = `读取曲目失败：${errorMessage(error)}`;
-    if (selectedTrackId.value !== null) {
-      isLoadingTrackDetails.value = false;
-      trackDetailsError.value = `刷新曲目详情失败：${errorMessage(error)}`;
-    }
   } finally {
     if (isMounted && generation === tracksRequestGeneration) {
       isLoadingTracks.value = false;
@@ -399,8 +384,6 @@ function selectTrack(trackId: number) {
 
   resetSelectedTrackState(true);
   selectedTrackId.value = trackId;
-  void loadTrackDetails(trackId);
-  void loadTrackArtwork(trackId);
 }
 
 function playTrackFromLibrary(trackId: number) {
@@ -428,6 +411,7 @@ onUnmounted(() => {
   ++albumsRequestGeneration;
   ++tracksRequestGeneration;
   resetSelectedTrackState(true);
+  syncCurrentTrackInfo(null);
   globalThis.window.removeEventListener(LIBRARY_SCAN_COMPLETED_EVENT, onLibraryScanCompleted);
 });
 </script>
