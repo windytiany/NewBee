@@ -42,14 +42,30 @@
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-      <ul class="space-y-0.5">
+      <p v-if="props.error" class="px-2 py-3 text-sm text-red-300" role="alert">
+        {{ props.error }}
+      </p>
+      <p
+        v-if="props.isLoading && props.artists.length === 0"
+        class="text-spotify-muted px-2 py-3 text-sm"
+        role="status"
+      >
+        正在读取专辑演出者…
+      </p>
+      <p
+        v-else-if="!props.isLoading && !props.error && props.artists.length === 0"
+        class="text-spotify-muted px-2 py-3 text-sm"
+      >
+        音乐库中暂无专辑演出者。
+      </p>
+      <ul v-if="props.artists.length > 0" class="space-y-0.5">
         <GroupListItem
           v-for="artist in props.artists"
-          :key="artist.name"
-          :name="artist.name"
+          :key="getArtistKey(artist.albumArtist)"
+          :name="artist.albumArtist ?? '未知演出者'"
           :album-count="artist.albumCount"
-          :is-selected="props.selectedArtist?.name === artist.name"
-          :is-focused="focusedItem === getArtistFocusKey(artist.name)"
+          :is-selected="isSelectedArtist(artist)"
+          :is-focused="focusedItem === getArtistFocusKey(artist.albumArtist)"
           @select="selectArtist(artist)"
         />
       </ul>
@@ -61,26 +77,36 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
 import { useClickFocus } from "../../composables/useClickFocus";
-import type { Artist } from "../../types/artist";
+import type { AlbumArtistSummary } from "../../types/library";
 import GroupListItem from "./GroupListItem.vue";
 
 const props = defineProps<{
-  artists: Artist[];
-  selectedArtist: Artist | null;
+  artists: AlbumArtistSummary[];
+  selectedArtist: AlbumArtistSummary | null;
+  isLoading: boolean;
+  error: string;
 }>();
 
 const emit = defineEmits<{
-  select: [artist: Artist];
+  select: [artist: AlbumArtistSummary];
 }>();
 
 const { focusedItem, setFocusedItem } = useClickFocus();
 
-function getArtistFocusKey(name: string) {
-  return `artist:${name}`;
+function getArtistKey(albumArtist: string | null) {
+  return JSON.stringify([albumArtist]);
 }
 
-function selectArtist(artist: Artist) {
-  setFocusedItem(getArtistFocusKey(artist.name));
+function getArtistFocusKey(albumArtist: string | null) {
+  return `artist:${getArtistKey(albumArtist)}`;
+}
+
+function isSelectedArtist(artist: AlbumArtistSummary) {
+  return props.selectedArtist?.albumArtist === artist.albumArtist;
+}
+
+function selectArtist(artist: AlbumArtistSummary) {
+  setFocusedItem(getArtistFocusKey(artist.albumArtist));
   emit("select", artist);
 }
 

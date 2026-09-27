@@ -3,7 +3,7 @@
   <article class="group min-w-0">
     <button
       class="focus-visible:outline-spotify-green block w-full rounded-md text-center focus-visible:outline-2 focus-visible:outline-offset-4"
-      :aria-label="`查看专辑 ${album.title}`"
+      :aria-label="`查看专辑 ${album.album ?? '未知专辑'}`"
       :aria-expanded="isSelected"
       type="button"
       @click="emit('select')"
@@ -15,8 +15,12 @@
       >
         <DiscAlbum class="size-14 text-white/70 sm:size-16" stroke-width="1.25" />
       </span>
-      <span class="block truncate text-sm font-semibold text-white">{{ album.title }}</span>
-      <span class="text-spotify-muted mt-1 block truncate text-xs">{{ album.year }}</span>
+      <span class="block truncate text-sm font-semibold text-white">
+        {{ album.album ?? "未知专辑" }}
+      </span>
+      <span class="text-spotify-muted mt-1 block truncate text-xs">
+        {{ album.trackCount }} 首曲目
+      </span>
     </button>
   </article>
 </template>
@@ -24,10 +28,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { DiscAlbum } from "@lucide/vue";
-import type { Album } from "../../types/album";
+import type { AlbumSummary } from "../../types/library";
 
 const props = defineProps<{
-  album: Album;
+  album: AlbumSummary;
   coverIndex: number;
   isSelected: boolean;
   isFocused: boolean;

@@ -1,38 +1,26 @@
-import { ref, watch } from "vue";
-import type { Artist } from "../types/artist";
+import { ref } from "vue";
+import type { AlbumArtistSummary, AlbumSummary, LibraryAlbumSelection } from "../types/library.ts";
 
-interface LibrarySelection {
-  artist: Artist | null;
-  albumId: string | null;
+interface StoredLibrarySelection {
+  groupSelected: boolean;
+  albumArtist: string | null;
+  albumSelected: boolean;
+  album: string | null;
 }
 
 const STORAGE_KEY = "newbee.library-selection";
-const EMPTY_SELECTION: LibrarySelection = {
-  artist: null,
-  albumId: null,
+const EMPTY_SELECTION: StoredLibrarySelection = {
+  groupSelected: false,
+  albumArtist: null,
+  albumSelected: false,
+  album: null,
 };
 
-function readStoredAlbumId(value: unknown, artist: Artist): string | null {
-  if (typeof value !== "string") return null;
-
-  const prefix = `${artist.name}:`;
-  if (!value.startsWith(prefix)) return null;
-
-  const albumNumberText = value.slice(prefix.length);
-  const albumNumber = Number(albumNumberText);
-  if (
-    !Number.isInteger(albumNumber) ||
-    albumNumber < 1 ||
-    albumNumber > artist.albumCount ||
-    String(albumNumber) !== albumNumberText
-  ) {
-    return null;
-  }
-
-  return value;
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
 }
 
-function loadLibrarySelection(availableArtists: Artist[]): LibrarySelection {
+function loadLibrarySelection(): StoredLibrarySelection {
   try {
     const serializedSelection = globalThis.localStorage.getItem(STORAGE_KEY);
     if (serializedSelection === null) return { ...EMPTY_SELECTION };
@@ -43,56 +31,149 @@ function loadLibrarySelection(availableArtists: Artist[]): LibrarySelection {
       parsedSelection === null ||
       Array.isArray(parsedSelection)
     ) {
-      console.error("Saved library selection has an invalid format; using an empty selection.");
-      return { ...EMPTY_SELECTION };
+      throw new Error("Saved library selection has an invalid format.");
     }
 
     const selection = parsedSelection as Record<string, unknown>;
-    if (selection.artistName === null) return { ...EMPTY_SELECTION };
-    if (typeof selection.artistName !== "string") {
-      console.error("Saved library artist is invalid; using an empty selection.");
-      return { ...EMPTY_SELECTION };
+    if (
+      typeof selection.groupSelected !== "boolean" ||
+      typeof selection.albumSelected !== "boolean" ||
+      !isNullableString(selection.albumArtist) ||
+      !isNullableString(selection.album) ||
+      (!selection.groupSelected && (selection.albumArtist !== null || selection.albumSelected)) ||
+      (!selection.albumSelected && selection.album !== null)
+    ) {
+      throw new Error("Saved library selection has invalid values.");
     }
 
-    const artist = availableArtists.find(({ name }) => name === selection.artistName);
-    if (!artist) {
-      console.error("Saved library artist is no longer available; using an empty selection.");
-      return { ...EMPTY_SELECTION };
-    }
-
-    return { artist, albumId: readStoredAlbumId(selection.albumId, artist) };
+    return {
+      groupSelected: selection.groupSelected,
+      albumArtist: selection.albumArtist,
+      albumSelected: selection.albumSelected,
+      album: selection.album,
+    };
   } catch (error) {
-    console.error("Could not read the saved library selection; using an empty selection.", error);
+    globalThis.console.error(
+      "Could not read the saved library selection; using an empty selection.",
+      error,
+    );
     return { ...EMPTY_SELECTION };
   }
 }
 
-function saveLibrarySelection(artist: Artist | null, albumId: string | null) {
-  try {
-    globalThis.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ artistName: artist?.name ?? null, albumId }),
+export function usePersistentLibrarySelection() {
+  const storedSelection = loadLibrarySelection();
+  const selectedGroup = ref<AlbumArtistSummary | null>(null);
+  const selectedAlbum = ref<LibraryAlbumSelection | null>(null);
+  let pendingAlbumSelection: LibraryAlbumSelection | null = null;
+  let hasRestoredGroups = false;
+
+  function saveSelection() {
+    const group = selectedGroup.value;
+    const album = selectedAlbum.value;
+    const selection: StoredLibrarySelection = {
+      groupSelected: group !== null,
+      albumArtist: group?.albumArtist ?? null,
+      albumSelected: album !== null,
+      album: album?.album ?? null,
+    };
+
+    try {
+      globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(selection));
+    } catch (error) {
+      globalThis.console.error("Could not save the library selection.", error);
+    }
+  }
+
+  function setAvailableGroups(groups: AlbumArtistSummary[]) {
+    if (!hasRestoredGroups) {
+      hasRestoredGroups = true;
+      if (storedSelection.groupSelected) {
+        const group = groups.find(
+          (available) => available.albumArtist === storedSelection.albumArtist,
+        );
+        if (group) {
+          selectedGroup.value = group;
+          if (storedSelection.albumSelected) {
+            pendingAlbumSelection = {
+              albumArtist: storedSelection.albumArtist,
+              album: storedSelection.album,
+            };
+            return;
+          }
+        }
+      }
+
+      selectedAlbum.value = null;
+      saveSelection();
+      return;
+    }
+
+    if (!selectedGroup.value) return;
+
+    const group = groups.find(
+      (available) => available.albumArtist === selectedGroup.value?.albumArtist,
     );
-  } catch (error) {
-    globalThis.console.error("Could not save the library selection.", error);
-  }
-}
+    if (!group) {
+      selectedGroup.value = null;
+      selectedAlbum.value = null;
+      pendingAlbumSelection = null;
+      saveSelection();
+      return;
+    }
 
-export function usePersistentLibrarySelection(availableArtists: Artist[]) {
-  const initialSelection = loadLibrarySelection(availableArtists);
-  const selectedArtist = ref<Artist | null>(initialSelection.artist);
-  const selectedAlbumId = ref<string | null>(initialSelection.albumId);
-
-  watch(
-    [selectedArtist, selectedAlbumId],
-    ([artist, albumId]) => saveLibrarySelection(artist, albumId),
-    { flush: "sync" },
-  );
-
-  function selectArtist(artist: Artist) {
-    if (selectedArtist.value?.name !== artist.name) selectedAlbumId.value = null;
-    selectedArtist.value = artist;
+    selectedGroup.value = group;
   }
 
-  return { selectedArtist, selectedAlbumId, selectArtist };
+  function setAvailableAlbums(albumArtist: string | null, albums: AlbumSummary[]) {
+    if (selectedGroup.value?.albumArtist !== albumArtist) return;
+
+    if (pendingAlbumSelection) {
+      const pending = pendingAlbumSelection;
+      pendingAlbumSelection = null;
+      const album = albums.find((available) => available.album === pending.album);
+      selectedAlbum.value = album ? { albumArtist: pending.albumArtist, album: album.album } : null;
+      saveSelection();
+      return;
+    }
+
+    const currentSelection = selectedAlbum.value;
+    if (currentSelection) {
+      const album =
+        currentSelection.albumArtist === albumArtist
+          ? albums.find((available) => available.album === currentSelection.album)
+          : undefined;
+      selectedAlbum.value = album ? { albumArtist, album: album.album } : null;
+    }
+    saveSelection();
+  }
+
+  function selectGroup(group: AlbumArtistSummary) {
+    const isSameGroup = selectedGroup.value?.albumArtist === group.albumArtist;
+    if (!isSameGroup) {
+      selectedAlbum.value = null;
+      pendingAlbumSelection = null;
+    }
+    selectedGroup.value = group;
+    if (!pendingAlbumSelection) saveSelection();
+  }
+
+  function selectAlbum(album: AlbumSummary | null) {
+    const group = selectedGroup.value;
+    if (album && !group) return;
+
+    selectedAlbum.value =
+      album && group ? { albumArtist: group.albumArtist, album: album.album } : null;
+    pendingAlbumSelection = null;
+    saveSelection();
+  }
+
+  return {
+    selectedGroup,
+    selectedAlbum,
+    setAvailableGroups,
+    setAvailableAlbums,
+    selectGroup,
+    selectAlbum,
+  };
 }
