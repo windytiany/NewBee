@@ -3,7 +3,16 @@
     aria-label="播放列表浏览"
     class="bg-spotify-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
-    <h2 class="shrink-0 px-2 py-1 text-sm font-medium text-white/90">播放列表浏览</h2>
+    <header class="flex shrink-0 items-center justify-between gap-2 px-2 py-1">
+      <h2 class="text-sm font-medium text-white/90">播放列表浏览</h2>
+      <button
+        class="focus-visible:outline-spotify-green shrink-0 rounded-full border border-white/15 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-2"
+        type="button"
+        @click="emit('create')"
+      >
+        新建歌单
+      </button>
+    </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       <p v-if="props.isLoading" class="text-spotify-muted px-2 py-3 text-sm" role="status">
@@ -46,6 +55,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [playlist: Playlist];
+  create: [];
 }>();
 
 const { focusedItem, setFocusedItem } = useClickFocus();

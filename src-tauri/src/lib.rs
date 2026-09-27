@@ -35,6 +35,7 @@ pub fn run() {
             database::list_album_artists,
             database::list_albums,
             database::list_album_tracks,
+            database::create_playlist,
             database::list_playlists,
             database::list_playlist_tracks,
             database::get_track,

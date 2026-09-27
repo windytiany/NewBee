@@ -380,6 +380,19 @@ impl Database {
             .map_err(|error| format!("Failed to read album tracks: {error}"))
     }
 
+    pub fn create_playlist(&self, name: &str) -> Result<i64, String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("Playlist name cannot be empty".to_owned());
+        }
+
+        let connection = self.connection()?;
+        connection
+            .execute("INSERT INTO playlists (name) VALUES (?1)", [name])
+            .map_err(|error| format!("Failed to create playlist: {error}"))?;
+        Ok(connection.last_insert_rowid())
+    }
+
     pub fn list_playlists(&self) -> Result<Vec<PlaylistSummary>, String> {
         let connection = self.connection()?;
         let mut statement = connection
@@ -572,6 +585,11 @@ pub fn list_album_tracks(
     state: tauri::State<'_, Database>,
 ) -> Result<Vec<TrackSummary>, String> {
     state.list_album_tracks(album_artist, album)
+}
+
+#[tauri::command]
+pub fn create_playlist(name: String, state: tauri::State<'_, Database>) -> Result<i64, String> {
+    state.create_playlist(&name)
 }
 
 #[tauri::command]

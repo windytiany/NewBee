@@ -7,6 +7,7 @@
         :is-loading="isLoadingPlaylists"
         :error="playlistsError"
         @select="selectPlaylist"
+        @create="showCreatePlaylistDialog"
       />
     </template>
 
@@ -44,6 +45,7 @@
       <TrackInfo :details="null" empty-message="歌单页面暂不提供曲目详情。" />
     </template>
   </ResizableThreeColumnLayout>
+  <CreatePlaylistDialog ref="createPlaylistDialog" @created="onPlaylistCreated" />
 </template>
 
 <script setup lang="ts">
@@ -52,6 +54,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { usePersistentPlaylistSelection } from "../composables/usePersistentPlaylistSelection";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
 import PlaylistBrowser from "../components/playlist/PlaylistBrowser.vue";
+import CreatePlaylistDialog from "../components/playlist/CreatePlaylistDialog.vue";
 import PlaylistList from "../components/playlist/PlaylistList.vue";
 import ResizableThreeColumnLayout from "../components/layout/ResizableThreeColumnLayout.vue";
 import TrackInfo from "../components/track/TrackInfo.vue";
@@ -66,6 +69,7 @@ const {
   setAvailablePlaylists,
   selectPlaylist: setSelectedPlaylist,
 } = usePersistentPlaylistSelection();
+const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
 const playlistTracks = ref<PlaylistTrackData[]>([]);
 const isLoadingPlaylists = ref(false);
 const isLoadingPlaylistTracks = ref(false);
@@ -129,7 +133,7 @@ async function loadPlaylistTracks(playlistId: number) {
   }
 }
 
-async function refreshPlaylists() {
+async function refreshPlaylists(selectPlaylistId?: number) {
   if (!isMounted) return;
 
   const generation = ++playlistsRequestGeneration;
@@ -144,6 +148,11 @@ async function refreshPlaylists() {
     if (!isMounted || generation !== playlistsRequestGeneration) return;
 
     setAvailablePlaylists(result);
+    if (selectPlaylistId !== undefined) {
+      const createdPlaylist = result.find(({ id }) => id === selectPlaylistId);
+      if (createdPlaylist) setSelectedPlaylist(createdPlaylist);
+    }
+
     const playlistId = selectedPlaylistId.value;
     if (playlistId === null) {
       playlistTracks.value = [];
@@ -160,6 +169,14 @@ async function refreshPlaylists() {
       isLoadingPlaylists.value = false;
     }
   }
+}
+
+function showCreatePlaylistDialog() {
+  createPlaylistDialog.value?.show();
+}
+
+function onPlaylistCreated(playlistId: number) {
+  void refreshPlaylists(playlistId);
 }
 
 function selectPlaylist(playlist: Playlist) {
