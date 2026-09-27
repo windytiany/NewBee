@@ -41,11 +41,11 @@
         <dl class="text-spotify-muted mt-3 space-y-1 text-xs leading-relaxed">
           <div class="flex gap-2">
             <dt class="shrink-0">发行日期</dt>
-            <dd class="min-w-0 break-words">{{ props.details.releaseDate ?? "未知" }}</dd>
+            <dd class="min-w-0 wrap-break-word">{{ props.details.releaseDate ?? "未知" }}</dd>
           </div>
           <div class="flex gap-2">
             <dt class="shrink-0">Codec</dt>
-            <dd class="min-w-0 break-words">{{ props.details.codec ?? "未知" }}</dd>
+            <dd class="min-w-0 wrap-break-word">{{ props.details.codec ?? "未知" }}</dd>
           </div>
           <div class="flex gap-2">
             <dt class="shrink-0">采样率</dt>
