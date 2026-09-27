@@ -3,44 +3,79 @@ import type { Playlist } from "../types/playlist.ts";
 
 const STORAGE_KEY = "newbee.playlist-selection";
 
-function loadSelectedPlaylistId(availablePlaylists: Playlist[]): string | null {
+function loadSelectedPlaylistId(availablePlaylists: Playlist[]): number | null {
   try {
     const storedPlaylistId = globalThis.localStorage.getItem(STORAGE_KEY);
-    if (storedPlaylistId === null) return null;
+    if (storedPlaylistId === null || !/^\d+$/.test(storedPlaylistId)) return null;
 
-    if (availablePlaylists.some(({ id }) => id === storedPlaylistId)) return storedPlaylistId;
+    const playlistId = Number(storedPlaylistId);
+    if (!Number.isSafeInteger(playlistId) || playlistId <= 0) return null;
 
-    return null;
+    return availablePlaylists.some(({ id }) => id === playlistId) ? playlistId : null;
   } catch (error) {
     console.error("Could not read the saved playlist selection; using an empty selection.", error);
     return null;
   }
 }
 
-function saveSelectedPlaylistId(playlistId: string | null) {
+function saveSelectedPlaylistId(playlistId: number | null) {
   try {
     if (playlistId === null) {
       globalThis.localStorage.removeItem(STORAGE_KEY);
       return;
     }
 
-    globalThis.localStorage.setItem(STORAGE_KEY, playlistId);
+    globalThis.localStorage.setItem(STORAGE_KEY, String(playlistId));
   } catch (error) {
     globalThis.console.error("Could not save the playlist selection.", error);
   }
 }
 
-export function usePersistentPlaylistSelection(availablePlaylists: Playlist[]) {
-  const selectedPlaylistId = ref(loadSelectedPlaylistId(availablePlaylists));
+export function usePersistentPlaylistSelection() {
+  const availablePlaylists = ref<Playlist[]>([]);
+  const selectedPlaylistId = ref<number | null>(null);
+  let hasLoadedPlaylists = false;
+
   const selectedPlaylist = computed(
-    () => availablePlaylists.find(({ id }) => id === selectedPlaylistId.value) ?? null,
+    () => availablePlaylists.value.find(({ id }) => id === selectedPlaylistId.value) ?? null,
   );
 
-  watch(selectedPlaylistId, saveSelectedPlaylistId, { flush: "sync", immediate: true });
+  watch(
+    selectedPlaylistId,
+    (playlistId) => {
+      if (hasLoadedPlaylists) saveSelectedPlaylistId(playlistId);
+    },
+    { flush: "sync" },
+  );
+
+  function setAvailablePlaylists(playlists: Playlist[]) {
+    availablePlaylists.value = playlists;
+
+    if (!hasLoadedPlaylists) {
+      hasLoadedPlaylists = true;
+      selectedPlaylistId.value = loadSelectedPlaylistId(playlists);
+      saveSelectedPlaylistId(selectedPlaylistId.value);
+      return;
+    }
+
+    if (
+      selectedPlaylistId.value !== null &&
+      !playlists.some(({ id }) => id === selectedPlaylistId.value)
+    ) {
+      selectedPlaylistId.value = null;
+    }
+  }
 
   function selectPlaylist(playlist: Playlist) {
+    if (!availablePlaylists.value.some(({ id }) => id === playlist.id)) return;
     selectedPlaylistId.value = playlist.id;
   }
 
-  return { selectedPlaylistId, selectedPlaylist, selectPlaylist };
+  return {
+    availablePlaylists,
+    selectedPlaylistId,
+    selectedPlaylist,
+    setAvailablePlaylists,
+    selectPlaylist,
+  };
 }

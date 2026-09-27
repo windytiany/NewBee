@@ -90,6 +90,17 @@ pub struct PlaylistSummary {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlaylistTrackSummary {
+    playlist_item_id: i64,
+    track_id: i64,
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    duration_ms: Option<i64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrackDetails {
     id: i64,
     path: String,
@@ -393,11 +404,14 @@ impl Database {
             .map_err(|error| format!("Failed to read playlists: {error}"))
     }
 
-    pub fn list_playlist_tracks(&self, playlist_id: i64) -> Result<Vec<TrackSummary>, String> {
+    pub fn list_playlist_tracks(
+        &self,
+        playlist_id: i64,
+    ) -> Result<Vec<PlaylistTrackSummary>, String> {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
-                "SELECT t.id, t.title, t.artist, t.album, t.duration_ms
+                "SELECT pi.id, t.id, t.title, t.artist, t.album, t.duration_ms
                  FROM playlist_items pi
                  JOIN tracks t ON t.id = pi.track_id
                  WHERE pi.playlist_id = ?1
@@ -406,12 +420,13 @@ impl Database {
             .map_err(|error| format!("Failed to prepare playlist track query: {error}"))?;
         let rows = statement
             .query_map([playlist_id], |row| {
-                Ok(TrackSummary {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    artist: row.get(2)?,
-                    album: row.get(3)?,
-                    duration_ms: row.get(4)?,
+                Ok(PlaylistTrackSummary {
+                    playlist_item_id: row.get(0)?,
+                    track_id: row.get(1)?,
+                    title: row.get(2)?,
+                    artist: row.get(3)?,
+                    album: row.get(4)?,
+                    duration_ms: row.get(5)?,
                 })
             })
             .map_err(|error| format!("Failed to list playlist tracks: {error}"))?;
@@ -568,7 +583,7 @@ pub fn list_playlists(state: tauri::State<'_, Database>) -> Result<Vec<PlaylistS
 pub fn list_playlist_tracks(
     playlist_id: i64,
     state: tauri::State<'_, Database>,
-) -> Result<Vec<TrackSummary>, String> {
+) -> Result<Vec<PlaylistTrackSummary>, String> {
     state.list_playlist_tracks(playlist_id)
 }
 

@@ -1,13 +1,14 @@
 export type PlaylistTrackData = {
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  duration: string;
+  playlistItemId: number;
+  trackId: number;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  durationMs: number | null;
 };
 
 export type Playlist = {
-  id: string;
+  id: number;
   name: string;
-  tracks: PlaylistTrackData[];
+  trackCount: number;
 };

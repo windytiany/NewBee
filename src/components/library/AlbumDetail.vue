@@ -36,7 +36,8 @@
         :track="track"
         :index="index"
         :is-focused="focusedItem === getTrackFocusKey(track.id)"
-        @select="setFocusedItem(getTrackFocusKey(track.id))"
+        :is-selected="track.id === props.selectedTrackId"
+        @select="selectTrack(track.id)"
       />
     </ol>
     <p v-else class="text-spotify-muted py-3 text-sm">此专辑暂无曲目。</p>
@@ -53,17 +54,24 @@ const props = defineProps<{
   album: AlbumSummary;
   albumArtist: string | null;
   tracks: TrackSummary[];
+  selectedTrackId: number | null;
   tracksLoading: boolean;
   tracksError: string;
 }>();
 
 const emit = defineEmits<{
   close: [];
+  selectTrack: [trackId: number];
 }>();
 
 const { focusedItem, setFocusedItem } = useClickFocus();
 
 function getTrackFocusKey(id: number) {
   return `album-track:${id}`;
+}
+
+function selectTrack(trackId: number) {
+  setFocusedItem(getTrackFocusKey(trackId));
+  emit("selectTrack", trackId);
 }
 </script>

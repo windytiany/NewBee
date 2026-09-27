@@ -2,7 +2,14 @@
   <li :aria-current="isCurrentTrack ? 'true' : undefined">
     <button
       class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors focus-visible:outline-2"
-      :class="isFocused ? 'bg-spotify-interactive' : 'hover:bg-white/5'"
+      :class="
+        isSelected
+          ? 'bg-white/10 ring-1 ring-white/10 ring-inset'
+          : isFocused
+            ? 'bg-spotify-interactive'
+            : 'hover:bg-white/5'
+      "
+      :aria-pressed="isSelected ? true : undefined"
       type="button"
       @click="emit('select')"
     >
@@ -34,13 +41,20 @@
 <script setup lang="ts">
 import { AudioLines, Disc3 } from "@lucide/vue";
 
-defineProps<{
-  title: string;
-  album: string;
-  duration: string;
-  isCurrentTrack?: boolean;
-  isFocused: boolean;
-}>();
+withDefaults(
+  defineProps<{
+    title: string;
+    album: string;
+    duration: string;
+    isCurrentTrack?: boolean;
+    isSelected?: boolean;
+    isFocused: boolean;
+  }>(),
+  {
+    isCurrentTrack: false,
+    isSelected: false,
+  },
+);
 
 const emit = defineEmits<{
   select: [];

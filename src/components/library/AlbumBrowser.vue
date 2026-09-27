@@ -37,9 +37,11 @@
             :album="row.selectedAlbum"
             :album-artist="props.artist.albumArtist"
             :tracks="props.tracks"
+            :selected-track-id="props.selectedTrackId"
             :tracks-loading="props.tracksLoading"
             :tracks-error="props.tracksError"
             @close="closeAlbum(row.selectedAlbum)"
+            @select-track="emit('selectTrack', $event)"
           />
         </template>
       </div>
@@ -75,6 +77,7 @@ const props = defineProps<{
   albums: AlbumSummary[];
   selectedAlbum: LibraryAlbumSelection | null;
   tracks: TrackSummary[];
+  selectedTrackId: number | null;
   albumsLoading: boolean;
   albumsError: string;
   tracksLoading: boolean;
@@ -83,6 +86,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectAlbum: [album: AlbumSummary | null];
+  selectTrack: [trackId: number];
 }>();
 
 const columnCount = ref(2);
