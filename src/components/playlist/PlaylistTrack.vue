@@ -5,6 +5,7 @@
       :class="isFocused ? 'bg-spotify-interactive' : 'hover:bg-white/5'"
       type="button"
       @click="emit('select')"
+      @dblclick="emit('play')"
     >
       <span class="text-spotify-muted text-right text-xs tabular-nums">{{ trackNumber }}</span>
       <span class="flex min-w-0 flex-col gap-0.5">
@@ -34,5 +35,6 @@ const duration = computed(() => formatTrackDuration(props.track.durationMs) ?? "
 
 const emit = defineEmits<{
   select: [];
+  play: [];
 }>();
 </script>

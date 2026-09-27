@@ -20,6 +20,7 @@
         :has-playlists="playlists.length > 0"
         :is-loading-tracks="isLoadingPlaylistTracks"
         :tracks-error="playlistTracksError"
+        @play-track="playTrackFromPlaylist"
       />
     </template>
 
@@ -37,6 +38,7 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref } from "vue";
+import { usePlaybackState } from "../composables/usePlaybackState";
 import { usePersistentPlaylistSelection } from "../composables/usePersistentPlaylistSelection";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
 import PlaylistBrowser from "../components/playlist/PlaylistBrowser.vue";
@@ -60,6 +62,7 @@ const isLoadingPlaylists = ref(false);
 const isLoadingPlaylistTracks = ref(false);
 const playlistsError = ref("");
 const playlistTracksError = ref("");
+const { playTrack } = usePlaybackState();
 let isMounted = false;
 let playlistsRequestGeneration = 0;
 let playlistTracksRequestGeneration = 0;
@@ -159,6 +162,11 @@ function selectPlaylist(playlist: Playlist) {
 
   setSelectedPlaylist(playlist);
   void loadPlaylistTracks(playlist.id);
+}
+
+function playTrackFromPlaylist(trackId: number) {
+  if (!playlistTracks.value.some((track) => track.trackId === trackId)) return;
+  void playTrack(trackId);
 }
 
 function onLibraryScanCompleted() {
