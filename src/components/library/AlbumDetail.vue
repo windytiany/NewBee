@@ -18,7 +18,7 @@
             <Play aria-hidden="true" class="ml-0.5 size-4 fill-current" />
           </button>
         </div>
-        <p class="text-spotify-muted mt-1 truncate text-sm">{{ props.album.trackCount }} 首曲目</p>
+        <p class="text-spotify-muted mt-1 truncate text-sm">{{ props.album.year ?? "年份未知" }}</p>
       </div>
       <button
         aria-label="收起专辑曲目"

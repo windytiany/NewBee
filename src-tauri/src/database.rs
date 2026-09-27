@@ -67,7 +67,7 @@ pub struct AlbumArtistSummary {
 #[serde(rename_all = "camelCase")]
 pub struct AlbumSummary {
     album: Option<String>,
-    track_count: i64,
+    year: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -337,7 +337,13 @@ impl Database {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
-                "SELECT album, COUNT(*)
+                "SELECT album,
+                        MIN(
+                            CASE
+                                WHEN substr(release_date, 1, 4) GLOB '[0-9][0-9][0-9][0-9]'
+                                THEN CAST(substr(release_date, 1, 4) AS INTEGER)
+                            END
+                        )
                  FROM tracks
                  WHERE album_artist IS ?1
                  GROUP BY album
@@ -348,7 +354,7 @@ impl Database {
             .query_map(params![album_artist], |row| {
                 Ok(AlbumSummary {
                     album: row.get(0)?,
-                    track_count: row.get(1)?,
+                    year: row.get(1)?,
                 })
             })
             .map_err(|error| format!("Failed to list albums: {error}"))?;

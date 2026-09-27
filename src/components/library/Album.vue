@@ -27,7 +27,7 @@
         {{ album.album ?? "未知专辑" }}
       </span>
       <span class="text-spotify-muted mt-1 block truncate text-xs">
-        {{ album.trackCount }} 首曲目
+        {{ album.year ?? "年份未知" }}
       </span>
     </button>
   </article>

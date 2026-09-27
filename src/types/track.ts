@@ -1,9 +1,3 @@
-export type Track = {
-  id: string;
-  title: string;
-  duration: string;
-};
-
 export type TrackSummary = {
   id: number;
   title: string | null;
