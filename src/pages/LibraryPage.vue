@@ -29,16 +29,7 @@
     </template>
 
     <template #right-top>
-      <TrackList
-        :tracks="libraryTracks"
-        title="当前专辑曲目"
-        :selected-track-id="selectedTrackId"
-        :current-track-id="currentTrack?.trackId ?? null"
-        :is-loading="isLoadingTracks"
-        :error="tracksError || albumsError"
-        :empty-message="selectedAlbum ? '此专辑暂无曲目。' : '展开专辑后可查看曲目。'"
-        @select="selectTrackFromList"
-      />
+      <TrackList :tracks="[]" title="播放队列" empty-message="播放队列为空。" />
     </template>
 
     <template #right-bottom>
@@ -56,7 +47,7 @@
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { usePersistentLibrarySelection } from "../composables/usePersistentLibrarySelection";
 import { usePlaybackState } from "../composables/usePlaybackState";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
@@ -65,7 +56,6 @@ import GroupList from "../components/library/GroupList.vue";
 import ResizableThreeColumnLayout from "../components/layout/ResizableThreeColumnLayout.vue";
 import TrackInfo from "../components/track/TrackInfo.vue";
 import TrackList from "../components/track/TrackList.vue";
-import { formatTrackDuration } from "../components/track/formatTrackDuration.ts";
 import type {
   AlbumArtistSummary,
   AlbumSummary,
@@ -89,14 +79,6 @@ const currentTrackArtworkUrl = ref<string | null>(null);
 const isLoadingCurrentTrackDetails = ref(false);
 const currentTrackDetailsError = ref("");
 const currentTrackArtworkError = ref("");
-const libraryTracks = computed(() =>
-  tracks.value.map((track) => ({
-    id: track.id,
-    title: track.title ?? "未知曲目",
-    album: track.album ?? "未知专辑",
-    duration: formatTrackDuration(track.durationMs) ?? "时长未知",
-  })),
-);
 const { currentTrack, playTrack } = usePlaybackState();
 const {
   selectedGroup,
@@ -389,10 +371,6 @@ function selectTrack(trackId: number) {
 function playTrackFromLibrary(trackId: number) {
   if (!tracks.value.some((track) => track.id === trackId)) return;
   void playTrack(trackId);
-}
-
-function selectTrackFromList(trackId: string | number) {
-  if (typeof trackId === "number") selectTrack(trackId);
 }
 
 function onLibraryScanCompleted() {

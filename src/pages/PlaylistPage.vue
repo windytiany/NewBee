@@ -24,21 +24,7 @@
     </template>
 
     <template #right-top>
-      <TrackList
-        :tracks="trackListTracks"
-        title="歌单曲目"
-        :current-track-id="null"
-        :selected-track-id="null"
-        :is-loading="isLoadingPlaylistTracks || (isLoadingPlaylists && playlists.length === 0)"
-        :error="playlistTracksError || playlistsError"
-        :empty-message="
-          selectedPlaylist
-            ? '此歌单暂无歌曲。'
-            : playlists.length > 0
-              ? '选择歌单后显示其中的歌曲。'
-              : '还没有歌单。'
-        "
-      />
+      <TrackList :tracks="[]" title="播放队列" empty-message="播放队列为空。" />
     </template>
 
     <template #right-bottom>
@@ -50,7 +36,7 @@
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { usePersistentPlaylistSelection } from "../composables/usePersistentPlaylistSelection";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
 import PlaylistBrowser from "../components/playlist/PlaylistBrowser.vue";
@@ -59,7 +45,6 @@ import PlaylistList from "../components/playlist/PlaylistList.vue";
 import ResizableThreeColumnLayout from "../components/layout/ResizableThreeColumnLayout.vue";
 import TrackInfo from "../components/track/TrackInfo.vue";
 import TrackList from "../components/track/TrackList.vue";
-import { formatTrackDuration } from "../components/track/formatTrackDuration.ts";
 import type { Playlist, PlaylistTrackData } from "../types/playlist";
 
 const {
@@ -75,16 +60,6 @@ const isLoadingPlaylists = ref(false);
 const isLoadingPlaylistTracks = ref(false);
 const playlistsError = ref("");
 const playlistTracksError = ref("");
-const trackListTracks = computed(() =>
-  playlistTracks.value.map((track) => ({
-    id: track.trackId,
-    rowKey: track.playlistItemId,
-    title: track.title ?? "未知曲目",
-    album: track.album ?? "未知专辑",
-    duration: formatTrackDuration(track.durationMs) ?? "时长未知",
-  })),
-);
-
 let isMounted = false;
 let playlistsRequestGeneration = 0;
 let playlistTracksRequestGeneration = 0;
