@@ -57,7 +57,8 @@
 <script setup lang="ts">
 import { Play, X } from "@lucide/vue";
 import { useClickFocus } from "@/composables/useClickFocus";
-import type { AlbumSummary, TrackSummary } from "@/types/library";
+import type { AlbumSummary } from "@/types/album";
+import type { TrackSummary } from "@/types/track";
 import AlbumTrack from "@/components/library/AlbumTrack.vue";
 
 const props = defineProps<{

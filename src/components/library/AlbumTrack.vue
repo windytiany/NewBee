@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { AudioLines } from "@lucide/vue";
-import type { TrackSummary } from "@/types/library.ts";
+import type { TrackSummary } from "@/types/track.ts";
 import { formatTrackDuration } from "@/utils/formatTrack.ts";
 
 const props = defineProps<{

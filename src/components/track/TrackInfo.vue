@@ -74,7 +74,7 @@
 
 <script setup lang="ts">
 import { Disc3 } from "@lucide/vue";
-import type { TrackDetails } from "@/types/library.ts";
+import type { TrackDetails } from "@/types/track.ts";
 import { formatAudioSummary } from "@/utils/formatTrack.ts";
 
 type TrackInfoData = {

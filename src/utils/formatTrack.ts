@@ -1,4 +1,4 @@
-import type { TrackDetails } from "@/types/library.ts";
+import type { TrackDetails } from "@/types/track.ts";
 
 export function formatTrackDuration(durationMs: number | null): string | null {
   if (durationMs === null || !Number.isFinite(durationMs) || durationMs < 0) return null;

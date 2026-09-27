@@ -55,12 +55,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useClickFocus } from "@/composables/useClickFocus";
-import type {
-  AlbumArtistSummary,
-  AlbumSummary,
-  LibraryAlbumSelection,
-  TrackSummary,
-} from "@/types/library";
+import type { AlbumArtistSummary, AlbumSummary, LibraryAlbumSelection } from "@/types/album";
+import type { TrackSummary } from "@/types/track";
 import AlbumDetail from "@/components/library/AlbumDetail.vue";
 import Album from "@/components/library/Album.vue";
 
