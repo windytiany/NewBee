@@ -56,7 +56,8 @@ import GroupList from "@/components/library/GroupList.vue";
 import ResizableThreeColumnLayout from "@/components/layout/ResizableThreeColumnLayout.vue";
 import TrackInfo from "@/components/track/TrackInfo.vue";
 import TrackList from "@/components/track/TrackList.vue";
-import type { AlbumArtistSummary, AlbumSummary } from "@/types/album";
+import type { AlbumArtistSummary } from "@/types/artist";
+import type { AlbumSummary } from "@/types/album";
 import type { TrackArtwork, TrackDetails, TrackSummary } from "@/types/track";
 
 const artists = ref<AlbumArtistSummary[]>([]);
