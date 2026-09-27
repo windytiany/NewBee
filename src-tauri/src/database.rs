@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS track_artwork (
     image BLOB NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS music_library_directories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS playlists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL
@@ -103,6 +108,41 @@ pub struct TrackDetails {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicLibraryDirectory {
+    pub(crate) id: i64,
+    pub(crate) path: String,
+    display_path: String,
+}
+
+pub struct ScannedTrack {
+    pub path: String,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub album_artist: Option<String>,
+    pub release_date: Option<String>,
+    pub disc_number: Option<i64>,
+    pub track_number: Option<i64>,
+    pub duration_ms: Option<i64>,
+    pub codec: Option<String>,
+    pub sample_rate_hz: Option<i64>,
+    pub bitrate_kbps: Option<i64>,
+    pub channels: Option<i64>,
+    pub artwork: Option<EmbeddedArtwork>,
+}
+
+pub struct EmbeddedArtwork {
+    pub mime_type: String,
+    pub image: Vec<u8>,
+}
+
+pub enum TrackWriteOutcome {
+    Added,
+    Updated,
+}
+
+#[derive(Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum TrackArtwork {
     Available { mime_type: String, data: Vec<u8> },
@@ -124,6 +164,130 @@ impl Database {
         self.connection
             .lock()
             .map_err(|_| "Database connection is unavailable".to_owned())
+    }
+
+    pub fn list_music_library_directories(&self) -> Result<Vec<MusicLibraryDirectory>, String> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare("SELECT id, path FROM music_library_directories ORDER BY id")
+            .map_err(|error| format!("Failed to prepare library directory query: {error}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                let id = row.get(0)?;
+                let path: String = row.get(1)?;
+                Ok(MusicLibraryDirectory {
+                    id,
+                    display_path: display_directory_path(&path),
+                    path,
+                })
+            })
+            .map_err(|error| format!("Failed to list library directories: {error}"))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|error| format!("Failed to read library directories: {error}"))
+    }
+
+    pub fn add_music_library_directory(&self, path: &str) -> Result<bool, String> {
+        let connection = self.connection()?;
+        let inserted = connection
+            .execute(
+                "INSERT OR IGNORE INTO music_library_directories (path) VALUES (?1)",
+                [path],
+            )
+            .map_err(|error| format!("Failed to save library directory: {error}"))?;
+        Ok(inserted > 0)
+    }
+
+    pub fn remove_music_library_directory(&self, id: i64) -> Result<(), String> {
+        let connection = self.connection()?;
+        let removed = connection
+            .execute("DELETE FROM music_library_directories WHERE id = ?1", [id])
+            .map_err(|error| format!("Failed to remove library directory: {error}"))?;
+        if removed == 0 {
+            return Err(format!("Library directory {id} was not found"));
+        }
+        Ok(())
+    }
+
+    pub fn upsert_scanned_track(&self, track: &ScannedTrack) -> Result<TrackWriteOutcome, String> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Failed to start track update: {error}"))?;
+        let existing_id = transaction
+            .query_row(
+                "SELECT id FROM tracks WHERE path = ?1",
+                [&track.path],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to check existing track: {error}"))?;
+
+        transaction
+            .execute(
+                "INSERT INTO tracks (
+                    path, title, artist, album, album_artist, release_date,
+                    disc_number, track_number, duration_ms, codec, sample_rate_hz,
+                    bitrate_kbps, channels
+                 ) VALUES (
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+                 )
+                 ON CONFLICT(path) DO UPDATE SET
+                    title = excluded.title,
+                    artist = excluded.artist,
+                    album = excluded.album,
+                    album_artist = excluded.album_artist,
+                    release_date = excluded.release_date,
+                    disc_number = excluded.disc_number,
+                    track_number = excluded.track_number,
+                    duration_ms = excluded.duration_ms,
+                    codec = excluded.codec,
+                    sample_rate_hz = excluded.sample_rate_hz,
+                    bitrate_kbps = excluded.bitrate_kbps,
+                    channels = excluded.channels",
+                params![
+                    &track.path,
+                    &track.title,
+                    &track.artist,
+                    &track.album,
+                    &track.album_artist,
+                    &track.release_date,
+                    track.disc_number,
+                    track.track_number,
+                    track.duration_ms,
+                    &track.codec,
+                    track.sample_rate_hz,
+                    track.bitrate_kbps,
+                    track.channels,
+                ],
+            )
+            .map_err(|error| format!("Failed to write track metadata: {error}"))?;
+
+        let track_id = existing_id.unwrap_or_else(|| transaction.last_insert_rowid());
+        if let Some(artwork) = track.artwork.as_ref() {
+            transaction
+                .execute(
+                    "INSERT INTO track_artwork (track_id, mime_type, image)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(track_id) DO UPDATE SET
+                        mime_type = excluded.mime_type,
+                        image = excluded.image",
+                    params![track_id, &artwork.mime_type, &artwork.image],
+                )
+                .map_err(|error| format!("Failed to write track artwork: {error}"))?;
+        } else {
+            transaction
+                .execute("DELETE FROM track_artwork WHERE track_id = ?1", [track_id])
+                .map_err(|error| format!("Failed to remove missing track artwork: {error}"))?;
+        }
+
+        transaction
+            .commit()
+            .map_err(|error| format!("Failed to finish track update: {error}"))?;
+        Ok(if existing_id.is_some() {
+            TrackWriteOutcome::Updated
+        } else {
+            TrackWriteOutcome::Added
+        })
     }
 
     pub fn list_album_artists(&self) -> Result<Vec<AlbumArtistSummary>, String> {
@@ -316,6 +480,59 @@ impl Database {
             Some(_) => Err(format!("Artwork record for track {track_id} is invalid")),
         }
     }
+}
+
+fn display_directory_path(path: &str) -> String {
+    #[cfg(windows)]
+    {
+        const EXTENDED_UNC_PREFIX: &str = r"\\?\UNC\";
+        const EXTENDED_PATH_PREFIX: &str = r"\\?\";
+
+        if let Some(unc_path) = path.strip_prefix(EXTENDED_UNC_PREFIX) {
+            return format!("\\\\{unc_path}");
+        }
+        if let Some(drive_path) = path.strip_prefix(EXTENDED_PATH_PREFIX) {
+            let bytes = drive_path.as_bytes();
+            if bytes.len() >= 3
+                && bytes[0].is_ascii_alphabetic()
+                && bytes[1] == b':'
+                && matches!(bytes[2], b'\\' | b'/')
+            {
+                return drive_path.to_owned();
+            }
+        }
+    }
+    path.to_owned()
+}
+
+#[tauri::command]
+pub fn list_music_library_directories(
+    state: tauri::State<'_, Database>,
+) -> Result<Vec<MusicLibraryDirectory>, String> {
+    state.list_music_library_directories()
+}
+
+#[tauri::command]
+pub fn add_music_library_directory(
+    path: String,
+    state: tauri::State<'_, Database>,
+) -> Result<bool, String> {
+    let canonical_path = Path::new(&path)
+        .canonicalize()
+        .map_err(|error| format!("Could not open selected directory: {error}"))?;
+    if !canonical_path.is_dir() {
+        return Err("The selected path is not a directory".to_owned());
+    }
+    let path = canonical_path.to_string_lossy().into_owned();
+    state.add_music_library_directory(&path)
+}
+
+#[tauri::command]
+pub fn remove_music_library_directory(
+    id: i64,
+    state: tauri::State<'_, Database>,
+) -> Result<(), String> {
+    state.remove_music_library_directory(id)
 }
 
 #[tauri::command]

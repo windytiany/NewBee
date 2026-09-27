@@ -1,10 +1,12 @@
 mod database;
 mod playback;
+mod scan;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(playback::PlaybackState::default())
+        .manage(scan::ScanState::default())
         .setup(|app| {
             use tauri::Manager;
 
@@ -15,6 +17,7 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(
@@ -25,6 +28,10 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            database::list_music_library_directories,
+            database::add_music_library_directory,
+            database::remove_music_library_directory,
+            scan::scan_music_library,
             database::list_album_artists,
             database::list_albums,
             database::list_album_tracks,

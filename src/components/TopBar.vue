@@ -3,7 +3,36 @@
     class="bg-spotify-base fixed inset-x-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-3 text-white sm:px-6"
     @mousedown.left="startDragging"
   >
-    <span class="justify-self-start text-base font-bold whitespace-nowrap sm:text-lg">NewBee</span>
+    <div ref="brandMenuContainer" class="relative justify-self-start">
+      <button
+        ref="brandButton"
+        aria-controls="brand-menu"
+        aria-haspopup="menu"
+        class="focus-visible:outline-spotify-green rounded text-base font-bold whitespace-nowrap focus-visible:outline-2 sm:text-lg"
+        :aria-expanded="isBrandMenuOpen"
+        type="button"
+        @click.stop="isBrandMenuOpen = !isBrandMenuOpen"
+      >
+        NewBee
+      </button>
+      <div
+        v-if="isBrandMenuOpen"
+        id="brand-menu"
+        class="bg-spotify-interactive absolute top-full left-0 z-50 mt-2 w-48 rounded-lg p-1 shadow-xl ring-1 ring-white/10"
+        role="menu"
+        aria-label="NewBee 菜单"
+      >
+        <button
+          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
+          role="menuitem"
+          type="button"
+          @click="openScanDialog"
+        >
+          扫描文件夹
+        </button>
+      </div>
+      <LibraryScanDialog ref="libraryScanDialog" />
+    </div>
 
     <nav
       aria-label="Main navigation"
@@ -66,10 +95,11 @@
 
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import LibraryScanDialog from "./LibraryScanDialog.vue";
 import { pageNames, type PageName } from "../types/page";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Maximize, Minus, X } from "@lucide/vue";
-import { onMounted, onUnmounted, ref } from "vue";
 
 const props = defineProps<{ activePage: PageName }>();
 const emit = defineEmits<{
@@ -78,6 +108,10 @@ const emit = defineEmits<{
 const isTauriApp = isTauri();
 const appWindow = isTauriApp ? getCurrentWindow() : null;
 const isMaximized = ref(false);
+const brandMenuContainer = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
+const brandButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
+const isBrandMenuOpen = ref(false);
+const libraryScanDialog = ref<InstanceType<typeof LibraryScanDialog> | null>(null);
 let unlistenResize: (() => void) | undefined;
 
 async function performWindowAction(action: () => Promise<void>, description: string) {
@@ -96,6 +130,27 @@ async function syncMaximizedState() {
   } catch (error) {
     globalThis.console.error("Failed to read the window maximized state.", error);
   }
+}
+
+async function openScanDialog() {
+  isBrandMenuOpen.value = false;
+  await nextTick();
+  brandButton.value?.focus();
+  libraryScanDialog.value?.show();
+}
+
+function closeBrandMenuOnOutsidePointer(event: InstanceType<typeof globalThis.PointerEvent>) {
+  if (event.target instanceof globalThis.Node && brandMenuContainer.value?.contains(event.target)) {
+    return;
+  }
+  isBrandMenuOpen.value = false;
+}
+
+function closeBrandMenuOnEscape(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+  if (event.key !== "Escape" || !isBrandMenuOpen.value) return;
+
+  isBrandMenuOpen.value = false;
+  brandButton.value?.focus();
 }
 
 function startDragging(event: InstanceType<typeof globalThis.MouseEvent>) {
@@ -127,6 +182,8 @@ async function closeWindow() {
 }
 
 onMounted(async () => {
+  globalThis.document.addEventListener("pointerdown", closeBrandMenuOnOutsidePointer);
+  globalThis.document.addEventListener("keydown", closeBrandMenuOnEscape);
   if (!appWindow) return;
 
   await syncMaximizedState();
@@ -141,6 +198,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  globalThis.document.removeEventListener("pointerdown", closeBrandMenuOnOutsidePointer);
+  globalThis.document.removeEventListener("keydown", closeBrandMenuOnEscape);
   unlistenResize?.();
 });
 </script>
