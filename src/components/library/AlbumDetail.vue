@@ -37,7 +37,10 @@
         :index="index"
         :is-focused="focusedItem === getTrackFocusKey(track.id)"
         :is-selected="track.id === props.selectedTrackId"
+        :is-current-track="track.id === props.currentTrackId"
+        :is-playback-pending="props.isPlaybackPending"
         @select="selectTrack(track.id)"
+        @play="emit('playTrack', track.id)"
       />
     </ol>
     <p v-else class="text-spotify-muted py-3 text-sm">此专辑暂无曲目。</p>
@@ -55,6 +58,8 @@ const props = defineProps<{
   albumArtist: string | null;
   tracks: TrackSummary[];
   selectedTrackId: number | null;
+  currentTrackId: number | null;
+  isPlaybackPending: boolean;
   tracksLoading: boolean;
   tracksError: string;
 }>();
@@ -62,6 +67,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   selectTrack: [trackId: number];
+  playTrack: [trackId: number];
 }>();
 
 const { focusedItem, setFocusedItem } = useClickFocus();

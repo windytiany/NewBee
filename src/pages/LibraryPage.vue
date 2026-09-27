@@ -17,12 +17,15 @@
         :selected-album="selectedAlbum"
         :tracks="tracks"
         :selected-track-id="selectedTrackId"
+        :current-track-id="currentTrack?.trackId ?? null"
+        :is-playback-pending="isPlaybackCommandPending"
         :albums-loading="isLoadingAlbums"
         :albums-error="albumsError"
         :tracks-loading="isLoadingTracks"
         :tracks-error="tracksError"
         @select-album="selectAlbum"
         @select-track="selectTrack"
+        @play-track="playTrackFromLibrary"
       />
     </template>
 
@@ -31,7 +34,7 @@
         :tracks="libraryTracks"
         title="当前专辑曲目"
         :selected-track-id="selectedTrackId"
-        :current-track-id="null"
+        :current-track-id="currentTrack?.trackId ?? null"
         :is-loading="isLoadingTracks"
         :error="tracksError || albumsError"
         :empty-message="selectedAlbum ? '此专辑暂无曲目。' : '展开专辑后可查看曲目。'"
@@ -55,6 +58,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { usePersistentLibrarySelection } from "../composables/usePersistentLibrarySelection";
+import { usePlaybackState } from "../composables/usePlaybackState";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
 import AlbumBrowser from "../components/library/AlbumBrowser.vue";
 import GroupList from "../components/library/GroupList.vue";
@@ -93,6 +97,7 @@ const libraryTracks = computed(() =>
     duration: formatTrackDuration(track.durationMs) ?? "时长未知",
   })),
 );
+const { currentTrack, isPlaybackCommandPending, playTrack } = usePlaybackState();
 const {
   selectedGroup,
   selectedAlbum,
@@ -397,6 +402,11 @@ function selectTrack(trackId: number) {
   selectedTrackId.value = trackId;
   void loadTrackDetails(trackId);
   void loadTrackArtwork(trackId);
+}
+
+function playTrackFromLibrary(trackId: number) {
+  if (!tracks.value.some((track) => track.id === trackId)) return;
+  void playTrack(trackId);
 }
 
 function selectTrackFromList(trackId: string | number) {

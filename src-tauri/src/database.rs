@@ -99,6 +99,12 @@ pub struct PlaylistTrackSummary {
     duration_ms: Option<i64>,
 }
 
+pub(crate) struct TrackPlaybackInfo {
+    pub(crate) path: String,
+    pub(crate) title: Option<String>,
+    pub(crate) artist: Option<String>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackDetails {
@@ -445,6 +451,27 @@ impl Database {
             .map_err(|error| format!("Failed to list playlist tracks: {error}"))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|error| format!("Failed to read playlist tracks: {error}"))
+    }
+
+    pub(crate) fn get_track_for_playback(
+        &self,
+        track_id: i64,
+    ) -> Result<Option<TrackPlaybackInfo>, String> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT path, title, artist FROM tracks WHERE id = ?1",
+                [track_id],
+                |row| {
+                    Ok(TrackPlaybackInfo {
+                        path: row.get(0)?,
+                        title: row.get(1)?,
+                        artist: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Failed to find track {track_id} for playback: {error}"))
     }
 
     pub fn get_track(&self, track_id: i64) -> Result<Option<TrackDetails>, String> {

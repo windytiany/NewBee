@@ -15,7 +15,7 @@
         <button
           :aria-label="playbackStatus.isPlaying ? 'Pause' : 'Play'"
           class="bg-spotify-green focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="isPlaybackCommandPending || isSeeking"
+          :disabled="isPlaybackCommandPending || isSeeking || !currentTrack"
           type="button"
           @click="togglePlayback"
         >
@@ -109,7 +109,10 @@
       <span
         class="pointer-events-none absolute top-10 left-1/2 max-w-56 -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-1"
       >
-        Title - Artist
+        <template v-if="currentTrack">
+          {{ currentTrack.title ?? "未知曲目" }} - {{ currentTrack.artist ?? "未知演出者" }}
+        </template>
+        <template v-else>未选择歌曲</template>
       </span>
       <div class="bg-spotify-track relative mt-1 h-1 rounded-full sm:mb-1">
         <div
@@ -169,6 +172,7 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { usePlaybackState } from "../composables/usePlaybackState";
 import {
   Pause,
   Play,
@@ -180,9 +184,6 @@ import {
   VolumeX,
 } from "@lucide/vue";
 
-// Temporary local file path. Replace this with the audio file path on your computer.
-const TEMP_AUDIO_PATH =
-  "D:/Music/American Football/American Football/01 - American Football - Never Meant.flac";
 const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
 
 const DEFAULT_VOLUME = 50;
@@ -268,16 +269,17 @@ const isRepeatEnabled = ref(false);
 const isShuffleEnabled = ref(false);
 const playbackStatus = ref<PlaybackStatus>({ ...EMPTY_PLAYBACK_STATUS });
 const playbackError = ref("");
+const { currentTrack, isPlaybackCommandPending, playbackStartError, playTrack } =
+  usePlaybackState();
 const volumeError = ref("");
 const isVolumeSyncReady = ref(false);
-const isPlaybackCommandPending = ref(false);
 const isSeeking = ref(false);
 const selectedPositionMs = ref(0);
 const sliderPositionMs = computed(() =>
   isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
 );
 const playbackFeedback = computed(() =>
-  [playbackError.value, volumeError.value].filter(Boolean).join(" "),
+  [playbackError.value, playbackStartError.value, volumeError.value].filter(Boolean).join(" "),
 );
 const progressPercent = computed(() =>
   playbackStatus.value.durationMs > 0
@@ -402,6 +404,8 @@ async function refreshPlaybackStatus(force = false): Promise<boolean> {
   }
 }
 
+watch(currentTrack, () => void refreshPlaybackStatus(true));
+
 async function togglePlayback() {
   if (isPlaybackCommandPending.value || isSeeking.value) return;
 
@@ -413,8 +417,16 @@ async function togglePlayback() {
       !status.hasAudio ||
       (!status.isPlaying && status.durationMs > 0 && status.positionMs >= status.durationMs)
     ) {
-      if (!(await ensureCurrentVolumeIsSynchronized())) return;
-      await invoke("play", { path: TEMP_AUDIO_PATH });
+      const track = currentTrack.value;
+      if (!track || !(await ensureCurrentVolumeIsSynchronized())) return;
+
+      isPlaybackCommandPending.value = false;
+      const started = await playTrack(track.trackId);
+      isPlaybackCommandPending.value = true;
+      if (!started) {
+        await refreshPlaybackStatus(true);
+        return;
+      }
     } else if (status.isPlaying) {
       await invoke("pause");
     } else {
@@ -422,6 +434,7 @@ async function togglePlayback() {
     }
 
     playbackError.value = "";
+    playbackStartError.value = "";
     await refreshPlaybackStatus(true);
   } catch (error) {
     playbackError.value = `Playback command failed: ${errorMessage(error)}`;
@@ -445,6 +458,7 @@ async function commitSeek() {
   try {
     await invoke("seek_to", { positionMs: selectedPositionMs.value });
     playbackError.value = "";
+    playbackStartError.value = "";
     await refreshPlaybackStatus(true);
   } catch (error) {
     playbackError.value = `Seek failed: ${errorMessage(error)}`;

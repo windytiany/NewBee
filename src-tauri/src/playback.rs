@@ -1,3 +1,4 @@
+use crate::database::Database;
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 use serde::Serialize;
 use std::fs::File;
@@ -37,37 +38,30 @@ pub struct PlaybackStatus {
     duration_ms: u64,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NowPlayingTrack {
+    track_id: i64,
+    title: Option<String>,
+    artist: Option<String>,
+}
+
 #[tauri::command]
-pub fn play(path: String, state: State<'_, PlaybackState>) -> Result<(), String> {
-    let path = PathBuf::from(path);
-    let source = open_decoder(&path)?;
-    let duration = source
-        .total_duration()
-        .ok_or_else(|| "Could not determine audio duration".to_owned())?;
+pub fn play_track(
+    track_id: i64,
+    database: State<'_, Database>,
+    state: State<'_, PlaybackState>,
+) -> Result<NowPlayingTrack, String> {
+    let track = database
+        .get_track_for_playback(track_id)?
+        .ok_or_else(|| format!("Track {track_id} was not found"))?;
+    start_playback(Path::new(&track.path), &state)?;
 
-    let output = DeviceSinkBuilder::open_default_sink()
-        .map_err(|error| format!("Could not open audio output: {error}"))?;
-    let volume = state
-        .volume
-        .lock()
-        .map_err(|_| "Playback state is unavailable".to_owned())?;
-    let mut active = state
-        .active
-        .lock()
-        .map_err(|_| "Playback state is unavailable".to_owned())?;
-    active.take();
-
-    let player = Player::connect_new(output.mixer());
-    player.set_volume(*volume as f32 / 100.0);
-    player.append(source);
-    *active = Some(ActivePlayback {
-        player,
-        _output: output,
-        path,
-        duration,
-    });
-
-    Ok(())
+    Ok(NowPlayingTrack {
+        track_id,
+        title: track.title,
+        artist: track.artist,
+    })
 }
 
 #[tauri::command]
@@ -174,6 +168,38 @@ pub fn playback_status(state: State<'_, PlaybackState>) -> Result<PlaybackStatus
         position_ms: duration_ms(position),
         duration_ms: duration_ms(playback.duration),
     })
+}
+
+fn start_playback(path: &Path, state: &PlaybackState) -> Result<(), String> {
+    let path = path.to_path_buf();
+    let source = open_decoder(&path)?;
+    let duration = source
+        .total_duration()
+        .ok_or_else(|| "Could not determine audio duration".to_owned())?;
+
+    let output = DeviceSinkBuilder::open_default_sink()
+        .map_err(|error| format!("Could not open audio output: {error}"))?;
+    let volume = state
+        .volume
+        .lock()
+        .map_err(|_| "Playback state is unavailable".to_owned())?;
+    let mut active = state
+        .active
+        .lock()
+        .map_err(|_| "Playback state is unavailable".to_owned())?;
+    active.take();
+
+    let player = Player::connect_new(output.mixer());
+    player.set_volume(*volume as f32 / 100.0);
+    player.append(source);
+    *active = Some(ActivePlayback {
+        player,
+        _output: output,
+        path,
+        duration,
+    });
+
+    Ok(())
 }
 
 fn reload_source_at_position(

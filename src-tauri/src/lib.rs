@@ -40,7 +40,7 @@ pub fn run() {
             database::list_playlist_tracks,
             database::get_track,
             database::get_track_artwork,
-            playback::play,
+            playback::play_track,
             playback::set_volume,
             playback::pause,
             playback::resume,
