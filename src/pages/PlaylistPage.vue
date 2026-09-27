@@ -38,16 +38,16 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref } from "vue";
-import { usePlaybackState } from "../composables/usePlaybackState";
-import { usePersistentPlaylistSelection } from "../composables/usePersistentPlaylistSelection";
-import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
-import PlaylistBrowser from "../components/playlist/PlaylistBrowser.vue";
-import CreatePlaylistDialog from "../components/playlist/CreatePlaylistDialog.vue";
-import PlaylistList from "../components/playlist/PlaylistList.vue";
-import ResizableThreeColumnLayout from "../components/layout/ResizableThreeColumnLayout.vue";
-import TrackInfo from "../components/track/TrackInfo.vue";
-import TrackList from "../components/track/TrackList.vue";
-import type { Playlist, PlaylistTrackData } from "../types/playlist";
+import { usePlaybackState } from "@/composables/usePlaybackState";
+import { usePersistentPlaylistSelection } from "@/composables/usePersistentPlaylistSelection";
+import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
+import PlaylistBrowser from "@/components/playlist/PlaylistBrowser.vue";
+import CreatePlaylistDialog from "@/components/playlist/CreatePlaylistDialog.vue";
+import PlaylistList from "@/components/playlist/PlaylistList.vue";
+import ResizableThreeColumnLayout from "@/components/layout/ResizableThreeColumnLayout.vue";
+import TrackInfo from "@/components/track/TrackInfo.vue";
+import TrackList from "@/components/track/TrackList.vue";
+import type { Playlist, PlaylistTrackData } from "@/types/playlist";
 
 const {
   availablePlaylists: playlists,

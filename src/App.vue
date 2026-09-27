@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { usePersistentActivePage } from "./composables/usePersistentActivePage";
-import LibraryPage from "./pages/LibraryPage.vue";
-import PlayingPage from "./pages/PlayingPage.vue";
-import PlaylistPage from "./pages/PlaylistPage.vue";
-import PlaybackBar from "./components/PlaybackBar.vue";
-import TopBar from "./components/TopBar.vue";
+import { usePersistentActivePage } from "@/composables/usePersistentActivePage";
+import LibraryPage from "@/pages/LibraryPage.vue";
+import PlayingPage from "@/pages/PlayingPage.vue";
+import PlaylistPage from "@/pages/PlaylistPage.vue";
+import PlaybackBar from "@/components/PlaybackBar.vue";
+import TopBar from "@/components/TopBar.vue";
 
 const pageComponents = {
   Playing: PlayingPage,

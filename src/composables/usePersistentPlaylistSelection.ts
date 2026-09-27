@@ -1,5 +1,5 @@
 import { computed, ref, watch } from "vue";
-import type { Playlist } from "../types/playlist.ts";
+import type { Playlist } from "@/types/playlist.ts";
 
 const STORAGE_KEY = "newbee.playlist-selection";
 

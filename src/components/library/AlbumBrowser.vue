@@ -54,15 +54,15 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useClickFocus } from "../../composables/useClickFocus";
+import { useClickFocus } from "@/composables/useClickFocus";
 import type {
   AlbumArtistSummary,
   AlbumSummary,
   LibraryAlbumSelection,
   TrackSummary,
-} from "../../types/library";
-import AlbumDetail from "./AlbumDetail.vue";
-import Album from "./Album.vue";
+} from "@/types/library";
+import AlbumDetail from "@/components/library/AlbumDetail.vue";
+import Album from "@/components/library/Album.vue";
 
 type AlbumBrowserRow = {
   id: string;

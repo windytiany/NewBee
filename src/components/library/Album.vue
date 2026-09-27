@@ -37,7 +37,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { DiscAlbum } from "@lucide/vue";
-import type { AlbumSummary, TrackArtwork } from "../../types/library";
+import type { AlbumSummary, TrackArtwork } from "@/types/library";
 
 const props = defineProps<{
   album: AlbumSummary;

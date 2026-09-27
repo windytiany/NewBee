@@ -77,9 +77,9 @@
 
 <script setup lang="ts">
 import { DiscAlbum } from "@lucide/vue";
-import { useClickFocus } from "../../composables/useClickFocus";
-import type { Playlist, PlaylistTrackData } from "../../types/playlist";
-import PlaylistTrack from "./PlaylistTrack.vue";
+import { useClickFocus } from "@/composables/useClickFocus";
+import type { Playlist, PlaylistTrackData } from "@/types/playlist";
+import PlaylistTrack from "@/components/playlist/PlaylistTrack.vue";
 
 const props = defineProps<{
   playlist: Playlist | null;

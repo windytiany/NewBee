@@ -61,9 +61,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { usePersistentSidebarLayout } from "../../composables/usePersistentSidebarLayout";
-import ResizeHandle from "./ResizeHandle.vue";
-import Sidebar from "./Sidebar.vue";
+import { usePersistentSidebarLayout } from "@/composables/usePersistentSidebarLayout";
+import ResizeHandle from "@/components/layout/ResizeHandle.vue";
+import Sidebar from "@/components/layout/Sidebar.vue";
 
 const MIN_LEFT_PANE_WIDTH = 208;
 const MIN_RIGHT_PANE_WIDTH = 240;

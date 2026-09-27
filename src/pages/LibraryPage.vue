@@ -48,21 +48,21 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
-import { usePersistentLibrarySelection } from "../composables/usePersistentLibrarySelection";
-import { usePlaybackState } from "../composables/usePlaybackState";
-import { LIBRARY_SCAN_COMPLETED_EVENT } from "../composables/useLibraryScan";
-import AlbumBrowser from "../components/library/AlbumBrowser.vue";
-import GroupList from "../components/library/GroupList.vue";
-import ResizableThreeColumnLayout from "../components/layout/ResizableThreeColumnLayout.vue";
-import TrackInfo from "../components/track/TrackInfo.vue";
-import TrackList from "../components/track/TrackList.vue";
+import { usePersistentLibrarySelection } from "@/composables/usePersistentLibrarySelection";
+import { usePlaybackState } from "@/composables/usePlaybackState";
+import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
+import AlbumBrowser from "@/components/library/AlbumBrowser.vue";
+import GroupList from "@/components/library/GroupList.vue";
+import ResizableThreeColumnLayout from "@/components/layout/ResizableThreeColumnLayout.vue";
+import TrackInfo from "@/components/track/TrackInfo.vue";
+import TrackList from "@/components/track/TrackList.vue";
 import type {
   AlbumArtistSummary,
   AlbumSummary,
   TrackArtwork,
   TrackDetails,
   TrackSummary,
-} from "../types/library";
+} from "@/types/library";
 
 const artists = ref<AlbumArtistSummary[]>([]);
 const albums = ref<AlbumSummary[]>([]);

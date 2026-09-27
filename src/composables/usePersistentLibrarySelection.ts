@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import type { AlbumArtistSummary, AlbumSummary, LibraryAlbumSelection } from "../types/library.ts";
+import type { AlbumArtistSummary, AlbumSummary, LibraryAlbumSelection } from "@/types/library.ts";
 
 interface StoredLibrarySelection {
   groupSelected: boolean;

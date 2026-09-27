@@ -74,8 +74,8 @@
 
 <script setup lang="ts">
 import { Disc3 } from "@lucide/vue";
-import type { TrackDetails } from "../../types/library";
-import { formatTrackDuration } from "./formatTrackDuration.ts";
+import type { TrackDetails } from "@/types/library.ts";
+import { formatAudioSummary } from "@/utils/formatTrack.ts";
 
 type TrackInfoData = {
   title: string;
@@ -113,45 +113,4 @@ const props = withDefaults(
     emptyMessage: "选择曲目以查看详情和封面。",
   },
 );
-
-function formatSampleRate(sampleRateHz: number | null) {
-  if (sampleRateHz === null || !Number.isFinite(sampleRateHz)) {
-    return null;
-  }
-
-  const sampleRateKHz = sampleRateHz / 1000;
-  return `${Number.isInteger(sampleRateKHz) ? sampleRateKHz : Number(sampleRateKHz.toFixed(3))} kHz`;
-}
-
-function formatBitrate(bitrateKbps: number | null) {
-  if (bitrateKbps === null || !Number.isFinite(bitrateKbps)) {
-    return null;
-  }
-
-  return `${bitrateKbps}k`;
-}
-
-function formatChannels(channels: number | null) {
-  if (channels === null || !Number.isFinite(channels)) {
-    return null;
-  }
-
-  if (channels === 1) return "单声道";
-  if (channels === 2) return "立体声";
-  return `${channels} 声道`;
-}
-
-function formatAudioSummary(details: TrackDetails) {
-  const codecAndSampleRate = [details.codec, formatSampleRate(details.sampleRateHz)]
-    .filter((value): value is string => value !== null && value !== "")
-    .join(" ");
-  const values = [
-    codecAndSampleRate || null,
-    formatBitrate(details.bitrateKbps),
-    formatChannels(details.channels),
-    formatTrackDuration(details.durationMs),
-  ].filter((value): value is string => value !== null && value !== "");
-
-  return values.length > 0 ? values.join(", ") : "音频信息未知";
-}
 </script>

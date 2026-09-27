@@ -113,7 +113,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
-import { useLibraryScan } from "../composables/useLibraryScan";
+import { useLibraryScan } from "@/composables/useLibraryScan";
 
 type LibraryDirectory = {
   id: number;

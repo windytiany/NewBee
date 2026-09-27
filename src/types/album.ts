@@ -1,4 +1,4 @@
-import type { Track } from "./track.ts";
+import type { Track } from "@/types/track.ts";
 
 export type Album = {
   id: string;

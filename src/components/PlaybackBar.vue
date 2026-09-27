@@ -172,7 +172,7 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { usePlaybackState } from "../composables/usePlaybackState";
+import { usePlaybackState } from "@/composables/usePlaybackState";
 import {
   Pause,
   Play,

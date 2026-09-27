@@ -33,8 +33,8 @@
 </template>
 
 <script setup lang="ts">
-import { useClickFocus } from "../../composables/useClickFocus";
-import TrackListItem from "./TrackListItem.vue";
+import { useClickFocus } from "@/composables/useClickFocus";
+import TrackListItem from "@/components/track/TrackListItem.vue";
 
 type Track = {
   id: string | number;

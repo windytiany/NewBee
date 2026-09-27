@@ -76,9 +76,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
-import { useClickFocus } from "../../composables/useClickFocus";
-import type { AlbumArtistSummary } from "../../types/library";
-import GroupListItem from "./GroupListItem.vue";
+import { useClickFocus } from "@/composables/useClickFocus";
+import type { AlbumArtistSummary } from "@/types/library";
+import GroupListItem from "@/components/library/GroupListItem.vue";
 
 const props = defineProps<{
   artists: AlbumArtistSummary[];

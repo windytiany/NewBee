@@ -22,8 +22,8 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { formatTrackDuration } from "../track/formatTrackDuration.ts";
-import type { PlaylistTrackData } from "../../types/playlist";
+import { formatTrackDuration } from "@/utils/formatTrack.ts";
+import type { PlaylistTrackData } from "@/types/playlist.ts";
 
 const props = defineProps<{
   track: PlaylistTrackData;
