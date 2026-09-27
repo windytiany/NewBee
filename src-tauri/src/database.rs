@@ -356,6 +356,35 @@ impl Database {
             .map_err(|error| format!("Failed to read albums: {error}"))
     }
 
+    pub fn get_album_artwork(
+        &self,
+        album_artist: Option<String>,
+        album: Option<String>,
+    ) -> Result<Option<TrackArtwork>, String> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT ta.mime_type, ta.image
+                 FROM tracks t
+                 INNER JOIN track_artwork ta ON ta.track_id = t.id
+                 WHERE t.album_artist IS ?1 AND t.album IS ?2
+                 ORDER BY t.disc_number IS NULL, t.disc_number,
+                          t.track_number IS NULL, t.track_number, t.id
+                 LIMIT 1",
+                params![album_artist.as_deref(), album.as_deref()],
+                |row| {
+                    Ok(TrackArtwork::Available {
+                        mime_type: row.get(0)?,
+                        data: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|error| {
+                format!("Failed to get artwork for album {album:?} by {album_artist:?}: {error}")
+            })
+    }
+
     pub fn list_album_tracks(
         &self,
         album_artist: Option<String>,
@@ -606,6 +635,15 @@ pub fn list_albums(
 }
 
 #[tauri::command]
+pub fn get_album_artwork(
+    album_artist: Option<String>,
+    album: Option<String>,
+    state: tauri::State<'_, Database>,
+) -> Result<Option<TrackArtwork>, String> {
+    state.get_album_artwork(album_artist, album)
+}
+
+#[tauri::command]
 pub fn list_album_tracks(
     album_artist: Option<String>,
     album: Option<String>,
@@ -646,4 +684,87 @@ pub fn get_track_artwork(
     state: tauri::State<'_, Database>,
 ) -> Result<Option<TrackArtwork>, String> {
     state.get_track_artwork(track_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Database, TrackArtwork};
+    use rusqlite::params;
+
+    fn insert_track(
+        database: &Database,
+        id: i64,
+        album_artist: Option<&str>,
+        album: Option<&str>,
+        track_number: i64,
+        artwork: Option<&[u8]>,
+    ) {
+        let connection = database.connection().unwrap();
+        connection
+            .execute(
+                "INSERT INTO tracks (id, path, album, album_artist, track_number)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    id,
+                    format!("track-{id}.mp3"),
+                    album,
+                    album_artist,
+                    track_number
+                ],
+            )
+            .unwrap();
+
+        if let Some(image) = artwork {
+            connection
+                .execute(
+                    "INSERT INTO track_artwork (track_id, mime_type, image)
+                     VALUES (?1, 'image/png', ?2)",
+                    params![id, image],
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn get_album_artwork_returns_first_available_cover_and_matches_null_metadata() {
+        let database = Database::open(":memory:").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(
+            &database,
+            2,
+            Some("Artist"),
+            Some("Album"),
+            2,
+            Some(&[2, 3]),
+        );
+        insert_track(
+            &database,
+            3,
+            Some("Artist"),
+            Some("Album"),
+            3,
+            Some(&[4, 5]),
+        );
+        insert_track(&database, 4, None, None, 1, Some(&[6, 7]));
+
+        let artwork = database
+            .get_album_artwork(Some("Artist".to_owned()), Some("Album".to_owned()))
+            .unwrap();
+        assert!(matches!(
+            artwork,
+            Some(TrackArtwork::Available { mime_type, data })
+                if mime_type == "image/png" && data == vec![2, 3]
+        ));
+
+        let artwork = database.get_album_artwork(None, None).unwrap();
+        assert!(matches!(
+            artwork,
+            Some(TrackArtwork::Available { data, .. }) if data == vec![6, 7]
+        ));
+
+        assert!(database
+            .get_album_artwork(Some("Missing".to_owned()), Some("Album".to_owned()))
+            .unwrap()
+            .is_none());
+    }
 }

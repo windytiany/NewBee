@@ -26,6 +26,7 @@
               v-for="(album, index) in row.albums"
               :key="getAlbumKey(album)"
               :album="album"
+              :album-artist="props.artist.albumArtist"
               :cover-index="row.startIndex + index"
               :is-selected="isSelectedAlbum(album)"
               :is-focused="focusedItem === getAlbumFocusKey(album)"

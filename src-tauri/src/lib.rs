@@ -34,6 +34,7 @@ pub fn run() {
             scan::scan_music_library,
             database::list_album_artists,
             database::list_albums,
+            database::get_album_artwork,
             database::list_album_tracks,
             database::create_playlist,
             database::list_playlists,

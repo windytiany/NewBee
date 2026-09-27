@@ -5,6 +5,7 @@
       class="focus-visible:outline-spotify-green block w-full rounded-md text-center focus-visible:outline-2 focus-visible:outline-offset-4"
       :aria-label="`查看专辑 ${album.album ?? '未知专辑'}`"
       :aria-expanded="isSelected"
+      :title="artworkLoadFailed ? '专辑封面加载失败' : undefined"
       type="button"
       @click="emit('select')"
     >
@@ -13,7 +14,14 @@
         class="mb-3 grid aspect-square w-full place-items-center overflow-hidden rounded-md bg-linear-to-br shadow-lg transition-transform duration-200 group-hover:-translate-y-1"
         :class="[coverPalette, isSelected || isFocused ? 'ring-spotify-green ring-2' : '']"
       >
-        <DiscAlbum class="size-14 text-white/70 sm:size-16" stroke-width="1.25" />
+        <img
+          v-if="artworkUrl"
+          :src="artworkUrl"
+          alt=""
+          class="size-full object-cover"
+          @error="handleArtworkError"
+        />
+        <DiscAlbum v-else class="size-14 text-white/70 sm:size-16" stroke-width="1.25" />
       </span>
       <span class="block truncate text-sm font-semibold text-white">
         {{ album.album ?? "未知专辑" }}
@@ -26,12 +34,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { DiscAlbum } from "@lucide/vue";
-import type { AlbumSummary } from "../../types/library";
+import type { AlbumSummary, TrackArtwork } from "../../types/library";
 
 const props = defineProps<{
   album: AlbumSummary;
+  albumArtist: string | null;
   coverIndex: number;
   isSelected: boolean;
   isFocused: boolean;
@@ -40,6 +50,57 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [];
 }>();
+
+const artworkUrl = ref<string | null>(null);
+const artworkLoadFailed = ref(false);
+let artworkRequestGeneration = 0;
+
+function revokeArtwork() {
+  const url = artworkUrl.value;
+  if (url) globalThis.URL.revokeObjectURL(url);
+  artworkUrl.value = null;
+}
+
+async function loadArtwork() {
+  const generation = ++artworkRequestGeneration;
+  revokeArtwork();
+  artworkLoadFailed.value = false;
+
+  try {
+    const artwork = await invoke<TrackArtwork | null>("get_album_artwork", {
+      albumArtist: props.albumArtist,
+      album: props.album.album,
+    });
+    if (generation !== artworkRequestGeneration) return;
+    if (!artwork || artwork.status !== "available") return;
+
+    const imageBlob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
+      type: artwork.mimeType,
+    });
+    artworkUrl.value = globalThis.URL.createObjectURL(imageBlob);
+  } catch {
+    if (generation !== artworkRequestGeneration) return;
+    artworkLoadFailed.value = true;
+  }
+}
+
+function handleArtworkError() {
+  artworkLoadFailed.value = true;
+  revokeArtwork();
+}
+
+watch(
+  () => [props.albumArtist, props.album.album] as const,
+  () => void loadArtwork(),
+  {
+    immediate: true,
+  },
+);
+
+onBeforeUnmount(() => {
+  ++artworkRequestGeneration;
+  revokeArtwork();
+});
 
 const coverPalettes = [
   "from-sky-950 via-blue-900/80 to-slate-950",
