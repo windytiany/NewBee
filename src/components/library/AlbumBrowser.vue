@@ -36,11 +36,9 @@
           <AlbumDetail
             v-if="row.selectedAlbum"
             :album="row.selectedAlbum"
-            :album-artist="props.artist.albumArtist"
             :tracks="props.tracks"
             :selected-track-id="props.selectedTrackId"
             :current-track-id="props.currentTrackId"
-            :is-playback-pending="props.isPlaybackPending"
             :tracks-loading="props.tracksLoading"
             :tracks-error="props.tracksError"
             @close="closeAlbum(row.selectedAlbum)"
@@ -83,7 +81,6 @@ const props = defineProps<{
   tracks: TrackSummary[];
   selectedTrackId: number | null;
   currentTrackId: number | null;
-  isPlaybackPending: boolean;
   albumsLoading: boolean;
   albumsError: string;
   tracksLoading: boolean;

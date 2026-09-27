@@ -5,12 +5,21 @@
     <header class="mb-5 flex items-start justify-between gap-4">
       <div class="min-w-0">
         <p class="text-spotify-muted mb-1 text-xs font-medium tracking-wide uppercase">专辑曲目</p>
-        <h2 class="truncate text-xl font-bold sm:text-2xl">
-          {{ props.album.album ?? "未知专辑" }}
-        </h2>
-        <p class="text-spotify-muted mt-1 truncate text-sm">
-          {{ props.albumArtist ?? "未知演出者" }} · {{ props.album.trackCount }} 首曲目
-        </p>
+        <div class="flex min-w-0 items-center gap-3">
+          <h2 class="min-w-0 flex-1 truncate text-xl font-bold sm:text-2xl">
+            {{ props.album.album ?? "未知专辑" }}
+          </h2>
+          <button
+            aria-label="播放专辑（暂未实现）"
+            class="focus-visible:outline-spotify-green bg-spotify-green grid size-9 shrink-0 place-items-center rounded-full text-black opacity-50 focus-visible:outline-2 disabled:cursor-not-allowed"
+            disabled
+            title="播放专辑（暂未实现）"
+            type="button"
+          >
+            <Play aria-hidden="true" class="ml-0.5 size-4 fill-current" />
+          </button>
+        </div>
+        <p class="text-spotify-muted mt-1 truncate text-sm">{{ props.album.trackCount }} 首曲目</p>
       </div>
       <button
         aria-label="收起专辑曲目"
@@ -38,7 +47,6 @@
         :is-focused="focusedItem === getTrackFocusKey(track.id)"
         :is-selected="track.id === props.selectedTrackId"
         :is-current-track="track.id === props.currentTrackId"
-        :is-playback-pending="props.isPlaybackPending"
         @select="selectTrack(track.id)"
         @play="emit('playTrack', track.id)"
       />
@@ -48,18 +56,16 @@
 </template>
 
 <script setup lang="ts">
-import { X } from "@lucide/vue";
+import { Play, X } from "@lucide/vue";
 import { useClickFocus } from "../../composables/useClickFocus";
 import type { AlbumSummary, TrackSummary } from "../../types/library";
 import AlbumTrack from "./AlbumTrack.vue";
 
 const props = defineProps<{
   album: AlbumSummary;
-  albumArtist: string | null;
   tracks: TrackSummary[];
   selectedTrackId: number | null;
   currentTrackId: number | null;
-  isPlaybackPending: boolean;
   tracksLoading: boolean;
   tracksError: string;
 }>();

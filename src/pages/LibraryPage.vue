@@ -18,7 +18,6 @@
         :tracks="tracks"
         :selected-track-id="selectedTrackId"
         :current-track-id="currentTrack?.trackId ?? null"
-        :is-playback-pending="isPlaybackCommandPending"
         :albums-loading="isLoadingAlbums"
         :albums-error="albumsError"
         :tracks-loading="isLoadingTracks"
@@ -97,7 +96,7 @@ const libraryTracks = computed(() =>
     duration: formatTrackDuration(track.durationMs) ?? "时长未知",
   })),
 );
-const { currentTrack, isPlaybackCommandPending, playTrack } = usePlaybackState();
+const { currentTrack, playTrack } = usePlaybackState();
 const {
   selectedGroup,
   selectedAlbum,
