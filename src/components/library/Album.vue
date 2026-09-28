@@ -11,17 +11,26 @@
     >
       <span
         aria-hidden="true"
-        class="mb-3 grid aspect-square w-full place-items-center overflow-hidden rounded-md bg-linear-to-br shadow-lg transition-transform duration-200 group-hover:-translate-y-1"
-        :class="[coverPalette, isSelected || isFocused ? 'ring-spotify-green ring-2' : '']"
+        class="mb-3 grid aspect-square w-full place-items-center overflow-hidden rounded-md transition-transform duration-200 group-hover:-translate-y-1"
+        :class="[
+          showFallback ? coverPalette : 'bg-transparent',
+          showFallback || artworkImageLoaded ? 'shadow-lg' : 'shadow-none',
+          isSelected || isFocused ? 'ring-spotify-green ring-2' : '',
+        ]"
       >
         <img
           v-if="artworkUrl"
           :src="artworkUrl"
           alt=""
           class="size-full object-cover"
+          @load="artworkImageLoaded = true"
           @error="handleArtworkError"
         />
-        <DiscAlbum v-else class="size-14 text-white/70 sm:size-16" stroke-width="1.25" />
+        <DiscAlbum
+          v-else-if="showFallback"
+          class="size-14 text-white/70 sm:size-16"
+          stroke-width="1.25"
+        />
       </span>
       <span class="block truncate text-sm font-semibold text-white">
         {{ album.album ?? "未知专辑" }}
@@ -54,6 +63,11 @@ const emit = defineEmits<{
 
 const artworkUrl = ref<string | null>(null);
 const artworkLoadFailed = ref(false);
+const artworkResolved = ref(false);
+const artworkImageLoaded = ref(false);
+const showFallback = computed(
+  () => artworkResolved.value && (artworkLoadFailed.value || artworkUrl.value === null),
+);
 let artworkRequestGeneration = 0;
 
 function revokeArtwork() {
@@ -66,6 +80,8 @@ async function loadArtwork() {
   const generation = ++artworkRequestGeneration;
   revokeArtwork();
   artworkLoadFailed.value = false;
+  artworkResolved.value = false;
+  artworkImageLoaded.value = false;
 
   try {
     const artwork = await invoke<TrackArtwork | null>("get_album_artwork", {
@@ -73,6 +89,7 @@ async function loadArtwork() {
       album: props.album.album,
     });
     if (generation !== artworkRequestGeneration) return;
+    artworkResolved.value = true;
     if (!artwork || artwork.status !== "available") return;
 
     const imageBlob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
@@ -82,6 +99,7 @@ async function loadArtwork() {
   } catch {
     if (generation !== artworkRequestGeneration) return;
     artworkLoadFailed.value = true;
+    artworkResolved.value = true;
   }
 }
 
