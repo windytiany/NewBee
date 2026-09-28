@@ -170,9 +170,9 @@
 </template>
 
 <script setup lang="ts">
-import { invoke } from "@tauri-apps/api/core";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { usePlaybackState } from "@/composables/usePlaybackState";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { usePlaybackControls } from "@/composables/usePlaybackControls";
+import { usePlaybackVolume } from "@/composables/usePlaybackVolume";
 import {
   Pause,
   Play,
@@ -184,127 +184,13 @@ import {
   VolumeX,
 } from "@lucide/vue";
 
-const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
-
-const DEFAULT_VOLUME = 50;
-const VOLUME_STORAGE_KEY = "newbee.playback-volume";
-
-type PlaybackVolumeState = {
-  volume: number;
-  lastNonMutedVolume: number;
-};
-
-type PlaybackStatus = {
-  hasAudio: boolean;
-  isPlaying: boolean;
-  positionMs: number;
-  durationMs: number;
-};
-
-const EMPTY_PLAYBACK_STATUS = {
-  hasAudio: false,
-  isPlaying: false,
-  positionMs: 0,
-  durationMs: 0,
-} satisfies PlaybackStatus;
-
-const DEFAULT_PLAYBACK_VOLUME = {
-  volume: DEFAULT_VOLUME,
-  lastNonMutedVolume: DEFAULT_VOLUME,
-} satisfies PlaybackVolumeState;
-
-function isVolumeLevel(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100;
-}
-
-function loadPlaybackVolume(): PlaybackVolumeState {
-  try {
-    const serializedVolume = globalThis.localStorage.getItem(VOLUME_STORAGE_KEY);
-    if (serializedVolume === null) return { ...DEFAULT_PLAYBACK_VOLUME };
-
-    const parsedVolume: unknown = JSON.parse(serializedVolume);
-    if (typeof parsedVolume !== "object" || parsedVolume === null || Array.isArray(parsedVolume)) {
-      globalThis.console.error("Saved playback volume has an invalid format; using the default.");
-      return { ...DEFAULT_PLAYBACK_VOLUME };
-    }
-
-    const storedVolume = parsedVolume as Record<string, unknown>;
-    if (
-      !isVolumeLevel(storedVolume.volume) ||
-      !isVolumeLevel(storedVolume.lastNonMutedVolume) ||
-      storedVolume.lastNonMutedVolume === 0
-    ) {
-      globalThis.console.error("Saved playback volume is invalid; using the default.");
-      return { ...DEFAULT_PLAYBACK_VOLUME };
-    }
-
-    return {
-      volume: storedVolume.volume,
-      lastNonMutedVolume:
-        storedVolume.volume > 0 ? storedVolume.volume : storedVolume.lastNonMutedVolume,
-    };
-  } catch (error) {
-    globalThis.console.error("Could not read saved playback volume; using the default.", error);
-    return { ...DEFAULT_PLAYBACK_VOLUME };
-  }
-}
-
-function savePlaybackVolume(volume: number, lastNonMutedVolume: number) {
-  try {
-    globalThis.localStorage.setItem(
-      VOLUME_STORAGE_KEY,
-      JSON.stringify({ volume, lastNonMutedVolume }),
-    );
-  } catch (error) {
-    globalThis.console.error("Could not save playback volume.", error);
-  }
-}
-
-const initialVolume = loadPlaybackVolume();
-const volume = ref(initialVolume.volume);
-const lastNonMutedVolume = ref(initialVolume.lastNonMutedVolume);
+const { volume, volumeError, toggleMute, ensureCurrentVolumeIsSynchronized } = usePlaybackVolume();
 const isVolumePopoverOpen = ref(false);
 const isHorizontalVolumeVisible = ref(false);
 const isRepeatEnabled = ref(false);
 const isShuffleEnabled = ref(false);
-const playbackStatus = ref<PlaybackStatus>({ ...EMPTY_PLAYBACK_STATUS });
-const playbackError = ref("");
-const { currentTrack, isPlaybackCommandPending, playbackStartError, playTrack } =
-  usePlaybackState();
-const volumeError = ref("");
-const isVolumeSyncReady = ref(false);
-const isSeeking = ref(false);
-const selectedPositionMs = ref(0);
-const sliderPositionMs = computed(() =>
-  isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
-);
-const playbackFeedback = computed(() =>
-  [playbackError.value, playbackStartError.value, volumeError.value].filter(Boolean).join(" "),
-);
-const progressPercent = computed(() =>
-  playbackStatus.value.durationMs > 0
-    ? (sliderPositionMs.value / playbackStatus.value.durationMs) * 100
-    : 0,
-);
 const volumeControl = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 let volumeLayoutQuery: ReturnType<typeof globalThis.matchMedia> | null = null;
-let playbackStatusPoll: ReturnType<typeof globalThis.setInterval> | null = null;
-let statusRequestsInFlight = 0;
-let statusRequestVersion = 0;
-let queuedVolume: number | null = null;
-let inFlightVolume: number | null = null;
-let synchronizedVolume: number | null = null;
-let volumeSyncWorker: Promise<void> | null = null;
-
-watch(
-  volume,
-  (nextVolume) => {
-    if (nextVolume > 0) lastNonMutedVolume.value = nextVolume;
-    savePlaybackVolume(nextVolume, lastNonMutedVolume.value);
-    void synchronizeVolume(nextVolume);
-  },
-  { flush: "sync" },
-);
 
 function formatTime(milliseconds: number): string {
   const totalSeconds = Math.floor(Math.max(0, milliseconds) / 1000);
@@ -313,178 +199,11 @@ function formatTime(milliseconds: number): string {
   return `${minutes}:${seconds}`;
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return typeof error === "string" ? error : "Unknown error";
-}
-
-async function flushVolumeSyncQueue(): Promise<void> {
-  while (queuedVolume !== null) {
-    const requestedVolume = queuedVolume;
-    queuedVolume = null;
-    inFlightVolume = requestedVolume;
-
-    try {
-      await invoke("set_volume", { volume: requestedVolume });
-      synchronizedVolume = requestedVolume;
-      if (queuedVolume === null && volume.value === requestedVolume) {
-        isVolumeSyncReady.value = true;
-        volumeError.value = "";
-      }
-    } catch (error) {
-      synchronizedVolume = null;
-      isVolumeSyncReady.value = false;
-      volumeError.value = `Volume update failed: ${errorMessage(error)}`;
-    } finally {
-      inFlightVolume = null;
-    }
-  }
-}
-
-function synchronizeVolume(nextVolume: number): Promise<void> {
-  if (
-    volumeSyncWorker === null &&
-    queuedVolume === null &&
-    isVolumeSyncReady.value &&
-    synchronizedVolume === nextVolume
-  ) {
-    return Promise.resolve();
-  }
-  if (volumeSyncWorker !== null && queuedVolume === null && inFlightVolume === nextVolume) {
-    return volumeSyncWorker;
-  }
-
-  queuedVolume = nextVolume;
-  isVolumeSyncReady.value = false;
-  if (volumeSyncWorker !== null) return volumeSyncWorker;
-
-  const worker = flushVolumeSyncQueue();
-  volumeSyncWorker = worker;
-  void worker.finally(() => {
-    if (volumeSyncWorker === worker) volumeSyncWorker = null;
-    if (queuedVolume !== null) void synchronizeVolume(queuedVolume);
-  });
-  return worker;
-}
-
-async function ensureCurrentVolumeIsSynchronized(): Promise<boolean> {
-  while (true) {
-    await synchronizeVolume(volume.value);
-    if (
-      isVolumeSyncReady.value &&
-      synchronizedVolume === volume.value &&
-      queuedVolume === null &&
-      volumeSyncWorker === null
-    ) {
-      return true;
-    }
-    if (queuedVolume === null && volumeSyncWorker === null) return false;
-  }
-}
-
-async function refreshPlaybackStatus(force = false): Promise<boolean> {
-  if (statusRequestsInFlight > 0 && !force) return false;
-
-  statusRequestsInFlight += 1;
-  const requestVersion = ++statusRequestVersion;
-  try {
-    const status = await invoke<PlaybackStatus>("playback_status");
-    if (requestVersion !== statusRequestVersion) return false;
-
-    playbackStatus.value = status;
-    if (playbackError.value.startsWith("Playback status unavailable:")) playbackError.value = "";
-    return true;
-  } catch (error) {
-    if (requestVersion === statusRequestVersion) {
-      playbackError.value = `Playback status unavailable: ${errorMessage(error)}`;
-    }
-    return false;
-  } finally {
-    statusRequestsInFlight -= 1;
-  }
-}
-
-watch(currentTrack, () => void refreshPlaybackStatus(true));
-
-async function togglePlayback() {
-  if (isPlaybackCommandPending.value || isSeeking.value) return;
-
-  isPlaybackCommandPending.value = true;
-  try {
-    if (!(await refreshPlaybackStatus(true))) return;
-    const status = playbackStatus.value;
-    if (
-      !status.hasAudio ||
-      (!status.isPlaying && status.durationMs > 0 && status.positionMs >= status.durationMs)
-    ) {
-      const track = currentTrack.value;
-      if (!track || !(await ensureCurrentVolumeIsSynchronized())) return;
-
-      isPlaybackCommandPending.value = false;
-      const started = await playTrack(track.trackId);
-      isPlaybackCommandPending.value = true;
-      if (!started) {
-        await refreshPlaybackStatus(true);
-        return;
-      }
-    } else if (status.isPlaying) {
-      await invoke("pause");
-    } else {
-      await invoke("resume");
-    }
-
-    playbackError.value = "";
-    playbackStartError.value = "";
-    await refreshPlaybackStatus(true);
-  } catch (error) {
-    playbackError.value = `Playback command failed: ${errorMessage(error)}`;
-    await refreshPlaybackStatus(true);
-  } finally {
-    isPlaybackCommandPending.value = false;
-  }
-}
-
-function handleSeekInput(event: InstanceType<typeof globalThis.Event>) {
-  selectedPositionMs.value = Number(
-    (event.target as InstanceType<typeof globalThis.HTMLInputElement>).value,
-  );
-  isSeeking.value = true;
-}
-
-async function commitSeek() {
-  if (!isSeeking.value || isPlaybackCommandPending.value) return;
-
-  isPlaybackCommandPending.value = true;
-  try {
-    await invoke("seek_to", { positionMs: selectedPositionMs.value });
-    playbackError.value = "";
-    playbackStartError.value = "";
-    await refreshPlaybackStatus(true);
-  } catch (error) {
-    playbackError.value = `Seek failed: ${errorMessage(error)}`;
-    await refreshPlaybackStatus(true);
-  } finally {
-    isSeeking.value = false;
-    selectedPositionMs.value = playbackStatus.value.positionMs;
-    isPlaybackCommandPending.value = false;
-  }
-}
-
 function updateVolumeLayout() {
   if (!volumeLayoutQuery) return;
 
   isHorizontalVolumeVisible.value = volumeLayoutQuery.matches;
   if (isHorizontalVolumeVisible.value) isVolumePopoverOpen.value = false;
-}
-
-function toggleMute() {
-  if (volume.value > 0) {
-    lastNonMutedVolume.value = volume.value;
-    volume.value = 0;
-    return;
-  }
-
-  volume.value = lastNonMutedVolume.value;
 }
 
 function handleVolumeButtonClick() {
@@ -509,24 +228,41 @@ function closeVolumePopoverOnEscape(event: InstanceType<typeof globalThis.Keyboa
 }
 
 onMounted(() => {
-  void synchronizeVolume(volume.value);
   volumeLayoutQuery = globalThis.matchMedia("(min-width: 64rem)");
   updateVolumeLayout();
   volumeLayoutQuery.addEventListener("change", updateVolumeLayout);
   globalThis.document.addEventListener("pointerdown", closeVolumePopoverOnOutsidePointer);
   globalThis.document.addEventListener("keydown", closeVolumePopoverOnEscape);
-  void refreshPlaybackStatus();
-  playbackStatusPoll = globalThis.setInterval(
-    () => void refreshPlaybackStatus(),
-    PLAYBACK_STATUS_POLL_INTERVAL_MS,
-  );
 });
 
+const {
+  playbackStatus,
+  playbackError,
+  isSeeking,
+  selectedPositionMs,
+  currentTrack,
+  isPlaybackCommandPending,
+  playbackStartError,
+  togglePlayback,
+  handleSeekInput,
+  commitSeek,
+} = usePlaybackControls(ensureCurrentVolumeIsSynchronized);
+
 onUnmounted(() => {
-  if (playbackStatusPoll !== null) globalThis.clearInterval(playbackStatusPoll);
-  statusRequestVersion += 1;
   volumeLayoutQuery?.removeEventListener("change", updateVolumeLayout);
   globalThis.document.removeEventListener("pointerdown", closeVolumePopoverOnOutsidePointer);
   globalThis.document.removeEventListener("keydown", closeVolumePopoverOnEscape);
 });
+
+const sliderPositionMs = computed(() =>
+  isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
+);
+const playbackFeedback = computed(() =>
+  [playbackError.value, playbackStartError.value, volumeError.value].filter(Boolean).join(" "),
+);
+const progressPercent = computed(() =>
+  playbackStatus.value.durationMs > 0
+    ? (sliderPositionMs.value / playbackStatus.value.durationMs) * 100
+    : 0,
+);
 </script>
