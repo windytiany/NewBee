@@ -44,6 +44,7 @@
             @close="closeAlbum(row.selectedAlbum)"
             @select-track="emit('selectTrack', $event)"
             @play-track="emit('playTrack', $event)"
+            @play-album="emit('playAlbum')"
           />
         </template>
       </div>
@@ -89,6 +90,7 @@ const emit = defineEmits<{
   selectAlbum: [album: AlbumSummary | null];
   selectTrack: [trackId: number];
   playTrack: [trackId: number];
+  playAlbum: [];
 }>();
 
 const columnCount = ref(2);

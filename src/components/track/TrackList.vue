@@ -19,13 +19,14 @@
         <TrackListItem
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
-          :title="track.title"
-          :album="track.album"
-          :duration="track.duration"
-          :is-current-track="track.id === props.currentTrackId"
-          :is-selected="track.id === props.selectedTrackId"
+          :track-id="track.trackId"
+          :title="track.title ?? '未知曲目'"
+          :album="track.album ?? '未知专辑'"
+          :duration="formatTrackDuration(track.durationMs) ?? '时长未知'"
+          :is-current-track="track.trackId === props.currentTrackId"
+          :is-selected="track.trackId === props.selectedTrackId"
           :is-focused="focusedItem === getTrackFocusKey(getTrackRowKey(track))"
-          @select="selectTrack(track.id, getTrackRowKey(track))"
+          @select="selectTrack(track.trackId, getTrackRowKey(track))"
         />
       </ul>
     </div>
@@ -34,48 +35,37 @@
 
 <script setup lang="ts">
 import { useClickFocus } from "@/composables/useClickFocus";
+import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import { formatTrackDuration } from "@/utils/formatTrack";
 import TrackListItem from "@/components/track/TrackListItem.vue";
 
-type Track = {
-  id: string | number;
-  title: string;
-  album: string;
-  duration: string;
-  rowKey?: string | number;
-};
+type Track = PlaybackDisplayTrack;
 
 const { focusedItem, setFocusedItem } = useClickFocus();
 
 function getTrackRowKey(track: Track) {
-  return track.rowKey ?? track.id;
+  return track.rowKey;
 }
 
-function getTrackFocusKey(id: string | number) {
+function getTrackFocusKey(id: string) {
   return `track:${id}`;
 }
 
 const props = withDefaults(
   defineProps<{
-    tracks?: Track[];
-    currentTrackId?: string | number | null;
-    selectedTrackId?: string | number | null;
+    tracks?: readonly Track[];
+    currentTrackId?: number | null;
+    selectedTrackId?: number | null;
     title?: string;
     isLoading?: boolean;
     error?: string;
     emptyMessage?: string;
   }>(),
   {
-    tracks: () => [
-      { id: "moonscape", title: "moonscape", album: "last little while", duration: "4:52" },
-      { id: "stargaze", title: "stargaze", album: "last little while", duration: "4:56" },
-      { id: "daydream", title: "daydream", album: "last little while", duration: "6:49" },
-      { id: "again", title: "again", album: "last little while", duration: "5:11" },
-      { id: "insomnia", title: "insomnia", album: "last little while", duration: "9:19" },
-      { id: "little-while", title: "little while", album: "last little while", duration: "6:00" },
-    ],
-    currentTrackId: "moonscape",
-    selectedTrackId: undefined,
-    title: "播放列表",
+    tracks: () => [],
+    currentTrackId: null,
+    selectedTrackId: null,
+    title: "当前曲目列表",
     isLoading: false,
     error: "",
     emptyMessage: "暂无曲目。",
@@ -83,10 +73,10 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  select: [trackId: Track["id"]];
+  select: [trackId: Track["trackId"]];
 }>();
 
-function selectTrack(trackId: Track["id"], rowKey: string | number) {
+function selectTrack(trackId: Track["trackId"], rowKey: string) {
   setFocusedItem(getTrackFocusKey(rowKey));
   emit("select", trackId);
 }

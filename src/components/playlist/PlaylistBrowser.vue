@@ -14,7 +14,7 @@
           >
             <DiscAlbum class="size-12 text-white/75 sm:size-16" stroke-width="1.25" />
           </div>
-          <div class="min-w-0 pb-1">
+          <div class="min-w-0 flex-1 pb-1">
             <p class="mb-2 text-xs font-semibold tracking-wide text-white/75 uppercase">播放列表</p>
             <h1
               id="playlist-browser-heading"
@@ -23,6 +23,21 @@
               {{ props.playlist.name }}
             </h1>
           </div>
+          <button
+            aria-label="播放歌单"
+            class="focus-visible:outline-spotify-green bg-spotify-green grid size-11 shrink-0 place-items-center rounded-full text-black transition-transform focus-visible:outline-2"
+            :class="
+              props.isLoadingTracks || props.tracks.length === 0
+                ? 'cursor-not-allowed opacity-50'
+                : 'hover:scale-105 active:scale-95'
+            "
+            :disabled="props.isLoadingTracks || props.tracks.length === 0"
+            title="播放歌单"
+            type="button"
+            @click="emit('playPlaylist')"
+          >
+            <Play aria-hidden="true" class="ml-0.5 size-5 fill-current" />
+          </button>
         </div>
       </header>
 
@@ -76,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { DiscAlbum } from "@lucide/vue";
+import { DiscAlbum, Play } from "@lucide/vue";
 import { useClickFocus } from "@/composables/useClickFocus";
 import type { Playlist, PlaylistTrackData } from "@/types/playlist";
 import PlaylistTrack from "@/components/playlist/PlaylistTrack.vue";
@@ -95,6 +110,7 @@ const { focusedItem, setFocusedItem } = useClickFocus();
 
 const emit = defineEmits<{
   playTrack: [trackId: number];
+  playPlaylist: [];
 }>();
 
 function getTrackFocusKey(playlistItemId: number) {

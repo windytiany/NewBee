@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
+import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
 import { usePlaybackState } from "@/composables/usePlaybackState";
 import { usePersistentPlaylistSelection } from "@/composables/usePersistentPlaylistSelection";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
+import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 import type { Playlist, PlaylistTrackData } from "@/types/playlist";
 
 export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
@@ -20,6 +22,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   const playlistsError = ref("");
   const playlistTracksError = ref("");
   const { playTrack } = usePlaybackState();
+  const { replaceDisplayedTracks } = usePlaybackDisplayList();
   let isMounted = false;
   let isSubscribedToLibraryScan = false;
   let playlistsRequestGeneration = 0;
@@ -117,9 +120,38 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     void loadPlaylistTracks(playlist.id);
   }
 
-  function playTrackFromPlaylist(trackId: number) {
-    if (!playlistTracks.value.some((track) => track.trackId === trackId)) return;
-    void playTrack(trackId);
+  function toPlaybackDisplayTracks(
+    sourceTracks: readonly PlaylistTrackData[],
+  ): PlaybackDisplayTrack[] {
+    return sourceTracks.map((track) => ({
+      trackId: track.trackId,
+      rowKey: `playlist-item:${track.playlistItemId}`,
+      title: track.title,
+      album: track.album,
+      durationMs: track.durationMs,
+    }));
+  }
+
+  async function playTrackFromPlaylist(trackId: number) {
+    if (
+      isLoadingPlaylistTracks.value ||
+      !playlistTracks.value.some((track) => track.trackId === trackId)
+    ) {
+      return;
+    }
+
+    const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
+    if (await playTrack(trackId)) replaceDisplayedTracks(displayedTracks);
+  }
+
+  async function playPlaylistFromPage() {
+    if (isLoadingPlaylistTracks.value || playlistTracks.value.length === 0) return;
+
+    const firstTrack = playlistTracks.value[0];
+    if (!firstTrack) return;
+
+    const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
+    if (await playTrack(firstTrack.trackId)) replaceDisplayedTracks(displayedTracks);
   }
 
   function onLibraryScanCompleted() {
@@ -179,6 +211,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     playlistTracksError,
     selectPlaylist,
     playTrackFromPlaylist,
+    playPlaylistFromPage,
     refreshPlaylists,
   };
 }

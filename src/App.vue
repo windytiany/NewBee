@@ -33,6 +33,7 @@ const {
   selectAlbum,
   selectTrack,
   playTrackFromLibrary,
+  playAlbumFromLibrary,
 } = useLibraryPage(libraryActive);
 const playlistActive = computed(() => activePage.value === "Playlist");
 const {
@@ -46,6 +47,7 @@ const {
   playlistTracksError,
   selectPlaylist,
   playTrackFromPlaylist,
+  playPlaylistFromPage,
   refreshPlaylists,
 } = usePlaylistPage(playlistActive);
 const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
@@ -99,6 +101,7 @@ function onPlaylistCreated(playlistId: number) {
             @select-album="selectAlbum"
             @select-track="selectTrack"
             @play-track="playTrackFromLibrary"
+            @play-album="playAlbumFromLibrary"
           />
           <PlaylistBrowser
             v-else-if="activePage === 'Playlist'"
@@ -110,6 +113,7 @@ function onPlaylistCreated(playlistId: number) {
             :is-loading-tracks="isLoadingPlaylistTracks"
             :tracks-error="playlistTracksError"
             @play-track="playTrackFromPlaylist"
+            @play-playlist="playPlaylistFromPage"
           />
         </template>
         <template #playing>

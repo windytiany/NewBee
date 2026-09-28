@@ -9,11 +9,17 @@
             {{ props.album.album ?? "未知专辑" }}
           </h2>
           <button
-            aria-label="播放专辑（暂未实现）"
-            class="focus-visible:outline-spotify-green bg-spotify-green grid size-9 shrink-0 place-items-center rounded-full text-black opacity-50 focus-visible:outline-2 disabled:cursor-not-allowed"
-            disabled
-            title="播放专辑（暂未实现）"
+            aria-label="播放专辑"
+            class="focus-visible:outline-spotify-green bg-spotify-green grid size-9 shrink-0 place-items-center rounded-full text-black focus-visible:outline-2"
+            :class="
+              props.tracksLoading || props.tracks.length === 0
+                ? 'cursor-not-allowed opacity-50'
+                : 'hover:scale-105 active:scale-95'
+            "
+            :disabled="props.tracksLoading || props.tracks.length === 0"
+            title="播放专辑"
             type="button"
+            @click="emit('playAlbum')"
           >
             <Play aria-hidden="true" class="ml-0.5 size-4 fill-current" />
           </button>
@@ -74,6 +80,7 @@ const emit = defineEmits<{
   close: [];
   selectTrack: [trackId: number];
   playTrack: [trackId: number];
+  playAlbum: [];
 }>();
 
 const { focusedItem, setFocusedItem } = useClickFocus();

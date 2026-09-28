@@ -2,10 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { usePersistentLibrarySelection } from "@/composables/usePersistentLibrarySelection";
+import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
 import { usePlaybackState } from "@/composables/usePlaybackState";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
+import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 import type { TrackSummary } from "@/types/track";
 
 export function useLibraryPage(active: Readonly<Ref<boolean>>) {
@@ -20,6 +22,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   const tracksError = ref("");
   const selectedTrackId = ref<number | null>(null);
   const { currentTrack, playTrack } = usePlaybackState();
+  const { replaceDisplayedTracks } = usePlaybackDisplayList();
   const {
     selectedGroup,
     selectedAlbum,
@@ -211,9 +214,31 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     selectedTrackId.value = trackId;
   }
 
-  function playTrackFromLibrary(trackId: number) {
-    if (!tracks.value.some((track) => track.id === trackId)) return;
-    void playTrack(trackId);
+  function toPlaybackDisplayTracks(sourceTracks: readonly TrackSummary[]): PlaybackDisplayTrack[] {
+    return sourceTracks.map((track) => ({
+      trackId: track.id,
+      rowKey: `album-track:${track.id}`,
+      title: track.title,
+      album: track.album,
+      durationMs: track.durationMs,
+    }));
+  }
+
+  async function playTrackFromLibrary(trackId: number) {
+    if (isLoadingTracks.value || !tracks.value.some((track) => track.id === trackId)) return;
+
+    const displayedTracks = toPlaybackDisplayTracks(tracks.value);
+    if (await playTrack(trackId)) replaceDisplayedTracks(displayedTracks);
+  }
+
+  async function playAlbumFromLibrary() {
+    if (isLoadingTracks.value || tracks.value.length === 0) return;
+
+    const firstTrack = tracks.value[0];
+    if (!firstTrack) return;
+
+    const displayedTracks = toPlaybackDisplayTracks(tracks.value);
+    if (await playTrack(firstTrack.id)) replaceDisplayedTracks(displayedTracks);
   }
 
   function onLibraryScanCompleted() {
@@ -284,5 +309,6 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     selectAlbum,
     selectTrack,
     playTrackFromLibrary,
+    playAlbumFromLibrary,
   };
 }

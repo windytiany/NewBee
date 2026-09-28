@@ -53,7 +53,12 @@
         }"
       >
         <div class="h-full min-h-0 min-w-0 overflow-hidden">
-          <TrackList :tracks="[]" title="播放队列" empty-message="播放队列为空。" />
+          <TrackList
+            :tracks="displayedTracks"
+            :current-track-id="currentTrack?.trackId ?? null"
+            title="当前曲目列表"
+            empty-message="当前没有展示的曲目列表。"
+          />
         </div>
         <ResizeHandle
           label="调整右侧上下区域高度"
@@ -78,10 +83,15 @@ import ResizeHandle from "@/components/layout/ResizeHandle.vue";
 import Sidebar from "@/components/layout/Sidebar.vue";
 import TrackInfo from "@/components/track/TrackInfo.vue";
 import TrackList from "@/components/track/TrackList.vue";
+import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
+import { usePlaybackState } from "@/composables/usePlaybackState";
 
 const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
   mode: "workspace",
 });
+
+const { displayedTracks } = usePlaybackDisplayList();
+const { currentTrack } = usePlaybackState();
 
 const MIN_LEFT_PANE_WIDTH = 208;
 const MIN_RIGHT_PANE_WIDTH = 240;

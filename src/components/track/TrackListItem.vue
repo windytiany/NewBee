@@ -15,9 +15,21 @@
     >
       <span
         aria-hidden="true"
-        class="grid size-10 shrink-0 place-items-center rounded-sm bg-linear-to-br from-[#293b70] via-[#222b50] to-[#171727] text-sky-200/80"
+        class="grid size-10 shrink-0 place-items-center overflow-hidden rounded-sm"
       >
-        <Disc3 class="size-5" />
+        <img
+          v-if="artworkUrl"
+          :src="artworkUrl"
+          alt=""
+          class="size-full object-cover transition-opacity"
+          :class="artworkStatus === 'available' ? 'opacity-100' : 'opacity-0'"
+          @load="onArtworkLoad"
+          @error="onArtworkError"
+        />
+        <Disc3
+          v-else-if="artworkStatus === 'missing' || artworkStatus === 'failed'"
+          class="size-5 text-sky-200/80"
+        />
       </span>
       <AudioLines
         v-if="isCurrentTrack"
@@ -39,10 +51,14 @@
 </template>
 
 <script setup lang="ts">
+import { invoke } from "@tauri-apps/api/core";
 import { AudioLines, Disc3 } from "@lucide/vue";
+import { onBeforeUnmount, ref, watch } from "vue";
+import type { TrackArtwork } from "@/types/track";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
+    trackId: number;
     title: string;
     album: string;
     duration: string;
@@ -59,4 +75,64 @@ withDefaults(
 const emit = defineEmits<{
   select: [];
 }>();
+
+const artworkUrl = ref<string | null>(null);
+const artworkStatus = ref<"loading" | "available" | "missing" | "failed">("loading");
+let artworkRequestGeneration = 0;
+
+function revokeArtworkUrl() {
+  const url = artworkUrl.value;
+  if (url) globalThis.URL.revokeObjectURL(url);
+  artworkUrl.value = null;
+}
+
+async function loadArtwork(trackId: number) {
+  const generation = ++artworkRequestGeneration;
+  revokeArtworkUrl();
+  artworkStatus.value = "loading";
+
+  try {
+    const artwork = await invoke<TrackArtwork | null>("get_track_artwork", { trackId });
+    if (generation !== artworkRequestGeneration || props.trackId !== trackId) return;
+
+    if (!artwork || artwork.status !== "available") {
+      artworkStatus.value = "missing";
+      return;
+    }
+
+    const imageBlob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
+      type: artwork.mimeType,
+    });
+    artworkUrl.value = globalThis.URL.createObjectURL(imageBlob);
+  } catch {
+    if (generation !== artworkRequestGeneration || props.trackId !== trackId) return;
+    artworkStatus.value = "failed";
+  }
+}
+
+function onArtworkLoad(event: globalThis.Event) {
+  const image = event.currentTarget;
+  if (
+    image instanceof globalThis.HTMLImageElement &&
+    image.src === artworkUrl.value &&
+    image.complete
+  ) {
+    artworkStatus.value = "available";
+  }
+}
+
+function onArtworkError(event: globalThis.Event) {
+  const image = event.currentTarget;
+  if (!(image instanceof globalThis.HTMLImageElement) || image.src !== artworkUrl.value) return;
+
+  revokeArtworkUrl();
+  artworkStatus.value = "failed";
+}
+
+watch(() => props.trackId, loadArtwork, { immediate: true, flush: "sync" });
+
+onBeforeUnmount(() => {
+  ++artworkRequestGeneration;
+  revokeArtworkUrl();
+});
 </script>
