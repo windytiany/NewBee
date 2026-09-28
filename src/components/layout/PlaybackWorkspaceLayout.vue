@@ -35,13 +35,14 @@
 
     <Sidebar side="right" class="max-md:hidden">
       <div
+        ref="sidebarElement"
         class="grid h-full min-h-0"
         :style="{
           gridTemplateRows: `minmax(${MIN_RIGHT_TOP_HEIGHT}px, ${rightTopHeight}px) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_RIGHT_BOTTOM_HEIGHT}px, 1fr)`,
         }"
       >
         <div class="h-full min-h-0 min-w-0 overflow-hidden">
-          <slot name="right-top" />
+          <TrackList :tracks="[]" title="播放队列" empty-message="播放队列为空。" />
         </div>
         <ResizeHandle
           label="调整右侧上下区域高度"
@@ -52,7 +53,7 @@
           @resize="resizeRightTop"
         />
         <div class="h-full min-h-0 min-w-0 overflow-hidden">
-          <slot name="right-bottom" />
+          <TrackInfo />
         </div>
       </div>
     </Sidebar>
@@ -64,6 +65,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { usePersistentSidebarLayout } from "@/composables/usePersistentSidebarLayout";
 import ResizeHandle from "@/components/layout/ResizeHandle.vue";
 import Sidebar from "@/components/layout/Sidebar.vue";
+import TrackInfo from "@/components/track/TrackInfo.vue";
+import TrackList from "@/components/track/TrackList.vue";
 
 const MIN_LEFT_PANE_WIDTH = 208;
 const MIN_RIGHT_PANE_WIDTH = 240;
@@ -95,17 +98,19 @@ const rightTopHeight = computed(() =>
   ),
 );
 const layoutElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
+const sidebarElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
-let resizeObserver: InstanceType<typeof globalThis.ResizeObserver> | null = null;
+let layoutResizeObserver: InstanceType<typeof globalThis.ResizeObserver> | null = null;
+let sidebarResizeObserver: InstanceType<typeof globalThis.ResizeObserver> | null = null;
 let hasInitialLayout = false;
+let hasInitialSidebarHeight = false;
 
 const gridColumns = computed(
   () =>
     `minmax(${MIN_LEFT_PANE_WIDTH}px, ${leftPaneWidth.value}px) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_CENTER_WIDTH}px, 1fr) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_RIGHT_PANE_WIDTH}px, ${rightPaneWidth.value}px)`,
 );
 
-const rightTopMaxHeight = computed(() => getRightTopMaxHeight(containerHeight.value));
 const leftPaneMaxWidth = computed(() =>
   Math.max(
     MIN_LEFT_PANE_WIDTH,
@@ -118,6 +123,7 @@ const rightPaneMaxWidth = computed(() =>
     Math.min(MAX_PANE_WIDTH, getPaneWidthBudget(containerWidth.value) - leftPaneWidth.value),
   ),
 );
+const rightTopMaxHeight = computed(() => getRightTopMaxHeight(containerHeight.value));
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -164,9 +170,8 @@ function resizeRightTop(height: number) {
   sharedRightTopHeight.value = clamp(height, MIN_RIGHT_TOP_HEIGHT, rightTopMaxHeight.value);
 }
 
-function updateContainerSize(width: number, height: number) {
+function updateContainerWidth(width: number) {
   containerWidth.value = width;
-  containerHeight.value = height;
 
   if (!hasInitialLayout) {
     hasInitialLayout = true;
@@ -180,11 +185,6 @@ function updateContainerSize(width: number, height: number) {
       MIN_RIGHT_PANE_WIDTH,
       MAX_PANE_WIDTH,
     );
-    sharedRightTopHeight.value ??= clamp(
-      height * INITIAL_RIGHT_TOP_HEIGHT_RATIO,
-      MIN_RIGHT_TOP_HEIGHT,
-      getRightTopMaxHeight(height),
-    );
   }
 
   const [nextLeftPaneWidth, nextRightPaneWidth] = fitPaneWidths(
@@ -194,6 +194,21 @@ function updateContainerSize(width: number, height: number) {
   );
   sharedLeftPaneWidth.value = nextLeftPaneWidth;
   sharedRightPaneWidth.value = nextRightPaneWidth;
+}
+
+function updateContainerHeight(height: number) {
+  if (height <= 0) return;
+  containerHeight.value = height;
+
+  if (!hasInitialSidebarHeight) {
+    hasInitialSidebarHeight = true;
+    sharedRightTopHeight.value ??= clamp(
+      height * INITIAL_RIGHT_TOP_HEIGHT_RATIO,
+      MIN_RIGHT_TOP_HEIGHT,
+      getRightTopMaxHeight(height),
+    );
+  }
+
   sharedRightTopHeight.value = clamp(
     rightTopHeight.value,
     MIN_RIGHT_TOP_HEIGHT,
@@ -202,18 +217,29 @@ function updateContainerSize(width: number, height: number) {
 }
 
 onMounted(() => {
-  const element = layoutElement.value;
-  if (!element) return;
+  const layout = layoutElement.value;
+  if (layout) {
+    layoutResizeObserver = new globalThis.ResizeObserver(([entry]) => {
+      if (!entry) return;
+      updateContainerWidth(entry.contentRect.width);
+    });
+    layoutResizeObserver.observe(layout);
+  }
 
-  resizeObserver = new globalThis.ResizeObserver(([entry]) => {
-    if (!entry) return;
-    updateContainerSize(entry.contentRect.width, entry.contentRect.height);
-  });
-  resizeObserver.observe(element);
+  const sidebar = sidebarElement.value;
+  if (sidebar) {
+    sidebarResizeObserver = new globalThis.ResizeObserver(([entry]) => {
+      if (!entry) return;
+      updateContainerHeight(entry.contentRect.height);
+    });
+    sidebarResizeObserver.observe(sidebar);
+  }
 });
 
 onBeforeUnmount(() => {
-  resizeObserver?.disconnect();
-  resizeObserver = null;
+  layoutResizeObserver?.disconnect();
+  layoutResizeObserver = null;
+  sidebarResizeObserver?.disconnect();
+  sidebarResizeObserver = null;
 });
 </script>

@@ -1,5 +1,5 @@
 <template>
-  <ResizableThreeColumnLayout>
+  <PlaybackWorkspaceLayout>
     <template #left>
       <PlaylistList
         :playlists="playlists"
@@ -23,15 +23,7 @@
         @play-track="playTrackFromPlaylist"
       />
     </template>
-
-    <template #right-top>
-      <TrackList :tracks="[]" title="播放队列" empty-message="播放队列为空。" />
-    </template>
-
-    <template #right-bottom>
-      <TrackInfo :details="null" empty-message="歌单页面暂不提供曲目详情。" />
-    </template>
-  </ResizableThreeColumnLayout>
+  </PlaybackWorkspaceLayout>
   <CreatePlaylistDialog ref="createPlaylistDialog" @created="onPlaylistCreated" />
 </template>
 
@@ -44,9 +36,7 @@ import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
 import PlaylistBrowser from "@/components/playlist/PlaylistBrowser.vue";
 import CreatePlaylistDialog from "@/components/playlist/CreatePlaylistDialog.vue";
 import PlaylistList from "@/components/playlist/PlaylistList.vue";
-import ResizableThreeColumnLayout from "@/components/layout/ResizableThreeColumnLayout.vue";
-import TrackInfo from "@/components/track/TrackInfo.vue";
-import TrackList from "@/components/track/TrackList.vue";
+import PlaybackWorkspaceLayout from "@/components/layout/PlaybackWorkspaceLayout.vue";
 import type { Playlist, PlaylistTrackData } from "@/types/playlist";
 
 const {
