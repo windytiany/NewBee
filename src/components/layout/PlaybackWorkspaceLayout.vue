@@ -4,11 +4,12 @@
     class="bg-spotify-base grid h-[calc(100vh-8.5rem)] min-h-0 w-full min-w-0 grid-cols-(--three-column-layout-columns) overflow-hidden max-md:grid-cols-1 md:h-[calc(100vh-6rem)]"
     :style="{ '--three-column-layout-columns': gridColumns }"
   >
-    <Sidebar side="left" class="max-md:hidden">
+    <Sidebar v-show="props.mode === 'workspace'" side="left" class="max-md:hidden">
       <slot name="left" />
     </Sidebar>
 
     <ResizeHandle
+      v-show="props.mode === 'workspace'"
       label="调整左侧栏宽度"
       class="max-md:hidden"
       orientation="vertical"
@@ -18,11 +19,21 @@
       @resize="resizeLeftPane"
     />
 
-    <section class="grid h-full min-h-0 min-w-0 place-items-center overflow-hidden text-white">
+    <section
+      v-if="props.mode === 'workspace'"
+      class="grid h-full min-h-0 min-w-0 place-items-center overflow-hidden text-white"
+    >
       <slot name="center" />
+    </section>
+    <section
+      v-else
+      class="grid h-full min-h-0 min-w-0 place-items-center overflow-hidden text-white"
+    >
+      <slot name="playing" />
     </section>
 
     <ResizeHandle
+      v-show="props.mode === 'workspace'"
       label="调整右侧栏宽度"
       reverse
       class="max-md:hidden"
@@ -33,7 +44,7 @@
       @resize="resizeRightPane"
     />
 
-    <Sidebar side="right" class="max-md:hidden">
+    <Sidebar v-show="props.mode === 'workspace'" side="right" class="max-md:hidden">
       <div
         ref="sidebarElement"
         class="grid h-full min-h-0"
@@ -61,12 +72,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { usePersistentSidebarLayout } from "@/composables/usePersistentSidebarLayout";
 import ResizeHandle from "@/components/layout/ResizeHandle.vue";
 import Sidebar from "@/components/layout/Sidebar.vue";
 import TrackInfo from "@/components/track/TrackInfo.vue";
 import TrackList from "@/components/track/TrackList.vue";
+
+const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
+  mode: "workspace",
+});
 
 const MIN_LEFT_PANE_WIDTH = 208;
 const MIN_RIGHT_PANE_WIDTH = 240;
@@ -106,9 +121,10 @@ let sidebarResizeObserver: InstanceType<typeof globalThis.ResizeObserver> | null
 let hasInitialLayout = false;
 let hasInitialSidebarHeight = false;
 
-const gridColumns = computed(
-  () =>
-    `minmax(${MIN_LEFT_PANE_WIDTH}px, ${leftPaneWidth.value}px) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_CENTER_WIDTH}px, 1fr) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_RIGHT_PANE_WIDTH}px, ${rightPaneWidth.value}px)`,
+const gridColumns = computed(() =>
+  props.mode === "playing"
+    ? "minmax(0, 1fr)"
+    : `minmax(${MIN_LEFT_PANE_WIDTH}px, ${leftPaneWidth.value}px) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_CENTER_WIDTH}px, 1fr) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_RIGHT_PANE_WIDTH}px, ${rightPaneWidth.value}px)`,
 );
 
 const leftPaneMaxWidth = computed(() =>
@@ -171,7 +187,10 @@ function resizeRightTop(height: number) {
 }
 
 function updateContainerWidth(width: number) {
+  if (width <= 0) return;
   containerWidth.value = width;
+
+  if (props.mode === "playing") return;
 
   if (!hasInitialLayout) {
     hasInitialLayout = true;
@@ -197,7 +216,7 @@ function updateContainerWidth(width: number) {
 }
 
 function updateContainerHeight(height: number) {
-  if (height <= 0) return;
+  if (height <= 0 || props.mode === "playing") return;
   containerHeight.value = height;
 
   if (!hasInitialSidebarHeight) {
@@ -215,6 +234,20 @@ function updateContainerHeight(height: number) {
     getRightTopMaxHeight(height),
   );
 }
+
+watch(
+  () => props.mode,
+  (mode) => {
+    if (mode !== "workspace") return;
+
+    const layout = layoutElement.value;
+    if (layout) updateContainerWidth(layout.getBoundingClientRect().width);
+
+    const sidebar = sidebarElement.value;
+    if (sidebar) updateContainerHeight(sidebar.getBoundingClientRect().height);
+  },
+  { flush: "post" },
+);
 
 onMounted(() => {
   const layout = layoutElement.value;
