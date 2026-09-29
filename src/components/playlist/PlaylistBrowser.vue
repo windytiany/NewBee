@@ -71,7 +71,7 @@
             :track-number="index + 1"
             :is-focused="focusedItem === getTrackFocusKey(track.playlistItemId)"
             @select="setFocusedItem(getTrackFocusKey(track.playlistItemId))"
-            @play="emit('playTrack', track.trackId)"
+            @play="emit('playTrack', track.playlistItemId)"
           />
         </ol>
       </div>
@@ -109,7 +109,7 @@ const props = defineProps<{
 const { focusedItem, setFocusedItem } = useClickFocus();
 
 const emit = defineEmits<{
-  playTrack: [trackId: number];
+  playTrack: [playlistItemId: number];
   playPlaylist: [];
 }>();
 

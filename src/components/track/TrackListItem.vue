@@ -10,8 +10,13 @@
             : 'hover:bg-white/5'
       "
       :aria-pressed="isSelected ? true : undefined"
+      :aria-haspopup="props.canRemoveFromQueue ? 'menu' : undefined"
+      :aria-expanded="props.canRemoveFromQueue ? props.isContextMenuOpen : undefined"
       type="button"
-      @click="emit('select')"
+      @click="handleTrackClick"
+      @dblclick="handleTrackDoubleClick"
+      @contextmenu="openQueueContextMenu"
+      @keydown="handleContextMenuKeydown"
     >
       <span
         aria-hidden="true"
@@ -59,22 +64,77 @@ import type { TrackArtwork } from "@/types/track";
 const props = withDefaults(
   defineProps<{
     trackId: number;
+    rowKey: string;
     title: string;
     album: string;
     duration: string;
     isCurrentTrack?: boolean;
     isSelected?: boolean;
     isFocused: boolean;
+    canRemoveFromQueue?: boolean;
+    isContextMenuOpen?: boolean;
   }>(),
   {
     isCurrentTrack: false,
     isSelected: false,
+    canRemoveFromQueue: false,
+    isContextMenuOpen: false,
   },
 );
 
 const emit = defineEmits<{
   select: [];
+  play: [];
+  contextMenu: [
+    request: {
+      rowKey: string;
+      x: number;
+      y: number;
+      trigger: InstanceType<typeof globalThis.HTMLButtonElement>;
+    },
+  ];
 }>();
+
+function handleTrackClick(event: InstanceType<typeof globalThis.MouseEvent>) {
+  if (event.button === 0) emit("select");
+}
+
+function handleTrackDoubleClick(event: InstanceType<typeof globalThis.MouseEvent>) {
+  if (event.button === 0) emit("play");
+}
+
+function openQueueContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
+  if (!props.canRemoveFromQueue) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  emit("contextMenu", {
+    rowKey: props.rowKey,
+    x: event.clientX,
+    y: event.clientY,
+    trigger: event.currentTarget as InstanceType<typeof globalThis.HTMLButtonElement>,
+  });
+}
+
+function handleContextMenuKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+  if (
+    !props.canRemoveFromQueue ||
+    (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey))
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  const trigger = event.currentTarget as InstanceType<typeof globalThis.HTMLButtonElement>;
+  const bounds = trigger.getBoundingClientRect();
+  emit("contextMenu", {
+    rowKey: props.rowKey,
+    x: bounds.left,
+    y: bounds.bottom,
+    trigger,
+  });
+}
 
 const artworkUrl = ref<string | null>(null);
 const artworkStatus = ref<"loading" | "available" | "missing" | "failed">("loading");

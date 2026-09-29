@@ -7,15 +7,20 @@
       <div class="flex items-center gap-1">
         <button
           aria-label="Previous track"
-          class="text-spotify-muted focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          class="text-spotify-muted focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+          :class="canPlayPrevious ? 'hover:text-white' : 'cursor-not-allowed opacity-50'"
+          :disabled="!canPlayPrevious"
           type="button"
+          @click="playPreviousTrack"
         >
           <SkipBack aria-hidden="true" class="size-4" />
         </button>
         <button
           :aria-label="playbackStatus.isPlaying ? 'Pause' : 'Play'"
           class="bg-spotify-green focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="isPlaybackCommandPending || isSeeking || !currentTrack"
+          :disabled="
+            isPlaybackCommandPending || isSeeking || (!currentTrack && !canStartRestoredQueue)
+          "
           type="button"
           @click="togglePlayback"
         >
@@ -24,8 +29,11 @@
         </button>
         <button
           aria-label="Next track"
-          class="text-spotify-muted focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          class="text-spotify-muted focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+          :class="canPlayNext ? 'hover:text-white' : 'cursor-not-allowed opacity-50'"
+          :disabled="!canPlayNext"
           type="button"
+          @click="playNextTrack"
         >
           <SkipForward aria-hidden="true" class="size-4" />
         </button>
@@ -96,7 +104,7 @@
     >
       <p
         v-if="playbackFeedback"
-        class="bg-spotify-interactive absolute right-0 bottom-full z-20 mb-2 max-w-[min(22rem,calc(100vw-2rem))] rounded-lg px-3 py-2 text-left text-xs text-red-200 shadow-lg"
+        class="bg-spotify-interactive absolute right-0 bottom-full z-20 mb-2 max-w-[min(22rem,calc(100vw-2rem))] rounded-lg px-3 py-2 text-left text-xs whitespace-pre-line text-red-200 shadow-lg"
         role="alert"
       >
         {{ playbackFeedback }}
@@ -148,20 +156,20 @@
       <button
         aria-label="Repeat one"
         class="focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-        :class="isRepeatEnabled ? 'text-spotify-green' : 'text-spotify-muted hover:text-white'"
-        :aria-pressed="isRepeatEnabled"
+        :class="repeatOneEnabled ? 'text-spotify-green' : 'text-spotify-muted hover:text-white'"
+        :aria-pressed="repeatOneEnabled"
         type="button"
-        @click="isRepeatEnabled = !isRepeatEnabled"
+        @click="setRepeatOneEnabled(!repeatOneEnabled)"
       >
         <Repeat1 aria-hidden="true" class="size-4" />
       </button>
       <button
         aria-label="Shuffle playback"
         class="focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-        :class="isShuffleEnabled ? 'text-spotify-green' : 'text-spotify-muted hover:text-white'"
-        :aria-pressed="isShuffleEnabled"
+        :class="shuffleEnabled ? 'text-spotify-green' : 'text-spotify-muted hover:text-white'"
+        :aria-pressed="shuffleEnabled"
         type="button"
-        @click="isShuffleEnabled = !isShuffleEnabled"
+        @click="setShuffleEnabled(!shuffleEnabled)"
       >
         <Shuffle aria-hidden="true" class="size-4" />
       </button>
@@ -187,8 +195,6 @@ import {
 const { volume, volumeError, toggleMute, ensureCurrentVolumeIsSynchronized } = usePlaybackVolume();
 const isVolumePopoverOpen = ref(false);
 const isHorizontalVolumeVisible = ref(false);
-const isRepeatEnabled = ref(false);
-const isShuffleEnabled = ref(false);
 const volumeControl = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 let volumeLayoutQuery: ReturnType<typeof globalThis.matchMedia> | null = null;
 
@@ -243,6 +249,16 @@ const {
   currentTrack,
   isPlaybackCommandPending,
   playbackStartError,
+  queuePlaybackError,
+  canStartRestoredQueue,
+  canPlayPrevious,
+  canPlayNext,
+  repeatOneEnabled,
+  shuffleEnabled,
+  setRepeatOneEnabled,
+  setShuffleEnabled,
+  playPreviousTrack,
+  playNextTrack,
   togglePlayback,
   handleSeekInput,
   commitSeek,
@@ -258,7 +274,9 @@ const sliderPositionMs = computed(() =>
   isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
 );
 const playbackFeedback = computed(() =>
-  [playbackError.value, playbackStartError.value, volumeError.value].filter(Boolean).join(" "),
+  [playbackError.value, playbackStartError.value, queuePlaybackError.value, volumeError.value]
+    .filter(Boolean)
+    .join(" "),
 );
 const progressPercent = computed(() =>
   playbackStatus.value.durationMs > 0

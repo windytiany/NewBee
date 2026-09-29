@@ -21,8 +21,8 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   const albumsError = ref("");
   const tracksError = ref("");
   const selectedTrackId = ref<number | null>(null);
-  const { currentTrack, playTrack } = usePlaybackState();
-  const { replaceDisplayedTracks } = usePlaybackDisplayList();
+  const { currentTrack } = usePlaybackState();
+  const { replaceAndPlay } = usePlaybackDisplayList();
   const {
     selectedGroup,
     selectedAlbum,
@@ -228,7 +228,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     if (isLoadingTracks.value || !tracks.value.some((track) => track.id === trackId)) return;
 
     const displayedTracks = toPlaybackDisplayTracks(tracks.value);
-    if (await playTrack(trackId)) replaceDisplayedTracks(displayedTracks);
+    await replaceAndPlay(displayedTracks, `album-track:${trackId}`);
   }
 
   async function playAlbumFromLibrary() {
@@ -238,7 +238,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     if (!firstTrack) return;
 
     const displayedTracks = toPlaybackDisplayTracks(tracks.value);
-    if (await playTrack(firstTrack.id)) replaceDisplayedTracks(displayedTracks);
+    await replaceAndPlay(displayedTracks, `album-track:${firstTrack.id}`);
   }
 
   function onLibraryScanCompleted() {

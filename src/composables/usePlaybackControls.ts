@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
+import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
 import { usePlaybackState } from "@/composables/usePlaybackState";
 
 const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
@@ -7,6 +8,8 @@ const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
 type PlaybackStatus = {
   hasAudio: boolean;
   isPlaying: boolean;
+  hasEnded: boolean;
+  playbackId: number | null;
   positionMs: number;
   durationMs: number;
 };
@@ -14,6 +17,8 @@ type PlaybackStatus = {
 const EMPTY_PLAYBACK_STATUS = {
   hasAudio: false,
   isPlaying: false,
+  hasEnded: false,
+  playbackId: null,
   positionMs: 0,
   durationMs: 0,
 } satisfies PlaybackStatus;
@@ -30,6 +35,26 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   const selectedPositionMs = ref(0);
   const { currentTrack, isPlaybackCommandPending, playbackStartError, playTrack } =
     usePlaybackState();
+  const {
+    displayedTracks,
+    currentRowKey,
+    canStartRestoredQueue,
+    queuePlaybackError,
+    repeatOneEnabled,
+    shuffleEnabled,
+    canPlayPrevious,
+    canPlayNext,
+    setRepeatOneEnabled,
+    setShuffleEnabled,
+    playQueueItem,
+    playRestoredQueue,
+    playPreviousTrack,
+    playNextTrack,
+    observePlaybackStatus,
+    invalidatePendingAdvance,
+    suppressPlaybackEnd,
+    allowPlaybackEnd,
+  } = usePlaybackDisplayList();
   let playbackStatusPoll: ReturnType<typeof globalThis.setInterval> | null = null;
   let statusRequestsInFlight = 0;
   let statusRequestVersion = 0;
@@ -44,6 +69,13 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
       if (requestVersion !== statusRequestVersion) return false;
 
       playbackStatus.value = status;
+      await observePlaybackStatus({
+        status,
+        currentPlaybackId: currentTrack.value?.playbackId ?? null,
+        currentTrackId: currentTrack.value?.trackId ?? null,
+        isCommandPending: isPlaybackCommandPending.value,
+        isSeeking: isSeeking.value,
+      });
       if (playbackError.value.startsWith("Playback status unavailable:")) playbackError.value = "";
       return true;
     } catch (error) {
@@ -59,6 +91,7 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   async function togglePlayback() {
     if (isPlaybackCommandPending.value || isSeeking.value) return;
 
+    invalidatePendingAdvance();
     isPlaybackCommandPending.value = true;
     try {
       if (!(await refreshPlaybackStatus(true))) return;
@@ -68,10 +101,36 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
         (!status.isPlaying && status.durationMs > 0 && status.positionMs >= status.durationMs)
       ) {
         const track = currentTrack.value;
-        if (!track || !(await ensureCurrentVolumeIsSynchronized())) return;
+        const shouldStartRestoredQueue =
+          canStartRestoredQueue.value && (track === null || track.playbackId === null);
+        if ((!track && !shouldStartRestoredQueue) || !(await ensureCurrentVolumeIsSynchronized())) {
+          return;
+        }
+        if (
+          !shouldStartRestoredQueue &&
+          track !== null &&
+          currentTrack.value?.playbackId !== track.playbackId
+        ) {
+          return;
+        }
 
         isPlaybackCommandPending.value = false;
-        const started = await playTrack(track.trackId);
+        let started: boolean;
+        if (shouldStartRestoredQueue) {
+          started = await playRestoredQueue();
+        } else if (track !== null) {
+          const rowKey = currentRowKey.value;
+          const queueItem = displayedTracks.value.find((item) => item.rowKey === rowKey);
+          started =
+            rowKey && queueItem?.trackId === track.trackId
+              ? await playQueueItem(rowKey)
+              : await playTrack(
+                  track.trackId,
+                  () => currentTrack.value?.playbackId === track.playbackId,
+                );
+        } else {
+          started = false;
+        }
         isPlaybackCommandPending.value = true;
         if (!started) {
           await refreshPlaybackStatus(true);
@@ -79,8 +138,10 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
         }
       } else if (status.isPlaying) {
         await invoke("pause");
+        suppressPlaybackEnd(currentTrack.value?.playbackId ?? status.playbackId);
       } else {
         await invoke("resume");
+        allowPlaybackEnd(currentTrack.value?.playbackId ?? status.playbackId);
       }
 
       playbackError.value = "";
@@ -104,23 +165,36 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   async function commitSeek() {
     if (!isSeeking.value || isPlaybackCommandPending.value) return;
 
+    invalidatePendingAdvance();
     isPlaybackCommandPending.value = true;
     try {
       await invoke("seek_to", { positionMs: selectedPositionMs.value });
       playbackError.value = "";
       playbackStartError.value = "";
-      await refreshPlaybackStatus(true);
     } catch (error) {
       playbackError.value = `Seek failed: ${errorMessage(error)}`;
-      await refreshPlaybackStatus(true);
     } finally {
       isSeeking.value = false;
-      selectedPositionMs.value = playbackStatus.value.positionMs;
       isPlaybackCommandPending.value = false;
     }
+
+    await refreshPlaybackStatus(true);
+    selectedPositionMs.value = playbackStatus.value.positionMs;
   }
 
-  watch(currentTrack, () => void refreshPlaybackStatus(true));
+  watch(
+    currentTrack,
+    (track) => {
+      if (!track) {
+        statusRequestVersion += 1;
+        playbackStatus.value = { ...EMPTY_PLAYBACK_STATUS };
+        selectedPositionMs.value = 0;
+        return;
+      }
+      void refreshPlaybackStatus(true);
+    },
+    { flush: "sync" },
+  );
 
   onMounted(() => {
     void refreshPlaybackStatus();
@@ -143,6 +217,16 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
     currentTrack,
     isPlaybackCommandPending,
     playbackStartError,
+    queuePlaybackError,
+    canStartRestoredQueue,
+    repeatOneEnabled,
+    shuffleEnabled,
+    canPlayPrevious,
+    canPlayNext,
+    setRepeatOneEnabled,
+    setShuffleEnabled,
+    playPreviousTrack,
+    playNextTrack,
     togglePlayback,
     handleSeekInput,
     commitSeek,

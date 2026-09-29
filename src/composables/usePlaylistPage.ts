@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
-import { usePlaybackState } from "@/composables/usePlaybackState";
 import { usePersistentPlaylistSelection } from "@/composables/usePersistentPlaylistSelection";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
@@ -21,8 +20,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   const isLoadingPlaylistTracks = ref(false);
   const playlistsError = ref("");
   const playlistTracksError = ref("");
-  const { playTrack } = usePlaybackState();
-  const { replaceDisplayedTracks } = usePlaybackDisplayList();
+  const { replaceAndPlay } = usePlaybackDisplayList();
   let isMounted = false;
   let isSubscribedToLibraryScan = false;
   let playlistsRequestGeneration = 0;
@@ -132,16 +130,16 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     }));
   }
 
-  async function playTrackFromPlaylist(trackId: number) {
+  async function playTrackFromPlaylist(playlistItemId: number) {
     if (
       isLoadingPlaylistTracks.value ||
-      !playlistTracks.value.some((track) => track.trackId === trackId)
+      !playlistTracks.value.some((track) => track.playlistItemId === playlistItemId)
     ) {
       return;
     }
 
     const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
-    if (await playTrack(trackId)) replaceDisplayedTracks(displayedTracks);
+    await replaceAndPlay(displayedTracks, `playlist-item:${playlistItemId}`);
   }
 
   async function playPlaylistFromPage() {
@@ -151,7 +149,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     if (!firstTrack) return;
 
     const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
-    if (await playTrack(firstTrack.trackId)) replaceDisplayedTracks(displayedTracks);
+    await replaceAndPlay(displayedTracks, `playlist-item:${firstTrack.playlistItemId}`);
   }
 
   function onLibraryScanCompleted() {

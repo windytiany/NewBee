@@ -55,9 +55,12 @@
         <div class="h-full min-h-0 min-w-0 overflow-hidden">
           <TrackList
             :tracks="displayedTracks"
-            :current-track-id="currentTrack?.trackId ?? null"
+            :current-row-key="activeCurrentRowKey"
+            :can-remove-from-queue="true"
             title="当前曲目列表"
             empty-message="当前没有展示的曲目列表。"
+            @play-queue-item="playQueueItem"
+            @remove-queue-item="removeQueueItem"
           />
         </div>
         <ResizeHandle
@@ -90,8 +93,19 @@ const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
   mode: "workspace",
 });
 
-const { displayedTracks } = usePlaybackDisplayList();
+const { displayedTracks, currentRowKey, playQueueItem, removeQueueItem } = usePlaybackDisplayList();
 const { currentTrack } = usePlaybackState();
+const activeCurrentRowKey = computed(() => {
+  const track = currentTrack.value;
+  const rowKey = currentRowKey.value;
+  if (track === null || track.playbackId === null || rowKey === null) return null;
+
+  return displayedTracks.value.some(
+    (item) => item.rowKey === rowKey && item.trackId === track.trackId,
+  )
+    ? rowKey
+    : null;
+});
 
 const MIN_LEFT_PANE_WIDTH = 208;
 const MIN_RIGHT_PANE_WIDTH = 240;

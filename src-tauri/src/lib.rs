@@ -45,6 +45,7 @@ pub fn run() {
             playback::set_volume,
             playback::pause,
             playback::resume,
+            playback::stop_playback,
             playback::seek_to,
             playback::playback_status,
         ])
