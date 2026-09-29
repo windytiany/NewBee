@@ -316,6 +316,7 @@ describe("playback session", () => {
       restoredQueueSnapshot: {
         displayedTracks: restoredTracks,
         currentRowKey: "selected",
+        nextRowKeys: [],
         shuffleEnabled: true,
         repeatOneEnabled: true,
       },

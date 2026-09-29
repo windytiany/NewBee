@@ -1,11 +1,12 @@
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 
 const PLAYBACK_QUEUE_STORAGE_KEY = "newbee.playback-queue";
-const PLAYBACK_QUEUE_SNAPSHOT_VERSION = 1;
+const PLAYBACK_QUEUE_SNAPSHOT_VERSION = 2;
 
 export type PlaybackQueuePersistenceSnapshot = {
   displayedTracks: readonly PlaybackDisplayTrack[];
   currentRowKey: string | null;
+  nextRowKeys: readonly string[];
   shuffleEnabled: boolean;
   repeatOneEnabled: boolean;
 };
@@ -14,12 +15,13 @@ export type PlaybackQueueStorage = Pick<Storage, "getItem" | "setItem">;
 type StorageProvider = () => PlaybackQueueStorage;
 type PersistableQueueState = Pick<
   PlaybackQueuePersistenceSnapshot,
-  "displayedTracks" | "currentRowKey" | "shuffleEnabled" | "repeatOneEnabled"
+  "displayedTracks" | "currentRowKey" | "nextRowKeys" | "shuffleEnabled" | "repeatOneEnabled"
 >;
 
 export const EMPTY_PLAYBACK_QUEUE_SNAPSHOT: PlaybackQueuePersistenceSnapshot = {
   displayedTracks: [],
   currentRowKey: null,
+  nextRowKeys: [],
   shuffleEnabled: false,
   repeatOneEnabled: false,
 };
@@ -68,11 +70,13 @@ export function parsePlaybackQueueSnapshot(
       "version",
       "displayedTracks",
       "currentRowKey",
+      "nextRowKeys",
       "shuffleEnabled",
       "repeatOneEnabled",
     ]) ||
     value.version !== PLAYBACK_QUEUE_SNAPSHOT_VERSION ||
     !Array.isArray(value.displayedTracks) ||
+    !Array.isArray(value.nextRowKeys) ||
     typeof value.shuffleEnabled !== "boolean" ||
     typeof value.repeatOneEnabled !== "boolean" ||
     (value.currentRowKey !== null && typeof value.currentRowKey !== "string")
@@ -90,9 +94,25 @@ export function parsePlaybackQueueSnapshot(
 
   if (value.currentRowKey !== null && !rowKeys.has(value.currentRowKey)) return null;
 
+  const nextRowKeys: string[] = [];
+  const uniqueNextRowKeys = new Set<string>();
+  for (const rowKey of value.nextRowKeys) {
+    if (
+      typeof rowKey !== "string" ||
+      rowKey.trim().length === 0 ||
+      !rowKeys.has(rowKey) ||
+      uniqueNextRowKeys.has(rowKey)
+    ) {
+      return null;
+    }
+    uniqueNextRowKeys.add(rowKey);
+    nextRowKeys.push(rowKey);
+  }
+
   return {
     displayedTracks,
     currentRowKey: value.currentRowKey,
+    nextRowKeys,
     shuffleEnabled: value.shuffleEnabled,
     repeatOneEnabled: value.repeatOneEnabled,
   };
@@ -148,6 +168,7 @@ function copyPersistableQueueState(state: PersistableQueueState): PlaybackQueueP
       durationMs: track.durationMs,
     })),
     currentRowKey: state.currentRowKey,
+    nextRowKeys: [...state.nextRowKeys],
     shuffleEnabled: state.shuffleEnabled,
     repeatOneEnabled: state.repeatOneEnabled,
   };

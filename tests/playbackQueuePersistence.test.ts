@@ -1,6 +1,7 @@
 // @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { describe, expect, it } from "bun:test";
 import { PlaybackQueueCoordinator } from "@/composables/playbackQueueCoordinator";
+import type { PlaybackQueueSnapshot } from "@/composables/playbackQueueCoordinator";
 import {
   createPlaybackQueueSnapshotWriter,
   loadPlaybackQueueSnapshot,
@@ -29,12 +30,24 @@ function createMemoryStorage(): MemoryStorage & { values: Map<string, string> } 
   };
 }
 
+function createCoordinatorSnapshotWriter(
+  initialSnapshot: PlaybackQueuePersistenceSnapshot | null,
+  storageProvider: () => MemoryStorage,
+) {
+  const writeSnapshot = createPlaybackQueueSnapshotWriter(initialSnapshot, storageProvider);
+  return (
+    _snapshot: PlaybackQueueSnapshot,
+    persistenceSnapshot: PlaybackQueuePersistenceSnapshot,
+  ) => writeSnapshot(persistenceSnapshot);
+}
+
 const snapshot: PlaybackQueuePersistenceSnapshot = {
   displayedTracks: [
     { rowKey: "playlist-item:11", trackId: 7, title: "First", album: null, durationMs: 1200 },
     { rowKey: "album-track:7", trackId: 7, title: null, album: "Second", durationMs: null },
   ],
   currentRowKey: "album-track:7",
+  nextRowKeys: [],
   shuffleEnabled: true,
   repeatOneEnabled: true,
 };
@@ -46,7 +59,7 @@ describe("playback queue persistence", () => {
     expect(savePlaybackQueueSnapshot(snapshot, () => storage)).toBe(true);
     expect(loadPlaybackQueueSnapshot(() => storage)).toEqual(snapshot);
     expect(JSON.parse(storage.values.get(STORAGE_KEY) ?? "null")).toEqual({
-      version: 1,
+      version: 2,
       ...snapshot,
     });
   });
@@ -65,7 +78,7 @@ describe("playback queue persistence", () => {
     writer(coordinatorSnapshot);
 
     expect(JSON.parse(storage.values.get(STORAGE_KEY) ?? "null")).toEqual({
-      version: 1,
+      version: 2,
       ...snapshot,
     });
   });
@@ -78,11 +91,12 @@ describe("playback queue persistence", () => {
         playbackAttempts += 1;
         return canStart() ? { status: "started", playbackId: 1 } : { status: "cancelled" };
       },
-      createPlaybackQueueSnapshotWriter(null, () => storage),
+      createCoordinatorSnapshotWriter(null, () => storage),
     );
     coordinator.restoreQueue({
       displayedTracks: [],
       currentRowKey: null,
+      nextRowKeys: [],
       shuffleEnabled: false,
       repeatOneEnabled: false,
     });
@@ -111,26 +125,46 @@ describe("playback queue persistence", () => {
       album: null,
       durationMs: null,
     });
+    const selectedRowKey = savedSnapshot.displayedTracks[1]?.rowKey;
+    const removedRowKey = savedSnapshot.displayedTracks[0]?.rowKey;
+    expect(selectedRowKey).toBeDefined();
+    expect(removedRowKey).toBeDefined();
+    if (!selectedRowKey || !removedRowKey) return;
+
+    expect(await restoredCoordinator.playQueueItem(selectedRowKey)).toBe(true);
+    expect(restoredCoordinator.snapshot.currentRowKey).toBe(selectedRowKey);
+    expect(await restoredCoordinator.removeQueueItem(removedRowKey)).toBe(true);
 
     const restoredRows = restoredCoordinator.snapshot.displayedTracks;
-    expect(restoredRows).toHaveLength(3);
-    expect(restoredRows.map((track) => track.trackId)).toEqual([7, 7, 7]);
-    expect(new Set(restoredRows.map((track) => track.rowKey)).size).toBe(3);
+    expect(restoredRows).toHaveLength(2);
+    expect(restoredRows.map((track) => track.trackId)).toEqual([7, 7]);
+    expect(restoredRows.map((track) => track.rowKey)).toContain(selectedRowKey);
+    expect(new Set(restoredRows.map((track) => track.rowKey)).size).toBe(2);
   });
 
-  it("restores added-next rows ahead of shuffled queue items", async () => {
+  it("restores explicit next priority ahead of shuffled rows despite a matching row-key substring", async () => {
     const storage = createMemoryStorage();
     let nextPlaybackId = 0;
     const options = { random: () => 0 };
     const coordinator = new PlaybackQueueCoordinator(
       async (_trackId, canStart) =>
         canStart() ? { status: "started", playbackId: ++nextPlaybackId } : { status: "cancelled" },
-      createPlaybackQueueSnapshotWriter(null, () => storage),
+      createCoordinatorSnapshotWriter(null, () => storage),
       options,
     );
     coordinator.restoreQueue({
-      displayedTracks: [],
+      displayedTracks: [
+        {
+          rowKey: "queue-next:ordinary-row",
+          trackId: 2,
+          title: "ordinary",
+          album: null,
+          durationMs: null,
+        },
+        { rowKey: "regular-row", trackId: 6, title: "regular", album: null, durationMs: null },
+      ],
       currentRowKey: null,
+      nextRowKeys: [],
       shuffleEnabled: true,
       repeatOneEnabled: false,
     });
@@ -141,6 +175,14 @@ describe("playback queue persistence", () => {
     const savedSnapshot = loadPlaybackQueueSnapshot(() => storage);
     expect(savedSnapshot).not.toBeNull();
     if (!savedSnapshot) return;
+
+    const savedNextRowKeys = new Set(savedSnapshot.nextRowKeys);
+    expect(
+      savedSnapshot.displayedTracks
+        .filter((track) => [3, 4].includes(track.trackId))
+        .every((track) => savedNextRowKeys.has(track.rowKey)),
+    ).toBe(true);
+    expect(savedNextRowKeys.has("queue-next:ordinary-row")).toBe(false);
 
     const attempts: number[] = [];
     const restoredCoordinator = new PlaybackQueueCoordinator(
@@ -155,10 +197,10 @@ describe("playback queue persistence", () => {
     );
     restoredCoordinator.restoreQueue(savedSnapshot);
     expect(restoredCoordinator.snapshot.currentRowKey).toBeNull();
-    expect(await restoredCoordinator.playNext()).toBe(true);
-    expect(await restoredCoordinator.playNext()).toBe(true);
-    expect(await restoredCoordinator.playNext()).toBe(true);
-    expect(attempts).toEqual([4, 3, 5]);
+    for (let index = 0; index < 5; index += 1) {
+      expect(await restoredCoordinator.playNext()).toBe(true);
+    }
+    expect(attempts).toEqual([4, 3, 6, 5, 2]);
   });
 
   it("persists mode changes and successful automatic track advances", async () => {
@@ -167,12 +209,13 @@ describe("playback queue persistence", () => {
     const coordinator = new PlaybackQueueCoordinator(
       async (_trackId, canStart) =>
         canStart() ? { status: "started", playbackId: ++nextPlaybackId } : { status: "cancelled" },
-      createPlaybackQueueSnapshotWriter(null, () => storage),
+      createCoordinatorSnapshotWriter(null, () => storage),
     );
     const queue = snapshot.displayedTracks;
     coordinator.restoreQueue({
       displayedTracks: [],
       currentRowKey: null,
+      nextRowKeys: [],
       shuffleEnabled: false,
       repeatOneEnabled: false,
     });
@@ -200,7 +243,7 @@ describe("playback queue persistence", () => {
     const coordinator = new PlaybackQueueCoordinator(
       async (_trackId, canStart) =>
         canStart() ? { status: "started", playbackId: 1 } : { status: "cancelled" },
-      createPlaybackQueueSnapshotWriter(restoredSnapshot, () => storage),
+      createCoordinatorSnapshotWriter(restoredSnapshot, () => storage),
     );
     coordinator.restoreQueue(restoredSnapshot);
 
@@ -231,7 +274,7 @@ describe("playback queue persistence", () => {
       const coordinator = new PlaybackQueueCoordinator(
         async (_trackId, canStart) =>
           canStart() ? { status: "started", playbackId: 1 } : { status: "cancelled" },
-        createPlaybackQueueSnapshotWriter(null, () => {
+        createCoordinatorSnapshotWriter(null, () => {
           throw new Error("storage unavailable");
         }),
       );
@@ -247,35 +290,53 @@ describe("playback queue persistence", () => {
     }
   });
 
-  it("rejects corrupt snapshots, duplicate row keys, invalid current keys, and invalid numbers", () => {
-    const duplicateRowKeySnapshot = {
+  it("rejects legacy and corrupt snapshots, invalid priorities, duplicate keys, and invalid numbers", () => {
+    const legacySnapshot = {
       version: 1,
+      displayedTracks: snapshot.displayedTracks,
+      currentRowKey: snapshot.currentRowKey,
+      shuffleEnabled: snapshot.shuffleEnabled,
+      repeatOneEnabled: snapshot.repeatOneEnabled,
+    };
+    const duplicateRowKeySnapshot = {
+      version: 2,
       ...snapshot,
       displayedTracks: [
         snapshot.displayedTracks[0],
         { ...snapshot.displayedTracks[1], rowKey: "playlist-item:11" },
       ],
     };
-    const invalidCurrentKeySnapshot = { version: 1, ...snapshot, currentRowKey: "missing-row" };
+    const invalidCurrentKeySnapshot = { version: 2, ...snapshot, currentRowKey: "missing-row" };
     const invalidTrackNumberSnapshot = {
-      version: 1,
+      version: 2,
       ...snapshot,
       displayedTracks: [{ ...snapshot.displayedTracks[0], trackId: Number.MAX_SAFE_INTEGER + 1 }],
       currentRowKey: "playlist-item:11",
     };
     const storage = createMemoryStorage();
 
+    expect(parsePlaybackQueueSnapshot(legacySnapshot)).toBeNull();
     expect(parsePlaybackQueueSnapshot(duplicateRowKeySnapshot)).toBeNull();
     expect(parsePlaybackQueueSnapshot(invalidCurrentKeySnapshot)).toBeNull();
     expect(parsePlaybackQueueSnapshot(invalidTrackNumberSnapshot)).toBeNull();
     expect(
+      parsePlaybackQueueSnapshot({ version: 2, ...snapshot, nextRowKeys: ["missing-row"] }),
+    ).toBeNull();
+    expect(
       parsePlaybackQueueSnapshot({
-        version: 1,
+        version: 2,
+        ...snapshot,
+        nextRowKeys: ["playlist-item:11", "playlist-item:11"],
+      }),
+    ).toBeNull();
+    expect(
+      parsePlaybackQueueSnapshot({
+        version: 2,
         ...snapshot,
         displayedTracks: snapshot.displayedTracks.map((track) => ({ ...track, playbackId: 91 })),
       }),
     ).toBeNull();
-    expect(parsePlaybackQueueSnapshot({ version: 1, ...snapshot, playbackHistory: [] })).toBeNull();
+    expect(parsePlaybackQueueSnapshot({ version: 2, ...snapshot, playbackHistory: [] })).toBeNull();
 
     storage.setItem(STORAGE_KEY, "not-json");
     const originalConsoleError = globalThis.console.error;

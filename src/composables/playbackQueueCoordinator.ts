@@ -38,17 +38,18 @@ type PlayItemOptions = {
   historyAction?: PlaybackHistoryAction;
 };
 type NextCandidateOptions = { stopWhenExhausted?: boolean };
+type QueueTrack = PlaybackDisplayTrack & { isNext: boolean };
 type NewQueueTrack = Omit<PlaybackDisplayTrack, "rowKey">;
 type QueueRemovalResult = { result: boolean; resumePlaybackId: number | null };
 
 export class PlaybackQueueCoordinator {
-  private displayedTracks: PlaybackDisplayTrack[] = [];
+  private displayedTracks: QueueTrack[] = [];
   private currentRowKey: string | null = null;
   private failures: string[] = [];
   private repeatOneEnabled = false;
   private shuffleEnabled = false;
-  private roundTracks: PlaybackDisplayTrack[] = [];
-  private remainingCandidates: PlaybackDisplayTrack[] = [];
+  private roundTracks: QueueTrack[] = [];
+  private remainingCandidates: QueueTrack[] = [];
   private playbackHistory: string[] = [];
   private historyIndex = -1;
   private activePlaybackId: number | null = null;
@@ -62,7 +63,10 @@ export class PlaybackQueueCoordinator {
 
   constructor(
     private readonly attemptPlayback: AttemptPlayback,
-    private readonly onStateChange: (snapshot: PlaybackQueueSnapshot) => void,
+    private readonly onStateChange: (
+      snapshot: PlaybackQueueSnapshot,
+      persistenceSnapshot: PlaybackQueuePersistenceSnapshot,
+    ) => void,
     options: PlaybackQueueCoordinatorOptions = {},
   ) {
     this.random = options.random ?? Math.random;
@@ -72,7 +76,7 @@ export class PlaybackQueueCoordinator {
 
   get snapshot(): PlaybackQueueSnapshot {
     return {
-      displayedTracks: this.displayedTracks.map((track) => ({ ...track })),
+      displayedTracks: this.displayedTracks.map(toPlaybackDisplayTrack),
       currentRowKey: this.currentRowKey,
       queuePlaybackError: this.failures.join("\n"),
       repeatOneEnabled: this.repeatOneEnabled,
@@ -84,7 +88,11 @@ export class PlaybackQueueCoordinator {
 
   restoreQueue(snapshot: PlaybackQueuePersistenceSnapshot) {
     this.operationGeneration += 1;
-    this.displayedTracks = snapshot.displayedTracks.map((track) => ({ ...track }));
+    const nextRowKeys = new Set(snapshot.nextRowKeys);
+    this.displayedTracks = snapshot.displayedTracks.map((track) => ({
+      ...track,
+      isNext: nextRowKeys.has(track.rowKey),
+    }));
     this.currentRowKey = snapshot.currentRowKey;
     this.failures = [];
     this.repeatOneEnabled = snapshot.repeatOneEnabled;
@@ -105,7 +113,7 @@ export class PlaybackQueueCoordinator {
   }
 
   replaceAndPlay(items: readonly PlaybackDisplayTrack[], startRowKey: string): Promise<boolean> {
-    const queue = items.map((item) => ({ ...item }));
+    const queue = items.map((item) => ({ ...item, isNext: false }));
     const startIndex = queue.findIndex((item) => item.rowKey === startRowKey);
     if (startIndex < 0) return Promise.resolve(false);
 
@@ -398,12 +406,12 @@ export class PlaybackQueueCoordinator {
     return this.playNextCandidate(generation, false, options);
   }
 
-  private getNextInsertionIndex(tracks: readonly PlaybackDisplayTrack[]) {
+  private getNextInsertionIndex(tracks: readonly QueueTrack[]) {
     const currentIndex = tracks.findIndex((item) => item.rowKey === this.currentRowKey);
     return currentIndex < 0 ? 0 : currentIndex + 1;
   }
 
-  private createQueueItem(track: NewQueueTrack, prioritizeNext = false): PlaybackDisplayTrack {
+  private createQueueItem(track: NewQueueTrack, isNext = false): QueueTrack {
     const existingRowKeys = new Set([
       ...this.displayedTracks.map((item) => item.rowKey),
       ...this.roundTracks.map((item) => item.rowKey),
@@ -411,15 +419,14 @@ export class PlaybackQueueCoordinator {
       ...this.playbackHistory,
       ...(this.currentRowKey === null ? [] : [this.currentRowKey]),
     ]);
-    const prefix = prioritizeNext ? "queue-next" : "queue-item";
-    const generatedKey = `${prefix}:${globalThis.crypto.randomUUID()}`;
+    const generatedKey = globalThis.crypto.randomUUID();
     let rowKey = generatedKey;
     let suffix = 1;
     while (existingRowKeys.has(rowKey)) {
       rowKey = `${generatedKey}:${suffix}`;
       suffix += 1;
     }
-    return { ...track, rowKey };
+    return { ...track, rowKey, isNext };
   }
 
   private findRoundTrack(rowKey: string) {
@@ -486,7 +493,7 @@ export class PlaybackQueueCoordinator {
   }
 
   private async playRound(
-    queue: readonly PlaybackDisplayTrack[],
+    queue: readonly QueueTrack[],
     startIndex: number,
     generation: number,
     replaceQueue: boolean,
@@ -629,13 +636,13 @@ export class PlaybackQueueCoordinator {
     return "started";
   }
 
-  private orderCandidates(candidates: PlaybackDisplayTrack[]) {
-    const prioritized = candidates.filter((item) => item.rowKey.startsWith("queue-next:"));
-    const regular = candidates.filter((item) => !item.rowKey.startsWith("queue-next:"));
+  private orderCandidates(candidates: QueueTrack[]) {
+    const prioritized = candidates.filter((item) => item.isNext);
+    const regular = candidates.filter((item) => !item.isNext);
     return [...prioritized, ...(this.shuffleEnabled ? this.shuffleCandidates(regular) : regular)];
   }
 
-  private shuffleCandidates(candidates: PlaybackDisplayTrack[]) {
+  private shuffleCandidates(candidates: QueueTrack[]) {
     const shuffled = [...candidates];
     for (let index = shuffled.length - 1; index > 0; index -= 1) {
       const randomIndex = Math.floor(this.random() * (index + 1));
@@ -648,18 +655,39 @@ export class PlaybackQueueCoordinator {
     return shuffled;
   }
 
-  private restoreCandidateOrder(candidates: PlaybackDisplayTrack[]) {
+  private restoreCandidateOrder(candidates: QueueTrack[]) {
     const queueIndex = new Map(this.roundTracks.map((item, index) => [item.rowKey, index]));
-    return [...candidates].sort(
-      (left, right) =>
-        (queueIndex.get(left.rowKey) ?? Number.MAX_SAFE_INTEGER) -
-        (queueIndex.get(right.rowKey) ?? Number.MAX_SAFE_INTEGER),
-    );
+    const byQueueOrder = (left: QueueTrack, right: QueueTrack) =>
+      (queueIndex.get(left.rowKey) ?? Number.MAX_SAFE_INTEGER) -
+      (queueIndex.get(right.rowKey) ?? Number.MAX_SAFE_INTEGER);
+    const prioritized = candidates.filter((item) => item.isNext).sort(byQueueOrder);
+    const regular = candidates.filter((item) => !item.isNext).sort(byQueueOrder);
+    return [...prioritized, ...regular];
+  }
+
+  private createPersistenceSnapshot(): PlaybackQueuePersistenceSnapshot {
+    return {
+      displayedTracks: this.displayedTracks.map(toPlaybackDisplayTrack),
+      currentRowKey: this.currentRowKey,
+      nextRowKeys: this.displayedTracks.flatMap((track) => (track.isNext ? [track.rowKey] : [])),
+      shuffleEnabled: this.shuffleEnabled,
+      repeatOneEnabled: this.repeatOneEnabled,
+    };
   }
 
   private publish() {
-    this.onStateChange(this.snapshot);
+    this.onStateChange(this.snapshot, this.createPersistenceSnapshot());
   }
+}
+
+function toPlaybackDisplayTrack(track: QueueTrack): PlaybackDisplayTrack {
+  return {
+    trackId: track.trackId,
+    rowKey: track.rowKey,
+    title: track.title,
+    album: track.album,
+    durationMs: track.durationMs,
+  };
 }
 
 function errorMessage(error: unknown) {

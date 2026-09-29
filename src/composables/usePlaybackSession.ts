@@ -136,9 +136,9 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
 
   const coordinator = new PlaybackQueueCoordinator(
     attemptPlayback,
-    (snapshot) => {
+    (snapshot, persistenceSnapshot) => {
       syncQueueState(snapshot);
-      writeQueueSnapshot(snapshot);
+      writeQueueSnapshot(persistenceSnapshot);
     },
     {
       stopPlayback: playbackState.stopPlayback,

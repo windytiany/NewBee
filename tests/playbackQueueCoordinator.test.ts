@@ -144,10 +144,13 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.attempts).toEqual([7, 7, 7]);
   });
 
-  it("prioritizes newer next items in playback and display order", async () => {
+  it("prioritizes explicit next items without treating row-key text as scheduling state", async () => {
     const harness = createHarness();
     const { coordinator } = harness;
-    await coordinator.replaceAndPlay(tracks(["current", 1], ["waiting", 2]), "current");
+    await coordinator.replaceAndPlay(
+      tracks(["current", 1], ["waiting", 2], ["queue-next:ordinary-row", 5]),
+      "current",
+    );
 
     expect(
       await coordinator.addToNext({
@@ -166,12 +169,17 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
       }),
     ).toBe(true);
 
-    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 4, 3, 2]);
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 4, 3, 2, 5]);
+    const addedRows = harness.snapshot.displayedTracks.filter((track) =>
+      [3, 4].includes(track.trackId),
+    );
+    expect(addedRows.every((track) => !track.rowKey.startsWith("queue-next:"))).toBe(true);
     expect(harness.snapshot.currentRowKey).toBe("current");
     expect(await coordinator.playNext()).toBe(true);
     expect(await coordinator.playNext()).toBe(true);
     expect(await coordinator.playNext()).toBe(true);
-    expect(harness.attempts).toEqual([1, 4, 3, 2]);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(harness.attempts).toEqual([1, 4, 3, 2, 5]);
   });
 
   it("appends without interrupting and shuffles the new tail item with pending candidates", async () => {
@@ -291,6 +299,7 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     harness.coordinator.restoreQueue({
       displayedTracks: restoredTracks,
       currentRowKey: "selected-row",
+      nextRowKeys: [],
       shuffleEnabled: true,
       repeatOneEnabled: true,
     });
