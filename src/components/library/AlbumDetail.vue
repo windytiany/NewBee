@@ -47,7 +47,11 @@
     <p v-else-if="props.tracksError" class="py-3 text-sm text-red-300" role="alert">
       {{ props.tracksError }}
     </p>
-    <ol v-else-if="props.tracks.length > 0" class="grid gap-x-8 sm:grid-cols-2">
+    <ol
+      v-else-if="props.tracks.length > 0"
+      class="grid gap-x-8 sm:grid-flow-col sm:grid-cols-2"
+      :style="{ gridTemplateRows: `repeat(${Math.ceil(props.tracks.length / 2)}, auto)` }"
+    >
       <AlbumTrack
         v-for="(track, index) in props.tracks"
         :key="track.id"
