@@ -61,11 +61,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { Disc3 } from "@lucide/vue";
-import { usePlaybackState } from "@/composables/usePlaybackState";
+import { usePlaybackSession } from "@/composables/usePlaybackSession";
 import type { TrackArtwork, TrackDetails } from "@/types/track";
 import { formatAudioSummary } from "@/utils/formatTrack.ts";
 
-const { currentTrack } = usePlaybackState();
+const { currentTrack } = usePlaybackSession().state;
 const currentTrackDetails = ref<TrackDetails | null>(null);
 const currentTrackArtworkUrl = ref<string | null>(null);
 const isLoading = ref(false);

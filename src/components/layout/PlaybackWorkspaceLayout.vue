@@ -86,26 +86,15 @@ import ResizeHandle from "@/components/layout/ResizeHandle.vue";
 import Sidebar from "@/components/layout/Sidebar.vue";
 import TrackInfo from "@/components/track/TrackInfo.vue";
 import TrackList from "@/components/track/TrackList.vue";
-import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
-import { usePlaybackState } from "@/composables/usePlaybackState";
+import { usePlaybackSession } from "@/composables/usePlaybackSession";
 
 const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
   mode: "workspace",
 });
 
-const { displayedTracks, currentRowKey, playQueueItem, removeQueueItem } = usePlaybackDisplayList();
-const { currentTrack } = usePlaybackState();
-const activeCurrentRowKey = computed(() => {
-  const track = currentTrack.value;
-  const rowKey = currentRowKey.value;
-  if (track === null || track.playbackId === null || rowKey === null) return null;
-
-  return displayedTracks.value.some(
-    (item) => item.rowKey === rowKey && item.trackId === track.trackId,
-  )
-    ? rowKey
-    : null;
-});
+const playbackSession = usePlaybackSession();
+const { displayedTracks, activeQueueRowKey: activeCurrentRowKey } = playbackSession.state;
+const { playQueueItem, removeQueueItem } = playbackSession;
 
 const MIN_LEFT_PANE_WIDTH = 208;
 const MIN_RIGHT_PANE_WIDTH = 240;

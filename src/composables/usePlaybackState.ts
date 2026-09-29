@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ref, watch } from "vue";
+import { readonly, ref, watch } from "vue";
 
 export type NowPlayingTrack = {
   trackId: number;
@@ -12,6 +12,11 @@ export type PlaybackStartFailure = {
   kind: "audio-file-not-found" | "playback-failed";
   message: string;
 };
+
+export type PlaybackCommandInvoker = <T>(
+  command: string,
+  args?: Record<string, unknown>,
+) => Promise<T>;
 
 const CURRENT_TRACK_STORAGE_KEY = "newbee.current-track";
 
@@ -60,129 +65,136 @@ function saveCurrentTrack(track: NowPlayingTrack) {
   }
 }
 
-const currentTrack = ref<NowPlayingTrack | null>(loadCurrentTrack());
-const isPlaybackCommandPending = ref(false);
-const playbackStartError = ref("");
-const playbackStartFailure = ref<PlaybackStartFailure | null>(null);
-let playbackCommandGeneration = 0;
-let pendingPlaybackCommandGeneration: number | null = null;
-
-function waitForPlaybackCommand() {
-  if (!isPlaybackCommandPending.value) return Promise.resolve();
-
-  return new Promise<void>((resolve) => {
-    const stopWatching = watch(
-      isPlaybackCommandPending,
-      (isPending) => {
-        if (isPending) return;
-        stopWatching();
-        resolve();
-      },
-      { flush: "sync" },
-    );
-  });
-}
-
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return typeof error === "string" ? error : "Unknown error";
 }
 
-async function stopPlaybackInstance(playbackId: number) {
-  await invoke<boolean>("stop_playback", { playbackId });
-}
+export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invoke) {
+  const currentTrack = ref<NowPlayingTrack | null>(loadCurrentTrack());
+  const isPlaybackCommandPending = ref(false);
+  const playbackStartError = ref("");
+  const playbackStartFailure = ref<PlaybackStartFailure | null>(null);
+  let playbackCommandGeneration = 0;
+  let pendingPlaybackCommandGeneration: number | null = null;
 
-function clearCurrentTrack(playbackId: number) {
-  if (currentTrack.value?.playbackId !== playbackId) return false;
+  function waitForPlaybackCommand() {
+    if (!isPlaybackCommandPending.value) return Promise.resolve();
 
-  currentTrack.value = null;
-  try {
-    globalThis.localStorage.removeItem(CURRENT_TRACK_STORAGE_KEY);
-  } catch (error) {
-    globalThis.console.error("Could not clear the saved current track.", error);
+    return new Promise<void>((resolve) => {
+      const stopWatching = watch(
+        isPlaybackCommandPending,
+        (isPending) => {
+          if (isPending) return;
+          stopWatching();
+          resolve();
+        },
+        { flush: "sync" },
+      );
+    });
   }
-  return true;
-}
 
-async function stopStalePlayback(playbackId: number) {
-  clearCurrentTrack(playbackId);
-  await stopPlaybackInstance(playbackId);
-}
+  async function stopPlaybackInstance(playbackId: number) {
+    await invokeCommand<boolean>("stop_playback", { playbackId });
+  }
 
-async function stopPlayback(playbackId: number) {
-  playbackCommandGeneration += 1;
-  clearCurrentTrack(playbackId);
+  function clearCurrentTrack(playbackId: number) {
+    if (currentTrack.value?.playbackId !== playbackId) return false;
 
-  await stopPlaybackInstance(playbackId);
-  while (isPlaybackCommandPending.value) await waitForPlaybackCommand();
-
-  const hasNewerPendingCommand =
-    pendingPlaybackCommandGeneration !== null &&
-    pendingPlaybackCommandGeneration === playbackCommandGeneration;
-  const hasNewerCurrentTrack =
-    currentTrack.value !== null && currentTrack.value.playbackId !== playbackId;
-  return !hasNewerPendingCommand && !hasNewerCurrentTrack;
-}
-
-async function playTrack(trackId: number, canStart: () => boolean = () => true): Promise<boolean> {
-  if (isPlaybackCommandPending.value || !canStart()) return false;
-
-  const commandGeneration = playbackCommandGeneration;
-  pendingPlaybackCommandGeneration = commandGeneration;
-  isPlaybackCommandPending.value = true;
-  playbackStartError.value = "";
-  playbackStartFailure.value = null;
-  try {
-    const track = await invoke<NowPlayingTrack>("play_track", { trackId });
-    if (
-      track.trackId !== trackId ||
-      track.playbackId === null ||
-      !Number.isSafeInteger(track.playbackId) ||
-      track.playbackId <= 0
-    ) {
-      throw new Error("The returned track or playback instance does not match the request.");
+    currentTrack.value = null;
+    try {
+      globalThis.localStorage.removeItem(CURRENT_TRACK_STORAGE_KEY);
+    } catch (error) {
+      globalThis.console.error("Could not clear the saved current track.", error);
     }
-
-    if (commandGeneration !== playbackCommandGeneration || !canStart()) {
-      try {
-        await stopPlaybackInstance(track.playbackId);
-      } catch (error) {
-        playbackStartError.value = `Could not stop cancelled playback: ${errorMessage(error)}`;
-      }
-      return false;
-    }
-
-    currentTrack.value = track;
-    saveCurrentTrack(track);
     return true;
-  } catch (error) {
-    const message = errorMessage(error);
-    const missingFilePrefix = "AUDIO_FILE_NOT_FOUND:";
-    playbackStartFailure.value = message.startsWith(missingFilePrefix)
-      ? { kind: "audio-file-not-found", message: message.slice(missingFilePrefix.length).trim() }
-      : { kind: "playback-failed", message };
-    const label =
-      playbackStartFailure.value.kind === "audio-file-not-found"
-        ? "Audio file not found"
-        : "Playback failed";
-    playbackStartError.value = `${label}: ${playbackStartFailure.value.message}`;
-    return false;
-  } finally {
-    if (pendingPlaybackCommandGeneration === commandGeneration) {
-      pendingPlaybackCommandGeneration = null;
-    }
-    isPlaybackCommandPending.value = false;
   }
-}
 
-export function usePlaybackState() {
+  async function stopStalePlayback(playbackId: number) {
+    clearCurrentTrack(playbackId);
+    await stopPlaybackInstance(playbackId);
+  }
+
+  async function stopPlayback(playbackId: number) {
+    playbackCommandGeneration += 1;
+    clearCurrentTrack(playbackId);
+
+    await stopPlaybackInstance(playbackId);
+    while (isPlaybackCommandPending.value) await waitForPlaybackCommand();
+
+    const hasNewerPendingCommand =
+      pendingPlaybackCommandGeneration !== null &&
+      pendingPlaybackCommandGeneration === playbackCommandGeneration;
+    const hasNewerCurrentTrack =
+      currentTrack.value !== null && currentTrack.value.playbackId !== playbackId;
+    return !hasNewerPendingCommand && !hasNewerCurrentTrack;
+  }
+
+  async function startTrack(trackId: number, canStart: () => boolean): Promise<boolean> {
+    if (isPlaybackCommandPending.value || !canStart()) return false;
+
+    const commandGeneration = playbackCommandGeneration;
+    pendingPlaybackCommandGeneration = commandGeneration;
+    isPlaybackCommandPending.value = true;
+    playbackStartError.value = "";
+    playbackStartFailure.value = null;
+    try {
+      const track = await invokeCommand<NowPlayingTrack>("play_track", { trackId });
+      if (
+        track.trackId !== trackId ||
+        track.playbackId === null ||
+        !Number.isSafeInteger(track.playbackId) ||
+        track.playbackId <= 0
+      ) {
+        throw new Error("The returned track or playback instance does not match the request.");
+      }
+
+      if (commandGeneration !== playbackCommandGeneration || !canStart()) {
+        try {
+          await stopPlaybackInstance(track.playbackId);
+        } catch (error) {
+          playbackStartError.value = `Could not stop cancelled playback: ${errorMessage(error)}`;
+        }
+        return false;
+      }
+
+      currentTrack.value = track;
+      saveCurrentTrack(track);
+      return true;
+    } catch (error) {
+      const message = errorMessage(error);
+      const missingFilePrefix = "AUDIO_FILE_NOT_FOUND:";
+      playbackStartFailure.value = message.startsWith(missingFilePrefix)
+        ? { kind: "audio-file-not-found", message: message.slice(missingFilePrefix.length).trim() }
+        : { kind: "playback-failed", message };
+      const label =
+        playbackStartFailure.value.kind === "audio-file-not-found"
+          ? "Audio file not found"
+          : "Playback failed";
+      playbackStartError.value = `${label}: ${playbackStartFailure.value.message}`;
+      return false;
+    } finally {
+      if (pendingPlaybackCommandGeneration === commandGeneration) {
+        pendingPlaybackCommandGeneration = null;
+      }
+      isPlaybackCommandPending.value = false;
+    }
+  }
+
+  function consumePlaybackStartFailure(): PlaybackStartFailure | null {
+    const failure = playbackStartFailure.value;
+    playbackStartError.value = "";
+    playbackStartFailure.value = null;
+    return failure;
+  }
+
   return {
-    currentTrack,
-    isPlaybackCommandPending,
-    playbackStartError,
-    playbackStartFailure,
-    playTrack,
+    currentTrack: readonly(currentTrack),
+    isCommandPending: readonly(isPlaybackCommandPending),
+    playbackStartError: readonly(playbackStartError),
+    startTrack,
     stopPlayback,
     stopStalePlayback,
+    consumePlaybackStartFailure,
   };
 }

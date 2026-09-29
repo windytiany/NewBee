@@ -179,20 +179,7 @@ describe("playback queue persistence", () => {
 
     expect(await coordinator.replaceAndPlay(queue, "playlist-item:11")).toBe(true);
     coordinator.setShuffleEnabled(true);
-    await coordinator.observePlaybackStatus({
-      status: {
-        hasAudio: true,
-        isPlaying: false,
-        hasEnded: true,
-        playbackId: 1,
-        positionMs: 1200,
-        durationMs: 1200,
-      },
-      currentPlaybackId: 1,
-      currentTrackId: 7,
-      isCommandPending: false,
-      isSeeking: false,
-    });
+    await coordinator.observePlaybackState(1, false, true);
     coordinator.setRepeatOneEnabled(true);
 
     expect(loadPlaybackQueueSnapshot(() => storage)).toEqual({

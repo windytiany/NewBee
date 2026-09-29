@@ -2,8 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { usePersistentLibrarySelection } from "@/composables/usePersistentLibrarySelection";
-import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
-import { usePlaybackState } from "@/composables/usePlaybackState";
+import { usePlaybackSession } from "@/composables/usePlaybackSession";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
@@ -23,9 +22,9 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   const isTrackActionPending = ref(false);
   const trackActionError = ref("");
   const selectedTrackId = ref<number | null>(null);
-  const { currentTrack } = usePlaybackState();
-  const { replaceAndPlay, addToNext, addToQueueEnd, removeTrackFromQueue } =
-    usePlaybackDisplayList();
+  const playbackSession = usePlaybackSession();
+  const { currentTrack } = playbackSession.state;
+  const { playTracks, addToNext, addToQueueEnd, removeTrackFromQueue } = playbackSession;
   const {
     selectedGroup,
     selectedAlbum,
@@ -263,7 +262,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     if (isLoadingTracks.value || !tracks.value.some((track) => track.id === trackId)) return;
 
     const displayedTracks = toPlaybackDisplayTracks(tracks.value);
-    await replaceAndPlay(displayedTracks, `album-track:${trackId}`);
+    await playTracks(displayedTracks, `album-track:${trackId}`);
   }
 
   async function playAlbumFromLibrary() {
@@ -273,7 +272,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     if (!firstTrack) return;
 
     const displayedTracks = toPlaybackDisplayTracks(tracks.value);
-    await replaceAndPlay(displayedTracks, `album-track:${firstTrack.id}`);
+    await playTracks(displayedTracks, `album-track:${firstTrack.id}`);
   }
 
   function addTrackToNext(trackId: number) {

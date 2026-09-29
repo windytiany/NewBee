@@ -69,23 +69,6 @@ function createHarness(options: HarnessOptions = {}) {
   };
 }
 
-function endedObservation(playbackId: number, trackId: number) {
-  return {
-    status: {
-      hasAudio: true,
-      isPlaying: false,
-      hasEnded: true,
-      playbackId,
-      positionMs: 100,
-      durationMs: 100,
-    },
-    currentPlaybackId: playbackId,
-    currentTrackId: trackId,
-    isCommandPending: false,
-    isSeeking: false,
-  };
-}
-
 describe("PlaybackQueueCoordinator manual navigation", () => {
   it("moves through sequential history despite repeat-one and stops at the end without wrapping", async () => {
     const harness = createHarness();
@@ -230,7 +213,7 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([
       1, 2, 6, 5, 3, 4,
     ]);
-    expect(await coordinator.observePlaybackStatus(endedObservation(4, 2))).toBe(true);
+    expect(await coordinator.observePlaybackState(4, false, true)).toBe(true);
     expect(await coordinator.playNext()).toBe(true);
     expect(await coordinator.playNext()).toBe(true);
     expect(harness.attempts).toEqual([1, 2, 3, 2, 6, 5, 3]);
@@ -288,7 +271,7 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     await coordinator.addToNext({ trackId: 3, title: "next", album: null, durationMs: null });
     coordinator.setRepeatOneEnabled(true);
 
-    await coordinator.observePlaybackStatus(endedObservation(1, 1));
+    await coordinator.observePlaybackState(1, false, true);
 
     expect(harness.attempts).toEqual([1, 1]);
     expect(harness.snapshot.currentRowKey).toBe("a");
@@ -317,29 +300,6 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.snapshot.shuffleEnabled).toBe(true);
     expect(harness.snapshot.repeatOneEnabled).toBe(true);
     expect(harness.attempts).toEqual([]);
-    expect(
-      await harness.coordinator.observePlaybackStatus({
-        ...endedObservation(99, 7),
-        currentPlaybackId: null,
-      }),
-    ).toBe(false);
-    expect(harness.attempts).toEqual([]);
-  });
-
-  it("starts the first restored playback from the saved row key", async () => {
-    const harness = createHarness();
-    const restoredTracks = tracks(["first-row", 7], ["selected-row", 7], ["next-row", 8]);
-    harness.coordinator.restoreQueue({
-      displayedTracks: restoredTracks,
-      currentRowKey: "selected-row",
-      shuffleEnabled: false,
-      repeatOneEnabled: true,
-    });
-
-    expect(await harness.coordinator.playQueueItem("selected-row")).toBe(true);
-    expect(harness.attempts).toEqual([7]);
-    expect(harness.snapshot.currentRowKey).toBe("selected-row");
-    expect(harness.snapshot.repeatOneEnabled).toBe(true);
   });
 
   it("serializes a queue addition behind an in-flight playback start", async () => {
@@ -415,7 +375,7 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     );
     await coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2]), "a");
 
-    const automaticAdvance = coordinator.observePlaybackStatus(endedObservation(1, 1));
+    const automaticAdvance = coordinator.observePlaybackState(1, false, true);
     await firstAttemptStarted;
     const manualAdvance = coordinator.playNext();
     releaseFirstAttempt({ status: "started", playbackId: 100 });

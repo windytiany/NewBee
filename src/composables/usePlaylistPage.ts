@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
-import { usePlaybackDisplayList } from "@/composables/usePlaybackDisplayList";
+import { usePlaybackSession } from "@/composables/usePlaybackSession";
 import { usePersistentPlaylistSelection } from "@/composables/usePersistentPlaylistSelection";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
@@ -20,7 +20,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   const isLoadingPlaylistTracks = ref(false);
   const playlistsError = ref("");
   const playlistTracksError = ref("");
-  const { replaceAndPlay } = usePlaybackDisplayList();
+  const { playTracks } = usePlaybackSession();
   let isMounted = false;
   let isSubscribedToLibraryScan = false;
   let playlistsRequestGeneration = 0;
@@ -141,7 +141,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     }
 
     const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
-    await replaceAndPlay(displayedTracks, `playlist-item:${playlistItemId}`);
+    await playTracks(displayedTracks, `playlist-item:${playlistItemId}`);
   }
 
   async function playPlaylistFromPage() {
@@ -151,7 +151,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     if (!firstTrack) return;
 
     const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
-    await replaceAndPlay(displayedTracks, `playlist-item:${firstTrack.playlistItemId}`);
+    await playTracks(displayedTracks, `playlist-item:${firstTrack.playlistItemId}`);
   }
 
   function onLibraryScanCompleted() {

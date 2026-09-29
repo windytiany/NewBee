@@ -11,23 +11,6 @@ export type QueuePlaybackAttempt =
   | { status: "failed"; failure: PlaybackStartFailure }
   | { status: "cancelled" };
 
-export type QueuePlaybackStatus = {
-  hasAudio: boolean;
-  isPlaying: boolean;
-  hasEnded: boolean;
-  playbackId: number | null;
-  positionMs: number;
-  durationMs: number;
-};
-
-export type PlaybackStatusObservation = {
-  status: QueuePlaybackStatus;
-  currentPlaybackId: number | null;
-  currentTrackId: number | null;
-  isCommandPending: boolean;
-  isSeeking: boolean;
-};
-
 export type PlaybackQueueSnapshot = {
   displayedTracks: readonly PlaybackDisplayTrack[];
   currentRowKey: string | null;
@@ -315,18 +298,14 @@ export class PlaybackQueueCoordinator {
     this.publish();
   }
 
-  observePlaybackStatus(observation: PlaybackStatusObservation): Promise<boolean> {
-    if (!this.isCurrentObservation(observation)) return Promise.resolve(false);
-
-    const { status } = observation;
-    const playbackId = status.playbackId;
-    if (playbackId === null) return Promise.resolve(false);
+  observePlaybackState(
+    playbackId: number,
+    isPlaying: boolean,
+    hasReachedEnd: boolean,
+  ): Promise<boolean> {
     this.reconcilePlaybackId(playbackId);
-
-    const hasReachedEnd =
-      status.hasEnded || (status.durationMs > 0 && status.positionMs >= status.durationMs);
     if (!hasReachedEnd) {
-      this.rearmPlaybackEnd(playbackId, status.isPlaying);
+      this.rearmPlaybackEnd(playbackId, isPlaying);
       return Promise.resolve(false);
     }
     if (this.isPlaybackEndSuppressed(playbackId)) return Promise.resolve(false);
@@ -358,28 +337,6 @@ export class PlaybackQueueCoordinator {
 
   private isCurrentOperation(generation: number) {
     return generation === this.operationGeneration;
-  }
-
-  private isCurrentObservation({
-    status,
-    currentPlaybackId,
-    currentTrackId,
-    isCommandPending,
-    isSeeking,
-  }: PlaybackStatusObservation) {
-    if (
-      isCommandPending ||
-      isSeeking ||
-      !status.hasAudio ||
-      status.playbackId === null ||
-      status.playbackId !== currentPlaybackId ||
-      currentTrackId === null
-    ) {
-      return false;
-    }
-
-    const currentItem = this.displayedTracks.find((item) => item.rowKey === this.currentRowKey);
-    return currentItem?.trackId === currentTrackId;
   }
 
   private reconcilePlaybackId(playbackId: number) {
