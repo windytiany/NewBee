@@ -3,10 +3,13 @@
     <button
       data-item-interaction
       class="focus-visible:outline-spotify-green grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-1 py-2.5 text-left text-sm transition-colors focus-visible:outline-2 sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
-      :class="[
-        isSelected ? 'bg-white/10 ring-1 ring-white/10 ring-inset' : 'hover:bg-white/5',
-        isFocused ? 'outline-spotify-green outline outline-1 outline-offset-[-1px]' : '',
-      ]"
+      :class="
+        isFocused
+          ? 'bg-spotify-track'
+          : isSelected
+            ? 'bg-white/10 ring-1 ring-white/10 ring-inset'
+            : 'hover:bg-white/5'
+      "
       type="button"
       @click="handleSelect"
       @dblclick="emit('play')"
@@ -15,7 +18,7 @@
       <span class="flex min-w-0 flex-col gap-0.5">
         <span
           class="truncate font-medium"
-          :class="isCurrentTrack ? 'text-spotify-green' : 'text-white'"
+          :class="isCurrentTrack || isFocused ? 'text-spotify-green' : 'text-white'"
         >
           {{ track.title ?? "未知曲目" }}
         </span>

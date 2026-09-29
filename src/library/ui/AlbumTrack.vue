@@ -3,10 +3,13 @@
     <button
       data-item-interaction
       class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center gap-3 rounded-md py-2.5 pr-3 text-left text-sm transition-colors focus-visible:outline-2"
-      :class="[
-        props.isSelected ? 'bg-white/10 ring-1 ring-white/10 ring-inset' : 'hover:bg-white/5',
-        props.isFocused ? 'outline-spotify-green outline outline-1 outline-offset-[-1px]' : '',
-      ]"
+      :class="
+        props.isFocused
+          ? 'bg-spotify-track'
+          : props.isSelected
+            ? 'bg-white/10 ring-1 ring-white/10 ring-inset'
+            : 'hover:bg-white/5'
+      "
       :aria-pressed="props.isSelected ? true : undefined"
       aria-haspopup="menu"
       :aria-expanded="props.isContextMenuOpen"
@@ -27,7 +30,7 @@
       />
       <span
         class="min-w-0 flex-1 truncate font-medium"
-        :class="props.isCurrentTrack ? 'text-spotify-green' : 'text-white'"
+        :class="props.isCurrentTrack || props.isFocused ? 'text-spotify-green' : 'text-white'"
       >
         {{ props.track.title ?? "未知曲目" }}
       </span>

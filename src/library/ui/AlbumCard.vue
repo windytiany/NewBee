@@ -3,6 +3,7 @@
     <button
       data-item-interaction
       class="focus-visible:outline-spotify-green block w-full rounded-md text-center focus-visible:outline-2 focus-visible:outline-offset-4"
+      :class="isFocused ? 'bg-spotify-track' : ''"
       :aria-label="`查看专辑 ${album.album ?? '未知专辑'}`"
       :aria-expanded="isSelected"
       :title="artworkLoadFailed ? '专辑封面加载失败' : undefined"
@@ -16,7 +17,6 @@
           showFallback ? coverPalette : 'bg-transparent',
           showFallback || artworkImageLoaded ? 'shadow-lg' : 'shadow-none',
           isSelected ? 'ring-1 ring-white/50' : '',
-          isFocused ? 'outline-spotify-green outline outline-2 outline-offset-1' : '',
         ]"
       >
         <img
@@ -33,7 +33,10 @@
           stroke-width="1.25"
         />
       </span>
-      <span class="block truncate text-sm font-semibold text-white">
+      <span
+        class="block truncate text-sm font-semibold"
+        :class="isFocused ? 'text-spotify-green' : 'text-white'"
+      >
         {{ album.album ?? "未知专辑" }}
       </span>
       <span class="text-spotify-muted mt-1 block truncate text-xs">
