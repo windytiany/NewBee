@@ -59,7 +59,7 @@
         音乐库中暂无专辑演出者。
       </p>
       <ul v-if="props.artists.length > 0" class="space-y-0.5">
-        <GroupListItem
+        <ArtistListItem
           v-for="artist in props.artists"
           :key="getArtistKey(artist.albumArtist)"
           :name="artist.albumArtist ?? '未知演出者'"
@@ -76,9 +76,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
-import { useClickFocus } from "@/composables/useClickFocus";
+import { useClickFocus } from "@/ui/useClickFocus";
 import type { AlbumArtistSummary } from "@/types/artist";
-import GroupListItem from "@/components/library/GroupListItem.vue";
+import ArtistListItem from "@/library/ui/ArtistListItem.vue";
 
 const props = defineProps<{
   artists: AlbumArtistSummary[];

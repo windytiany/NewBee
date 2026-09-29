@@ -1,6 +1,6 @@
 import { computed, readonly, ref, watch } from "vue";
 import type { ComputedRef, Ref } from "vue";
-import type { NowPlayingTrack, PlaybackCommandInvoker } from "@/composables/usePlaybackState";
+import type { NowPlayingTrack, PlaybackCommandInvoker } from "@/playback/state";
 
 export type PlaybackStatus = {
   hasAudio: boolean;

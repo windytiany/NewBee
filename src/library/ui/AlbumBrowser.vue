@@ -32,7 +32,7 @@
       <div v-else class="flex flex-col gap-6 px-5 pb-8 sm:px-8">
         <template v-for="row in albumRows" :key="row.id">
           <div class="grid grid-cols-2 gap-x-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4">
-            <Album
+            <AlbumCard
               v-for="(album, index) in row.albums"
               :key="getAlbumKey(album)"
               :album="album"
@@ -74,14 +74,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useClickFocus } from "@/composables/useClickFocus";
-import type { LibraryAlbumSelection } from "@/composables/usePersistentLibrarySelection";
+import { useClickFocus } from "@/ui/useClickFocus";
+import type { LibraryAlbumSelection } from "@/library/selection";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
 import type { Playlist } from "@/types/playlist";
 import type { TrackSummary } from "@/types/track";
-import AlbumDetail from "@/components/library/AlbumDetail.vue";
-import Album from "@/components/library/Album.vue";
+import AlbumDetail from "@/library/ui/AlbumDetail.vue";
+import AlbumCard from "@/library/ui/AlbumCard.vue";
 
 type AlbumBrowserRow = {
   id: string;

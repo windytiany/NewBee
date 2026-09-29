@@ -1,7 +1,7 @@
 // @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { createRenderer, ref } from "vue";
-import type { useLibraryPage } from "@/composables/useLibraryPage";
+import type { useLibraryPage } from "@/library/usePage";
 
 const artist = { albumArtist: "Artist", albumCount: 1 };
 const album = { album: "Album", year: 2024 };
@@ -41,11 +41,11 @@ mock.module("@tauri-apps/api/core", () => ({
   },
 }));
 
-mock.module("@/composables/useLibraryScan", () => ({
+mock.module("@/library/scan", () => ({
   LIBRARY_SCAN_COMPLETED_EVENT: "library-scan-completed",
 }));
 
-mock.module("@/composables/usePersistentLibrarySelection", () => ({
+mock.module("@/library/selection", () => ({
   usePersistentLibrarySelection: () => ({
     selectedGroup,
     selectedAlbum,
@@ -62,7 +62,7 @@ mock.module("@/composables/usePersistentLibrarySelection", () => ({
   }),
 }));
 
-mock.module("@/composables/usePlaybackSession", () => ({
+mock.module("@/playback/session", () => ({
   PLAYBACK_STATUS_POLL_INTERVAL_MS: 500,
   usePlaybackSession: () => ({
     state: {
@@ -92,7 +92,7 @@ mock.module("@/composables/usePlaybackSession", () => ({
   }),
 }));
 
-const { useLibraryPage: createLibraryPage } = await import("@/composables/useLibraryPage");
+const { useLibraryPage: createLibraryPage } = await import("@/library/usePage");
 
 function mountLibraryPage() {
   let page!: ReturnType<typeof useLibraryPage>;

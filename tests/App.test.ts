@@ -108,7 +108,7 @@ function createComponent(source: string) {
         ]);
     },
   });
-  const DeleteTrackConfirmationDialog = Vue.defineComponent({
+  const DeleteTrackDialog = Vue.defineComponent({
     props: ["track", "error"],
     setup(props, { emit, expose }) {
       expose({
@@ -133,7 +133,7 @@ function createComponent(source: string) {
         ]);
     },
   });
-  const PlaybackWorkspaceLayout = Vue.defineComponent({
+  const WorkspaceLayout = Vue.defineComponent({
     setup(_, { slots }) {
       return () => Vue.h("main", slots.center?.());
     },
@@ -141,25 +141,23 @@ function createComponent(source: string) {
   const defaultModule = (component: Vue.Component) => ({ __esModule: true, default: component });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/composables/usePersistentActivePage": {
+    "@/navigation/activePage": {
       usePersistentActivePage: () => ({ activePage: Vue.ref("Library") }),
     },
-    "@/composables/useLibraryPage": { useLibraryPage },
-    "@/composables/usePlaylistPage": { usePlaylistPage },
-    "@/components/library/AlbumBrowser.vue": defaultModule(AlbumBrowser),
-    "@/components/library/DeleteTrackConfirmationDialog.vue": defaultModule(
-      DeleteTrackConfirmationDialog,
-    ),
-    "@/components/layout/PlaybackWorkspaceLayout.vue": defaultModule(PlaybackWorkspaceLayout),
+    "@/library/usePage": { useLibraryPage },
+    "@/playlist/usePage": { usePlaylistPage },
+    "@/library/ui/AlbumBrowser.vue": defaultModule(AlbumBrowser),
+    "@/library/ui/DeleteTrackDialog.vue": defaultModule(DeleteTrackDialog),
+    "@/layout/WorkspaceLayout.vue": defaultModule(WorkspaceLayout),
   };
   for (const name of [
-    "@/pages/PlayingPage.vue",
-    "@/components/PlaybackBar.vue",
-    "@/components/library/GroupList.vue",
-    "@/components/playlist/CreatePlaylistDialog.vue",
-    "@/components/playlist/PlaylistBrowser.vue",
-    "@/components/playlist/PlaylistList.vue",
-    "@/components/TopBar.vue",
+    "@/playing/PlayingPage.vue",
+    "@/playback/ui/PlaybackBar.vue",
+    "@/library/ui/ArtistList.vue",
+    "@/playlist/ui/CreatePlaylistDialog.vue",
+    "@/playlist/ui/PlaylistBrowser.vue",
+    "@/playlist/ui/PlaylistList.vue",
+    "@/navigation/TopBar.vue",
   ]) {
     modules[name] = defaultModule(passiveComponent);
   }

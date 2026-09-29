@@ -22,7 +22,7 @@
         {{ props.emptyMessage }}
       </p>
       <ul v-else ref="listElement" class="space-y-1">
-        <TrackListItem
+        <QueueRow
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
           :track-id="track.trackId"
@@ -66,10 +66,10 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
-import { useClickFocus } from "@/composables/useClickFocus";
+import { useClickFocus } from "@/ui/useClickFocus";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 import { formatTrackDuration } from "@/utils/formatTrack";
-import TrackListItem from "@/components/track/TrackListItem.vue";
+import QueueRow from "@/playback/ui/QueueRow.vue";
 
 type Track = PlaybackDisplayTrack;
 

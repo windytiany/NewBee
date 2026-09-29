@@ -1,14 +1,14 @@
 // @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { describe, expect, it } from "bun:test";
-import { PlaybackQueueCoordinator } from "@/composables/playbackQueueCoordinator";
-import type { PlaybackQueueSnapshot } from "@/composables/playbackQueueCoordinator";
+import { PlaybackQueueCoordinator } from "@/playback/queue/coordinator";
+import type { PlaybackQueueSnapshot } from "@/playback/queue/coordinator";
 import {
   createPlaybackQueueSnapshotWriter,
   loadPlaybackQueueSnapshot,
   parsePlaybackQueueSnapshot,
   savePlaybackQueueSnapshot,
   type PlaybackQueuePersistenceSnapshot,
-} from "@/composables/playbackQueuePersistence";
+} from "@/playback/queue/persistence";
 
 type MemoryStorage = {
   getItem(key: string): string | null;

@@ -42,9 +42,9 @@
 </template>
 
 <script setup lang="ts">
-import { useClickFocus } from "@/composables/useClickFocus";
+import { useClickFocus } from "@/ui/useClickFocus";
 import type { Playlist } from "@/types/playlist";
-import PlaylistListItem from "@/components/playlist/PlaylistListItem.vue";
+import PlaylistListItem from "@/playlist/ui/PlaylistListItem.vue";
 
 const props = defineProps<{
   playlists: Playlist[];

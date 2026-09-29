@@ -1,26 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 import { computed, readonly, ref, watch } from "vue";
-import { PlaybackQueueCoordinator } from "@/composables/playbackQueueCoordinator";
-import type {
-  PlaybackQueueSnapshot,
-  QueuePlaybackAttempt,
-} from "@/composables/playbackQueueCoordinator";
+import { PlaybackQueueCoordinator } from "@/playback/queue/coordinator";
+import type { PlaybackQueueSnapshot, QueuePlaybackAttempt } from "@/playback/queue/coordinator";
 import {
   createPlaybackQueueSnapshotWriter,
   EMPTY_PLAYBACK_QUEUE_SNAPSHOT,
   loadPlaybackQueueSnapshot,
-} from "@/composables/playbackQueuePersistence";
-import type { PlaybackQueuePersistenceSnapshot } from "@/composables/playbackQueuePersistence";
-import { createPlaybackSessionCommands } from "@/composables/playbackSessionCommands";
-import { createPlaybackStatusObserver } from "@/composables/playbackStatusObserver";
+} from "@/playback/queue/persistence";
+import type { PlaybackQueuePersistenceSnapshot } from "@/playback/queue/persistence";
+import { createPlaybackSessionCommands } from "@/playback/commands";
+import { createPlaybackStatusObserver } from "@/playback/status";
 import {
   createPlaybackState,
   type PlaybackCommandInvoker,
   type PlaybackStartFailure,
-} from "@/composables/usePlaybackState";
+} from "@/playback/state";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 
-export type { PlaybackStatus } from "@/composables/playbackStatusObserver";
+export type { PlaybackStatus } from "@/playback/status";
 
 export const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
 

@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
-import { usePersistentLibrarySelection } from "@/composables/usePersistentLibrarySelection";
-import { usePlaybackSession } from "@/composables/usePlaybackSession";
-import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/composables/useLibraryScan";
+import { usePersistentLibrarySelection } from "@/library/selection";
+import { usePlaybackSession } from "@/playback/session";
+import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/library/scan";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";

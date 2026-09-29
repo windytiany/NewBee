@@ -1,4 +1,4 @@
-import type { PlaybackQueuePersistenceSnapshot } from "@/composables/playbackQueuePersistence";
+import type { PlaybackQueuePersistenceSnapshot } from "@/playback/queue/persistence";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 
 export type PlaybackStartFailure = {

@@ -96,7 +96,7 @@
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
-import LibraryScanDialog from "@/components/LibraryScanDialog.vue";
+import LibraryScanDialog from "@/library/ui/LibraryScanDialog.vue";
 import { pageNames, type PageName } from "@/types/page";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Maximize, Minus, X } from "@lucide/vue";

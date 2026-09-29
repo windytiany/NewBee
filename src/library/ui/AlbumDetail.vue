@@ -162,11 +162,11 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { ChevronRight, Play, X } from "@lucide/vue";
-import { useClickFocus } from "@/composables/useClickFocus";
+import { useClickFocus } from "@/ui/useClickFocus";
 import type { AlbumSummary } from "@/types/album";
 import type { Playlist } from "@/types/playlist";
 import type { TrackSummary } from "@/types/track";
-import AlbumTrack from "@/components/library/AlbumTrack.vue";
+import AlbumTrack from "@/library/ui/AlbumTrack.vue";
 
 type TrackContextMenuRequest = {
   trackId: number;

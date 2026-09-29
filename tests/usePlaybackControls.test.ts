@@ -35,7 +35,7 @@ const invoke = mock(async (command: string) => {
 
 mock.module("@tauri-apps/api/core", () => ({ invoke }));
 
-const { usePlaybackControls } = await import("@/composables/usePlaybackControls");
+const { usePlaybackControls } = await import("@/playback/useControls");
 
 describe("playback controls progress input", () => {
   it("keeps the slider's temporary position in the playback bar", () => {

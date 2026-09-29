@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
-import { usePersistentActivePage } from "@/composables/usePersistentActivePage";
-import { useLibraryPage } from "@/composables/useLibraryPage";
-import { usePlaylistPage } from "@/composables/usePlaylistPage";
-import PlayingPage from "@/pages/PlayingPage.vue";
-import PlaybackBar from "@/components/PlaybackBar.vue";
-import AlbumBrowser from "@/components/library/AlbumBrowser.vue";
-import DeleteTrackConfirmationDialog from "@/components/library/DeleteTrackConfirmationDialog.vue";
-import GroupList from "@/components/library/GroupList.vue";
-import CreatePlaylistDialog from "@/components/playlist/CreatePlaylistDialog.vue";
-import PlaylistBrowser from "@/components/playlist/PlaylistBrowser.vue";
-import PlaylistList from "@/components/playlist/PlaylistList.vue";
-import PlaybackWorkspaceLayout from "@/components/layout/PlaybackWorkspaceLayout.vue";
-import TopBar from "@/components/TopBar.vue";
+import { usePersistentActivePage } from "@/navigation/activePage";
+import { useLibraryPage } from "@/library/usePage";
+import { usePlaylistPage } from "@/playlist/usePage";
+import PlayingPage from "@/playing/PlayingPage.vue";
+import PlaybackBar from "@/playback/ui/PlaybackBar.vue";
+import AlbumBrowser from "@/library/ui/AlbumBrowser.vue";
+import DeleteTrackDialog from "@/library/ui/DeleteTrackDialog.vue";
+import ArtistList from "@/library/ui/ArtistList.vue";
+import CreatePlaylistDialog from "@/playlist/ui/CreatePlaylistDialog.vue";
+import PlaylistBrowser from "@/playlist/ui/PlaylistBrowser.vue";
+import PlaylistList from "@/playlist/ui/PlaylistList.vue";
+import WorkspaceLayout from "@/layout/WorkspaceLayout.vue";
+import TopBar from "@/navigation/TopBar.vue";
 import type { TrackSummary } from "@/types/track";
 
 const { activePage } = usePersistentActivePage();
@@ -59,7 +59,7 @@ const {
   refreshPlaylists,
 } = usePlaylistPage(playlistActive);
 const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
-const deleteTrackDialog = ref<InstanceType<typeof DeleteTrackConfirmationDialog> | null>(null);
+const deleteTrackDialog = ref<InstanceType<typeof DeleteTrackDialog> | null>(null);
 const deleteTrackTarget = ref<TrackSummary | null>(null);
 const deleteTrackDialogError = ref("");
 
@@ -115,9 +115,9 @@ async function confirmTrackDeletion(trackId: number) {
   <div class="bg-spotify-base min-h-screen font-sans text-white">
     <TopBar v-model:active-page="activePage" />
     <main class="grid min-h-screen place-items-center pt-14 pb-20 sm:pb-10">
-      <PlaybackWorkspaceLayout :mode="activePage === 'Playing' ? 'playing' : 'workspace'">
+      <WorkspaceLayout :mode="activePage === 'Playing' ? 'playing' : 'workspace'">
         <template #left>
-          <GroupList
+          <ArtistList
             v-if="activePage === 'Library'"
             :artists="artists"
             :selected-artist="selectedGroup"
@@ -179,14 +179,14 @@ async function confirmTrackDeletion(trackId: number) {
         <template #playing>
           <PlayingPage v-if="activePage === 'Playing'" />
         </template>
-      </PlaybackWorkspaceLayout>
+      </WorkspaceLayout>
     </main>
     <CreatePlaylistDialog
       v-if="activePage === 'Playlist'"
       ref="createPlaylistDialog"
       @created="onPlaylistCreated"
     />
-    <DeleteTrackConfirmationDialog
+    <DeleteTrackDialog
       v-if="deleteTrackTarget"
       ref="deleteTrackDialog"
       :track="deleteTrackTarget"

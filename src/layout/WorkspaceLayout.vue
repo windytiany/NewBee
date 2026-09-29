@@ -53,7 +53,7 @@
         }"
       >
         <div class="h-full min-h-0 min-w-0 overflow-hidden">
-          <TrackList
+          <QueueList
             :tracks="displayedTracks"
             :current-row-key="activeCurrentRowKey"
             :can-remove-from-queue="true"
@@ -81,12 +81,12 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { usePersistentSidebarLayout } from "@/composables/usePersistentSidebarLayout";
-import ResizeHandle from "@/components/layout/ResizeHandle.vue";
-import Sidebar from "@/components/layout/Sidebar.vue";
-import TrackInfo from "@/components/track/TrackInfo.vue";
-import TrackList from "@/components/track/TrackList.vue";
-import { usePlaybackSession } from "@/composables/usePlaybackSession";
+import { usePersistentSidebarLayout } from "@/layout/sidebarState";
+import ResizeHandle from "@/layout/ResizeHandle.vue";
+import Sidebar from "@/layout/Sidebar.vue";
+import TrackInfo from "@/playback/ui/TrackInfo.vue";
+import QueueList from "@/playback/ui/QueueList.vue";
+import { usePlaybackSession } from "@/playback/session";
 
 const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
   mode: "workspace",

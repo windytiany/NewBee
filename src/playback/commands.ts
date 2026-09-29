@@ -1,11 +1,11 @@
 import type { ComputedRef, Ref } from "vue";
-import { PlaybackQueueCoordinator } from "@/composables/playbackQueueCoordinator";
-import type { InternalPlaybackStatus } from "@/composables/playbackStatusObserver";
+import { PlaybackQueueCoordinator } from "@/playback/queue/coordinator";
+import type { InternalPlaybackStatus } from "@/playback/status";
 import {
   createPlaybackState,
   type NowPlayingTrack,
   type PlaybackCommandInvoker,
-} from "@/composables/usePlaybackState";
+} from "@/playback/state";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 
 type PlaybackSessionCommandOptions = {

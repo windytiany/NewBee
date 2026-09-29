@@ -61,7 +61,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { Disc3 } from "@lucide/vue";
-import { usePlaybackSession } from "@/composables/usePlaybackSession";
+import { usePlaybackSession } from "@/playback/session";
 import type { TrackArtwork, TrackDetails } from "@/types/track";
 import { formatAudioSummary } from "@/utils/formatTrack.ts";
 

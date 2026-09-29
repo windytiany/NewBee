@@ -33,8 +33,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
-import Lyrics from "@/components/playing/Lyrics.vue";
-import TrackDetail from "@/components/playing/TrackDetail.vue";
+import Lyrics from "@/playing/ui/Lyrics.vue";
+import TrackDetail from "@/playing/ui/TrackDetail.vue";
 
 type Presentation = "track" | "lyrics" | "both";
 

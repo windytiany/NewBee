@@ -1,7 +1,7 @@
 // @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { beforeEach, describe, expect, it } from "bun:test";
-import { createPlaybackSession, type PlaybackStatus } from "@/composables/usePlaybackSession";
-import type { PlaybackCommandInvoker } from "@/composables/usePlaybackState";
+import { createPlaybackSession, type PlaybackStatus } from "@/playback/session";
+import type { PlaybackCommandInvoker } from "@/playback/state";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 
 const CURRENT_TRACK_STORAGE_KEY = "newbee.current-track";

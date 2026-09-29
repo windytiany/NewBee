@@ -1,8 +1,5 @@
 import { onMounted, onUnmounted, ref, watch } from "vue";
-import {
-  PLAYBACK_STATUS_POLL_INTERVAL_MS,
-  usePlaybackSession,
-} from "@/composables/usePlaybackSession";
+import { PLAYBACK_STATUS_POLL_INTERVAL_MS, usePlaybackSession } from "@/playback/session";
 
 export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Promise<boolean>) {
   const session = usePlaybackSession();

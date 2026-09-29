@@ -179,8 +179,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { usePlaybackControls } from "@/composables/usePlaybackControls";
-import { usePlaybackVolume } from "@/composables/usePlaybackVolume";
+import { usePlaybackControls } from "@/playback/useControls";
+import { usePlaybackVolume } from "@/playback/useVolume";
 import {
   Pause,
   Play,
