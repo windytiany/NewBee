@@ -55,6 +55,8 @@ type PlayItemOptions = {
   historyAction?: PlaybackHistoryAction;
 };
 type NextCandidateOptions = { stopWhenExhausted?: boolean };
+type NewQueueTrack = Omit<PlaybackDisplayTrack, "rowKey">;
+type QueueRemovalResult = { result: boolean; resumePlaybackId: number | null };
 
 export class PlaybackQueueCoordinator {
   private displayedTracks: PlaybackDisplayTrack[] = [];
@@ -164,60 +166,138 @@ export class PlaybackQueueCoordinator {
     });
   }
 
-  async removeQueueItem(rowKey: string): Promise<boolean> {
-    const removedItem = this.displayedTracks.find((item) => item.rowKey === rowKey);
-    if (!removedItem) return false;
+  addToNext(track: NewQueueTrack): Promise<boolean> {
+    return this.enqueue(() => {
+      const item = this.createQueueItem(track, true);
+      this.displayedTracks.splice(this.getNextInsertionIndex(this.displayedTracks), 0, item);
+      this.roundTracks.splice(this.getNextInsertionIndex(this.roundTracks), 0, { ...item });
 
-    const removesCurrentItem = this.currentRowKey === rowKey;
+      if (
+        this.historyIndex >= 0 &&
+        this.playbackHistory[this.historyIndex] === this.currentRowKey
+      ) {
+        this.playbackHistory.splice(this.historyIndex + 1, 0, item.rowKey);
+      } else {
+        this.remainingCandidates.unshift({ ...item });
+      }
+
+      this.publish();
+      return Promise.resolve(true);
+    });
+  }
+
+  addToQueueEnd(track: NewQueueTrack): Promise<boolean> {
+    return this.enqueue(() => {
+      const item = this.createQueueItem(track);
+      this.displayedTracks.push(item);
+      this.roundTracks.push({ ...item });
+      this.remainingCandidates = this.orderCandidates([...this.remainingCandidates, { ...item }]);
+      this.publish();
+      return Promise.resolve(true);
+    });
+  }
+
+  async removeQueueItem(rowKey: string): Promise<boolean> {
+    if (!this.displayedTracks.some((item) => item.rowKey === rowKey)) return false;
+
+    const generation = this.beginQueueRemoval();
+    const removal = await this.enqueue(() => {
+      const item = this.displayedTracks.find((candidate) => candidate.rowKey === rowKey);
+      return item
+        ? this.removeQueueItems([item], generation)
+        : Promise.resolve({ result: false, resumePlaybackId: null });
+    });
+    return this.finishQueueRemoval(removal);
+  }
+
+  async removeTrackFromQueue(trackId: number): Promise<boolean> {
+    if (
+      !this.displayedTracks.some((item) => item.trackId === trackId) &&
+      !this.roundTracks.some((item) => item.trackId === trackId)
+    ) {
+      return false;
+    }
+
+    const generation = this.beginQueueRemoval();
+    const removal = await this.enqueue(() => {
+      const matchingItems = new Map<string, PlaybackDisplayTrack>();
+      for (const item of [...this.displayedTracks, ...this.roundTracks]) {
+        if (item.trackId === trackId) matchingItems.set(item.rowKey, item);
+      }
+      return this.removeQueueItems([...matchingItems.values()], generation);
+    });
+    return this.finishQueueRemoval(removal);
+  }
+
+  private beginQueueRemoval() {
+    this.operationGeneration += 1;
+    this.failures = [];
+    return this.operationGeneration;
+  }
+
+  private async finishQueueRemoval(removal: QueueRemovalResult) {
+    if (removal.resumePlaybackId !== null) {
+      await this.scheduleAdvance(removal.resumePlaybackId);
+    }
+    return removal.result;
+  }
+
+  private async removeQueueItems(
+    removedItems: readonly PlaybackDisplayTrack[],
+    generation: number,
+  ): Promise<QueueRemovalResult> {
+    const removedRowKeys = new Set(removedItems.map((item) => item.rowKey));
+    const removedCurrentItem = removedItems.find((item) => item.rowKey === this.currentRowKey);
+    const failureItem = removedCurrentItem ?? removedItems[0];
+    if (!failureItem) return { result: false, resumePlaybackId: null };
+
     const endedPlaybackId = this.activePlaybackId;
     const resumePendingAdvance =
-      !removesCurrentItem &&
+      !removedCurrentItem &&
       endedPlaybackId !== null &&
       this.handledEndPlaybackId === endedPlaybackId &&
       this.ignoredEndPlaybackId !== endedPlaybackId;
-    const generation = ++this.operationGeneration;
 
-    this.displayedTracks = this.displayedTracks.filter((item) => item.rowKey !== rowKey);
-    this.roundTracks = this.roundTracks.filter((item) => item.rowKey !== rowKey);
-    this.remainingCandidates = this.remainingCandidates.filter((item) => item.rowKey !== rowKey);
-    this.removeFromPlaybackHistory(rowKey);
+    this.displayedTracks = this.displayedTracks.filter((item) => !removedRowKeys.has(item.rowKey));
+    this.roundTracks = this.roundTracks.filter((item) => !removedRowKeys.has(item.rowKey));
+    this.remainingCandidates = this.remainingCandidates.filter(
+      (item) => !removedRowKeys.has(item.rowKey),
+    );
+    this.removeFromPlaybackHistory(removedRowKeys);
     this.failures = [];
 
-    if (removesCurrentItem) {
+    if (removedCurrentItem) {
       this.currentRowKey = null;
       this.activePlaybackId = null;
       this.handledEndPlaybackId = null;
       if (endedPlaybackId !== null) this.ignoredEndPlaybackId = endedPlaybackId;
-
-      const stopResult = (
-        endedPlaybackId === null ? Promise.resolve(true) : this.stopPlayback(endedPlaybackId)
-      ).then(
-        (canAdvance) => ({ status: "completed" as const, canAdvance }),
-        (error: unknown) => ({ status: "failed" as const, error }),
-      );
       this.publish();
 
-      return this.enqueue(async () => {
-        const stopOutcome = await stopResult;
-        if (!this.isCurrentOperation(generation)) return false;
-
-        if (stopOutcome.status === "failed") {
-          this.failures = [formatStopFailure(removedItem, stopOutcome.error)];
-          this.publish();
-          return false;
+      let canAdvance = true;
+      if (endedPlaybackId !== null) {
+        try {
+          canAdvance = await this.stopPlayback(endedPlaybackId);
+        } catch (error) {
+          if (this.isCurrentOperation(generation)) {
+            this.failures = [formatStopFailure(failureItem, error)];
+            this.publish();
+          }
+          return { result: false, resumePlaybackId: null };
         }
-        if (!stopOutcome.canAdvance) return false;
+      }
+      if (!this.isCurrentOperation(generation) || !canAdvance) {
+        return { result: false, resumePlaybackId: null };
+      }
 
-        await this.playNextCandidate(generation, false);
-        return true;
-      });
+      await this.playNextFromHistory(generation, { stopWhenExhausted: false });
+      return { result: true, resumePlaybackId: null };
     }
 
     this.publish();
-    if (resumePendingAdvance && endedPlaybackId !== null) {
-      await this.scheduleAdvance(endedPlaybackId);
-    }
-    return true;
+    return {
+      result: true,
+      resumePlaybackId: resumePendingAdvance ? endedPlaybackId : null,
+    };
   }
 
   setRepeatOneEnabled(enabled: boolean) {
@@ -230,7 +310,7 @@ export class PlaybackQueueCoordinator {
     if (this.shuffleEnabled === enabled) return;
     this.shuffleEnabled = enabled;
     this.remainingCandidates = enabled
-      ? this.shuffleCandidates(this.remainingCandidates)
+      ? this.orderCandidates(this.remainingCandidates)
       : this.restoreCandidateOrder(this.remainingCandidates);
     this.publish();
   }
@@ -361,19 +441,44 @@ export class PlaybackQueueCoordinator {
     return this.playNextCandidate(generation, false, options);
   }
 
+  private getNextInsertionIndex(tracks: readonly PlaybackDisplayTrack[]) {
+    const currentIndex = tracks.findIndex((item) => item.rowKey === this.currentRowKey);
+    return currentIndex < 0 ? 0 : currentIndex + 1;
+  }
+
+  private createQueueItem(track: NewQueueTrack, prioritizeNext = false): PlaybackDisplayTrack {
+    const existingRowKeys = new Set([
+      ...this.displayedTracks.map((item) => item.rowKey),
+      ...this.roundTracks.map((item) => item.rowKey),
+      ...this.remainingCandidates.map((item) => item.rowKey),
+      ...this.playbackHistory,
+      ...(this.currentRowKey === null ? [] : [this.currentRowKey]),
+    ]);
+    const prefix = prioritizeNext ? "queue-next" : "queue-item";
+    const generatedKey = `${prefix}:${globalThis.crypto.randomUUID()}`;
+    let rowKey = generatedKey;
+    let suffix = 1;
+    while (existingRowKeys.has(rowKey)) {
+      rowKey = `${generatedKey}:${suffix}`;
+      suffix += 1;
+    }
+    return { ...track, rowKey };
+  }
+
   private findRoundTrack(rowKey: string) {
     return this.roundTracks.find((item) => item.rowKey === rowKey);
   }
 
-  private removeFromPlaybackHistory(rowKey: string) {
+  private removeFromPlaybackHistory(removedRowKeys: ReadonlySet<string>) {
     const currentHistoryRowKey = this.playbackHistory[this.historyIndex] ?? null;
-    const wasCurrentHistoryItem = currentHistoryRowKey === rowKey;
+    const removesHistoryCursor =
+      currentHistoryRowKey !== null && removedRowKeys.has(currentHistoryRowKey);
     const retainedBeforeCursor = this.playbackHistory
       .slice(0, Math.max(0, this.historyIndex))
-      .filter((key) => key !== rowKey).length;
+      .filter((key) => !removedRowKeys.has(key)).length;
 
-    this.playbackHistory = this.playbackHistory.filter((key) => key !== rowKey);
-    if (wasCurrentHistoryItem) {
+    this.playbackHistory = this.playbackHistory.filter((key) => !removedRowKeys.has(key));
+    if (removesHistoryCursor) {
       this.historyIndex = retainedBeforeCursor - 1;
       return;
     }
@@ -404,7 +509,7 @@ export class PlaybackQueueCoordinator {
       if (this.repeatOneEnabled) {
         return this.repeatCurrentOrAdvance(currentItem, generation);
       }
-      return this.playNextCandidate(generation, false);
+      return this.playNextFromHistory(generation, { stopWhenExhausted: false });
     });
   }
 
@@ -414,7 +519,7 @@ export class PlaybackQueueCoordinator {
     }
   }
 
-  private enqueue(operation: () => Promise<boolean>) {
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.operationTail.then(operation);
     this.operationTail = result.then(
       () => undefined,
@@ -454,9 +559,13 @@ export class PlaybackQueueCoordinator {
       historyAction: { kind: "none" },
     });
     if (result === "started") return true;
-    if (result === "failed") return this.playNextCandidate(generation, false);
+    if (result === "failed") {
+      return this.playNextFromHistory(generation, { stopWhenExhausted: false });
+    }
     if (!this.isCurrentOperation(generation)) return false;
-    return this.repeatOneEnabled ? false : this.playNextCandidate(generation, false);
+    return this.repeatOneEnabled
+      ? false
+      : this.playNextFromHistory(generation, { stopWhenExhausted: false });
   }
 
   private applyPlaybackHistory(item: PlaybackDisplayTrack, action: PlaybackHistoryAction) {
@@ -564,7 +673,9 @@ export class PlaybackQueueCoordinator {
   }
 
   private orderCandidates(candidates: PlaybackDisplayTrack[]) {
-    return this.shuffleEnabled ? this.shuffleCandidates(candidates) : candidates;
+    const prioritized = candidates.filter((item) => item.rowKey.startsWith("queue-next:"));
+    const regular = candidates.filter((item) => !item.rowKey.startsWith("queue-next:"));
+    return [...prioritized, ...(this.shuffleEnabled ? this.shuffleCandidates(regular) : regular)];
   }
 
   private shuffleCandidates(candidates: PlaybackDisplayTrack[]) {

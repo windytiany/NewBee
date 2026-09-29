@@ -20,9 +20,12 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   const artistsError = ref("");
   const albumsError = ref("");
   const tracksError = ref("");
+  const isTrackActionPending = ref(false);
+  const trackActionError = ref("");
   const selectedTrackId = ref<number | null>(null);
   const { currentTrack } = usePlaybackState();
-  const { replaceAndPlay } = usePlaybackDisplayList();
+  const { replaceAndPlay, addToNext, addToQueueEnd, removeTrackFromQueue } =
+    usePlaybackDisplayList();
   const {
     selectedGroup,
     selectedAlbum,
@@ -56,6 +59,38 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
 
   function resetSelectedTrackState(clearSelection: boolean) {
     if (clearSelection) selectedTrackId.value = null;
+  }
+
+  async function runTrackAction(name: string, action: () => Promise<boolean>) {
+    if (isTrackActionPending.value) return false;
+
+    isTrackActionPending.value = true;
+    trackActionError.value = "";
+    try {
+      if (!(await action())) {
+        trackActionError.value = `${name}失败：操作未执行。`;
+        return false;
+      }
+      return true;
+    } catch (error) {
+      trackActionError.value = `${name}失败：${errorMessage(error)}`;
+      return false;
+    } finally {
+      isTrackActionPending.value = false;
+    }
+  }
+
+  function findLibraryTrack(trackId: number) {
+    return tracks.value.find((track) => track.id === trackId);
+  }
+
+  function toQueueTrack(track: TrackSummary): Omit<PlaybackDisplayTrack, "rowKey"> {
+    return {
+      trackId: track.id,
+      title: track.title,
+      album: track.album,
+      durationMs: track.durationMs,
+    };
   }
 
   async function refreshLibrary() {
@@ -241,6 +276,60 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     await replaceAndPlay(displayedTracks, `album-track:${firstTrack.id}`);
   }
 
+  function addTrackToNext(trackId: number) {
+    const track = findLibraryTrack(trackId);
+    if (!track || isLoadingTracks.value) return Promise.resolve(false);
+    return runTrackAction("添加为下一首", () => addToNext(toQueueTrack(track)));
+  }
+
+  function addTrackToQueueEnd(trackId: number) {
+    const track = findLibraryTrack(trackId);
+    if (!track || isLoadingTracks.value) return Promise.resolve(false);
+    return runTrackAction("添加到队尾", () => addToQueueEnd(toQueueTrack(track)));
+  }
+
+  function addTrackToPlaylist(trackId: number, playlistId: number) {
+    const track = findLibraryTrack(trackId);
+    if (!track || isLoadingTracks.value) return Promise.resolve(false);
+    return runTrackAction("添加到播放列表", async () => {
+      await invoke<void>("add_track_to_playlist", { trackId, playlistId });
+      return true;
+    });
+  }
+
+  async function removeTrackFromLibrary(trackId: number) {
+    if (!findLibraryTrack(trackId) || isLoadingTracks.value || isTrackActionPending.value) {
+      return false;
+    }
+
+    isTrackActionPending.value = true;
+    trackActionError.value = "";
+    try {
+      try {
+        await invoke<void>("remove_track_from_library", { trackId });
+      } catch (error) {
+        trackActionError.value = `从曲库删除失败：${errorMessage(error)}`;
+        return false;
+      }
+
+      let queueCleanupError = "";
+      try {
+        await removeTrackFromQueue(trackId);
+      } catch (error) {
+        queueCleanupError = errorMessage(error);
+      }
+      await refreshLibrary();
+
+      if (queueCleanupError) {
+        trackActionError.value = `曲库索引已删除，但从队列移除失败：${queueCleanupError}`;
+        return false;
+      }
+      return true;
+    } finally {
+      isTrackActionPending.value = false;
+    }
+  }
+
   function onLibraryScanCompleted() {
     void refreshLibrary();
   }
@@ -300,6 +389,8 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     artistsError,
     albumsError,
     tracksError,
+    isTrackActionPending,
+    trackActionError,
     selectedTrackId,
     currentTrack,
     selectedGroup,
@@ -310,5 +401,9 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     selectTrack,
     playTrackFromLibrary,
     playAlbumFromLibrary,
+    addTrackToNext,
+    addTrackToQueueEnd,
+    addTrackToPlaylist,
+    removeTrackFromLibrary,
   };
 }

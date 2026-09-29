@@ -124,6 +124,18 @@ function removeQueueItem(rowKey: string) {
   return coordinator.removeQueueItem(rowKey);
 }
 
+function removeTrackFromQueue(trackId: number) {
+  return coordinator.removeTrackFromQueue(trackId);
+}
+
+function addToNext(track: Omit<PlaybackDisplayTrack, "rowKey">) {
+  return coordinator.addToNext(track);
+}
+
+function addToQueueEnd(track: Omit<PlaybackDisplayTrack, "rowKey">) {
+  return coordinator.addToQueueEnd(track);
+}
+
 function replaceAndPlay(items: readonly PlaybackDisplayTrack[], startRowKey: string) {
   return coordinator.replaceAndPlay(items, startRowKey);
 }
@@ -184,6 +196,9 @@ export function usePlaybackDisplayList() {
     setRepeatOneEnabled,
     setShuffleEnabled,
     removeQueueItem,
+    removeTrackFromQueue,
+    addToNext,
+    addToQueueEnd,
     replaceAndPlay,
     playQueueItem,
     playRestoredQueue,

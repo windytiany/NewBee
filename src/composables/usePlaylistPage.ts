@@ -31,8 +31,8 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     return typeof error === "string" ? error : "未知错误";
   }
 
-  async function loadPlaylistTracks(playlistId: number) {
-    if (!isMounted || !active.value || selectedPlaylistId.value !== playlistId) return;
+  async function loadPlaylistTracks(playlistId: number, force = false) {
+    if (!isMounted || (!force && !active.value) || selectedPlaylistId.value !== playlistId) return;
 
     const generation = ++playlistTracksRequestGeneration;
     playlistTracks.value = [];
@@ -43,7 +43,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
       const result = await invoke<PlaylistTrackData[]>("list_playlist_tracks", { playlistId });
       if (
         !isMounted ||
-        !active.value ||
+        (!force && !active.value) ||
         generation !== playlistTracksRequestGeneration ||
         selectedPlaylistId.value !== playlistId
       ) {
@@ -54,7 +54,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     } catch (error) {
       if (
         !isMounted ||
-        !active.value ||
+        (!force && !active.value) ||
         generation !== playlistTracksRequestGeneration ||
         selectedPlaylistId.value !== playlistId
       ) {
@@ -64,7 +64,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     } finally {
       if (
         isMounted &&
-        active.value &&
+        (force || active.value) &&
         generation === playlistTracksRequestGeneration &&
         selectedPlaylistId.value === playlistId
       ) {
@@ -73,8 +73,8 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     }
   }
 
-  async function refreshPlaylists(selectPlaylistId?: number) {
-    if (!isMounted || !active.value) return;
+  async function refreshPlaylists(selectPlaylistId?: number, force = false) {
+    if (!isMounted || (!force && !active.value)) return;
 
     const generation = ++playlistsRequestGeneration;
     ++playlistTracksRequestGeneration;
@@ -85,7 +85,8 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
 
     try {
       const result = await invoke<Playlist[]>("list_playlists");
-      if (!isMounted || !active.value || generation !== playlistsRequestGeneration) return;
+      if (!isMounted || (!force && !active.value) || generation !== playlistsRequestGeneration)
+        return;
 
       setAvailablePlaylists(result);
       if (selectPlaylistId !== undefined) {
@@ -98,14 +99,15 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
         playlistTracks.value = [];
         isLoadingPlaylistTracks.value = false;
       } else {
-        void loadPlaylistTracks(playlistId);
+        void loadPlaylistTracks(playlistId, force);
       }
     } catch (error) {
-      if (!isMounted || !active.value || generation !== playlistsRequestGeneration) return;
+      if (!isMounted || (!force && !active.value) || generation !== playlistsRequestGeneration)
+        return;
       playlistsError.value = `读取歌单失败：${errorMessage(error)}`;
       isLoadingPlaylistTracks.value = false;
     } finally {
-      if (isMounted && active.value && generation === playlistsRequestGeneration) {
+      if (isMounted && (force || active.value) && generation === playlistsRequestGeneration) {
         isLoadingPlaylists.value = false;
       }
     }

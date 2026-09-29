@@ -68,6 +68,15 @@ pub fn list_album_tracks(
 }
 
 #[tauri::command]
+pub fn add_track_to_playlist(
+    playlist_id: i64,
+    track_id: i64,
+    state: tauri::State<'_, Database>,
+) -> Result<(), String> {
+    state.add_track_to_playlist(playlist_id, track_id)
+}
+
+#[tauri::command]
 pub fn create_playlist(name: String, state: tauri::State<'_, Database>) -> Result<i64, String> {
     state.create_playlist(&name)
 }
@@ -83,6 +92,14 @@ pub fn list_playlist_tracks(
     state: tauri::State<'_, Database>,
 ) -> Result<Vec<PlaylistTrackSummary>, String> {
     state.list_playlist_tracks(playlist_id)
+}
+
+#[tauri::command]
+pub fn remove_track_from_library(
+    track_id: i64,
+    state: tauri::State<'_, Database>,
+) -> Result<(), String> {
+    state.remove_track_from_library(track_id)
 }
 
 #[tauri::command]

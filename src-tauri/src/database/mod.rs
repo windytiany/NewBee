@@ -436,6 +436,57 @@ impl Database {
         Ok(connection.last_insert_rowid())
     }
 
+    pub fn add_track_to_playlist(&self, playlist_id: i64, track_id: i64) -> Result<(), String> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Failed to start playlist update: {error}"))?;
+        let playlist = transaction
+            .query_row(
+                "SELECT id FROM playlists WHERE id = ?1",
+                [playlist_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to verify playlist {playlist_id}: {error}"))?;
+        if playlist.is_none() {
+            return Err(format!("Playlist {playlist_id} was not found"));
+        }
+
+        let track = transaction
+            .query_row("SELECT id FROM tracks WHERE id = ?1", [track_id], |row| {
+                row.get::<_, i64>(0)
+            })
+            .optional()
+            .map_err(|error| format!("Failed to verify track {track_id}: {error}"))?;
+        if track.is_none() {
+            return Err(format!("Track {track_id} was not found"));
+        }
+
+        let position = transaction
+            .query_row(
+                "SELECT COALESCE(MAX(position), -1) + 1
+                 FROM playlist_items
+                 WHERE playlist_id = ?1",
+                [playlist_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| format!("Failed to find playlist {playlist_id} end: {error}"))?;
+        transaction
+            .execute(
+                "INSERT INTO playlist_items (playlist_id, track_id, position)
+                 VALUES (?1, ?2, ?3)",
+                params![playlist_id, track_id, position],
+            )
+            .map_err(|error| {
+                format!("Failed to add track {track_id} to playlist {playlist_id}: {error}")
+            })?;
+        transaction
+            .commit()
+            .map_err(|error| format!("Failed to finish playlist update: {error}"))?;
+        Ok(())
+    }
+
     pub fn list_playlists(&self) -> Result<Vec<PlaylistSummary>, String> {
         let connection = self.connection()?;
         let mut statement = connection
@@ -509,6 +560,17 @@ impl Database {
             )
             .optional()
             .map_err(|error| format!("Failed to find track {track_id} for playback: {error}"))
+    }
+
+    pub fn remove_track_from_library(&self, track_id: i64) -> Result<(), String> {
+        let connection = self.connection()?;
+        let removed = connection
+            .execute("DELETE FROM tracks WHERE id = ?1", [track_id])
+            .map_err(|error| format!("Failed to remove track {track_id} from library: {error}"))?;
+        if removed == 0 {
+            return Err(format!("Track {track_id} was not found"));
+        }
+        Ok(())
     }
 
     pub fn get_track(&self, track_id: i64) -> Result<Option<TrackDetails>, String> {
@@ -634,6 +696,87 @@ mod tests {
                 )
                 .unwrap();
         }
+    }
+
+    #[test]
+    fn adding_tracks_appends_to_playlist_and_allows_duplicates() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("Favorites").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(&database, 2, Some("Artist"), Some("Album"), 2, None);
+
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database.add_track_to_playlist(playlist_id, 2).unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+
+        let tracks = database.list_playlist_tracks(playlist_id).unwrap();
+        assert_eq!(
+            tracks
+                .iter()
+                .map(|track| track.track_id)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 1]
+        );
+        assert_eq!(database.list_playlists().unwrap()[0].track_count, 3);
+        assert_eq!(
+            database.add_track_to_playlist(playlist_id, 99).unwrap_err(),
+            "Track 99 was not found"
+        );
+        assert_eq!(
+            database.add_track_to_playlist(99, 1).unwrap_err(),
+            "Playlist 99 was not found"
+        );
+    }
+
+    #[test]
+    fn removing_track_cascades_playlist_items_without_deleting_the_file() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("Favorites").unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "newbee-delete-track-{}-{}.mp3",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&path, b"audio remains on disk").unwrap();
+        let path_string = path.to_string_lossy().into_owned();
+        database
+            .connection()
+            .unwrap()
+            .execute(
+                "INSERT INTO tracks (id, path, title) VALUES (1, ?1, 'Track')",
+                [&path_string],
+            )
+            .unwrap();
+        database
+            .connection()
+            .unwrap()
+            .execute(
+                "INSERT INTO track_artwork (track_id, mime_type, image)
+                 VALUES (1, 'image/png', X'0102')",
+                [],
+            )
+            .unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+
+        database.remove_track_from_library(1).unwrap();
+
+        assert!(database.get_track(1).unwrap().is_none());
+        assert!(database.get_track_artwork(1).unwrap().is_none());
+        assert!(database
+            .list_playlist_tracks(playlist_id)
+            .unwrap()
+            .is_empty());
+        assert_eq!(database.list_playlists().unwrap()[0].track_count, 0);
+        assert_eq!(std::fs::read(&path).unwrap(), b"audio remains on disk");
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(
+            database.remove_track_from_library(1).unwrap_err(),
+            "Track 1 was not found"
+        );
     }
 
     #[test]

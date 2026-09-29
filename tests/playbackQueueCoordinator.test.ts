@@ -161,6 +161,102 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.attempts).toEqual([7, 7, 7]);
   });
 
+  it("prioritizes newer next items in playback and display order", async () => {
+    const harness = createHarness();
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["waiting", 2]), "current");
+
+    expect(
+      await coordinator.addToNext({
+        trackId: 3,
+        title: "A",
+        album: null,
+        durationMs: null,
+      }),
+    ).toBe(true);
+    expect(
+      await coordinator.addToNext({
+        trackId: 4,
+        title: "B",
+        album: null,
+        durationMs: null,
+      }),
+    ).toBe(true);
+
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 4, 3, 2]);
+    expect(harness.snapshot.currentRowKey).toBe("current");
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(harness.attempts).toEqual([1, 4, 3, 2]);
+  });
+
+  it("appends without interrupting and shuffles the new tail item with pending candidates", async () => {
+    const harness = createHarness({ random: () => 0 });
+    const { coordinator } = harness;
+    coordinator.setShuffleEnabled(true);
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["b", 2], ["c", 3]), "current");
+
+    expect(
+      await coordinator.addToQueueEnd({
+        trackId: 4,
+        title: "tail",
+        album: null,
+        durationMs: null,
+      }),
+    ).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("current");
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 2, 3, 4]);
+    expect(harness.attempts).toEqual([1]);
+
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(harness.attempts).toEqual([1, 2, 4, 3]);
+  });
+
+  it("puts next additions before forward history after previous navigation", async () => {
+    const harness = createHarness();
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2], ["c", 3], ["d", 4]), "a");
+    await coordinator.playNext();
+    await coordinator.playNext();
+    expect(await coordinator.playPrevious()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("b");
+
+    await coordinator.addToNext({ trackId: 5, title: "A", album: null, durationMs: null });
+    await coordinator.addToNext({ trackId: 6, title: "B", album: null, durationMs: null });
+
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([
+      1, 2, 6, 5, 3, 4,
+    ]);
+    expect(await coordinator.observePlaybackStatus(endedObservation(4, 2))).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(harness.attempts).toEqual([1, 2, 3, 2, 6, 5, 3]);
+  });
+
+  it("removes every queued row for a track and advances after stopping its current row", async () => {
+    const harness = createHarness();
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(
+      tracks(
+        ["current-duplicate", 7],
+        ["queued-duplicate-a", 7],
+        ["other", 8],
+        ["queued-duplicate-b", 7],
+      ),
+      "current-duplicate",
+    );
+
+    expect(await coordinator.removeTrackFromQueue(7)).toBe(true);
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([8]);
+    expect(harness.snapshot.currentRowKey).toBe("other");
+    expect(harness.stoppedPlaybackIds).toEqual([1]);
+    expect(harness.attempts).toEqual([7, 8]);
+    expect(await coordinator.removeTrackFromQueue(7)).toBe(false);
+  });
+
   it("prunes removed history and resets it when a queue item or replacement starts a new round", async () => {
     const harness = createHarness();
     const { coordinator } = harness;
@@ -189,6 +285,7 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     const harness = createHarness();
     const { coordinator } = harness;
     await coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2]), "a");
+    await coordinator.addToNext({ trackId: 3, title: "next", album: null, durationMs: null });
     coordinator.setRepeatOneEnabled(true);
 
     await coordinator.observePlaybackStatus(endedObservation(1, 1));
@@ -197,7 +294,11 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.snapshot.currentRowKey).toBe("a");
     expect(harness.snapshot.canPlayPrevious).toBe(false);
     expect(await coordinator.playNext()).toBe(true);
-    expect(harness.snapshot.currentRowKey).toBe("b");
+    expect(
+      harness.snapshot.displayedTracks.find(
+        (track) => track.rowKey === harness.snapshot.currentRowKey,
+      )?.trackId,
+    ).toBe(3);
   });
 
   it("restores the queue and modes without treating the saved row as active playback", async () => {
@@ -239,6 +340,48 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.attempts).toEqual([7]);
     expect(harness.snapshot.currentRowKey).toBe("selected-row");
     expect(harness.snapshot.repeatOneEnabled).toBe(true);
+  });
+
+  it("serializes a queue addition behind an in-flight playback start", async () => {
+    let releaseFirstStart!: (result: QueuePlaybackAttempt) => void;
+    let notifyFirstStart!: () => void;
+    const firstStart = new Promise<void>((resolve) => {
+      notifyFirstStart = resolve;
+    });
+    const attempts: number[] = [];
+    let nextPlaybackId = 0;
+    const coordinator = new PlaybackQueueCoordinator(
+      async (trackId, canStart) => {
+        attempts.push(trackId);
+        if (trackId === 1) {
+          notifyFirstStart();
+          return new Promise<QueuePlaybackAttempt>((resolve) => {
+            releaseFirstStart = resolve;
+          });
+        }
+        return canStart()
+          ? { status: "started", playbackId: ++nextPlaybackId }
+          : { status: "cancelled" };
+      },
+      () => {},
+    );
+    const starting = coordinator.replaceAndPlay(tracks(["current", 1], ["waiting", 2]), "current");
+    await firstStart;
+    const adding = coordinator.addToNext({
+      trackId: 3,
+      title: "new",
+      album: null,
+      durationMs: null,
+    });
+
+    releaseFirstStart({ status: "started", playbackId: 1 });
+
+    expect(await starting).toBe(true);
+    expect(await adding).toBe(true);
+    expect(coordinator.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 3, 2]);
+    expect(coordinator.snapshot.currentRowKey).toBe("current");
+    expect(await coordinator.playNext()).toBe(true);
+    expect(attempts).toEqual([1, 3]);
   });
 
   it("discards a late automatic start and retries the candidate for the latest manual operation", async () => {

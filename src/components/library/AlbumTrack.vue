@@ -10,9 +10,14 @@
             : 'hover:bg-white/5'
       "
       :aria-pressed="props.isSelected ? true : undefined"
+      aria-haspopup="menu"
+      :aria-expanded="props.isContextMenuOpen"
+      :aria-controls="props.isContextMenuOpen ? 'album-track-context-menu' : undefined"
       type="button"
       @click="emit('select')"
       @dblclick="emit('play')"
+      @contextmenu="openTrackContextMenu"
+      @keydown="handleContextMenuKeydown"
     >
       <span class="text-spotify-muted w-5 shrink-0 text-right tabular-nums">
         {{ props.index + 1 }}
@@ -46,10 +51,45 @@ const props = defineProps<{
   isFocused: boolean;
   isSelected: boolean;
   isCurrentTrack: boolean;
+  isContextMenuOpen: boolean;
 }>();
 
 const emit = defineEmits<{
   select: [];
   play: [];
+  contextMenu: [
+    request: {
+      trackId: number;
+      x: number;
+      y: number;
+      trigger: InstanceType<typeof globalThis.HTMLButtonElement>;
+    },
+  ];
 }>();
+
+function openTrackContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
+  event.preventDefault();
+  event.stopPropagation();
+  emit("contextMenu", {
+    trackId: props.track.id,
+    x: event.clientX,
+    y: event.clientY,
+    trigger: event.currentTarget as InstanceType<typeof globalThis.HTMLButtonElement>,
+  });
+}
+
+function handleContextMenuKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+  if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  const trigger = event.currentTarget as InstanceType<typeof globalThis.HTMLButtonElement>;
+  const bounds = trigger.getBoundingClientRect();
+  emit("contextMenu", {
+    trackId: props.track.id,
+    x: bounds.left,
+    y: bounds.bottom,
+    trigger,
+  });
+}
 </script>

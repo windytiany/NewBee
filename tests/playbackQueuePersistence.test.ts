@@ -70,6 +70,97 @@ describe("playback queue persistence", () => {
     });
   });
 
+  it("persists unique row keys for manually added duplicate tracks across restore", async () => {
+    const storage = createMemoryStorage();
+    let playbackAttempts = 0;
+    const coordinator = new PlaybackQueueCoordinator(
+      async (_trackId, canStart) => {
+        playbackAttempts += 1;
+        return canStart() ? { status: "started", playbackId: 1 } : { status: "cancelled" };
+      },
+      createPlaybackQueueSnapshotWriter(null, () => storage),
+    );
+    coordinator.restoreQueue({
+      displayedTracks: [],
+      currentRowKey: null,
+      shuffleEnabled: false,
+      repeatOneEnabled: false,
+    });
+
+    await coordinator.addToQueueEnd({ trackId: 7, title: "same", album: null, durationMs: null });
+    await coordinator.addToQueueEnd({ trackId: 7, title: "same", album: null, durationMs: null });
+    expect(playbackAttempts).toBe(0);
+    const savedSnapshot = loadPlaybackQueueSnapshot(() => storage);
+
+    expect(savedSnapshot?.displayedTracks).toHaveLength(2);
+    expect(savedSnapshot?.displayedTracks.map((track) => track.trackId)).toEqual([7, 7]);
+    expect(new Set(savedSnapshot?.displayedTracks.map((track) => track.rowKey)).size).toBe(2);
+    if (!savedSnapshot) return;
+
+    const restoredCoordinator = new PlaybackQueueCoordinator(
+      async () => ({
+        status: "started",
+        playbackId: 2,
+      }),
+      () => {},
+    );
+    restoredCoordinator.restoreQueue(savedSnapshot);
+    await restoredCoordinator.addToNext({
+      trackId: 7,
+      title: "same",
+      album: null,
+      durationMs: null,
+    });
+
+    const restoredRows = restoredCoordinator.snapshot.displayedTracks;
+    expect(restoredRows).toHaveLength(3);
+    expect(restoredRows.map((track) => track.trackId)).toEqual([7, 7, 7]);
+    expect(new Set(restoredRows.map((track) => track.rowKey)).size).toBe(3);
+  });
+
+  it("restores added-next rows ahead of shuffled queue items", async () => {
+    const storage = createMemoryStorage();
+    let nextPlaybackId = 0;
+    const options = { random: () => 0 };
+    const coordinator = new PlaybackQueueCoordinator(
+      async (_trackId, canStart) =>
+        canStart() ? { status: "started", playbackId: ++nextPlaybackId } : { status: "cancelled" },
+      createPlaybackQueueSnapshotWriter(null, () => storage),
+      options,
+    );
+    coordinator.restoreQueue({
+      displayedTracks: [],
+      currentRowKey: null,
+      shuffleEnabled: true,
+      repeatOneEnabled: false,
+    });
+    await coordinator.addToNext({ trackId: 3, title: "A", album: null, durationMs: null });
+    await coordinator.addToNext({ trackId: 4, title: "B", album: null, durationMs: null });
+    await coordinator.addToQueueEnd({ trackId: 5, title: "tail", album: null, durationMs: null });
+
+    const savedSnapshot = loadPlaybackQueueSnapshot(() => storage);
+    expect(savedSnapshot).not.toBeNull();
+    if (!savedSnapshot) return;
+
+    const attempts: number[] = [];
+    const restoredCoordinator = new PlaybackQueueCoordinator(
+      async (trackId, canStart) => {
+        attempts.push(trackId);
+        return canStart()
+          ? { status: "started", playbackId: ++nextPlaybackId }
+          : { status: "cancelled" };
+      },
+      () => {},
+      options,
+    );
+    restoredCoordinator.restoreQueue(savedSnapshot);
+    expect(restoredCoordinator.snapshot.currentRowKey).toBeNull();
+    expect(await restoredCoordinator.playNext()).toBe(true);
+    expect(await restoredCoordinator.playNext()).toBe(true);
+    expect(await restoredCoordinator.playNext()).toBe(true);
+    expect(attempts).toEqual([4, 3, 5]);
+  });
+
   it("persists mode changes and successful automatic track advances", async () => {
     const storage = createMemoryStorage();
     let nextPlaybackId = 0;

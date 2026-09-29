@@ -10,6 +10,16 @@
         </h1>
       </header>
 
+      <p
+        v-if="props.trackActionPending"
+        class="text-spotify-muted px-5 text-sm sm:px-8"
+        role="status"
+      >
+        正在处理曲目操作…
+      </p>
+      <p v-else-if="props.trackActionError" class="px-5 text-sm text-red-300 sm:px-8" role="alert">
+        {{ props.trackActionError }}
+      </p>
       <p v-if="props.albumsLoading" class="text-spotify-muted px-5 text-sm sm:px-8" role="status">
         正在读取专辑…
       </p>
@@ -41,10 +51,19 @@
             :current-track-id="props.currentTrackId"
             :tracks-loading="props.tracksLoading"
             :tracks-error="props.tracksError"
+            :playlists="props.playlists"
+            :playlists-loading="props.playlistsLoading"
+            :playlists-error="props.playlistsError"
+            :track-action-pending="props.trackActionPending"
             @close="closeAlbum(row.selectedAlbum)"
             @select-track="emit('selectTrack', $event)"
             @play-track="emit('playTrack', $event)"
             @play-album="emit('playAlbum')"
+            @refresh-playlists="emit('refreshPlaylists')"
+            @add-to-next="emit('addToNext', $event)"
+            @add-to-queue-end="emit('addToQueueEnd', $event)"
+            @add-track-to-playlist="addTrackToPlaylist"
+            @delete-track="emit('deleteTrack', $event)"
           />
         </template>
       </div>
@@ -59,6 +78,7 @@ import { useClickFocus } from "@/composables/useClickFocus";
 import type { LibraryAlbumSelection } from "@/composables/usePersistentLibrarySelection";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
+import type { Playlist } from "@/types/playlist";
 import type { TrackSummary } from "@/types/track";
 import AlbumDetail from "@/components/library/AlbumDetail.vue";
 import Album from "@/components/library/Album.vue";
@@ -84,6 +104,11 @@ const props = defineProps<{
   albumsError: string;
   tracksLoading: boolean;
   tracksError: string;
+  playlists: Playlist[];
+  playlistsLoading: boolean;
+  playlistsError: string;
+  trackActionPending: boolean;
+  trackActionError: string;
 }>();
 
 const emit = defineEmits<{
@@ -91,6 +116,11 @@ const emit = defineEmits<{
   selectTrack: [trackId: number];
   playTrack: [trackId: number];
   playAlbum: [];
+  refreshPlaylists: [];
+  addToNext: [trackId: number];
+  addToQueueEnd: [trackId: number];
+  addTrackToPlaylist: [trackId: number, playlistId: number];
+  deleteTrack: [trackId: number];
 }>();
 
 const columnCount = ref(2);
@@ -155,5 +185,9 @@ function toggleAlbum(album: AlbumSummary) {
 function closeAlbum(album: AlbumSummary) {
   setFocusedItem(getAlbumFocusKey(album));
   emit("selectAlbum", null);
+}
+
+function addTrackToPlaylist(trackId: number, playlistId: number) {
+  emit("addTrackToPlaylist", trackId, playlistId);
 }
 </script>
