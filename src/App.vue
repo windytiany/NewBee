@@ -29,18 +29,18 @@ const {
   tracksError,
   isTrackActionPending,
   trackActionError,
-  selectedTrackId,
+  trackActionMessage,
   currentTrack,
+  activeQueueRowKey,
   selectedGroup,
   selectedAlbum,
   selectArtist,
   selectAlbum,
-  selectTrack,
   playTrackFromLibrary,
   playAlbumFromLibrary,
-  addTrackToNext,
-  addTrackToQueueEnd,
-  addTrackToPlaylist,
+  addTracksToNext,
+  addTracksToQueueEnd,
+  addTracksToPlaylist,
   removeTrackFromLibrary,
 } = useLibraryPage(libraryActive);
 const playlistActive = computed(() => activePage.value === "Playlist");
@@ -75,10 +75,9 @@ function refreshPlaylistsForTrackMenu() {
   void refreshPlaylists(undefined, true);
 }
 
-async function addTrackToExistingPlaylist(trackId: number, playlistId: number) {
-  if (await addTrackToPlaylist(trackId, playlistId)) {
-    await refreshPlaylists(undefined, true);
-  }
+async function addTracksToExistingPlaylist(trackIds: number[], playlistId: number) {
+  const result = await addTracksToPlaylist(trackIds, playlistId);
+  if (result.successfulTrackIds.length > 0) await refreshPlaylists(undefined, true);
 }
 
 function requestTrackDeletion(trackId: number) {
@@ -142,7 +141,6 @@ async function confirmTrackDeletion(trackId: number) {
             :albums="albums"
             :selected-album="selectedAlbum"
             :tracks="tracks"
-            :selected-track-id="selectedTrackId"
             :current-track-id="currentTrack?.trackId ?? null"
             :albums-loading="isLoadingAlbums"
             :albums-error="albumsError"
@@ -153,20 +151,21 @@ async function confirmTrackDeletion(trackId: number) {
             :playlists-error="playlistsError"
             :track-action-pending="isTrackActionPending"
             :track-action-error="trackActionError"
+            :track-action-message="trackActionMessage"
             @select-album="selectAlbum"
-            @select-track="selectTrack"
             @play-track="playTrackFromLibrary"
             @play-album="playAlbumFromLibrary"
             @refresh-playlists="refreshPlaylistsForTrackMenu"
-            @add-to-next="addTrackToNext"
-            @add-to-queue-end="addTrackToQueueEnd"
-            @add-track-to-playlist="addTrackToExistingPlaylist"
+            @add-tracks-to-next="addTracksToNext"
+            @add-tracks-to-queue-end="addTracksToQueueEnd"
+            @add-tracks-to-playlist="addTracksToExistingPlaylist"
             @delete-track="requestTrackDeletion"
           />
           <PlaylistBrowser
             v-else-if="activePage === 'Playlist'"
             :playlist="selectedPlaylist"
             :tracks="playlistTracks"
+            :current-row-key="activeQueueRowKey"
             :is-loading-playlists="isLoadingPlaylists"
             :playlists-error="playlistsError"
             :has-playlists="playlists.length > 0"

@@ -33,9 +33,9 @@
           :album="track.album ?? '未知专辑'"
           :duration="formatTrackDuration(track.durationMs) ?? '时长未知'"
           :is-current-track="getTrackRowKey(track) === props.currentRowKey"
-          :is-selected="track.trackId === props.selectedTrackId"
-          :is-focused="focusedItem === getTrackFocusKey(getTrackRowKey(track))"
-          @select="selectTrack(track.trackId, getTrackRowKey(track))"
+          :is-selected="queueFocus.isSelected(getTrackRowKey(track))"
+          :is-focused="queueFocus.isFocused(getTrackRowKey(track))"
+          @select="selectTrack(getTrackRowKey(track), $event)"
           @play="emit('playQueueItem', getTrackRowKey(track))"
           @context-menu="openQueueContextMenu"
         />
@@ -45,6 +45,7 @@
     <div
       v-if="contextMenu"
       ref="queueContextMenuElement"
+      data-item-interaction
       class="bg-spotify-interactive fixed z-100 w-52 rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
       role="menu"
@@ -65,21 +66,24 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
-import { useClickFocus } from "@/ui/useClickFocus";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { useItemFocusList } from "@/interaction/itemFocus";
+import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 import { formatTrackDuration } from "@/utils/formatTrack";
 import QueueRow from "@/playback/ui/QueueRow.vue";
 
 type Track = PlaybackDisplayTrack;
 
-const { focusedItem, setFocusedItem } = useClickFocus();
-type QueueContextMenuRequest = {
+const queueFocus = useItemFocusList("playback:queue");
+type QueueContextMenuTrigger = {
   rowKey: string;
   x: number;
   y: number;
   trigger: InstanceType<typeof globalThis.HTMLButtonElement>;
 };
+
+type QueueContextMenuRequest = QueueContextMenuTrigger & { targetRowKeys: string[] };
 const headingElement = ref<InstanceType<typeof globalThis.HTMLHeadingElement> | null>(null);
 const listElement = ref<InstanceType<typeof globalThis.HTMLUListElement> | null>(null);
 const queueContextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
@@ -91,15 +95,10 @@ function getTrackRowKey(track: Track) {
   return track.rowKey;
 }
 
-function getTrackFocusKey(id: string) {
-  return `track:${id}`;
-}
-
 const props = withDefaults(
   defineProps<{
     tracks?: readonly Track[];
     currentRowKey?: string | null;
-    selectedTrackId?: number | null;
     title?: string;
     isLoading?: boolean;
     error?: string;
@@ -109,7 +108,6 @@ const props = withDefaults(
   {
     tracks: () => [],
     currentRowKey: null,
-    selectedTrackId: null,
     title: "当前曲目列表",
     isLoading: false,
     error: "",
@@ -118,13 +116,16 @@ const props = withDefaults(
   },
 );
 
+const visibleRowKeys = computed(() => props.tracks.map(getTrackRowKey));
+
+watch(visibleRowKeys, (rowKeys) => queueFocus.syncVisibleItems(rowKeys), { immediate: true });
+
 const emit = defineEmits<{
-  select: [trackId: Track["trackId"]];
   playQueueItem: [rowKey: string];
-  removeQueueItem: [rowKey: string];
+  removeQueueItems: [rowKeys: string[]];
 }>();
 
-function openQueueContextMenu(request: QueueContextMenuRequest) {
+function openQueueContextMenu(request: QueueContextMenuTrigger) {
   if (!props.canRemoveFromQueue) return;
 
   const menuWidth = 216;
@@ -133,7 +134,9 @@ function openQueueContextMenu(request: QueueContextMenuRequest) {
     x: Math.max(0, Math.min(request.x, globalThis.innerWidth - menuWidth)),
     y: Math.max(0, Math.min(request.y, globalThis.innerHeight - menuHeight)),
   };
-  contextMenu.value = request;
+  const targetRowKeys = queueFocus.contextMenuTargets(request.rowKey, visibleRowKeys.value);
+  if (targetRowKeys.length === 0) return;
+  contextMenu.value = { ...request, targetRowKeys };
   void nextTick(() => removeMenuItemElement.value?.focus());
 }
 
@@ -169,12 +172,13 @@ function closeQueueContextMenuOnEscape(event: InstanceType<typeof globalThis.Key
 }
 
 function removeContextMenuItem() {
-  const rowKey = contextMenu.value?.rowKey;
-  if (rowKey === undefined) return;
+  const targetRowKeys = contextMenu.value?.targetRowKeys;
+  if (!targetRowKeys?.length) return;
 
-  const removedIndex = props.tracks.findIndex((track) => track.rowKey === rowKey);
+  const targetRows = new Set(targetRowKeys);
+  const removedIndex = props.tracks.findIndex((track) => targetRows.has(track.rowKey));
   closeQueueContextMenu(false);
-  emit("removeQueueItem", rowKey);
+  emit("removeQueueItems", targetRowKeys);
 
   void nextTick(() => {
     const buttons =
@@ -191,8 +195,11 @@ function removeContextMenuItem() {
 
 watch(
   () => {
-    const rowKey = contextMenu.value?.rowKey;
-    return rowKey === undefined || props.tracks.some((track) => track.rowKey === rowKey);
+    const rowKeys = contextMenu.value?.targetRowKeys;
+    return (
+      rowKeys === undefined ||
+      rowKeys.every((rowKey) => props.tracks.some((track) => track.rowKey === rowKey))
+    );
   },
   (isRowStillDisplayed) => {
     if (!isRowStillDisplayed) closeQueueContextMenu(true);
@@ -209,8 +216,7 @@ onUnmounted(() => {
   globalThis.document.removeEventListener("keydown", closeQueueContextMenuOnEscape);
 });
 
-function selectTrack(trackId: Track["trackId"], rowKey: string) {
-  setFocusedItem(getTrackFocusKey(rowKey));
-  emit("select", trackId);
+function selectTrack(rowKey: string, modifiers: ItemSelectionModifiers) {
+  queueFocus.selectItem(rowKey, visibleRowKeys.value, modifiers);
 }
 </script>

@@ -65,7 +65,7 @@
           :name="artist.albumArtist ?? '未知演出者'"
           :album-count="artist.albumCount"
           :is-selected="isSelectedArtist(artist)"
-          :is-focused="focusedItem === getArtistFocusKey(artist.albumArtist)"
+          :is-focused="artistFocus.isFocused(getArtistKey(artist.albumArtist))"
           @select="selectArtist(artist)"
         />
       </ul>
@@ -74,9 +74,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
-import { useClickFocus } from "@/ui/useClickFocus";
+import { useItemFocusList } from "@/interaction/itemFocus";
 import type { AlbumArtistSummary } from "@/types/artist";
 import ArtistListItem from "@/library/ui/ArtistListItem.vue";
 
@@ -91,14 +91,16 @@ const emit = defineEmits<{
   select: [artist: AlbumArtistSummary];
 }>();
 
-const { focusedItem, setFocusedItem } = useClickFocus();
+const artistListScope = "library:artist-navigation";
+const artistFocus = useItemFocusList(artistListScope);
+const artistItemKeys = computed(() =>
+  props.artists.map((artist) => getArtistKey(artist.albumArtist)),
+);
+
+watch(artistItemKeys, (itemKeys) => artistFocus.syncVisibleItems(itemKeys), { immediate: true });
 
 function getArtistKey(albumArtist: string | null) {
   return JSON.stringify([albumArtist]);
-}
-
-function getArtistFocusKey(albumArtist: string | null) {
-  return `artist:${getArtistKey(albumArtist)}`;
 }
 
 function isSelectedArtist(artist: AlbumArtistSummary) {
@@ -106,7 +108,7 @@ function isSelectedArtist(artist: AlbumArtistSummary) {
 }
 
 function selectArtist(artist: AlbumArtistSummary) {
-  setFocusedItem(getArtistFocusKey(artist.albumArtist));
+  artistFocus.focusItem(getArtistKey(artist.albumArtist));
   emit("select", artist);
 }
 

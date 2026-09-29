@@ -32,7 +32,7 @@
           v-for="playlist in props.playlists"
           :key="playlist.id"
           :name="playlist.name"
-          :is-focused="focusedItem === getPlaylistFocusKey(playlist.id)"
+          :is-focused="playlistFocus.isFocused(String(playlist.id))"
           :is-selected="props.selectedPlaylistId === playlist.id"
           @select="selectPlaylist(playlist)"
         />
@@ -42,7 +42,8 @@
 </template>
 
 <script setup lang="ts">
-import { useClickFocus } from "@/ui/useClickFocus";
+import { computed, watch } from "vue";
+import { useItemFocusList } from "@/interaction/itemFocus";
 import type { Playlist } from "@/types/playlist";
 import PlaylistListItem from "@/playlist/ui/PlaylistListItem.vue";
 
@@ -58,14 +59,15 @@ const emit = defineEmits<{
   create: [];
 }>();
 
-const { focusedItem, setFocusedItem } = useClickFocus();
+const playlistFocus = useItemFocusList("playlist:navigation");
+const playlistItemKeys = computed(() => props.playlists.map((playlist) => String(playlist.id)));
 
-function getPlaylistFocusKey(id: number) {
-  return `playlist:${id}`;
-}
+watch(playlistItemKeys, (itemKeys) => playlistFocus.syncVisibleItems(itemKeys), {
+  immediate: true,
+});
 
 function selectPlaylist(playlist: Playlist) {
-  setFocusedItem(getPlaylistFocusKey(playlist.id));
+  playlistFocus.focusItem(String(playlist.id));
   emit("select", playlist);
 }
 </script>

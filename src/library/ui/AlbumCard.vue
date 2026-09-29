@@ -1,6 +1,7 @@
 <template>
   <article class="group min-w-0">
     <button
+      data-item-interaction
       class="focus-visible:outline-spotify-green block w-full rounded-md text-center focus-visible:outline-2 focus-visible:outline-offset-4"
       :aria-label="`查看专辑 ${album.album ?? '未知专辑'}`"
       :aria-expanded="isSelected"
@@ -14,7 +15,8 @@
         :class="[
           showFallback ? coverPalette : 'bg-transparent',
           showFallback || artworkImageLoaded ? 'shadow-lg' : 'shadow-none',
-          isSelected || isFocused ? 'ring-spotify-green ring-2' : '',
+          isSelected ? 'ring-1 ring-white/50' : '',
+          isFocused ? 'outline-spotify-green outline outline-2 outline-offset-1' : '',
         ]"
       >
         <img

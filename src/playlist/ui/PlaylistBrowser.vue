@@ -69,8 +69,10 @@
             :key="track.playlistItemId"
             :track="track"
             :track-number="index + 1"
-            :is-focused="focusedItem === getTrackFocusKey(track.playlistItemId)"
-            @select="setFocusedItem(getTrackFocusKey(track.playlistItemId))"
+            :is-focused="playlistTrackFocus.isFocused(String(track.playlistItemId))"
+            :is-selected="playlistTrackFocus.isSelected(String(track.playlistItemId))"
+            :is-current-track="props.currentRowKey === getTrackRowKey(track.playlistItemId)"
+            @select="selectTrack(track.playlistItemId, $event)"
             @play="emit('playTrack', track.playlistItemId)"
           />
         </ol>
@@ -91,14 +93,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed, watch } from "vue";
 import { DiscAlbum, Play } from "@lucide/vue";
-import { useClickFocus } from "@/ui/useClickFocus";
+import { useItemFocusList } from "@/interaction/itemFocus";
+import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { Playlist, PlaylistTrackData } from "@/types/playlist";
 import PlaylistTrack from "@/playlist/ui/PlaylistTrack.vue";
 
 const props = defineProps<{
   playlist: Playlist | null;
   tracks: PlaylistTrackData[];
+  currentRowKey: string | null;
   isLoadingPlaylists: boolean;
   playlistsError: string;
   hasPlaylists: boolean;
@@ -106,14 +111,26 @@ const props = defineProps<{
   tracksError: string;
 }>();
 
-const { focusedItem, setFocusedItem } = useClickFocus();
+const playlistTrackScope = computed(() =>
+  JSON.stringify(["playlist", "tracks", props.playlist?.id ?? null]),
+);
+const playlistTrackFocus = useItemFocusList(playlistTrackScope);
+const visibleTrackKeys = computed(() => props.tracks.map((track) => String(track.playlistItemId)));
+
+watch(visibleTrackKeys, (itemKeys) => playlistTrackFocus.syncVisibleItems(itemKeys), {
+  immediate: true,
+});
 
 const emit = defineEmits<{
   playTrack: [playlistItemId: number];
   playPlaylist: [];
 }>();
 
-function getTrackFocusKey(playlistItemId: number) {
+function getTrackRowKey(playlistItemId: number) {
   return `playlist-item:${playlistItemId}`;
+}
+
+function selectTrack(playlistItemId: number, modifiers: ItemSelectionModifiers) {
+  playlistTrackFocus.selectItem(String(playlistItemId), visibleTrackKeys.value, modifiers);
 }
 </script>

@@ -20,6 +20,13 @@
       <p v-else-if="props.trackActionError" class="px-5 text-sm text-red-300 sm:px-8" role="alert">
         {{ props.trackActionError }}
       </p>
+      <p
+        v-else-if="props.trackActionMessage"
+        class="px-5 text-sm text-white/80 sm:px-8"
+        role="status"
+      >
+        {{ props.trackActionMessage }}
+      </p>
       <p v-if="props.albumsLoading" class="text-spotify-muted px-5 text-sm sm:px-8" role="status">
         正在读取专辑…
       </p>
@@ -39,15 +46,15 @@
               :album-artist="props.artist.albumArtist"
               :cover-index="row.startIndex + index"
               :is-selected="isSelectedAlbum(album)"
-              :is-focused="focusedItem === getAlbumFocusKey(album)"
+              :is-focused="albumFocus.isFocused(getAlbumKey(album))"
               @select="toggleAlbum(album)"
             />
           </div>
           <AlbumDetail
             v-if="row.selectedAlbum"
             :album="row.selectedAlbum"
+            :album-artist="props.artist.albumArtist"
             :tracks="props.tracks"
-            :selected-track-id="props.selectedTrackId"
             :current-track-id="props.currentTrackId"
             :tracks-loading="props.tracksLoading"
             :tracks-error="props.tracksError"
@@ -56,13 +63,12 @@
             :playlists-error="props.playlistsError"
             :track-action-pending="props.trackActionPending"
             @close="closeAlbum(row.selectedAlbum)"
-            @select-track="emit('selectTrack', $event)"
             @play-track="emit('playTrack', $event)"
             @play-album="emit('playAlbum')"
             @refresh-playlists="emit('refreshPlaylists')"
-            @add-to-next="emit('addToNext', $event)"
-            @add-to-queue-end="emit('addToQueueEnd', $event)"
-            @add-track-to-playlist="addTrackToPlaylist"
+            @add-tracks-to-next="emit('addTracksToNext', $event)"
+            @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
+            @add-tracks-to-playlist="addTracksToPlaylist"
             @delete-track="emit('deleteTrack', $event)"
           />
         </template>
@@ -73,8 +79,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useClickFocus } from "@/ui/useClickFocus";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useItemFocusList } from "@/interaction/itemFocus";
 import type { LibraryAlbumSelection } from "@/library/selection";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
@@ -98,7 +104,6 @@ const props = defineProps<{
   albums: AlbumSummary[];
   selectedAlbum: LibraryAlbumSelection | null;
   tracks: TrackSummary[];
-  selectedTrackId: number | null;
   currentTrackId: number | null;
   albumsLoading: boolean;
   albumsError: string;
@@ -109,22 +114,29 @@ const props = defineProps<{
   playlistsError: string;
   trackActionPending: boolean;
   trackActionError: string;
+  trackActionMessage: string;
 }>();
 
 const emit = defineEmits<{
   selectAlbum: [album: AlbumSummary | null];
-  selectTrack: [trackId: number];
   playTrack: [trackId: number];
   playAlbum: [];
   refreshPlaylists: [];
-  addToNext: [trackId: number];
-  addToQueueEnd: [trackId: number];
-  addTrackToPlaylist: [trackId: number, playlistId: number];
+  addTracksToNext: [trackIds: number[]];
+  addTracksToQueueEnd: [trackIds: number[]];
+  addTracksToPlaylist: [trackIds: number[], playlistId: number];
   deleteTrack: [trackId: number];
 }>();
 
 const columnCount = ref(2);
-const { focusedItem, setFocusedItem } = useClickFocus();
+const albumListScope = computed(() =>
+  JSON.stringify(["library", "albums", props.artist?.albumArtist ?? null]),
+);
+const albumFocus = useItemFocusList(albumListScope);
+
+const albumItemKeys = computed(() => props.albums.map(getAlbumKey));
+
+watch(albumItemKeys, (itemKeys) => albumFocus.syncVisibleItems(itemKeys), { immediate: true });
 
 const albumRows = computed(() => {
   const rows: AlbumBrowserRow[] = [];
@@ -164,10 +176,6 @@ function getAlbumKey(album: AlbumSummary) {
   return JSON.stringify([props.artist?.albumArtist ?? null, album.album]);
 }
 
-function getAlbumFocusKey(album: AlbumSummary) {
-  return `album:${getAlbumKey(album)}`;
-}
-
 function isSelectedAlbum(album: AlbumSummary) {
   return (
     props.artist !== null &&
@@ -178,16 +186,16 @@ function isSelectedAlbum(album: AlbumSummary) {
 }
 
 function toggleAlbum(album: AlbumSummary) {
-  setFocusedItem(getAlbumFocusKey(album));
+  albumFocus.focusItem(getAlbumKey(album));
   emit("selectAlbum", isSelectedAlbum(album) ? null : album);
 }
 
 function closeAlbum(album: AlbumSummary) {
-  setFocusedItem(getAlbumFocusKey(album));
+  albumFocus.focusItem(getAlbumKey(album));
   emit("selectAlbum", null);
 }
 
-function addTrackToPlaylist(trackId: number, playlistId: number) {
-  emit("addTrackToPlaylist", trackId, playlistId);
+function addTracksToPlaylist(trackIds: number[], playlistId: number) {
+  emit("addTracksToPlaylist", trackIds, playlistId);
 }
 </script>

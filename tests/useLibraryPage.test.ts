@@ -12,6 +12,24 @@ const track = {
   album: "Album",
   durationMs: 100,
 };
+const secondTrack = {
+  id: 42,
+  title: "Second song",
+  artist: "Artist",
+  album: "Album",
+  durationMs: 120,
+};
+const thirdTrack = {
+  id: 43,
+  title: "Third song",
+  artist: "Artist",
+  album: "Album",
+  durationMs: 130,
+};
+let availableTracks = [track];
+let playlistAddCalls: number[] = [];
+let playlistAddFailures = new Map<number, Error>();
+let queueNextBatchCalls: number[][] = [];
 
 let invokeCalls: string[] = [];
 let databaseDeleteError: Error | null = null;
@@ -29,14 +47,21 @@ const mountedApps: Array<{ unmount: () => void }> = [];
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 
 mock.module("@tauri-apps/api/core", () => ({
-  invoke: async (command: string) => {
+  invoke: async (command: string, args?: Record<string, unknown>) => {
     invokeCalls.push(command);
     if (command === "remove_track_from_library" && databaseDeleteError) {
       throw databaseDeleteError;
     }
     if (command === "list_album_artists") return [artist];
     if (command === "list_albums") return [album];
-    if (command === "list_album_tracks") return [track];
+    if (command === "list_album_tracks") return availableTracks;
+    if (command === "add_track_to_playlist") {
+      const trackId = args?.trackId as number;
+      playlistAddCalls.push(trackId);
+      const error = playlistAddFailures.get(trackId);
+      if (error) throw error;
+      return undefined;
+    }
     return undefined;
   },
 }));
@@ -72,8 +97,11 @@ mock.module("@/playback/session", () => ({
       playbackStatus: mockedPlaybackStatus,
     },
     playTracks: async () => true,
-    addToNext: async () => true,
-    addToQueueEnd: async () => true,
+    addTracksToNext: async (tracksToAdd: { trackId: number }[]) => {
+      queueNextBatchCalls.push(tracksToAdd.map(({ trackId }) => trackId));
+      return true;
+    },
+    addTracksToQueueEnd: async () => true,
     beginSeeking: () => {
       mockedIsSeeking.value = true;
     },
@@ -129,11 +157,15 @@ async function loadTrack(page: ReturnType<typeof useLibraryPage>) {
   await settleRequests();
   page.selectAlbum(album);
   await settleRequests();
-  expect(page.tracks.value).toEqual([track]);
+  expect(page.tracks.value).toEqual(availableTracks);
 }
 
 beforeEach(() => {
   invokeCalls = [];
+  availableTracks = [track];
+  playlistAddCalls = [];
+  playlistAddFailures = new Map();
+  queueNextBatchCalls = [];
   databaseDeleteError = null;
   queueRemovalResult = { status: "not-found" };
   queueRemovalError = null;
@@ -158,7 +190,40 @@ afterEach(() => {
   }
 });
 
-describe("library track deletion", () => {
+describe("library track actions", () => {
+  it("submits a visible-order batch as one queue addition", async () => {
+    availableTracks = [track, secondTrack];
+    const page = mountLibraryPage();
+    await loadTrack(page);
+
+    expect(await page.addTracksToNext([secondTrack.id, track.id])).toBe(true);
+    expect(queueNextBatchCalls).toEqual([[secondTrack.id, track.id]]);
+  });
+
+  it("continues playlist additions after failures and reports every failed item", async () => {
+    availableTracks = [track, secondTrack, thirdTrack];
+    playlistAddFailures.set(secondTrack.id, new Error("permission denied"));
+    const page = mountLibraryPage();
+    await loadTrack(page);
+
+    const result = await page.addTracksToPlaylist([track.id, secondTrack.id, thirdTrack.id], 3);
+
+    expect(playlistAddCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
+    expect(result).toEqual({
+      successfulTrackIds: [track.id, thirdTrack.id],
+      failures: [
+        {
+          trackId: secondTrack.id,
+          trackName: secondTrack.title,
+          message: "permission denied",
+        },
+      ],
+    });
+    expect(page.trackActionMessage.value).toBe(
+      "已成功添加 2 首；1 首失败：Second song（permission denied）",
+    );
+  });
+
   it("keeps deletion failure separate and does not clean the playback queue", async () => {
     const page = mountLibraryPage();
     await loadTrack(page);

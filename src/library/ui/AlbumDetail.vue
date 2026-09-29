@@ -57,11 +57,11 @@
         :key="track.id"
         :track="track"
         :index="index"
-        :is-focused="focusedItem === getTrackFocusKey(track.id)"
-        :is-selected="track.id === props.selectedTrackId"
+        :is-focused="trackFocus.isFocused(String(track.id))"
+        :is-selected="trackFocus.isSelected(String(track.id))"
         :is-current-track="track.id === props.currentTrackId"
-        :is-context-menu-open="contextMenu?.trackId === track.id"
-        @select="selectTrack(track.id)"
+        :is-context-menu-open="contextMenu?.itemKey === String(track.id)"
+        @select="selectTrack(track.id, $event)"
         @play="emit('playTrack', track.id)"
         @context-menu="openTrackContextMenu"
       />
@@ -72,6 +72,7 @@
       v-if="contextMenu"
       id="album-track-context-menu"
       ref="contextMenuElement"
+      data-item-interaction
       class="bg-spotify-interactive fixed z-100 w-64 rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
       role="menu"
@@ -140,7 +141,7 @@
           role="menuitem"
           :disabled="props.trackActionPending"
           type="button"
-          @click.stop="addTrackToPlaylist(playlist.id)"
+          @click.stop="addTracksToPlaylist(playlist.id)"
         >
           {{ playlist.name }}
         </button>
@@ -149,7 +150,8 @@
       <button
         class="focus-visible:outline-spotify-green w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
         role="menuitem"
-        :disabled="props.trackActionPending"
+        :disabled="props.trackActionPending || contextMenu.targetTrackIds.length !== 1"
+        :title="contextMenu.targetTrackIds.length !== 1 ? '多选时暂不支持从曲库删除' : undefined"
         type="button"
         @click.stop="requestTrackDeletion"
       >
@@ -160,25 +162,31 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { ChevronRight, Play, X } from "@lucide/vue";
-import { useClickFocus } from "@/ui/useClickFocus";
+import { useItemFocusList } from "@/interaction/itemFocus";
+import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { AlbumSummary } from "@/types/album";
 import type { Playlist } from "@/types/playlist";
 import type { TrackSummary } from "@/types/track";
 import AlbumTrack from "@/library/ui/AlbumTrack.vue";
 
-type TrackContextMenuRequest = {
+type TrackContextMenuTrigger = {
   trackId: number;
   x: number;
   y: number;
   trigger: InstanceType<typeof globalThis.HTMLButtonElement>;
 };
 
+type TrackContextMenuRequest = Omit<TrackContextMenuTrigger, "trackId"> & {
+  itemKey: string;
+  targetTrackIds: number[];
+};
+
 const props = defineProps<{
   album: AlbumSummary;
+  albumArtist: string | null;
   tracks: TrackSummary[];
-  selectedTrackId: number | null;
   currentTrackId: number | null;
   tracksLoading: boolean;
   tracksError: string;
@@ -190,17 +198,24 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  selectTrack: [trackId: number];
   playTrack: [trackId: number];
   playAlbum: [];
   refreshPlaylists: [];
-  addToNext: [trackId: number];
-  addToQueueEnd: [trackId: number];
-  addTrackToPlaylist: [trackId: number, playlistId: number];
+  addTracksToNext: [trackIds: number[]];
+  addTracksToQueueEnd: [trackIds: number[]];
+  addTracksToPlaylist: [trackIds: number[], playlistId: number];
   deleteTrack: [trackId: number];
 }>();
 
-const { focusedItem, setFocusedItem } = useClickFocus();
+const trackListScope = computed(() =>
+  JSON.stringify(["library", "album-tracks", props.albumArtist, props.album.album]),
+);
+const trackFocus = useItemFocusList(trackListScope);
+const visibleTrackKeys = computed(() => props.tracks.map((track) => String(track.id)));
+
+watch(visibleTrackKeys, (itemKeys) => trackFocus.syncVisibleItems(itemKeys), {
+  immediate: true,
+});
 const albumHeadingElement = ref<InstanceType<typeof globalThis.HTMLHeadingElement> | null>(null);
 const contextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
@@ -214,13 +229,13 @@ const menuPosition = ref({ x: 0, y: 0 });
 const playlistMenuPosition = ref({ x: 0, y: 0 });
 const isPlaylistMenuOpen = ref(false);
 
-function getTrackFocusKey(id: number) {
-  return `album-track:${id}`;
+function selectTrack(trackId: number, modifiers: ItemSelectionModifiers) {
+  trackFocus.selectItem(String(trackId), visibleTrackKeys.value, modifiers);
 }
 
-function selectTrack(trackId: number) {
-  setFocusedItem(getTrackFocusKey(trackId));
-  emit("selectTrack", trackId);
+function getContextTargetTrackIds(itemKeys: readonly string[]) {
+  const targetKeys = new Set(itemKeys);
+  return props.tracks.flatMap((track) => (targetKeys.has(String(track.id)) ? [track.id] : []));
 }
 
 function clampMenuPosition(x: number, y: number, width: number, height: number) {
@@ -230,8 +245,19 @@ function clampMenuPosition(x: number, y: number, width: number, height: number) 
   };
 }
 
-function openTrackContextMenu(request: TrackContextMenuRequest) {
-  contextMenu.value = request;
+function openTrackContextMenu(request: TrackContextMenuTrigger) {
+  const itemKey = String(request.trackId);
+  const targetKeys = trackFocus.contextMenuTargets(itemKey, visibleTrackKeys.value);
+  const targetTrackIds = getContextTargetTrackIds(targetKeys);
+  if (targetTrackIds.length === 0) return;
+
+  contextMenu.value = {
+    itemKey,
+    targetTrackIds,
+    x: request.x,
+    y: request.y,
+    trigger: request.trigger,
+  };
   isPlaylistMenuOpen.value = false;
   menuPosition.value = clampMenuPosition(request.x, request.y, 256, 240);
   emit("refreshPlaylists");
@@ -305,13 +331,13 @@ function closePlaylistMenuOnPointerLeave() {
 }
 
 function runTrackMenuAction(action: "addToNext" | "addToQueueEnd" | "deleteTrack") {
-  const trackId = contextMenu.value?.trackId;
-  if (trackId === undefined) return;
+  const targetTrackIds = contextMenu.value?.targetTrackIds;
+  if (!targetTrackIds?.length || (action === "deleteTrack" && targetTrackIds.length !== 1)) return;
   closeTrackContextMenu(true);
 
-  if (action === "addToNext") emit("addToNext", trackId);
-  else if (action === "addToQueueEnd") emit("addToQueueEnd", trackId);
-  else emit("deleteTrack", trackId);
+  if (action === "addToNext") emit("addTracksToNext", targetTrackIds);
+  else if (action === "addToQueueEnd") emit("addTracksToQueueEnd", targetTrackIds);
+  else emit("deleteTrack", targetTrackIds[0]!);
 }
 
 function addToNext() {
@@ -322,21 +348,25 @@ function addToQueueEnd() {
   runTrackMenuAction("addToQueueEnd");
 }
 
-function addTrackToPlaylist(playlistId: number) {
-  const trackId = contextMenu.value?.trackId;
-  if (trackId === undefined) return;
+function addTracksToPlaylist(playlistId: number) {
+  const targetTrackIds = contextMenu.value?.targetTrackIds;
+  if (!targetTrackIds?.length) return;
   closeTrackContextMenu(true);
-  emit("addTrackToPlaylist", trackId, playlistId);
+  emit("addTracksToPlaylist", targetTrackIds, playlistId);
 }
 
 function requestTrackDeletion() {
+  if (contextMenu.value?.targetTrackIds.length !== 1) return;
   runTrackMenuAction("deleteTrack");
 }
 
 watch(
   () => {
     const request = contextMenu.value;
-    return request === null || props.tracks.some((track) => track.id === request.trackId);
+    return (
+      request === null ||
+      request.targetTrackIds.every((trackId) => props.tracks.some((track) => track.id === trackId))
+    );
   },
   (isTargetStillVisible) => {
     if (!isTargetStillVisible) closeTrackContextMenu(true);

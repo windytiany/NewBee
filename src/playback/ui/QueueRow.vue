@@ -1,14 +1,12 @@
 <template>
   <li :aria-current="isCurrentTrack ? 'true' : undefined">
     <button
+      data-item-interaction
       class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors focus-visible:outline-2"
-      :class="
-        isSelected
-          ? 'bg-white/10 ring-1 ring-white/10 ring-inset'
-          : isFocused
-            ? 'bg-spotify-interactive'
-            : 'hover:bg-white/5'
-      "
+      :class="[
+        isSelected ? 'bg-white/10 ring-1 ring-white/10 ring-inset' : 'hover:bg-white/5',
+        isFocused ? 'outline-spotify-green outline outline-1 outline-offset-[-1px]' : '',
+      ]"
       :aria-pressed="isSelected ? true : undefined"
       :aria-haspopup="props.canRemoveFromQueue ? 'menu' : undefined"
       :aria-expanded="props.canRemoveFromQueue ? props.isContextMenuOpen : undefined"
@@ -59,6 +57,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { AudioLines, Disc3 } from "@lucide/vue";
 import { onBeforeUnmount, ref, watch } from "vue";
+import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { TrackArtwork } from "@/types/track";
 
 const props = withDefaults(
@@ -83,7 +82,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  select: [];
+  select: [modifiers: ItemSelectionModifiers];
   play: [];
   contextMenu: [
     request: {
@@ -96,7 +95,9 @@ const emit = defineEmits<{
 }>();
 
 function handleTrackClick(event: InstanceType<typeof globalThis.MouseEvent>) {
-  if (event.button === 0) emit("select");
+  if (event.button === 0) {
+    emit("select", { ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
+  }
 }
 
 function handleTrackDoubleClick(event: InstanceType<typeof globalThis.MouseEvent>) {

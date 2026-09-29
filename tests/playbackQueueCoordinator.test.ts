@@ -183,6 +183,47 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.attempts).toEqual([1, 4, 3, 2, 5]);
   });
 
+  it("keeps a batch of next additions in visible order for playback", async () => {
+    const harness = createHarness();
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["waiting", 2]), "current");
+
+    expect(
+      await coordinator.addTracksToNext([
+        { trackId: 3, title: "A", album: null, durationMs: null },
+        { trackId: 4, title: "B", album: null, durationMs: null },
+        { trackId: 5, title: "C", album: null, durationMs: null },
+      ]),
+    ).toBe(true);
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 3, 4, 5, 2]);
+
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(harness.attempts).toEqual([1, 3, 4, 5]);
+  });
+
+  it("appends a batch to the visible queue tail in input order", async () => {
+    const harness = createHarness();
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["waiting", 2]), "current");
+
+    expect(
+      await coordinator.addTracksToQueueEnd([
+        { trackId: 3, title: "A", album: null, durationMs: null },
+        { trackId: 4, title: "B", album: null, durationMs: null },
+        { trackId: 5, title: "C", album: null, durationMs: null },
+      ]),
+    ).toBe(true);
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 2, 3, 4, 5]);
+
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(await coordinator.playNext()).toBe(true);
+    expect(harness.attempts).toEqual([1, 2, 3, 4, 5]);
+  });
+
   it("appends without interrupting and shuffles the new tail item with pending candidates", async () => {
     const harness = createHarness({ random: () => 0 });
     const { coordinator } = harness;
@@ -247,6 +288,45 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(harness.stoppedPlaybackIds).toEqual([1]);
     expect(harness.attempts).toEqual([7, 8]);
     expect(await coordinator.removeTrackFromQueue(7)).toEqual({ status: "not-found" });
+  });
+
+  it("removes a multi-row selection with the current row using one stop and one advance", async () => {
+    const harness = createHarness();
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(
+      tracks(["current", 1], ["selected", 2], ["next", 3], ["tail", 4]),
+      "current",
+    );
+
+    expect(await coordinator.removeQueueItems(["current", "selected"])).toEqual({
+      status: "removed",
+    });
+    expect(harness.snapshot.displayedTracks.map((track) => track.rowKey)).toEqual(["next", "tail"]);
+    expect(harness.snapshot.currentRowKey).toBe("next");
+    expect(harness.stoppedPlaybackIds).toEqual([1]);
+    expect(harness.attempts).toEqual([1, 3]);
+  });
+
+  it("preserves stop failure semantics when a batch contains the current row", async () => {
+    const harness = createHarness({
+      stopPlayback: async () => {
+        throw new Error("device busy");
+      },
+    });
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(
+      tracks(["current", 1], ["selected", 2], ["next", 3]),
+      "current",
+    );
+
+    expect(await coordinator.removeQueueItems(["current", "selected"])).toEqual({
+      status: "stop-failed",
+      message: "device busy",
+    });
+    expect(harness.snapshot.displayedTracks.map((track) => track.rowKey)).toEqual(["next"]);
+    expect(harness.snapshot.currentRowKey).toBeNull();
+    expect(harness.stoppedPlaybackIds).toEqual([1]);
+    expect(harness.attempts).toEqual([1]);
   });
 
   it("removes a non-current track without stopping or advancing current playback", async () => {
@@ -344,12 +424,12 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     await coordinator.playNext();
     await coordinator.playPrevious();
 
-    expect(await coordinator.removeQueueItem("c")).toBe(true);
+    expect(await coordinator.removeQueueItems(["c"])).toEqual({ status: "removed" });
     expect(await coordinator.playNext()).toBe(true);
     expect(harness.snapshot.currentRowKey).toBe("d");
     expect(await coordinator.playPrevious()).toBe(true);
     expect(harness.snapshot.currentRowKey).toBe("b");
-    expect(await coordinator.removeQueueItem("a")).toBe(true);
+    expect(await coordinator.removeQueueItems(["a"])).toEqual({ status: "removed" });
     expect(harness.snapshot.canPlayPrevious).toBe(false);
     expect(await coordinator.playPrevious()).toBe(false);
 

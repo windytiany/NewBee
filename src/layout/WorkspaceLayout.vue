@@ -60,7 +60,7 @@
             title="当前曲目列表"
             empty-message="当前没有展示的曲目列表。"
             @play-queue-item="playQueueItem"
-            @remove-queue-item="removeQueueItem"
+            @remove-queue-items="removeQueueItems"
           />
         </div>
         <ResizeHandle
@@ -94,7 +94,7 @@ const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
 
 const playbackSession = usePlaybackSession();
 const { displayedTracks, activeQueueRowKey: activeCurrentRowKey } = playbackSession.state;
-const { playQueueItem, removeQueueItem } = playbackSession;
+const { playQueueItem, removeQueueItems } = playbackSession;
 
 const MIN_LEFT_PANE_WIDTH = 208;
 const MIN_RIGHT_PANE_WIDTH = 240;

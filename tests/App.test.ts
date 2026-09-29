@@ -53,18 +53,18 @@ function createComponent(source: string) {
     tracksError: Vue.ref(""),
     isTrackActionPending: Vue.ref(false),
     trackActionError: libraryTrackActionError,
-    selectedTrackId: Vue.ref(null),
+    trackActionMessage: Vue.ref(""),
     currentTrack: Vue.ref(null),
+    activeQueueRowKey: Vue.ref(null),
     selectedGroup: Vue.ref({ albumArtist: "Artist", albumCount: 1 }),
     selectedAlbum: Vue.ref({ albumArtist: "Artist", album: "Album" }),
     selectArtist: () => {},
     selectAlbum: () => {},
-    selectTrack: () => {},
     playTrackFromLibrary: () => {},
     playAlbumFromLibrary: () => {},
-    addTrackToNext: () => {},
-    addTrackToQueueEnd: () => {},
-    addTrackToPlaylist: () => {},
+    addTracksToNext: () => {},
+    addTracksToQueueEnd: () => {},
+    addTracksToPlaylist: async () => ({ successfulTrackIds: [], failures: [] }),
     removeTrackFromLibrary: async () => {
       removalCalls += 1;
       if (removalResult.status === "not-deleted") {

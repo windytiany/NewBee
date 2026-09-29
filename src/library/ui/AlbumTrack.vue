@@ -1,20 +1,18 @@
 <template>
   <li class="min-w-0 border-b border-white/10">
     <button
+      data-item-interaction
       class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center gap-3 rounded-md py-2.5 pr-3 text-left text-sm transition-colors focus-visible:outline-2"
-      :class="
-        props.isSelected
-          ? 'bg-white/10 ring-1 ring-white/10 ring-inset'
-          : props.isFocused
-            ? 'bg-white/10'
-            : 'hover:bg-white/5'
-      "
+      :class="[
+        props.isSelected ? 'bg-white/10 ring-1 ring-white/10 ring-inset' : 'hover:bg-white/5',
+        props.isFocused ? 'outline-spotify-green outline outline-1 outline-offset-[-1px]' : '',
+      ]"
       :aria-pressed="props.isSelected ? true : undefined"
       aria-haspopup="menu"
       :aria-expanded="props.isContextMenuOpen"
       :aria-controls="props.isContextMenuOpen ? 'album-track-context-menu' : undefined"
       type="button"
-      @click="emit('select')"
+      @click="handleSelect"
       @dblclick="emit('play')"
       @contextmenu="openTrackContextMenu"
       @keydown="handleContextMenuKeydown"
@@ -42,6 +40,7 @@
 
 <script setup lang="ts">
 import { AudioLines } from "@lucide/vue";
+import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { TrackSummary } from "@/types/track.ts";
 import { formatTrackDuration } from "@/utils/formatTrack.ts";
 
@@ -55,7 +54,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  select: [];
+  select: [modifiers: ItemSelectionModifiers];
   play: [];
   contextMenu: [
     request: {
@@ -66,6 +65,11 @@ const emit = defineEmits<{
     },
   ];
 }>();
+
+function handleSelect(event: InstanceType<typeof globalThis.MouseEvent>) {
+  if (event.button !== 0) return;
+  emit("select", { ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
+}
 
 function openTrackContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
   event.preventDefault();

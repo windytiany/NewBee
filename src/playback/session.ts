@@ -201,10 +201,12 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     state,
     refreshPlaybackStatus: statusObserver.refresh,
     ...commands,
-    removeQueueItem: coordinator.removeQueueItem.bind(coordinator),
+    removeQueueItems: coordinator.removeQueueItems.bind(coordinator),
     removeTrackFromQueue: coordinator.removeTrackFromQueue.bind(coordinator),
     addToNext: coordinator.addToNext.bind(coordinator),
+    addTracksToNext: coordinator.addTracksToNext.bind(coordinator),
     addToQueueEnd: coordinator.addToQueueEnd.bind(coordinator),
+    addTracksToQueueEnd: coordinator.addTracksToQueueEnd.bind(coordinator),
     setRepeatOneEnabled: coordinator.setRepeatOneEnabled.bind(coordinator),
     setShuffleEnabled: coordinator.setShuffleEnabled.bind(coordinator),
   });

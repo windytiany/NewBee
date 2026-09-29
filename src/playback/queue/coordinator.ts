@@ -167,18 +167,29 @@ export class PlaybackQueueCoordinator {
   }
 
   addToNext(track: NewQueueTrack): Promise<boolean> {
+    return this.addTracksToNext([track]);
+  }
+
+  addTracksToNext(tracks: readonly NewQueueTrack[]): Promise<boolean> {
+    if (tracks.length === 0) return Promise.resolve(false);
+
     return this.enqueue(() => {
-      const item = this.createQueueItem(track, true);
-      this.displayedTracks.splice(this.getNextInsertionIndex(this.displayedTracks), 0, item);
-      this.roundTracks.splice(this.getNextInsertionIndex(this.roundTracks), 0, { ...item });
+      const items = this.createQueueItems(tracks, true);
+      this.displayedTracks.splice(this.getNextInsertionIndex(this.displayedTracks), 0, ...items);
+      this.roundTracks.splice(
+        this.getNextInsertionIndex(this.roundTracks),
+        0,
+        ...items.map((item) => ({ ...item })),
+      );
+      const itemRowKeys = items.map((item) => item.rowKey);
 
       if (
         this.historyIndex >= 0 &&
         this.playbackHistory[this.historyIndex] === this.currentRowKey
       ) {
-        this.playbackHistory.splice(this.historyIndex + 1, 0, item.rowKey);
+        this.playbackHistory.splice(this.historyIndex + 1, 0, ...itemRowKeys);
       } else {
-        this.remainingCandidates.unshift({ ...item });
+        this.remainingCandidates.unshift(...items.map((item) => ({ ...item })));
       }
 
       this.publish();
@@ -187,18 +198,30 @@ export class PlaybackQueueCoordinator {
   }
 
   addToQueueEnd(track: NewQueueTrack): Promise<boolean> {
+    return this.addTracksToQueueEnd([track]);
+  }
+
+  addTracksToQueueEnd(tracks: readonly NewQueueTrack[]): Promise<boolean> {
+    if (tracks.length === 0) return Promise.resolve(false);
+
     return this.enqueue(() => {
-      const item = this.createQueueItem(track);
-      this.displayedTracks.push(item);
-      this.roundTracks.push({ ...item });
-      this.remainingCandidates = this.orderCandidates([...this.remainingCandidates, { ...item }]);
+      const items = this.createQueueItems(tracks);
+      this.displayedTracks.push(...items);
+      this.roundTracks.push(...items.map((item) => ({ ...item })));
+      this.remainingCandidates = this.orderCandidates([
+        ...this.remainingCandidates,
+        ...items.map((item) => ({ ...item })),
+      ]);
       this.publish();
       return Promise.resolve(true);
     });
   }
 
-  async removeQueueItem(rowKey: string): Promise<boolean> {
-    if (!this.displayedTracks.some((item) => item.rowKey === rowKey)) return false;
+  async removeQueueItems(rowKeys: readonly string[]): Promise<QueueTrackRemovalResult> {
+    const selectedRowKeys = new Set(rowKeys);
+    if (!this.displayedTracks.some((item) => selectedRowKeys.has(item.rowKey))) {
+      return { status: "not-found" };
+    }
 
     const generation = this.beginQueueRemoval();
     const removal = await this.enqueue(() => {
@@ -208,16 +231,10 @@ export class PlaybackQueueCoordinator {
           resumePlaybackId: null,
         } satisfies QueueRemovalResult);
       }
-      const item = this.displayedTracks.find((candidate) => candidate.rowKey === rowKey);
-      return item
-        ? this.removeQueueItems([item], generation)
-        : Promise.resolve({
-            result: { status: "not-found" },
-            resumePlaybackId: null,
-          } satisfies QueueRemovalResult);
+      const selectedItems = this.displayedTracks.filter((item) => selectedRowKeys.has(item.rowKey));
+      return this.removeItemsFromQueue(selectedItems, generation);
     });
-    const result = await this.finishQueueRemoval(removal, generation);
-    return result.status === "removed";
+    return this.finishQueueRemoval(removal, generation);
   }
 
   async removeTrackFromQueue(trackId: number): Promise<QueueTrackRemovalResult> {
@@ -240,7 +257,7 @@ export class PlaybackQueueCoordinator {
       for (const item of [...this.displayedTracks, ...this.roundTracks]) {
         if (item.trackId === trackId) matchingItems.set(item.rowKey, item);
       }
-      return this.removeQueueItems([...matchingItems.values()], generation);
+      return this.removeItemsFromQueue([...matchingItems.values()], generation);
     });
     return this.finishQueueRemoval(removal, generation);
   }
@@ -265,7 +282,7 @@ export class PlaybackQueueCoordinator {
     return removal.result;
   }
 
-  private async removeQueueItems(
+  private async removeItemsFromQueue(
     removedItems: readonly PlaybackDisplayTrack[],
     generation: number,
   ): Promise<QueueRemovalResult> {
@@ -459,13 +476,27 @@ export class PlaybackQueueCoordinator {
     return currentIndex < 0 ? 0 : currentIndex + 1;
   }
 
-  private createQueueItem(track: NewQueueTrack, isNext = false): QueueTrack {
+  private createQueueItems(tracks: readonly NewQueueTrack[], isNext = false) {
+    const reservedRowKeys = new Set<string>();
+    return tracks.map((track) => {
+      const item = this.createQueueItem(track, isNext, reservedRowKeys);
+      reservedRowKeys.add(item.rowKey);
+      return item;
+    });
+  }
+
+  private createQueueItem(
+    track: NewQueueTrack,
+    isNext = false,
+    reservedRowKeys: ReadonlySet<string> = new Set(),
+  ): QueueTrack {
     const existingRowKeys = new Set([
       ...this.displayedTracks.map((item) => item.rowKey),
       ...this.roundTracks.map((item) => item.rowKey),
       ...this.remainingCandidates.map((item) => item.rowKey),
       ...this.playbackHistory,
       ...(this.currentRowKey === null ? [] : [this.currentRowKey]),
+      ...reservedRowKeys,
     ]);
     const generatedKey = globalThis.crypto.randomUUID();
     let rowKey = generatedKey;

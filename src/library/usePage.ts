@@ -30,10 +30,15 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   const tracksError = ref("");
   const isTrackActionPending = ref(false);
   const trackActionError = ref("");
-  const selectedTrackId = ref<number | null>(null);
+  const trackActionMessage = ref("");
   const playbackSession = usePlaybackSession();
-  const { currentTrack } = playbackSession.state;
-  const { playTracks, addToNext, addToQueueEnd, removeTrackFromQueue } = playbackSession;
+  const { currentTrack, activeQueueRowKey } = playbackSession.state;
+  const {
+    playTracks,
+    addTracksToNext: enqueueTracksToNext,
+    addTracksToQueueEnd: enqueueTracksToQueueEnd,
+    removeTrackFromQueue,
+  } = playbackSession;
   const {
     selectedGroup,
     selectedAlbum,
@@ -65,15 +70,12 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     return typeof error === "string" ? error : "未知错误";
   }
 
-  function resetSelectedTrackState(clearSelection: boolean) {
-    if (clearSelection) selectedTrackId.value = null;
-  }
-
   async function runTrackAction(name: string, action: () => Promise<boolean>) {
     if (isTrackActionPending.value) return false;
 
     isTrackActionPending.value = true;
     trackActionError.value = "";
+    trackActionMessage.value = "";
     try {
       if (!(await action())) {
         trackActionError.value = `${name}失败：操作未执行。`;
@@ -126,7 +128,6 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
       } else {
         albums.value = [];
         tracks.value = [];
-        resetSelectedTrackState(true);
       }
     } catch (error) {
       if (!isMounted || !active.value || generation !== artistsRequestGeneration) return;
@@ -171,7 +172,6 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
         void loadTracks(selection);
       } else {
         isLoadingTracks.value = false;
-        resetSelectedTrackState(true);
       }
     } catch (error) {
       if (!isMounted || !active.value || generation !== albumsRequestGeneration) return;
@@ -207,12 +207,6 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
       }
 
       tracks.value = result;
-      const trackId = selectedTrackId.value;
-      if (trackId !== null) {
-        if (!result.some((track) => track.id === trackId)) {
-          resetSelectedTrackState(true);
-        }
-      }
     } catch (error) {
       if (
         !isMounted ||
@@ -231,14 +225,11 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   }
 
   function selectArtist(artist: AlbumArtistSummary) {
-    const groupChanged = selectedGroup.value?.albumArtist !== artist.albumArtist;
     selectGroup(artist);
-    if (groupChanged) resetSelectedTrackState(true);
     void loadAlbums(artist);
   }
 
   function selectAlbum(album: AlbumSummary | null) {
-    resetSelectedTrackState(true);
     setSelectedAlbum(album);
     ++tracksRequestGeneration;
     tracks.value = [];
@@ -247,14 +238,6 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
 
     const selection = selectedAlbum.value;
     if (selection) void loadTracks(selection);
-  }
-
-  function selectTrack(trackId: number) {
-    if (!tracks.value.some((track) => track.id === trackId)) return;
-    if (selectedTrackId.value === trackId) return;
-
-    resetSelectedTrackState(true);
-    selectedTrackId.value = trackId;
   }
 
   function toPlaybackDisplayTracks(sourceTracks: readonly TrackSummary[]): PlaybackDisplayTrack[] {
@@ -284,25 +267,86 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     await playTracks(displayedTracks, `album-track:${firstTrack.id}`);
   }
 
-  function addTrackToNext(trackId: number) {
-    const track = findLibraryTrack(trackId);
-    if (!track || isLoadingTracks.value) return Promise.resolve(false);
-    return runTrackAction("添加为下一首", () => addToNext(toQueueTrack(track)));
-  }
-
-  function addTrackToQueueEnd(trackId: number) {
-    const track = findLibraryTrack(trackId);
-    if (!track || isLoadingTracks.value) return Promise.resolve(false);
-    return runTrackAction("添加到队尾", () => addToQueueEnd(toQueueTrack(track)));
-  }
-
-  function addTrackToPlaylist(trackId: number, playlistId: number) {
-    const track = findLibraryTrack(trackId);
-    if (!track || isLoadingTracks.value) return Promise.resolve(false);
-    return runTrackAction("添加到播放列表", async () => {
-      await invoke<void>("add_track_to_playlist", { trackId, playlistId });
-      return true;
+  function findLibraryTracks(trackIds: readonly number[]) {
+    return trackIds.flatMap((trackId) => {
+      const track = findLibraryTrack(trackId);
+      return track ? [track] : [];
     });
+  }
+
+  function addTracksToNext(trackIds: readonly number[]) {
+    const sourceTracks = findLibraryTracks(trackIds);
+    if (isLoadingTracks.value || trackIds.length === 0 || sourceTracks.length !== trackIds.length) {
+      return Promise.resolve(false);
+    }
+    return runTrackAction("添加为下一首", () =>
+      enqueueTracksToNext(sourceTracks.map(toQueueTrack)),
+    );
+  }
+
+  function addTracksToQueueEnd(trackIds: readonly number[]) {
+    const sourceTracks = findLibraryTracks(trackIds);
+    if (isLoadingTracks.value || trackIds.length === 0 || sourceTracks.length !== trackIds.length) {
+      return Promise.resolve(false);
+    }
+    return runTrackAction("添加到队尾", () =>
+      enqueueTracksToQueueEnd(sourceTracks.map(toQueueTrack)),
+    );
+  }
+
+  async function addTracksToPlaylist(trackIds: readonly number[], playlistId: number) {
+    const successfulTrackIds: number[] = [];
+    const failures: { trackId: number; trackName: string; message: string }[] = [];
+    if (trackIds.length === 0) return { successfulTrackIds, failures };
+    if (isTrackActionPending.value || isLoadingTracks.value) {
+      const unavailableTracks = trackIds.map((trackId) => ({
+        trackId,
+        trackName: findLibraryTrack(trackId)?.title ?? `曲目 ${trackId}`,
+        message: "曲目不可用或当前有操作正在进行",
+      }));
+      trackActionError.value = `已成功添加 0 首；${unavailableTracks.length} 首未执行：${unavailableTracks
+        .map(({ trackName, message }) => `${trackName}（${message}）`)
+        .join("、")}`;
+      trackActionMessage.value = "";
+      return { successfulTrackIds, failures: unavailableTracks };
+    }
+
+    isTrackActionPending.value = true;
+    trackActionError.value = "";
+    trackActionMessage.value = "";
+    try {
+      for (const trackId of trackIds) {
+        const track = findLibraryTrack(trackId);
+        if (!track) {
+          failures.push({
+            trackId,
+            trackName: `曲目 ${trackId}`,
+            message: "曲目已不可用",
+          });
+          continue;
+        }
+
+        try {
+          await invoke<void>("add_track_to_playlist", { trackId, playlistId });
+          successfulTrackIds.push(trackId);
+        } catch (error) {
+          failures.push({
+            trackId,
+            trackName: track.title ?? `曲目 ${trackId}`,
+            message: errorMessage(error),
+          });
+        }
+      }
+    } finally {
+      isTrackActionPending.value = false;
+    }
+
+    trackActionMessage.value = failures.length
+      ? `已成功添加 ${successfulTrackIds.length} 首；${failures.length} 首失败：${failures
+          .map(({ trackName, message }) => `${trackName}（${message}）`)
+          .join("、")}`
+      : `已成功添加 ${successfulTrackIds.length} 首到播放列表。`;
+    return { successfulTrackIds, failures };
   }
 
   async function removeTrackFromLibrary(trackId: number): Promise<LibraryTrackRemovalResult> {
@@ -395,7 +439,6 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     isLoadingArtists.value = false;
     isLoadingAlbums.value = false;
     isLoadingTracks.value = false;
-    resetSelectedTrackState(true);
   }
 
   watch(
@@ -430,19 +473,19 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     tracksError,
     isTrackActionPending,
     trackActionError,
-    selectedTrackId,
+    trackActionMessage,
     currentTrack,
+    activeQueueRowKey,
     selectedGroup,
     selectedAlbum,
     refreshLibrary,
     selectArtist,
     selectAlbum,
-    selectTrack,
     playTrackFromLibrary,
     playAlbumFromLibrary,
-    addTrackToNext,
-    addTrackToQueueEnd,
-    addTrackToPlaylist,
+    addTracksToNext,
+    addTracksToQueueEnd,
+    addTracksToPlaylist,
     removeTrackFromLibrary,
   };
 }

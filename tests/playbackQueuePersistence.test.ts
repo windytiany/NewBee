@@ -133,7 +133,9 @@ describe("playback queue persistence", () => {
 
     expect(await restoredCoordinator.playQueueItem(selectedRowKey)).toBe(true);
     expect(restoredCoordinator.snapshot.currentRowKey).toBe(selectedRowKey);
-    expect(await restoredCoordinator.removeQueueItem(removedRowKey)).toBe(true);
+    expect(await restoredCoordinator.removeQueueItems([removedRowKey])).toEqual({
+      status: "removed",
+    });
 
     const restoredRows = restoredCoordinator.snapshot.displayedTracks;
     expect(restoredRows).toHaveLength(2);
@@ -247,7 +249,7 @@ describe("playback queue persistence", () => {
     );
     coordinator.restoreQueue(restoredSnapshot);
 
-    expect(await coordinator.removeQueueItem("playlist-item:11")).toBe(true);
+    expect(await coordinator.removeQueueItems(["playlist-item:11"])).toEqual({ status: "removed" });
     const reloadedSnapshot = loadPlaybackQueueSnapshot(() => storage);
     expect(reloadedSnapshot).toEqual({
       ...snapshot,
