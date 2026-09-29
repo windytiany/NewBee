@@ -73,6 +73,7 @@
       role="menu"
       aria-label="专辑曲目操作"
       @pointerdown.stop
+      @pointerleave="closePlaylistMenuOnPointerLeave"
     >
       <button
         ref="firstMenuItemElement"
@@ -94,29 +95,33 @@
         添加到队尾
       </button>
       <button
-        class="focus-visible:outline-spotify-green flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
+        ref="playlistMenuTriggerElement"
+        class="focus-visible:outline-spotify-green flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm focus-visible:outline-2"
+        :class="isPlaylistMenuOpen ? 'bg-spotify-green text-black' : 'text-white hover:bg-white/10'"
         role="menuitem"
         aria-haspopup="menu"
-        :aria-expanded="isPlaylistMenuOpen"
-        aria-controls="album-track-playlist-menu"
+        :aria-expanded="isPlaylistMenuOpen && !props.playlistsLoading"
+        :aria-controls="
+          isPlaylistMenuOpen && !props.playlistsLoading ? 'album-track-playlist-menu' : undefined
+        "
         :disabled="props.trackActionPending"
         type="button"
-        @click.stop="togglePlaylistMenu"
+        @mouseenter="openPlaylistMenu()"
+        @click.stop="openPlaylistMenu(true)"
       >
         添加到播放列表
         <ChevronRight aria-hidden="true" class="size-4" />
       </button>
       <div
-        v-if="isPlaylistMenuOpen"
+        v-if="isPlaylistMenuOpen && !props.playlistsLoading"
         id="album-track-playlist-menu"
-        class="max-h-56 overflow-y-auto border-t border-white/10 pt-1"
+        ref="playlistMenuElement"
+        class="bg-spotify-interactive fixed z-101 max-h-72 w-56 overflow-y-auto rounded-md p-1 shadow-xl ring-1 ring-white/10"
+        :style="{ left: `${playlistMenuPosition.x}px`, top: `${playlistMenuPosition.y}px` }"
         role="menu"
         aria-label="选择目标歌单"
       >
-        <p v-if="props.playlistsLoading" class="text-spotify-muted px-2 py-2 text-sm" role="status">
-          正在读取歌单…
-        </p>
-        <p v-else-if="props.playlistsError" class="px-2 py-2 text-sm text-red-300" role="alert">
+        <p v-if="props.playlistsError" class="px-2 py-2 text-sm text-red-300" role="alert">
           读取歌单失败：{{ props.playlistsError }}
         </p>
         <p v-else-if="props.playlists.length === 0" class="text-spotify-muted px-2 py-2 text-sm">
@@ -195,9 +200,14 @@ const { focusedItem, setFocusedItem } = useClickFocus();
 const albumHeadingElement = ref<InstanceType<typeof globalThis.HTMLHeadingElement> | null>(null);
 const contextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
+const playlistMenuTriggerElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(
+  null,
+);
+const playlistMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const playlistMenuItemElements = ref<InstanceType<typeof globalThis.HTMLButtonElement>[]>([]);
 const contextMenu = shallowRef<TrackContextMenuRequest | null>(null);
 const menuPosition = ref({ x: 0, y: 0 });
+const playlistMenuPosition = ref({ x: 0, y: 0 });
 const isPlaylistMenuOpen = ref(false);
 
 function getTrackFocusKey(id: number) {
@@ -257,12 +267,37 @@ function closeTrackContextMenuOnEscape(event: InstanceType<typeof globalThis.Key
   closeTrackContextMenu(true);
 }
 
-function togglePlaylistMenu() {
-  isPlaylistMenuOpen.value = !isPlaylistMenuOpen.value;
-  if (!isPlaylistMenuOpen.value) return;
+function positionPlaylistMenu() {
+  const contextMenuBounds = contextMenuElement.value?.getBoundingClientRect();
+  const triggerBounds = playlistMenuTriggerElement.value?.getBoundingClientRect();
+  const playlistMenuBounds = playlistMenuElement.value?.getBoundingClientRect();
+  if (!contextMenuBounds || !triggerBounds || !playlistMenuBounds) return;
 
-  emit("refreshPlaylists");
-  void nextTick(() => playlistMenuItemElements.value[0]?.focus());
+  const fitsOnRight = contextMenuBounds.right + playlistMenuBounds.width <= globalThis.innerWidth;
+  const x = fitsOnRight
+    ? contextMenuBounds.right
+    : contextMenuBounds.left - playlistMenuBounds.width;
+  playlistMenuPosition.value = clampMenuPosition(
+    x,
+    triggerBounds.top,
+    playlistMenuBounds.width,
+    playlistMenuBounds.height,
+  );
+}
+
+function openPlaylistMenu(focusFirst = false) {
+  const wasOpen = isPlaylistMenuOpen.value;
+  isPlaylistMenuOpen.value = true;
+  if (!wasOpen) emit("refreshPlaylists");
+
+  void nextTick(() => {
+    positionPlaylistMenu();
+    if (focusFirst) playlistMenuItemElements.value[0]?.focus();
+  });
+}
+
+function closePlaylistMenuOnPointerLeave() {
+  isPlaylistMenuOpen.value = false;
 }
 
 function runTrackMenuAction(action: "addToNext" | "addToQueueEnd" | "deleteTrack") {
@@ -301,6 +336,13 @@ watch(
   },
   (isTargetStillVisible) => {
     if (!isTargetStillVisible) closeTrackContextMenu(true);
+  },
+);
+
+watch(
+  () => [props.playlists.length, props.playlistsLoading, props.playlistsError],
+  () => {
+    if (isPlaylistMenuOpen.value) void nextTick(positionPlaylistMenu);
   },
 );
 
