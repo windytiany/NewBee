@@ -40,7 +40,16 @@ type PlayItemOptions = {
 type NextCandidateOptions = { stopWhenExhausted?: boolean };
 type QueueTrack = PlaybackDisplayTrack & { isNext: boolean };
 type NewQueueTrack = Omit<PlaybackDisplayTrack, "rowKey">;
-type QueueRemovalResult = { result: boolean; resumePlaybackId: number | null };
+export type QueueTrackRemovalResult =
+  | { status: "not-found" }
+  | { status: "removed" }
+  | { status: "stop-failed"; message: string }
+  | { status: "stop-unconfirmed" }
+  | { status: "superseded" };
+type QueueRemovalResult = {
+  result: QueueTrackRemovalResult;
+  resumePlaybackId: number | null;
+};
 
 export class PlaybackQueueCoordinator {
   private displayedTracks: QueueTrack[] = [];
@@ -193,31 +202,47 @@ export class PlaybackQueueCoordinator {
 
     const generation = this.beginQueueRemoval();
     const removal = await this.enqueue(() => {
+      if (!this.isCurrentOperation(generation)) {
+        return Promise.resolve({
+          result: { status: "superseded" },
+          resumePlaybackId: null,
+        } satisfies QueueRemovalResult);
+      }
       const item = this.displayedTracks.find((candidate) => candidate.rowKey === rowKey);
       return item
         ? this.removeQueueItems([item], generation)
-        : Promise.resolve({ result: false, resumePlaybackId: null });
+        : Promise.resolve({
+            result: { status: "not-found" },
+            resumePlaybackId: null,
+          } satisfies QueueRemovalResult);
     });
-    return this.finishQueueRemoval(removal);
+    const result = await this.finishQueueRemoval(removal, generation);
+    return result.status === "removed";
   }
 
-  async removeTrackFromQueue(trackId: number): Promise<boolean> {
+  async removeTrackFromQueue(trackId: number): Promise<QueueTrackRemovalResult> {
     if (
       !this.displayedTracks.some((item) => item.trackId === trackId) &&
       !this.roundTracks.some((item) => item.trackId === trackId)
     ) {
-      return false;
+      return { status: "not-found" };
     }
 
     const generation = this.beginQueueRemoval();
     const removal = await this.enqueue(() => {
+      if (!this.isCurrentOperation(generation)) {
+        return Promise.resolve({
+          result: { status: "superseded" },
+          resumePlaybackId: null,
+        } satisfies QueueRemovalResult);
+      }
       const matchingItems = new Map<string, PlaybackDisplayTrack>();
       for (const item of [...this.displayedTracks, ...this.roundTracks]) {
         if (item.trackId === trackId) matchingItems.set(item.rowKey, item);
       }
       return this.removeQueueItems([...matchingItems.values()], generation);
     });
-    return this.finishQueueRemoval(removal);
+    return this.finishQueueRemoval(removal, generation);
   }
 
   private beginQueueRemoval() {
@@ -226,9 +251,16 @@ export class PlaybackQueueCoordinator {
     return this.operationGeneration;
   }
 
-  private async finishQueueRemoval(removal: QueueRemovalResult) {
+  private async finishQueueRemoval(
+    removal: QueueRemovalResult,
+    generation: number,
+  ): Promise<QueueTrackRemovalResult> {
+    if (removal.result.status !== "removed") return removal.result;
+    if (!this.isCurrentOperation(generation)) return { status: "superseded" };
+
     if (removal.resumePlaybackId !== null) {
       await this.scheduleAdvance(removal.resumePlaybackId);
+      if (!this.isCurrentOperation(generation)) return { status: "superseded" };
     }
     return removal.result;
   }
@@ -237,10 +269,16 @@ export class PlaybackQueueCoordinator {
     removedItems: readonly PlaybackDisplayTrack[],
     generation: number,
   ): Promise<QueueRemovalResult> {
+    if (!this.isCurrentOperation(generation)) {
+      return { result: { status: "superseded" }, resumePlaybackId: null };
+    }
+
     const removedRowKeys = new Set(removedItems.map((item) => item.rowKey));
     const removedCurrentItem = removedItems.find((item) => item.rowKey === this.currentRowKey);
     const failureItem = removedCurrentItem ?? removedItems[0];
-    if (!failureItem) return { result: false, resumePlaybackId: null };
+    if (!failureItem) {
+      return { result: { status: "not-found" }, resumePlaybackId: null };
+    }
 
     const endedPlaybackId = this.activePlaybackId;
     const resumePendingAdvance =
@@ -269,24 +307,34 @@ export class PlaybackQueueCoordinator {
         try {
           canAdvance = await this.stopPlayback(endedPlaybackId);
         } catch (error) {
-          if (this.isCurrentOperation(generation)) {
-            this.failures = [formatStopFailure(failureItem, error)];
-            this.publish();
+          if (!this.isCurrentOperation(generation)) {
+            return { result: { status: "superseded" }, resumePlaybackId: null };
           }
-          return { result: false, resumePlaybackId: null };
+          this.failures = [formatStopFailure(failureItem, error)];
+          this.publish();
+          return {
+            result: { status: "stop-failed", message: errorMessage(error) },
+            resumePlaybackId: null,
+          };
         }
       }
-      if (!this.isCurrentOperation(generation) || !canAdvance) {
-        return { result: false, resumePlaybackId: null };
+      if (!this.isCurrentOperation(generation)) {
+        return { result: { status: "superseded" }, resumePlaybackId: null };
+      }
+      if (!canAdvance) {
+        return { result: { status: "stop-unconfirmed" }, resumePlaybackId: null };
       }
 
       await this.playNextFromHistory(generation, { stopWhenExhausted: false });
-      return { result: true, resumePlaybackId: null };
+      if (!this.isCurrentOperation(generation)) {
+        return { result: { status: "superseded" }, resumePlaybackId: null };
+      }
+      return { result: { status: "removed" }, resumePlaybackId: null };
     }
 
     this.publish();
     return {
-      result: true,
+      result: { status: "removed" },
       resumePlaybackId: resumePendingAdvance ? endedPlaybackId : null,
     };
   }

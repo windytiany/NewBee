@@ -9,6 +9,15 @@ import type { AlbumSummary } from "@/types/album";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 import type { TrackSummary } from "@/types/track";
 
+type LibraryTrackRemovalResult =
+  | { status: "not-deleted"; message: string }
+  | { status: "deleted" }
+  | {
+      status: "deleted-queue-sync-failed";
+      issue: "stop-failed" | "stop-unconfirmed" | "superseded" | "queue-error";
+      message: string;
+    };
+
 export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   const artists = ref<AlbumArtistSummary[]>([]);
   const albums = ref<AlbumSummary[]>([]);
@@ -296,9 +305,11 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     });
   }
 
-  async function removeTrackFromLibrary(trackId: number) {
+  async function removeTrackFromLibrary(trackId: number): Promise<LibraryTrackRemovalResult> {
     if (!findLibraryTrack(trackId) || isLoadingTracks.value || isTrackActionPending.value) {
-      return false;
+      const message = "从曲库删除失败：曲目不可用或当前有操作正在进行。";
+      trackActionError.value = message;
+      return { status: "not-deleted", message };
     }
 
     isTrackActionPending.value = true;
@@ -307,23 +318,52 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
       try {
         await invoke<void>("remove_track_from_library", { trackId });
       } catch (error) {
-        trackActionError.value = `从曲库删除失败：${errorMessage(error)}`;
-        return false;
+        const message = `从曲库删除失败：${errorMessage(error)}`;
+        trackActionError.value = message;
+        return { status: "not-deleted", message };
       }
 
-      let queueCleanupError = "";
+      let queueResult:
+        | Awaited<ReturnType<typeof removeTrackFromQueue>>
+        | { status: "queue-error"; message: string };
       try {
-        await removeTrackFromQueue(trackId);
+        queueResult = await removeTrackFromQueue(trackId);
       } catch (error) {
-        queueCleanupError = errorMessage(error);
+        queueResult = { status: "queue-error", message: errorMessage(error) };
       }
       await refreshLibrary();
 
-      if (queueCleanupError) {
-        trackActionError.value = `曲库索引已删除，但从队列移除失败：${queueCleanupError}`;
-        return false;
+      if (queueResult.status === "removed" || queueResult.status === "not-found") {
+        return { status: "deleted" };
       }
-      return true;
+
+      let issue: Extract<
+        LibraryTrackRemovalResult,
+        { status: "deleted-queue-sync-failed" }
+      >["issue"];
+      let message: string;
+      switch (queueResult.status) {
+        case "stop-failed":
+          issue = "stop-failed";
+          message = `曲库索引已删除，但停止当前播放失败：${queueResult.message}`;
+          break;
+        case "stop-unconfirmed":
+          issue = "stop-unconfirmed";
+          message = "曲库索引已删除，但无法确认当前播放已停止，未推进下一首。";
+          break;
+        case "superseded":
+          issue = "superseded";
+          message = "曲库索引已删除，但队列清理已被较新的播放操作取代。";
+          break;
+        case "queue-error":
+          issue = "queue-error";
+          message = `曲库索引已删除，但播放队列同步失败：${queueResult.message}`;
+          break;
+        default:
+          throw new Error("Unexpected queue removal result.");
+      }
+      trackActionError.value = message;
+      return { status: "deleted-queue-sync-failed", issue, message };
     } finally {
       isTrackActionPending.value = false;
     }

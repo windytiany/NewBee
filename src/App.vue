@@ -98,8 +98,9 @@ function cancelTrackDeletion() {
 async function confirmTrackDeletion(trackId: number) {
   if (deleteTrackTarget.value?.id !== trackId) return;
 
-  if (!(await removeTrackFromLibrary(trackId))) {
-    deleteTrackDialogError.value = trackActionError.value || "从曲库删除失败。";
+  const result = await removeTrackFromLibrary(trackId);
+  if (result.status === "not-deleted") {
+    deleteTrackDialogError.value = result.message;
     return;
   }
 

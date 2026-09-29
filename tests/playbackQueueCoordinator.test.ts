@@ -13,6 +13,7 @@ type HarnessOptions = {
   random?: () => number;
   failedTrackIds?: number[];
   attemptPlayback?: AttemptPlayback;
+  stopPlayback?: (playbackId: number) => Promise<boolean>;
 };
 
 function tracks(...entries: [rowKey: string, trackId: number][]): PlaybackDisplayTrack[] {
@@ -54,7 +55,7 @@ function createHarness(options: HarnessOptions = {}) {
       random: options.random,
       stopPlayback: async (playbackId) => {
         stoppedPlaybackIds.push(playbackId);
-        return true;
+        return options.stopPlayback ? options.stopPlayback(playbackId) : true;
       },
     },
   );
@@ -240,12 +241,99 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
       "current-duplicate",
     );
 
-    expect(await coordinator.removeTrackFromQueue(7)).toBe(true);
+    expect(await coordinator.removeTrackFromQueue(7)).toEqual({ status: "removed" });
     expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([8]);
     expect(harness.snapshot.currentRowKey).toBe("other");
     expect(harness.stoppedPlaybackIds).toEqual([1]);
     expect(harness.attempts).toEqual([7, 8]);
-    expect(await coordinator.removeTrackFromQueue(7)).toBe(false);
+    expect(await coordinator.removeTrackFromQueue(7)).toEqual({ status: "not-found" });
+  });
+
+  it("removes a non-current track without stopping or advancing current playback", async () => {
+    const harness = createHarness();
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(
+      tracks(["current", 1], ["removed", 2], ["next", 3]),
+      "current",
+    );
+
+    expect(await coordinator.removeTrackFromQueue(2)).toEqual({ status: "removed" });
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([1, 3]);
+    expect(harness.snapshot.currentRowKey).toBe("current");
+    expect(harness.stoppedPlaybackIds).toEqual([]);
+    expect(harness.attempts).toEqual([1]);
+  });
+
+  it("reports stop failure without advancing to the next track", async () => {
+    const harness = createHarness({
+      stopPlayback: async () => {
+        throw new Error("device busy");
+      },
+    });
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["next", 2]), "current");
+
+    expect(await coordinator.removeTrackFromQueue(1)).toEqual({
+      status: "stop-failed",
+      message: "device busy",
+    });
+    expect(harness.snapshot.displayedTracks.map((track) => track.trackId)).toEqual([2]);
+    expect(harness.snapshot.currentRowKey).toBeNull();
+    expect(harness.attempts).toEqual([1]);
+  });
+
+  it("distinguishes an unconfirmed stop from a stop failure", async () => {
+    const harness = createHarness({ stopPlayback: async () => false });
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["next", 2]), "current");
+
+    expect(await coordinator.removeTrackFromQueue(1)).toEqual({ status: "stop-unconfirmed" });
+    expect(harness.attempts).toEqual([1]);
+  });
+
+  it("reports queue removal superseded by a newer playback operation", async () => {
+    let releaseStop!: (canAdvance: boolean) => void;
+    let notifyStopStarted!: () => void;
+    const stopStarted = new Promise<void>((resolve) => {
+      notifyStopStarted = resolve;
+    });
+    const harness = createHarness({
+      stopPlayback: async () => {
+        notifyStopStarted();
+        return new Promise<boolean>((resolve) => {
+          releaseStop = resolve;
+        });
+      },
+    });
+    const { coordinator } = harness;
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["next", 2]), "current");
+
+    const removal = coordinator.removeTrackFromQueue(1);
+    await stopStarted;
+    const newerPlayback = coordinator.playQueueItem("next");
+    releaseStop(true);
+
+    expect(await removal).toEqual({ status: "superseded" });
+    expect(await newerPlayback).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("next");
+    expect(harness.attempts).toEqual([1, 2]);
+  });
+
+  it("rejects unexpected queue-state errors instead of reporting cleanup success", async () => {
+    let shouldThrow = false;
+    const coordinator = new PlaybackQueueCoordinator(
+      async (trackId) => ({ status: "started", playbackId: trackId }),
+      (snapshot) => {
+        if (shouldThrow && snapshot.currentRowKey === null) {
+          throw new Error("queue persistence failed");
+        }
+      },
+      { stopPlayback: async () => true },
+    );
+    await coordinator.replaceAndPlay(tracks(["current", 1], ["next", 2]), "current");
+    shouldThrow = true;
+
+    await expect(coordinator.removeTrackFromQueue(1)).rejects.toThrow("queue persistence failed");
   });
 
   it("prunes removed history and resets it when a queue item or replacement starts a new round", async () => {
