@@ -4,6 +4,7 @@ import * as Vue from "vue";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import * as TypeScript from "typescript";
 import { createItemFocusManager } from "@/interaction/itemFocus";
+import * as contextMenuModule from "@/interaction/contextMenu";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 
 type HostNode = {
@@ -27,6 +28,7 @@ const tracks = [
 ];
 const mountedApps: Array<{ unmount: () => void }> = [];
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const originalInnerWidth = Object.getOwnPropertyDescriptor(globalThis, "innerWidth");
 const originalInnerHeight = Object.getOwnPropertyDescriptor(globalThis, "innerHeight");
 let itemFocusManager: ItemFocusManager;
@@ -137,6 +139,7 @@ function createComponent(source: string) {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@lucide/vue": { ChevronRight: icon, Play: icon, X: icon },
+    "@/interaction/contextMenu": contextMenuModule,
     "@/interaction/itemFocus": { useItemFocusList: useTestItemFocusList },
     "@/library/ui/AlbumTrack.vue": { __esModule: true, default: AlbumTrack },
   };
@@ -223,6 +226,7 @@ function mountAlbumDetail() {
     setup: () => () =>
       Vue.h(albumDetail, {
         album: { albumArtist: "Artist", album: "Album", year: 2024 },
+        albumArtist: "Artist",
         tracks,
         currentTrackId: null,
         tracksLoading: false,
@@ -307,6 +311,10 @@ beforeEach(() => {
     configurable: true,
     value: createDocumentTarget(),
   });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { addEventListener() {}, removeEventListener() {} },
+  });
   Object.defineProperty(globalThis, "innerWidth", { configurable: true, value: 1024 });
   Object.defineProperty(globalThis, "innerHeight", { configurable: true, value: 768 });
 });
@@ -315,6 +323,7 @@ afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
   for (const [key, descriptor] of [
     ["document", originalDocument],
+    ["window", originalWindow],
     ["innerWidth", originalInnerWidth],
     ["innerHeight", originalInnerHeight],
   ] as const) {

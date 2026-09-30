@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
@@ -88,6 +89,7 @@ pub struct PlaylistSummary {
     id: i64,
     name: String,
     track_count: i64,
+    cover_track_id: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -491,7 +493,12 @@ impl Database {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
-                "SELECT p.id, p.name, COUNT(pi.id)
+                "SELECT p.id, p.name, COUNT(pi.id),
+                        (SELECT cover_item.track_id
+                         FROM playlist_items cover_item
+                         WHERE cover_item.playlist_id = p.id
+                         ORDER BY cover_item.position ASC, cover_item.id ASC
+                         LIMIT 1)
                  FROM playlists p
                  LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
                  GROUP BY p.id, p.name
@@ -504,11 +511,164 @@ impl Database {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     track_count: row.get(2)?,
+                    cover_track_id: row.get(3)?,
                 })
             })
             .map_err(|error| format!("Failed to list playlists: {error}"))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|error| format!("Failed to read playlists: {error}"))
+    }
+
+    pub fn remove_playlist_items(
+        &self,
+        playlist_id: i64,
+        playlist_item_ids: Vec<i64>,
+    ) -> Result<(), String> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Failed to start playlist update: {error}"))?;
+        let playlist = transaction
+            .query_row(
+                "SELECT id FROM playlists WHERE id = ?1",
+                [playlist_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to verify playlist {playlist_id}: {error}"))?;
+        if playlist.is_none() {
+            return Err(format!("Playlist {playlist_id} was not found"));
+        }
+
+        if playlist_item_ids.is_empty() {
+            transaction
+                .commit()
+                .map_err(|error| format!("Failed to finish playlist update: {error}"))?;
+            return Ok(());
+        }
+
+        let mut unique_ids = HashSet::with_capacity(playlist_item_ids.len());
+        for item_id in &playlist_item_ids {
+            if !unique_ids.insert(*item_id) {
+                return Err(format!("Playlist item ID {item_id} appears more than once"));
+            }
+        }
+
+        for item_id in &playlist_item_ids {
+            let item = transaction
+                .query_row(
+                    "SELECT id FROM playlist_items WHERE id = ?1 AND playlist_id = ?2",
+                    params![item_id, playlist_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(|error| format!("Failed to verify playlist item {item_id}: {error}"))?;
+            if item.is_none() {
+                return Err(format!(
+                    "Playlist item {item_id} was not found in playlist {playlist_id}"
+                ));
+            }
+        }
+
+        for item_id in playlist_item_ids {
+            let removed = transaction
+                .execute(
+                    "DELETE FROM playlist_items WHERE id = ?1 AND playlist_id = ?2",
+                    params![item_id, playlist_id],
+                )
+                .map_err(|error| {
+                    format!(
+                        "Failed to remove playlist item {item_id} from playlist {playlist_id}: {error}"
+                    )
+                })?;
+            if removed != 1 {
+                return Err(format!(
+                    "Playlist item {item_id} changed while removing it from playlist {playlist_id}"
+                ));
+            }
+        }
+
+        transaction
+            .commit()
+            .map_err(|error| format!("Failed to finish playlist update: {error}"))?;
+        Ok(())
+    }
+
+    pub fn reorder_playlist_items(
+        &self,
+        playlist_id: i64,
+        ordered_playlist_item_ids: Vec<i64>,
+    ) -> Result<(), String> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("Failed to start playlist update: {error}"))?;
+        let playlist = transaction
+            .query_row(
+                "SELECT id FROM playlists WHERE id = ?1",
+                [playlist_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to verify playlist {playlist_id}: {error}"))?;
+        if playlist.is_none() {
+            return Err(format!("Playlist {playlist_id} was not found"));
+        }
+
+        let current_item_ids = {
+            let mut statement = transaction
+                .prepare("SELECT id FROM playlist_items WHERE playlist_id = ?1 ORDER BY id")
+                .map_err(|error| {
+                    format!("Failed to prepare playlist {playlist_id} item query: {error}")
+                })?;
+            let rows = statement
+                .query_map([playlist_id], |row| row.get::<_, i64>(0))
+                .map_err(|error| {
+                    format!("Failed to read playlist {playlist_id} item IDs: {error}")
+                })?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|error| {
+                    format!("Failed to read playlist {playlist_id} item IDs: {error}")
+                })?
+        };
+        let current_ids = current_item_ids.into_iter().collect::<HashSet<_>>();
+        let ordered_ids = ordered_playlist_item_ids
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        if ordered_ids.len() != ordered_playlist_item_ids.len() {
+            return Err("Playlist item IDs must not contain duplicates".to_owned());
+        }
+        if ordered_ids != current_ids {
+            return Err(format!(
+                "Ordered playlist item IDs must exactly match playlist {playlist_id}"
+            ));
+        }
+
+        for (position, item_id) in ordered_playlist_item_ids.into_iter().enumerate() {
+            let position = i64::try_from(position)
+                .map_err(|_| format!("Playlist {playlist_id} has too many items to reorder"))?;
+            let updated = transaction
+                .execute(
+                    "UPDATE playlist_items SET position = ?1 WHERE playlist_id = ?2 AND id = ?3",
+                    params![position, playlist_id, item_id],
+                )
+                .map_err(|error| {
+                    format!(
+                        "Failed to reorder playlist item {item_id} in playlist {playlist_id}: {error}"
+                    )
+                })?;
+            if updated != 1 {
+                return Err(format!(
+                    "Playlist item {item_id} changed while reordering playlist {playlist_id}"
+                ));
+            }
+        }
+
+        transaction
+            .commit()
+            .map_err(|error| format!("Failed to finish playlist update: {error}"))?;
+        Ok(())
     }
 
     pub fn list_playlist_tracks(
@@ -726,6 +886,251 @@ mod tests {
             database.add_track_to_playlist(99, 1).unwrap_err(),
             "Playlist 99 was not found"
         );
+    }
+
+    #[test]
+    fn playlist_cover_uses_first_item_by_position_then_id() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("Cover").unwrap();
+        let empty_playlist_id = database.create_playlist("Empty").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(&database, 2, Some("Artist"), Some("Album"), 2, None);
+        insert_track(&database, 3, Some("Artist"), Some("Album"), 3, None);
+        {
+            let connection = database.connection().unwrap();
+            connection
+                .execute(
+                    "INSERT INTO playlist_items (id, playlist_id, track_id, position)
+                     VALUES (20, ?1, 2, 0), (10, ?1, 1, 0), (30, ?1, 3, 1)",
+                    [playlist_id],
+                )
+                .unwrap();
+        }
+
+        let playlists = database.list_playlists().unwrap();
+        let playlist = playlists
+            .iter()
+            .find(|playlist| playlist.id == playlist_id)
+            .unwrap();
+        let empty_playlist = playlists
+            .iter()
+            .find(|playlist| playlist.id == empty_playlist_id)
+            .unwrap();
+        assert_eq!(playlist.track_count, 3);
+        assert_eq!(playlist.cover_track_id, Some(1));
+        assert_eq!(empty_playlist.cover_track_id, None);
+
+        let item_ids = database
+            .list_playlist_tracks(playlist_id)
+            .unwrap()
+            .iter()
+            .map(|item| item.playlist_item_id)
+            .collect::<Vec<_>>();
+        database
+            .remove_playlist_items(playlist_id, vec![item_ids[0]])
+            .unwrap();
+        let updated_playlist = database
+            .list_playlists()
+            .unwrap()
+            .into_iter()
+            .find(|entry| entry.id == playlist_id)
+            .unwrap();
+        assert_eq!(updated_playlist.cover_track_id, Some(2));
+    }
+
+    #[test]
+    fn remove_playlist_items_validates_all_ids_before_deleting() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("Favorites").unwrap();
+        let other_playlist_id = database.create_playlist("Other").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(&database, 2, Some("Artist"), Some("Album"), 2, None);
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database.add_track_to_playlist(playlist_id, 2).unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database
+            .add_track_to_playlist(other_playlist_id, 2)
+            .unwrap();
+        let playlist_items = database.list_playlist_tracks(playlist_id).unwrap();
+        let other_playlist_item_id =
+            database.list_playlist_tracks(other_playlist_id).unwrap()[0].playlist_item_id;
+        let original_ids = playlist_items
+            .iter()
+            .map(|item| item.playlist_item_id)
+            .collect::<Vec<_>>();
+
+        assert!(database
+            .remove_playlist_items(playlist_id, vec![original_ids[0], original_ids[0]])
+            .is_err());
+        assert!(database
+            .remove_playlist_items(playlist_id, vec![original_ids[0], other_playlist_item_id])
+            .is_err());
+        assert_eq!(
+            database
+                .list_playlist_tracks(playlist_id)
+                .unwrap()
+                .iter()
+                .map(|item| item.playlist_item_id)
+                .collect::<Vec<_>>(),
+            original_ids
+        );
+
+        database.remove_playlist_items(playlist_id, vec![]).unwrap();
+        database
+            .remove_playlist_items(playlist_id, vec![original_ids[0]])
+            .unwrap();
+        let remaining_items = database.list_playlist_tracks(playlist_id).unwrap();
+        assert_eq!(
+            remaining_items
+                .iter()
+                .map(|item| item.playlist_item_id)
+                .collect::<Vec<_>>(),
+            vec![original_ids[1], original_ids[2]]
+        );
+        assert!(database.get_track(1).unwrap().is_some());
+        assert_eq!(
+            database.remove_playlist_items(99, vec![]).unwrap_err(),
+            "Playlist 99 was not found"
+        );
+    }
+
+    #[test]
+    fn removing_one_duplicate_playlist_item_preserves_its_siblings_and_tracks() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("Favorites").unwrap();
+        let other_playlist_id = database.create_playlist("Other").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(&database, 2, Some("Artist"), Some("Album"), 2, None);
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database
+            .add_track_to_playlist(other_playlist_id, 1)
+            .unwrap();
+
+        let duplicate_ids = database
+            .list_playlist_tracks(playlist_id)
+            .unwrap()
+            .iter()
+            .map(|item| item.playlist_item_id)
+            .collect::<Vec<_>>();
+        let other_item_id =
+            database.list_playlist_tracks(other_playlist_id).unwrap()[0].playlist_item_id;
+        database
+            .remove_playlist_items(playlist_id, vec![duplicate_ids[1]])
+            .unwrap();
+
+        let remaining_items = database.list_playlist_tracks(playlist_id).unwrap();
+        assert_eq!(remaining_items.len(), 1);
+        assert_eq!(remaining_items[0].playlist_item_id, duplicate_ids[0]);
+        assert_eq!(remaining_items[0].track_id, 1);
+        assert_eq!(
+            database.list_playlist_tracks(other_playlist_id).unwrap()[0].playlist_item_id,
+            other_item_id
+        );
+        assert!(database.get_track(1).unwrap().is_some());
+        assert!(database.get_track(2).unwrap().is_some());
+    }
+
+    #[test]
+    fn reorder_playlist_items_requires_exact_ids_and_rolls_back_failures() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("Favorites").unwrap();
+        let other_playlist_id = database.create_playlist("Other").unwrap();
+        let empty_playlist_id = database.create_playlist("Empty").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(&database, 2, Some("Artist"), Some("Album"), 2, None);
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database.add_track_to_playlist(playlist_id, 2).unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database
+            .add_track_to_playlist(other_playlist_id, 2)
+            .unwrap();
+        let item_ids = database
+            .list_playlist_tracks(playlist_id)
+            .unwrap()
+            .iter()
+            .map(|item| item.playlist_item_id)
+            .collect::<Vec<_>>();
+        let other_item_id =
+            database.list_playlist_tracks(other_playlist_id).unwrap()[0].playlist_item_id;
+
+        assert!(database
+            .reorder_playlist_items(playlist_id, vec![item_ids[0], item_ids[0], item_ids[2]])
+            .is_err());
+        assert!(database
+            .reorder_playlist_items(playlist_id, vec![item_ids[0], item_ids[1], other_item_id])
+            .is_err());
+        assert!(database
+            .reorder_playlist_items(playlist_id, vec![item_ids[0], item_ids[1]])
+            .is_err());
+        assert!(database
+            .reorder_playlist_items(
+                playlist_id,
+                vec![item_ids[0], item_ids[1], item_ids[2], 999]
+            )
+            .is_err());
+        assert_eq!(
+            database
+                .list_playlist_tracks(playlist_id)
+                .unwrap()
+                .iter()
+                .map(|item| item.playlist_item_id)
+                .collect::<Vec<_>>(),
+            item_ids
+        );
+
+        let connection = database.connection().unwrap();
+        connection
+            .execute_batch(&format!(
+                "CREATE TRIGGER fail_playlist_reorder
+                 BEFORE UPDATE OF position ON playlist_items
+                 WHEN NEW.id = {} AND NEW.position = 1
+                 BEGIN SELECT RAISE(ABORT, 'test reorder failure'); END;",
+                item_ids[1]
+            ))
+            .unwrap();
+        drop(connection);
+        assert!(database
+            .reorder_playlist_items(playlist_id, vec![item_ids[2], item_ids[1], item_ids[0]])
+            .is_err());
+        assert_eq!(
+            database
+                .list_playlist_tracks(playlist_id)
+                .unwrap()
+                .iter()
+                .map(|item| item.playlist_item_id)
+                .collect::<Vec<_>>(),
+            item_ids
+        );
+        database
+            .connection()
+            .unwrap()
+            .execute_batch("DROP TRIGGER fail_playlist_reorder")
+            .unwrap();
+
+        database
+            .reorder_playlist_items(playlist_id, vec![item_ids[2], item_ids[1], item_ids[0]])
+            .unwrap();
+        database
+            .reorder_playlist_items(empty_playlist_id, vec![])
+            .unwrap();
+        let reordered_ids = database
+            .list_playlist_tracks(playlist_id)
+            .unwrap()
+            .iter()
+            .map(|item| item.playlist_item_id)
+            .collect::<Vec<_>>();
+        assert_eq!(reordered_ids, vec![item_ids[2], item_ids[1], item_ids[0]]);
+        let connection = database.connection().unwrap();
+        let mut statement = connection
+            .prepare("SELECT position FROM playlist_items WHERE playlist_id = ?1 ORDER BY position")
+            .unwrap();
+        let positions = statement
+            .query_map([playlist_id], |row| row.get::<_, i64>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(positions, vec![0, 1, 2]);
     }
 
     #[test]

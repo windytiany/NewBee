@@ -60,7 +60,7 @@
         :is-focused="trackFocus.isFocused(String(track.id))"
         :is-selected="trackFocus.isSelected(String(track.id))"
         :is-current-track="track.id === props.currentTrackId"
-        :is-context-menu-open="contextMenu?.itemKey === String(track.id)"
+        :is-context-menu-open="contextMenu?.payload.itemKey === String(track.id)"
         @select="selectTrack(track.id, $event)"
         @play="emit('playTrack', track.id)"
         @context-menu="openTrackContextMenu"
@@ -150,8 +150,10 @@
       <button
         class="focus-visible:outline-spotify-green w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
         role="menuitem"
-        :disabled="props.trackActionPending || contextMenu.targetTrackIds.length !== 1"
-        :title="contextMenu.targetTrackIds.length !== 1 ? '多选时暂不支持从曲库删除' : undefined"
+        :disabled="props.trackActionPending || contextMenu.payload.targetTrackIds.length !== 1"
+        :title="
+          contextMenu.payload.targetTrackIds.length !== 1 ? '多选时暂不支持从曲库删除' : undefined
+        "
         type="button"
         @click.stop="requestTrackDeletion"
       >
@@ -162,8 +164,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { ChevronRight, Play, X } from "@lucide/vue";
+import { useContextMenu } from "@/interaction/contextMenu";
 import { useItemFocusList } from "@/interaction/itemFocus";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { AlbumSummary } from "@/types/album";
@@ -178,7 +181,7 @@ type TrackContextMenuTrigger = {
   trigger: InstanceType<typeof globalThis.HTMLButtonElement>;
 };
 
-type TrackContextMenuRequest = Omit<TrackContextMenuTrigger, "trackId"> & {
+type AlbumTrackContextMenuPayload = {
   itemKey: string;
   targetTrackIds: number[];
 };
@@ -224,8 +227,16 @@ const playlistMenuTriggerElement = ref<InstanceType<typeof globalThis.HTMLButton
 );
 const playlistMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const playlistMenuItemElements = ref<InstanceType<typeof globalThis.HTMLButtonElement>[]>([]);
-const contextMenu = shallowRef<TrackContextMenuRequest | null>(null);
-const menuPosition = ref({ x: 0, y: 0 });
+const {
+  request: contextMenu,
+  position: menuPosition,
+  open: openContextMenu,
+  close: closeContextMenu,
+} = useContextMenu<AlbumTrackContextMenuPayload>({
+  menuElement: contextMenuElement,
+  firstMenuItemElement,
+  fallbackFocusElement: albumHeadingElement,
+});
 const playlistMenuPosition = ref({ x: 0, y: 0 });
 const isPlaylistMenuOpen = ref(false);
 
@@ -251,50 +262,19 @@ function openTrackContextMenu(request: TrackContextMenuTrigger) {
   const targetTrackIds = getContextTargetTrackIds(targetKeys);
   if (targetTrackIds.length === 0) return;
 
-  contextMenu.value = {
-    itemKey,
-    targetTrackIds,
+  isPlaylistMenuOpen.value = false;
+  openContextMenu({
     x: request.x,
     y: request.y,
     trigger: request.trigger,
-  };
-  isPlaylistMenuOpen.value = false;
-  menuPosition.value = clampMenuPosition(request.x, request.y, 256, 240);
-  emit("refreshPlaylists");
-  void nextTick(() => {
-    firstMenuItemElement.value?.focus();
-    const bounds = contextMenuElement.value?.getBoundingClientRect();
-    if (bounds)
-      menuPosition.value = clampMenuPosition(request.x, request.y, bounds.width, bounds.height);
+    payload: { itemKey, targetTrackIds },
   });
+  emit("refreshPlaylists");
 }
 
 function closeTrackContextMenu(restoreFocus: boolean) {
-  const trigger = contextMenu.value?.trigger;
-  contextMenu.value = null;
   isPlaylistMenuOpen.value = false;
-  if (!restoreFocus) return;
-
-  void nextTick(() => {
-    if (trigger?.isConnected) trigger.focus();
-    else albumHeadingElement.value?.focus();
-  });
-}
-
-function closeTrackContextMenuOnOutsidePointer(
-  event: InstanceType<typeof globalThis.PointerEvent>,
-) {
-  if (!contextMenu.value) return;
-  if (event.target instanceof globalThis.Node && contextMenuElement.value?.contains(event.target)) {
-    return;
-  }
-  closeTrackContextMenu(false);
-}
-
-function closeTrackContextMenuOnEscape(event: InstanceType<typeof globalThis.KeyboardEvent>) {
-  if (event.key !== "Escape" || !contextMenu.value) return;
-  event.preventDefault();
-  closeTrackContextMenu(true);
+  closeContextMenu(restoreFocus);
 }
 
 function positionPlaylistMenu() {
@@ -331,7 +311,7 @@ function closePlaylistMenuOnPointerLeave() {
 }
 
 function runTrackMenuAction(action: "addToNext" | "addToQueueEnd" | "deleteTrack") {
-  const targetTrackIds = contextMenu.value?.targetTrackIds;
+  const targetTrackIds = contextMenu.value?.payload.targetTrackIds;
   if (!targetTrackIds?.length || (action === "deleteTrack" && targetTrackIds.length !== 1)) return;
   closeTrackContextMenu(true);
 
@@ -349,23 +329,31 @@ function addToQueueEnd() {
 }
 
 function addTracksToPlaylist(playlistId: number) {
-  const targetTrackIds = contextMenu.value?.targetTrackIds;
+  const targetTrackIds = contextMenu.value?.payload.targetTrackIds;
   if (!targetTrackIds?.length) return;
   closeTrackContextMenu(true);
   emit("addTracksToPlaylist", targetTrackIds, playlistId);
 }
 
 function requestTrackDeletion() {
-  if (contextMenu.value?.targetTrackIds.length !== 1) return;
+  if (contextMenu.value?.payload.targetTrackIds.length !== 1) return;
   runTrackMenuAction("deleteTrack");
 }
+
+watch(contextMenu, (request) => {
+  if (request === null) isPlaylistMenuOpen.value = false;
+});
+
+watch(trackListScope, () => closeTrackContextMenu(false));
 
 watch(
   () => {
     const request = contextMenu.value;
     return (
       request === null ||
-      request.targetTrackIds.every((trackId) => props.tracks.some((track) => track.id === trackId))
+      request.payload.targetTrackIds.every((trackId) =>
+        props.tracks.some((track) => track.id === trackId),
+      )
     );
   },
   (isTargetStillVisible) => {
@@ -379,14 +367,4 @@ watch(
     if (isPlaylistMenuOpen.value) void nextTick(positionPlaylistMenu);
   },
 );
-
-onMounted(() => {
-  globalThis.document.addEventListener("pointerdown", closeTrackContextMenuOnOutsidePointer);
-  globalThis.document.addEventListener("keydown", closeTrackContextMenuOnEscape);
-});
-
-onUnmounted(() => {
-  globalThis.document.removeEventListener("pointerdown", closeTrackContextMenuOnOutsidePointer);
-  globalThis.document.removeEventListener("keydown", closeTrackContextMenuOnEscape);
-});
 </script>

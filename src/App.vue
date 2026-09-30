@@ -53,9 +53,18 @@ const {
   isLoadingPlaylistTracks,
   playlistsError,
   playlistTracksError,
+  isPlaylistActionPending,
+  playlistActionError,
+  playlistActionMessage,
+  coverTrackId,
+  isCoverPending,
   selectPlaylist,
   playTrackFromPlaylist,
   playPlaylistFromPage,
+  addPlaylistItemsToNext,
+  addPlaylistItemsToQueueEnd,
+  removePlaylistItems,
+  reorderPlaylistItems,
   refreshPlaylists,
 } = usePlaylistPage(playlistActive);
 const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
@@ -164,6 +173,8 @@ async function confirmTrackDeletion(trackId: number) {
           <PlaylistBrowser
             v-else-if="activePage === 'Playlist'"
             :playlist="selectedPlaylist"
+            :cover-track-id="coverTrackId"
+            :is-cover-pending="isCoverPending"
             :tracks="playlistTracks"
             :current-row-key="activeQueueRowKey"
             :is-loading-playlists="isLoadingPlaylists"
@@ -171,8 +182,15 @@ async function confirmTrackDeletion(trackId: number) {
             :has-playlists="playlists.length > 0"
             :is-loading-tracks="isLoadingPlaylistTracks"
             :tracks-error="playlistTracksError"
+            :is-playlist-action-pending="isPlaylistActionPending"
+            :playlist-action-error="playlistActionError"
+            :playlist-action-message="playlistActionMessage"
             @play-track="playTrackFromPlaylist"
             @play-playlist="playPlaylistFromPage"
+            @add-playlist-items-to-next="addPlaylistItemsToNext"
+            @add-playlist-items-to-queue-end="addPlaylistItemsToQueueEnd"
+            @remove-playlist-items="removePlaylistItems"
+            @reorder-playlist-items="reorderPlaylistItems"
           />
         </template>
         <template #playing>

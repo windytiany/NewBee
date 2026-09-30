@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import * as TypeScript from "typescript";
+import type { Playlist } from "@/types/playlist";
 
+const playlist: Playlist = {
+  id: 7,
+  name: "Favorites",
+  trackCount: 1,
+  coverTrackId: 41,
+};
 const track = {
   id: 41,
   title: "Song",
@@ -76,17 +83,26 @@ function createComponent(source: string) {
     },
   });
   const usePlaylistPage = () => ({
-    playlists: Vue.ref([]),
-    selectedPlaylistId: Vue.ref(null),
-    selectedPlaylist: Vue.ref(null),
+    playlists: Vue.ref([playlist]),
+    selectedPlaylistId: Vue.ref(playlist.id),
+    selectedPlaylist: Vue.ref(playlist),
     playlistTracks: Vue.ref([]),
     isLoadingPlaylists: Vue.ref(false),
     isLoadingPlaylistTracks: Vue.ref(false),
     playlistsError: Vue.ref(""),
     playlistTracksError: Vue.ref(""),
+    isPlaylistActionPending: Vue.ref(false),
+    playlistActionError: Vue.ref(""),
+    playlistActionMessage: Vue.ref(""),
+    coverTrackId: Vue.ref(playlist.coverTrackId),
+    isCoverPending: Vue.ref(false),
     selectPlaylist: () => {},
     playTrackFromPlaylist: () => {},
     playPlaylistFromPage: () => {},
+    addPlaylistItemsToNext: () => {},
+    addPlaylistItemsToQueueEnd: () => {},
+    removePlaylistItems: () => {},
+    reorderPlaylistItems: () => {},
     refreshPlaylists: async () => {
       playlistRefreshCalls += 1;
     },

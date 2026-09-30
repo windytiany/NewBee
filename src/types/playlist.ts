@@ -11,4 +11,5 @@ export type Playlist = {
   id: number;
   name: string;
   trackCount: number;
+  coverTrackId: number | null;
 };

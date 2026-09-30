@@ -32,6 +32,7 @@
           v-for="playlist in props.playlists"
           :key="playlist.id"
           :name="playlist.name"
+          :cover-track-id="playlist.coverTrackId"
           :is-focused="playlistFocus.isFocused(String(playlist.id))"
           :is-selected="props.selectedPlaylistId === playlist.id"
           @select="selectPlaylist(playlist)"
