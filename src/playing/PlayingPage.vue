@@ -38,13 +38,6 @@
         正在加载歌词…
       </p>
       <p
-        v-else-if="lyricsState.status === 'error'"
-        class="text-spotify-muted mx-auto max-w-5xl px-6 py-8 text-center text-lg"
-        role="alert"
-      >
-        歌词读取失败：{{ lyricsState.message }}
-      </p>
-      <p
         v-else-if="lyricsState.status === 'idle'"
         class="text-spotify-muted mx-auto max-w-5xl px-6 py-8 text-center text-lg"
       >

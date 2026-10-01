@@ -427,23 +427,18 @@ afterEach(() => {
 });
 
 describe("歌单曲目上下文菜单", () => {
-  it("操作错误显示可关闭 toast，且不显示普通操作状态", async () => {
+  it("操作错误由全局通知展示，页面不再渲染提示", async () => {
     playlistActionError.value = "保存歌单排序失败：database unavailable";
     isPlaylistActionPending.value = true;
     const root = mountPlaylistBrowser();
     await settle();
 
-    const toast = findNode(root, (node) => node.props.role === "alert");
-    expect(toast && getTextContent(toast)).toContain("database unavailable");
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+    expect(getTextContent(root)).not.toContain("database unavailable");
     expect(getTextContent(root)).not.toContain("正在处理歌单操作");
     expect(getTextContent(root)).not.toContain("已保存");
 
-    const closeButton = findNode(root, (node) => node.props["aria-label"] === "关闭错误通知");
-    if (!closeButton) throw new Error("Toast close button was not rendered.");
-    clickNode(closeButton);
-    await settle();
-
-    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+    expect(playlistActionError.value).toBe("保存歌单排序失败：database unavailable");
   });
 
   it("右键已选中行保留多选目标并按歌单顺序触发操作", async () => {

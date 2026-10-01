@@ -7,6 +7,8 @@ import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import { createPlaybackSession } from "@/playback/session";
 import type { PlaybackCommandInvoker } from "@/playback/state";
 import type { InternalPlaybackStatus } from "@/playback/status";
+import { useNotification } from "@/notification/useNotification";
+import { notifications } from "@/notification/center";
 
 type Session = ReturnType<typeof createPlaybackSession>;
 type HostNode = {
@@ -63,6 +65,7 @@ const componentModule = { exports: {} as Record<string, unknown> };
 const modules: Record<string, unknown> = {
   vue: Vue,
   "@lucide/vue": Icons,
+  "@/notification/useNotification": { useNotification },
   "@/playback/useControls": {
     usePlaybackControls: () => ({
       ...activeSession.state,
@@ -232,6 +235,7 @@ async function startQueue(session: Session) {
 }
 
 beforeEach(() => {
+  notifications.clear();
   const stored = new Map<string, string>();
   const globals = {
     localStorage: {
@@ -254,6 +258,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();
+  notifications.clear();
   for (const [key, descriptor] of originalGlobals) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);
     else Reflect.deleteProperty(globalThis, key);
@@ -343,6 +348,9 @@ describe("playback bar button", () => {
     expect(playButton(root).props["aria-label"]).toBe("Play");
     expect(playButton(root).props.disabled).toBe(true);
     expect(isDimmed(playButton(root))).toBe(true);
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0].message).toContain("audio unavailable");
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
   });
 
   it("still dims when no song or restored queue can be played", () => {

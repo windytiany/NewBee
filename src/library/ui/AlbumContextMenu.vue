@@ -57,15 +57,15 @@
       <p v-if="playlistsLoading" class="text-spotify-muted px-2 py-2 text-sm" role="status">
         正在读取歌单…
       </p>
-      <p v-else-if="playlistsError" class="px-2 py-2 text-sm text-red-300" role="alert">
-        读取歌单失败：{{ playlistsError }}
-      </p>
-      <p v-else-if="playlists.length === 0" class="text-spotify-muted px-2 py-2 text-sm">
+      <p
+        v-else-if="!playlistsError && playlists.length === 0"
+        class="text-spotify-muted px-2 py-2 text-sm"
+      >
         暂无可用歌单。
       </p>
       <button
         v-for="playlist in playlists"
-        v-else
+        v-else-if="!playlistsError"
         :key="playlist.id"
         ref="playlistItemElements"
         class="focus-visible:outline-spotify-green w-full truncate rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"

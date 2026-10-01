@@ -6,7 +6,7 @@
     <h2 class="shrink-0 px-1 py-2 text-sm font-medium text-white/90">曲目信息</h2>
 
     <TransitionNowPlaying
-      v-slot="{ track, details, artworkUrl, detailsError, artworkError }"
+      v-slot="{ track, details, artworkUrl }"
       :track="currentTrack"
       content-class="px-1 pb-3"
     >
@@ -26,9 +26,6 @@
         <p class="text-spotify-muted mt-1 min-h-4 truncate text-xs leading-4">
           {{ details ? formatAudioSummary(details) : "" }}
         </p>
-        <p v-if="detailsError" class="text-red-300" role="alert">
-          {{ detailsError }}
-        </p>
       </div>
       <p v-else class="text-spotify-muted py-3 text-sm">开始播放后显示当前曲目信息和封面。</p>
 
@@ -46,9 +43,6 @@
         />
         <Disc3 v-else aria-hidden="true" class="size-20" stroke-width="1" />
       </div>
-      <p v-if="artworkError" class="text-spotify-muted mt-2 text-xs" role="status">
-        {{ artworkError }}
-      </p>
     </TransitionNowPlaying>
   </section>
 </template>

@@ -11,7 +11,7 @@
     "
   >
     <TransitionNowPlaying
-      v-slot="{ track, details, artworkUrl, detailsError, artworkError }"
+      v-slot="{ track, details, artworkUrl }"
       :track="currentTrack"
       :class="{ 'md:h-full md:min-h-0': props.compact && !props.horizontal }"
       :content-class="
@@ -101,12 +101,6 @@
           "
         >
           {{ details?.album ?? "未知专辑" }}
-        </p>
-        <p v-if="artworkError" class="text-spotify-muted text-xs" role="status">
-          {{ artworkError }}
-        </p>
-        <p v-if="detailsError" class="text-sm text-red-300" role="alert">
-          {{ detailsError }}
         </p>
       </div>
     </TransitionNowPlaying>

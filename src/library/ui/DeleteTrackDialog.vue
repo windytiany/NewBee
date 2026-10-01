@@ -18,9 +18,6 @@
         <p id="delete-track-dialog-description" class="text-spotify-muted mt-3 text-sm leading-6">
           不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。
         </p>
-        <p v-if="props.error" class="mt-3 text-sm text-red-300" role="alert">
-          {{ props.error }}
-        </p>
       </div>
 
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -52,7 +49,6 @@ import type { TrackSummary } from "@/types/track";
 const props = defineProps<{
   track: TrackSummary;
   isDeleting: boolean;
-  error: string;
 }>();
 
 const emit = defineEmits<{

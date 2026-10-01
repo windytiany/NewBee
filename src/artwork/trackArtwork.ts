@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { nextTick, onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import type { TrackArtwork } from "@/types/track";
+import { notify } from "@/notification/center";
 
 export type TrackArtworkStatus = "loading" | "ready" | "fallback";
 
@@ -186,6 +187,7 @@ async function loadArtwork(entry: SharedArtwork, generation: number) {
     if (!isCurrent(entry, generation)) return;
     const message = error instanceof Error ? error.message : String(error ?? "未知错误");
     entry.error = `读取封面失败，已显示占位图：${message}`;
+    notify({ type: "warning", message: entry.error, key: `track-artwork:${entry.trackId}` });
     showFallback(entry);
   }
 }

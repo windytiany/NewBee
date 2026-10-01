@@ -4,6 +4,8 @@ import * as Vue from "vue";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import type { Playlist } from "@/types/playlist";
+import { notifications, notify } from "@/notification/center";
+import { useNotification } from "@/notification/useNotification";
 
 const playlist: Playlist = {
   id: 7,
@@ -37,6 +39,12 @@ let dialogShowCalls = 0;
 let dialogCloseCalls = 0;
 const mountedApps: Array<{ unmount: () => void }> = [];
 const libraryTrackActionError = Vue.ref("");
+const libraryTrackActionMessage = Vue.ref("");
+const libraryTrackActionMessageType = Vue.ref<"success" | "warning">("success");
+const libraryTrackActionPending = Vue.ref(false);
+const playlistActionError = Vue.ref("");
+const artistsError = Vue.ref("");
+const activePage = Vue.ref("Library");
 
 function createComponent(source: string) {
   const { descriptor } = parse(source, { filename: "src/App.vue" });
@@ -55,12 +63,13 @@ function createComponent(source: string) {
     isLoadingArtists: Vue.ref(false),
     isLoadingAlbums: Vue.ref(false),
     isLoadingTracks: Vue.ref(false),
-    artistsError: Vue.ref(""),
+    artistsError,
     albumsError: Vue.ref(""),
     tracksError: Vue.ref(""),
-    isTrackActionPending: Vue.ref(false),
+    isTrackActionPending: libraryTrackActionPending,
     trackActionError: libraryTrackActionError,
-    trackActionMessage: Vue.ref(""),
+    trackActionMessage: libraryTrackActionMessage,
+    trackActionMessageType: libraryTrackActionMessageType,
     currentTrack: Vue.ref(null),
     activeQueueRowKey: Vue.ref(null),
     selectedGroup: Vue.ref({ albumArtist: "Artist", albumCount: 1 }),
@@ -93,8 +102,7 @@ function createComponent(source: string) {
     playlistsError: Vue.ref(""),
     playlistTracksError: Vue.ref(""),
     isPlaylistActionPending: Vue.ref(false),
-    playlistActionError: Vue.ref(""),
-    dismissPlaylistActionError: () => {},
+    playlistActionError,
     coverTrackId: Vue.ref(playlist.coverTrackId),
     isCoverPending: Vue.ref(false),
     selectPlaylist: () => {},
@@ -160,8 +168,11 @@ function createComponent(source: string) {
   const defaultModule = (component: Vue.Component) => ({ __esModule: true, default: component });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/notification/center": { notify },
+    "@/notification/useNotification": { useNotification },
+    "@/notification/ui/NotificationHost.vue": defaultModule(passiveComponent),
     "@/navigation/activePage": {
-      usePersistentActivePage: () => ({ activePage: Vue.ref("Library") }),
+      usePersistentActivePage: () => ({ activePage }),
     },
     "@/library/usePage": { useLibraryPage },
     "@/playlist/usePage": { usePlaylistPage },
@@ -268,10 +279,69 @@ beforeEach(() => {
   dialogShowCalls = 0;
   dialogCloseCalls = 0;
   libraryTrackActionError.value = "";
+  libraryTrackActionMessage.value = "";
+  libraryTrackActionMessageType.value = "success";
+  libraryTrackActionPending.value = false;
+  playlistActionError.value = "";
+  artistsError.value = "";
+  activePage.value = "Library";
+  notifications.clear();
 });
 
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
+  notifications.clear();
+});
+
+describe("App notification integration", () => {
+  it("reports album/track success and partial failures without inline messages", async () => {
+    const root = mountApp();
+    libraryTrackActionPending.value = true;
+    libraryTrackActionMessage.value = "已成功添加 2 首到播放列表。";
+    await Vue.nextTick();
+    expect(notifications.items.value).toEqual([]);
+    libraryTrackActionPending.value = false;
+    await Vue.nextTick();
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "success",
+      message: libraryTrackActionMessage.value,
+    });
+    expect(findByTestId(root, "library-error")).toBeNull();
+    notifications.clear();
+    libraryTrackActionMessageType.value = "warning";
+    libraryTrackActionMessage.value = "已成功添加 1 首；1 首失败：permission denied";
+    await Vue.nextTick();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      message: libraryTrackActionMessage.value,
+    });
+  });
+
+  it("keeps dismissed playlist failures in business state and preserves toasts across page changes", async () => {
+    mountApp();
+    playlistActionError.value = "保存歌单排序失败：database unavailable";
+    await Vue.nextTick();
+    expect(notifications.items.value).toHaveLength(1);
+    activePage.value = "Playing";
+    await Vue.nextTick();
+    expect(notifications.items.value).toHaveLength(1);
+    notifications.dismiss(notifications.items.value[0].id);
+    await Vue.nextTick();
+    expect(playlistActionError.value).toContain("database unavailable");
+    expect(notifications.items.value).toEqual([]);
+  });
+
+  it("reports a load failure exactly once, even after unrelated state changes", async () => {
+    mountApp();
+    artistsError.value = "读取专辑演出者失败：database unavailable";
+    await Vue.nextTick();
+    expect(notifications.items.value).toHaveLength(1);
+    activePage.value = "Playlist";
+    await Vue.nextTick();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0].count).toBe(1);
+  });
 });
 
 describe("App track deletion confirmation", () => {
@@ -288,7 +358,11 @@ describe("App track deletion confirmation", () => {
     expect(dialogShowCalls).toBe(1);
     expect(dialogCloseCalls).toBe(0);
     expect(findByTestId(root, "delete-dialog")).not.toBeNull();
-    expect(findByTestId(root, "dialog-error")?.text).toBe("数据库不可用");
+    expect(findByTestId(root, "dialog-error")).toBeNull();
+    expect(notifications.items.value.map(({ message }) => message)).toEqual(["数据库不可用"]);
+    notifications.dismiss(notifications.items.value[0].id);
+    expect(libraryTrackActionError.value).toBe("数据库不可用");
+    expect(findByTestId(root, "delete-dialog")).not.toBeNull();
     expect(playlistRefreshCalls).toBe(0);
   });
 
@@ -305,7 +379,8 @@ describe("App track deletion confirmation", () => {
 
     expect(dialogCloseCalls).toBe(1);
     expect(findByTestId(root, "delete-dialog")).toBeNull();
-    expect(findByTestId(root, "library-error")?.text).toBe(warning);
+    expect(findByTestId(root, "library-error")).toBeNull();
+    expect(notifications.items.value.map(({ message }) => message)).toEqual([warning]);
     expect(removalCalls).toBe(1);
     expect(playlistRefreshCalls).toBe(1);
   });

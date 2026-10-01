@@ -58,18 +58,15 @@
             </button>
           </li>
         </ul>
-        <p v-else class="text-spotify-muted mt-3 rounded-lg bg-white/5 px-3 py-4 text-sm">
+        <p
+          v-else-if="!isLoadingDirectories && !directoryLoadFailed"
+          class="text-spotify-muted mt-3 rounded-lg bg-white/5 px-3 py-4 text-sm"
+        >
           尚未添加目录。点击“添加目录”选择文件夹。
         </p>
 
         <p class="text-spotify-muted mt-3 text-xs">
           移除目录只会移除扫描配置，不会删除已入库歌曲。
-        </p>
-        <p v-if="directoryError" class="mt-3 text-sm text-red-300" role="alert">
-          {{ directoryError }}
-        </p>
-        <p v-else-if="directoryFeedback" class="text-spotify-muted mt-3 text-sm" role="status">
-          {{ directoryFeedback }}
         </p>
         <p v-if="!isTauriApp" class="text-spotify-muted mt-3 text-sm">
           请在桌面应用中选择和扫描目录。
@@ -79,13 +76,6 @@
       <footer class="border-t border-white/10 px-5 py-4">
         <p v-if="isScanning" class="text-spotify-green text-sm" role="status">
           正在扫描音乐文件，请稍候…
-        </p>
-        <p v-else-if="scanResult" class="text-sm leading-5 text-white/80" role="status">
-          扫描完成：新增 {{ scanResult.added }}，更新 {{ scanResult.updated }}，跳过
-          {{ scanResult.skipped }}，读取失败 {{ scanResult.failed }}
-        </p>
-        <p v-else-if="scanError" class="text-sm text-red-300" role="alert">
-          扫描失败：{{ scanError }}
         </p>
         <div class="mt-4 flex justify-end gap-2">
           <button
@@ -114,6 +104,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
 import { useLibraryScan } from "@/library/scan";
+import { notify } from "@/notification/center";
 
 type LibraryDirectory = {
   id: number;
@@ -125,9 +116,8 @@ const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | nu
 const isTauriApp = isTauri();
 const directories = ref<LibraryDirectory[]>([]);
 const isLoadingDirectories = ref(false);
-const directoryError = ref("");
-const directoryFeedback = ref("");
-const { isScanning, scanResult, scanError, scanMusicLibrary } = useLibraryScan();
+const directoryLoadFailed = ref(false);
+const { isScanning, scanMusicLibrary } = useLibraryScan();
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -145,40 +135,52 @@ function closeDialog() {
 
 async function refreshDirectories() {
   isLoadingDirectories.value = true;
-  directoryError.value = "";
+  directoryLoadFailed.value = false;
   try {
     directories.value = await invoke<LibraryDirectory[]>("list_music_library_directories");
   } catch (error) {
-    directoryError.value = `读取已保存目录失败：${errorMessage(error)}`;
+    directoryLoadFailed.value = true;
+    notify({
+      type: "error",
+      message: `读取已保存目录失败：${errorMessage(error)}`,
+      key: "scan-directories",
+    });
   } finally {
     isLoadingDirectories.value = false;
   }
 }
 
 async function addDirectory() {
-  directoryError.value = "";
-  directoryFeedback.value = "";
   try {
     const selectedPath = await open({ directory: true, multiple: false, title: "选择音乐库目录" });
     if (typeof selectedPath !== "string") return;
 
     const added = await invoke<boolean>("add_music_library_directory", { path: selectedPath });
     await refreshDirectories();
-    directoryFeedback.value = added ? "目录已保存。" : "该目录已经保存。";
+    notify({
+      type: added ? "success" : "info",
+      message: added ? "目录已保存。" : "该目录已经保存。",
+    });
   } catch (error) {
-    directoryError.value = `添加目录失败：${errorMessage(error)}`;
+    notify({
+      type: "error",
+      message: `添加目录失败：${errorMessage(error)}`,
+      key: "scan-directories",
+    });
   }
 }
 
 async function removeDirectory(directory: LibraryDirectory) {
-  directoryError.value = "";
-  directoryFeedback.value = "";
   try {
     await invoke("remove_music_library_directory", { id: directory.id });
     directories.value = directories.value.filter((saved) => saved.id !== directory.id);
-    directoryFeedback.value = "目录已移除，已入库歌曲保留。";
+    notify({ type: "success", message: "目录已移除，已入库歌曲保留。" });
   } catch (error) {
-    directoryError.value = `移除目录失败：${errorMessage(error)}`;
+    notify({
+      type: "error",
+      message: `移除目录失败：${errorMessage(error)}`,
+      key: "scan-directories",
+    });
   }
 }
 

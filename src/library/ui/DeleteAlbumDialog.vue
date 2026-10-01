@@ -18,7 +18,6 @@
         <p id="delete-album-dialog-description" class="text-spotify-muted mt-3 text-sm leading-6">
           删除此专辑的全部曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。
         </p>
-        <p v-if="error" class="mt-3 text-sm text-red-300" role="alert">{{ error }}</p>
       </div>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
@@ -45,7 +44,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { LibraryAlbumSelection } from "@/library/selection";
-const props = defineProps<{ album: LibraryAlbumSelection; pending: boolean; error: string }>();
+const props = defineProps<{ album: LibraryAlbumSelection; pending: boolean }>();
 const emit = defineEmits<{ confirm: [album: LibraryAlbumSelection]; cancel: [] }>();
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 function show() {

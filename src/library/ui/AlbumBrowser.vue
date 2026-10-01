@@ -17,26 +17,16 @@
       >
         正在处理曲目操作…
       </p>
-      <p v-else-if="props.trackActionError" class="px-5 text-sm text-red-300 sm:px-8" role="alert">
-        {{ props.trackActionError }}
-      </p>
-      <p
-        v-else-if="props.trackActionMessage"
-        class="px-5 text-sm text-white/80 sm:px-8"
-        role="status"
-      >
-        {{ props.trackActionMessage }}
-      </p>
       <p v-if="props.albumsLoading" class="text-spotify-muted px-5 text-sm sm:px-8" role="status">
         正在读取专辑…
       </p>
-      <p v-else-if="props.albumsError" class="px-5 text-sm text-red-300 sm:px-8" role="alert">
-        {{ props.albumsError }}
-      </p>
-      <p v-else-if="props.albums.length === 0" class="text-spotify-muted px-5 text-sm sm:px-8">
+      <p
+        v-else-if="!props.albumsError && props.albums.length === 0"
+        class="text-spotify-muted px-5 text-sm sm:px-8"
+      >
         此专辑演出者暂无专辑。
       </p>
-      <div v-else class="flex flex-col gap-6 px-5 pb-8 sm:px-8">
+      <div v-else-if="!props.albumsError" class="flex flex-col gap-6 px-5 pb-8 sm:px-8">
         <template v-for="row in albumRows" :key="row.id">
           <div class="grid grid-cols-2 gap-x-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4">
             <AlbumCard
@@ -140,8 +130,6 @@ const props = defineProps<{
   playlistsLoading: boolean;
   playlistsError: string;
   trackActionPending: boolean;
-  trackActionError: string;
-  trackActionMessage: string;
 }>();
 
 const emit = defineEmits<{

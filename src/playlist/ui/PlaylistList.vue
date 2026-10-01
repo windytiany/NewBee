@@ -19,9 +19,6 @@
       <p v-if="props.isLoading" class="text-spotify-muted px-2 py-3 text-sm" role="status">
         正在读取歌单…
       </p>
-      <p v-if="props.error" class="px-2 py-3 text-sm text-red-300" role="alert">
-        {{ props.error }}
-      </p>
       <p
         v-if="!props.isLoading && !props.error && props.playlists.length === 0"
         class="text-spotify-muted px-2 py-3 text-sm"

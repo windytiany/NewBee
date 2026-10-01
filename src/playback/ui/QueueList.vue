@@ -15,13 +15,13 @@
       <p v-if="props.isLoading" class="text-spotify-muted px-2 py-3 text-sm" role="status">
         正在读取曲目…
       </p>
-      <p v-else-if="props.error" class="px-2 py-3 text-sm text-red-300" role="alert">
-        {{ props.error }}
-      </p>
-      <p v-else-if="props.tracks.length === 0" class="text-spotify-muted px-2 py-3 text-sm">
+      <p
+        v-else-if="!props.error && props.tracks.length === 0"
+        class="text-spotify-muted px-2 py-3 text-sm"
+      >
         {{ props.emptyMessage }}
       </p>
-      <ul v-else ref="listElement" class="space-y-1">
+      <ul v-else-if="!props.error" ref="listElement" class="space-y-1">
         <QueueRow
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useItemFocusList } from "@/interaction/itemFocus";
+import { useNotification } from "@/notification/useNotification";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 import { formatTrackDuration } from "@/utils/formatTrack";
@@ -114,6 +115,10 @@ const props = withDefaults(
     emptyMessage: "暂无曲目。",
     canRemoveFromQueue: false,
   },
+);
+
+useNotification(() =>
+  props.error ? { type: "error", message: props.error, key: "queue-list" } : null,
 );
 
 const visibleRowKeys = computed(() => props.tracks.map(getTrackRowKey));

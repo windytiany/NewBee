@@ -42,9 +42,6 @@
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-      <p v-if="props.error" class="px-2 py-3 text-sm text-red-300" role="alert">
-        {{ props.error }}
-      </p>
       <p
         v-if="props.isLoading && props.artists.length === 0"
         class="text-spotify-muted px-2 py-3 text-sm"

@@ -21,9 +21,6 @@
         >
           删除此歌单无法撤销。不会删除曲库歌曲或磁盘文件，也不会改变当前播放队列。
         </p>
-        <p v-if="props.error" class="mt-3 text-sm text-red-300" role="alert">
-          {{ props.error }}
-        </p>
       </div>
 
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -56,7 +53,6 @@ import type { Playlist } from "@/types/playlist";
 const props = defineProps<{
   playlist: Playlist;
   isPending: boolean;
-  error: string;
 }>();
 
 const emit = defineEmits<{

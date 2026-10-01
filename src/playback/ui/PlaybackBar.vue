@@ -103,13 +103,6 @@
     <section
       class="relative col-span-full row-start-2 min-w-0 sm:absolute sm:top-0 sm:left-1/2 sm:col-auto sm:row-auto sm:flex sm:h-full sm:w-[min(24rem,calc(100vw-22.5rem))] sm:-translate-x-1/2 sm:flex-col sm:py-1 md:w-[max(24rem,calc(100vw-41rem))]"
     >
-      <p
-        v-if="playbackFeedback"
-        class="bg-spotify-interactive absolute right-0 bottom-full z-20 mb-2 max-w-[min(22rem,calc(100vw-2rem))] rounded-lg px-3 py-2 text-left text-xs whitespace-pre-line text-red-200 shadow-lg"
-        role="alert"
-      >
-        {{ playbackFeedback }}
-      </p>
       <div class="flex items-center justify-end text-xs sm:h-5">
         <span class="text-spotify-muted text-right tabular-nums">
           {{ formatTime(sliderPositionMs) }}/{{ formatTime(playbackStatus.durationMs) }}
@@ -181,6 +174,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { usePlaybackControls } from "@/playback/useControls";
+import { useNotification } from "@/notification/useNotification";
 import { usePlaybackVolume } from "@/playback/useVolume";
 import {
   Pause,
@@ -284,11 +278,19 @@ watch(
 const sliderPositionMs = computed(() =>
   isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
 );
-const playbackFeedback = computed(() =>
-  [playbackError.value, playbackStartError.value, queuePlaybackError.value, volumeError.value]
-    .filter(Boolean)
-    .join(" "),
-);
+useNotification(() => {
+  const message = [
+    ...new Set(
+      [
+        playbackError.value,
+        playbackStartError.value,
+        queuePlaybackError.value,
+        volumeError.value,
+      ].filter(Boolean),
+    ),
+  ].join("\n");
+  return message ? { type: "error", message, key: "playback" } : null;
+});
 const progressPercent = computed(() =>
   playbackStatus.value.durationMs > 0
     ? (sliderPositionMs.value / playbackStatus.value.durationMs) * 100

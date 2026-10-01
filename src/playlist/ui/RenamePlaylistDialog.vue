@@ -2,11 +2,7 @@
   <dialog
     ref="dialogElement"
     aria-labelledby="rename-playlist-dialog-title"
-    :aria-describedby="
-      validationError || props.error
-        ? 'rename-playlist-dialog-description rename-playlist-dialog-error'
-        : 'rename-playlist-dialog-description'
-    "
+    aria-describedby="rename-playlist-dialog-description"
     class="bg-spotify-surface m-auto w-[min(28rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
     @click.self="cancelDialog"
     @cancel.prevent="cancelDialog"
@@ -38,14 +34,6 @@
         >
           输入新的歌单名称。
         </p>
-        <p
-          v-if="validationError || props.error"
-          id="rename-playlist-dialog-error"
-          class="mt-3 text-sm text-red-300"
-          role="alert"
-        >
-          {{ validationError || props.error }}
-        </p>
       </div>
 
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -71,12 +59,12 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { notify } from "@/notification/center";
 import type { Playlist } from "@/types/playlist";
 
 const props = defineProps<{
   playlist: Playlist;
   isPending: boolean;
-  error: string;
 }>();
 
 const emit = defineEmits<{
@@ -116,6 +104,8 @@ function renamePlaylist() {
   const trimmedName = name.value.trim();
   if (!trimmedName) {
     validationError.value = "歌单名称不能为空。";
+    notify({ type: "error", message: validationError.value, key: "playlist-name-validation" });
+    nameInput.value?.focus();
     return;
   }
 

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import type { TrackDetails } from "@/types/track";
+import { useNotification } from "@/notification/useNotification";
 
 export type TrackInfoInvoker = <Result>(
   command: "get_track",
@@ -19,6 +20,15 @@ export function useTrackInfo(
   const currentTrackDetails = ref<TrackDetails | null>(null);
   const isLoading = ref(false);
   const currentTrackDetailsError = ref("");
+  useNotification(() =>
+    currentTrackDetailsError.value
+      ? {
+          type: "error",
+          message: currentTrackDetailsError.value,
+          key: `track-details:${toValue(trackIdSource)}`,
+        }
+      : null,
+  );
   let currentTrackId: number | null = null;
   let detailsRequestGeneration = 0;
 

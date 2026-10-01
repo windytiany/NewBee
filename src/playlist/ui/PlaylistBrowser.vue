@@ -66,16 +66,13 @@
         <p v-if="props.isLoadingTracks" class="text-spotify-muted py-4 text-sm" role="status">
           正在读取歌单曲目…
         </p>
-        <p v-else-if="props.playlistsError" class="py-4 text-sm text-red-300" role="alert">
-          {{ props.playlistsError }}
-        </p>
-        <p v-else-if="props.tracksError" class="py-4 text-sm text-red-300" role="alert">
-          {{ props.tracksError }}
-        </p>
-        <p v-else-if="props.tracks.length === 0" class="text-spotify-muted py-4 text-sm">
+        <p
+          v-else-if="!props.playlistsError && !props.tracksError && props.tracks.length === 0"
+          class="text-spotify-muted py-4 text-sm"
+        >
           此歌单暂无歌曲。
         </p>
-        <ol v-else ref="trackListElement">
+        <ol v-else-if="!props.playlistsError && !props.tracksError" ref="trackListElement">
           <PlaylistTrack
             v-for="(track, index) in props.tracks"
             :key="track.playlistItemId"
@@ -157,34 +154,20 @@
       <p v-if="props.isLoadingPlaylists" class="text-spotify-muted text-sm" role="status">
         正在读取歌单…
       </p>
-      <p v-else-if="props.playlistsError" class="text-sm text-red-300" role="alert">
-        {{ props.playlistsError }}
-      </p>
-      <p v-else-if="!props.hasPlaylists" class="text-spotify-muted text-sm">还没有歌单。</p>
-      <p v-else class="text-spotify-muted text-sm">请选择一个歌单。</p>
-    </div>
-
-    <div
-      v-if="props.playlistActionError"
-      class="bg-spotify-interactive fixed right-4 bottom-24 z-100 flex max-w-[min(28rem,calc(100vw-2rem))] items-start gap-3 rounded-xl px-4 py-3 text-sm text-red-100 shadow-xl ring-1 ring-white/10"
-      role="alert"
-    >
-      <p class="min-w-0 flex-1 whitespace-pre-wrap">{{ props.playlistActionError }}</p>
-      <button
-        aria-label="关闭错误通知"
-        class="focus-visible:outline-spotify-green -mr-1 -ml-1 rounded p-1 text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2"
-        type="button"
-        @click="emit('dismissPlaylistActionError')"
+      <p
+        v-else-if="!props.playlistsError && !props.hasPlaylists"
+        class="text-spotify-muted text-sm"
       >
-        <X aria-hidden="true" class="size-4" />
-      </button>
+        还没有歌单。
+      </p>
+      <p v-else-if="!props.playlistsError" class="text-spotify-muted text-sm">请选择一个歌单。</p>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
-import { DiscAlbum, Files, Play, X } from "@lucide/vue";
+import { DiscAlbum, Files, Play } from "@lucide/vue";
 import { useContextMenu } from "@/interaction/contextMenu";
 import { useItemFocusList } from "@/interaction/itemFocus";
 import { createPlaylistDragReorder } from "@/playlist/dragReorder";
@@ -277,7 +260,6 @@ const emit = defineEmits<{
   addPlaylistItemsToQueueEnd: [playlistItemIds: number[]];
   removePlaylistItems: [playlistItemIds: number[]];
   reorderPlaylistItems: [orderedPlaylistItemIds: number[]];
-  dismissPlaylistActionError: [];
 }>();
 
 function getTrackRowKey(playlistItemId: number) {

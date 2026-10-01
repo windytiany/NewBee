@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
+import { notify } from "@/notification/center";
+import { useNotification } from "@/notification/useNotification";
+import NotificationHost from "@/notification/ui/NotificationHost.vue";
 import { usePersistentActivePage } from "@/navigation/activePage";
 import { useLibraryPage } from "@/library/usePage";
 import { usePlaylistPage } from "@/playlist/usePage";
@@ -36,6 +39,7 @@ const {
   isTrackActionPending,
   trackActionError,
   trackActionMessage,
+  trackActionMessageType,
   currentTrack,
   activeQueueRowKey,
   selectedGroup,
@@ -66,7 +70,6 @@ const {
   playlistTracksError,
   isPlaylistActionPending,
   playlistActionError,
-  dismissPlaylistActionError,
   coverTrackId,
   isCoverPending,
   selectPlaylist,
@@ -80,6 +83,25 @@ const {
   reorderPlaylistItems,
   refreshPlaylists,
 } = usePlaylistPage(playlistActive);
+for (const [key, source] of [
+  ["library-artists", artistsError],
+  ["library-albums", albumsError],
+  ["library-tracks", tracksError],
+  ["playlist-list", playlistsError],
+  ["playlist-tracks", playlistTracksError],
+  ["playlist-action", playlistActionError],
+] as const) {
+  useNotification(() => (source.value ? { type: "error", message: source.value, key } : null));
+}
+useNotification(() => {
+  if (isTrackActionPending.value) return null;
+  const message = [trackActionMessage.value, trackActionError.value].filter(Boolean).join("\n");
+  if (!message) return null;
+  let type = trackActionMessageType.value as "success" | "warning" | "error";
+  if (trackActionError.value) type = trackActionMessage.value ? "warning" : "error";
+  return { type, message, key: type === "success" ? undefined : "library-action" };
+});
+
 const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
 const deleteTrackDialog = ref<InstanceType<typeof DeleteTrackDialog> | null>(null);
 const playlistList = ref<InstanceType<typeof PlaylistList> | null>(null);
@@ -87,13 +109,10 @@ const renamePlaylistDialog = ref<InstanceType<typeof RenamePlaylistDialog> | nul
 const deletePlaylistDialog = ref<InstanceType<typeof DeletePlaylistDialog> | null>(null);
 const deleteAlbumDialog = ref<InstanceType<typeof DeleteAlbumDialog> | null>(null);
 const deleteAlbumTarget = ref<LibraryAlbumSelection | null>(null);
-const deleteAlbumDialogError = ref("");
 const deleteTrackTarget = ref<TrackSummary | null>(null);
-const deleteTrackDialogError = ref("");
 const managementPlaylistId = ref<number | null>(null);
 const managementDialogType = ref<PlaylistManagementDialog | null>(null);
 const managementOriginalIndex = ref<number | null>(null);
-const managementDialogError = ref("");
 const managementPlaylist = computed(() => {
   const playlistId = managementPlaylistId.value;
   return playlistId === null
@@ -122,7 +141,6 @@ function resetPlaylistManagement() {
   managementPlaylistId.value = null;
   managementDialogType.value = null;
   managementOriginalIndex.value = null;
-  managementDialogError.value = "";
 }
 
 function isCurrentPlaylistManagementRequest(
@@ -149,7 +167,6 @@ function requestPlaylistManagement(dialogType: PlaylistManagementDialog, playlis
   managementPlaylistId.value = playlistId;
   managementDialogType.value = dialogType;
   managementOriginalIndex.value = originalIndex;
-  managementDialogError.value = "";
 
   void nextTick(() => {
     if (!isCurrentPlaylistManagementRequest(playlistId, dialogType, requestId)) return;
@@ -210,7 +227,11 @@ async function confirmPlaylistRename(playlistId: number, name: string) {
   if (!isCurrentPlaylistManagementRequest(playlistId, "rename", requestId)) return;
 
   if (result.status === "error") {
-    managementDialogError.value = result.message;
+    notify({
+      type: "error",
+      message: `重命名歌单失败：${result.message}`,
+      key: "playlist-management",
+    });
     return;
   }
 
@@ -232,7 +253,11 @@ async function confirmPlaylistDeletion(playlistId: number) {
   if (!isCurrentPlaylistManagementRequest(playlistId, "delete", requestId)) return;
 
   if (result.status === "error") {
-    managementDialogError.value = result.message;
+    notify({
+      type: "error",
+      message: `删除歌单失败：${result.message}`,
+      key: "playlist-management",
+    });
     return;
   }
 
@@ -275,23 +300,18 @@ async function addAlbumToExistingPlaylist(album: LibraryAlbumSelection, playlist
 function requestAlbumDeletion(album: LibraryAlbumSelection) {
   if (isTrackActionPending.value) return;
   deleteAlbumTarget.value = album;
-  deleteAlbumDialogError.value = "";
   void nextTick(() => deleteAlbumDialog.value?.show());
 }
 
 function cancelAlbumDeletion() {
   deleteAlbumTarget.value = null;
-  deleteAlbumDialogError.value = "";
 }
 
 async function confirmAlbumDeletion(album: LibraryAlbumSelection) {
   if (deleteAlbumTarget.value !== album) return;
   const result = await removeAlbumFromLibrary(album);
   if (result.deletedCount > 0) await refreshPlaylists(undefined, true);
-  if (!result.completed) {
-    deleteAlbumDialogError.value = result.message;
-    return;
-  }
+  if (!result.completed) return;
   deleteAlbumDialog.value?.close();
   cancelAlbumDeletion();
 }
@@ -301,27 +321,21 @@ function requestTrackDeletion(trackId: number) {
   if (!track) return;
 
   deleteTrackTarget.value = track;
-  deleteTrackDialogError.value = "";
   void nextTick(() => deleteTrackDialog.value?.show());
 }
 
 function cancelTrackDeletion() {
   deleteTrackTarget.value = null;
-  deleteTrackDialogError.value = "";
 }
 
 async function confirmTrackDeletion(trackId: number) {
   if (deleteTrackTarget.value?.id !== trackId) return;
 
   const result = await removeTrackFromLibrary(trackId);
-  if (result.status === "not-deleted") {
-    deleteTrackDialogError.value = result.message;
-    return;
-  }
+  if (result.status === "not-deleted") return;
 
   deleteTrackDialog.value?.close();
   deleteTrackTarget.value = null;
-  deleteTrackDialogError.value = "";
   await refreshPlaylists(undefined, true);
 }
 </script>
@@ -370,8 +384,6 @@ async function confirmTrackDeletion(trackId: number) {
             :playlists-loading="isLoadingPlaylists"
             :playlists-error="playlistsError"
             :track-action-pending="isTrackActionPending"
-            :track-action-error="trackActionError"
-            :track-action-message="trackActionMessage"
             @select-album="selectAlbum"
             @play-track="playTrackFromLibrary"
             @play-album="playAlbumFromLibrary"
@@ -405,7 +417,6 @@ async function confirmTrackDeletion(trackId: number) {
             @add-playlist-items-to-queue-end="addPlaylistItemsToQueueEnd"
             @remove-playlist-items="removePlaylistItems"
             @reorder-playlist-items="reorderPlaylistItems"
-            @dismiss-playlist-action-error="dismissPlaylistActionError"
           />
         </template>
         <template #playing>
@@ -423,7 +434,6 @@ async function confirmTrackDeletion(trackId: number) {
       ref="deleteAlbumDialog"
       :album="deleteAlbumTarget"
       :pending="isTrackActionPending"
-      :error="deleteAlbumDialogError"
       @confirm="confirmAlbumDeletion"
       @cancel="cancelAlbumDeletion"
     />
@@ -432,7 +442,6 @@ async function confirmTrackDeletion(trackId: number) {
       ref="deleteTrackDialog"
       :track="deleteTrackTarget"
       :is-deleting="isTrackActionPending"
-      :error="deleteTrackDialogError"
       @confirm="confirmTrackDeletion"
       @cancel="cancelTrackDeletion"
     />
@@ -441,7 +450,6 @@ async function confirmTrackDeletion(trackId: number) {
       ref="renamePlaylistDialog"
       :playlist="managementPlaylist"
       :is-pending="managementPlaylistPending"
-      :error="managementDialogError"
       @confirm="confirmPlaylistRename"
       @cancel="cancelPlaylistManagement"
     />
@@ -450,10 +458,10 @@ async function confirmTrackDeletion(trackId: number) {
       ref="deletePlaylistDialog"
       :playlist="managementPlaylist"
       :is-pending="managementPlaylistPending"
-      :error="managementDialogError"
       @confirm="confirmPlaylistDeletion"
       @cancel="cancelPlaylistManagement"
     />
     <PlaybackBar />
+    <NotificationHost />
   </div>
 </template>

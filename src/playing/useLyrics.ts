@@ -4,6 +4,7 @@ import type { Ref } from "vue";
 import type { PlaybackCommandInvoker } from "@/playback/state";
 import type { PlaybackStatus } from "@/playback/status";
 import type { LyricLine, TrackLyrics } from "@/playing/types";
+import { notify } from "@/notification/center";
 
 export type PlayingLyricsState =
   | { status: "idle" }
@@ -75,6 +76,13 @@ export function usePlayingLyrics(options: PlayingLyricsOptions) {
       outcome = { status: "error", message };
     } finally {
       if (version === requestVersion) {
+        if (outcome.status === "error") {
+          notify({
+            type: "error",
+            message: `歌词读取失败：${outcome.message}`,
+            key: `track-lyrics:${trackId}`,
+          });
+        }
         lyricsState.value =
           outcome.status === "ready"
             ? { status: "ready", lyrics: outcome.lyrics }

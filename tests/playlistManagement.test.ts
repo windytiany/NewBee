@@ -4,6 +4,8 @@ import * as Vue from "vue";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import type { Playlist } from "@/types/playlist";
+import { notifications, notify } from "@/notification/center";
+import { useNotification } from "@/notification/useNotification";
 
 type ManagementResult = { status: "success" } | { status: "error"; message: string };
 class TestDocument {
@@ -79,7 +81,7 @@ function compileComponent(
 const bunRuntime = globalThis as typeof globalThis & {
   Bun: { file: (path: URL) => { text: () => Promise<string> } };
 };
-const vueModules = { vue: Vue };
+const vueModules = { vue: Vue, "@/notification/center": { notify } };
 const renameDialogComponent = compileComponent(
   await bunRuntime.Bun.file(
     new URL("../src/playlist/ui/RenamePlaylistDialog.vue", import.meta.url),
@@ -199,6 +201,7 @@ const emptyLibraryPage = () => ({
   isTrackActionPending: Vue.ref(false),
   trackActionError: Vue.ref(""),
   trackActionMessage: Vue.ref(""),
+  trackActionMessageType: Vue.ref("success"),
   currentTrack: Vue.ref(null),
   activeQueueRowKey: Vue.ref(null),
   selectedGroup: Vue.ref(null),
@@ -214,6 +217,8 @@ const emptyLibraryPage = () => ({
 });
 const appModules: Record<string, unknown> = {
   ...vueModules,
+  "@/notification/useNotification": { useNotification },
+  "@/notification/ui/NotificationHost.vue": { __esModule: true, default: passiveComponent },
   "@/navigation/activePage": { usePersistentActivePage: () => ({ activePage }) },
   "@/library/usePage": { useLibraryPage: emptyLibraryPage },
   "@/playlist/usePage": {
@@ -229,7 +234,6 @@ const appModules: Record<string, unknown> = {
       playlistTracksError: Vue.ref(""),
       isPlaylistActionPending: Vue.ref(false),
       playlistActionError: Vue.ref(""),
-      dismissPlaylistActionError: () => {},
       coverTrackId: Vue.computed(() => selectedPlaylist.value?.coverTrackId ?? null),
       isCoverPending: Vue.ref(false),
       selectPlaylist: (playlist: Playlist) => {
@@ -385,6 +389,8 @@ function click(node: HostNode | null) {
 function setInputValue(node: HostNode, value: string) {
   node.value = value;
   node.dispatch("input");
+  const handler = node.props.onInput;
+  if (typeof handler === "function") handler({ target: node });
 }
 
 function submitRename(root: HostNode) {
@@ -409,6 +415,7 @@ function requestDelete(root: HostNode, playlistId: number) {
 }
 
 beforeEach(() => {
+  notifications.clear();
   playlists.value = [firstPlaylist, secondPlaylist, thirdPlaylist];
   selectedPlaylistId.value = firstPlaylist.id;
   playlistTracks.value = [];
@@ -439,6 +446,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
+  notifications.clear();
   if (originalDocument) Object.defineProperty(globalThis, "document", originalDocument);
   else Reflect.deleteProperty(globalThis, "document");
   if (originalDocumentConstructor) {
@@ -454,6 +462,38 @@ afterEach(() => {
 });
 
 describe("App 歌单管理", () => {
+  it("空名称通过 toast 校验，保留输入焦点和 aria-invalid", async () => {
+    let renameCalls = 0;
+    renameAction = async () => {
+      renameCalls++;
+      return { status: "success" };
+    };
+    const root = mountApp();
+    requestRename(root, secondPlaylist.id);
+    await settleApp();
+    const input = findNode(root, (node) => node.props.id === "rename-playlist-name");
+    if (!input) throw new Error("Rename dialog input was not rendered.");
+    setInputValue(input, "  ");
+    submitRename(root);
+    await settleApp();
+    expect(renameCalls).toBe(0);
+    expect(input.props["aria-invalid"]).toBe("true");
+    expect(focusedNode).toBe(input);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "error",
+      message: "歌单名称不能为空。",
+    });
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+    notifications.dismiss(notifications.items.value[0].id);
+    expect(input.props["aria-invalid"]).toBe("true");
+    submitRename(root);
+    await settleApp();
+    expect(notifications.items.value).toHaveLength(1);
+    setInputValue(input, "Valid name");
+    await Vue.nextTick();
+    expect(input.props["aria-invalid"]).toBeUndefined();
+  });
+
   it("重命名失败时保留输入和对话框", async () => {
     renameAction = async () => ({ status: "error", message: "数据库不可用" });
     const root = mountApp();
@@ -467,7 +507,10 @@ describe("App 歌单管理", () => {
     await settleApp();
 
     expect(input.value).toBe("My edited name");
-    expect(findNode(root, (node) => node.props.role === "alert")?.text).toBe("数据库不可用");
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+    expect(notifications.items.value.map(({ message }) => message)).toEqual([
+      "重命名歌单失败：数据库不可用",
+    ]);
     expect(findNode(root, (node) => node.type === "dialog" && node.open)).not.toBeNull();
     expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
     expect(findByTestId(root, "right-playlist")?.props["data-playlist-id"]).toBe("1");
@@ -570,6 +613,7 @@ describe("App 歌单管理", () => {
     const currentInput = findNode(root, (node) => node.props.id === "rename-playlist-name");
     expect(currentInput?.value).toBe("Second");
     expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+    expect(notifications.items.value).toEqual([]);
     expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
     expect(queueMutationCalls).toEqual([]);
   });

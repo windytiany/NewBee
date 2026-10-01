@@ -251,7 +251,7 @@ describe("歌单页面操作", () => {
     expect(page.coverTrackId.value).toBe(501);
     expect(page.selectedPlaylist.value?.coverTrackId).toBe(501);
     expect(page.playlistActionError.value).toContain("database unavailable");
-    page.dismissPlaylistActionError();
+    page.selectPlaylist(secondPlaylist);
     expect(page.playlistActionError.value).toBe("");
   });
 

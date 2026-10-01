@@ -131,10 +131,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     playlistActionError.value = message;
   }
 
-  function dismissPlaylistActionError() {
-    playlistActionError.value = "";
-  }
-
   function getLoadedPlaylistTracks(playlistId: number) {
     if (
       selectedPlaylistId.value !== playlistId ||
@@ -674,7 +670,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     pendingPlaylistIds,
     isPlaylistActionPending,
     playlistActionError,
-    dismissPlaylistActionError,
     coverTrackId,
     isCoverPending,
     selectPlaylist,

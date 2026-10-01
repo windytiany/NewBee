@@ -46,11 +46,8 @@
     <p v-if="props.tracksLoading" class="text-spotify-muted py-3 text-sm" role="status">
       正在读取曲目…
     </p>
-    <p v-else-if="props.tracksError" class="py-3 text-sm text-red-300" role="alert">
-      {{ props.tracksError }}
-    </p>
     <ol
-      v-else-if="props.tracks.length > 0"
+      v-else-if="!props.tracksError && props.tracks.length > 0"
       ref="trackListElement"
       class="grid gap-x-8"
       :class="trackColumnCount === 2 ? 'grid-flow-col grid-cols-2' : 'grid-cols-1'"
@@ -73,7 +70,7 @@
         @context-menu="openTrackContextMenu"
       />
     </ol>
-    <p v-else class="text-spotify-muted py-3 text-sm">此专辑暂无曲目。</p>
+    <p v-else-if="!props.tracksError" class="text-spotify-muted py-3 text-sm">此专辑暂无曲目。</p>
 
     <div
       v-if="contextMenu"
@@ -133,15 +130,15 @@
         role="menu"
         aria-label="选择目标歌单"
       >
-        <p v-if="props.playlistsError" class="px-2 py-2 text-sm text-red-300" role="alert">
-          读取歌单失败：{{ props.playlistsError }}
-        </p>
-        <p v-else-if="props.playlists.length === 0" class="text-spotify-muted px-2 py-2 text-sm">
+        <p
+          v-if="!props.playlistsError && props.playlists.length === 0"
+          class="text-spotify-muted px-2 py-2 text-sm"
+        >
           暂无可用歌单。
         </p>
         <button
           v-for="playlist in props.playlists"
-          v-else
+          v-else-if="!props.playlistsError"
           :key="playlist.id"
           ref="playlistMenuItemElements"
           class="focus-visible:outline-spotify-green w-full truncate rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"

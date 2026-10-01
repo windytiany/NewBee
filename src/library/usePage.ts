@@ -32,6 +32,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   const isTrackActionPending = ref(false);
   const trackActionError = ref("");
   const trackActionMessage = ref("");
+  const trackActionMessageType = ref<"success" | "warning">("success");
   const playbackSession = usePlaybackSession();
   const { currentTrack, activeQueueRowKey } = playbackSession.state;
   const {
@@ -352,6 +353,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
       }
     }
 
+    trackActionMessageType.value = failures.length ? "warning" : "success";
     trackActionMessage.value = failures.length
       ? `已成功添加 ${successfulTrackIds.length} 首；${failures.length} 首失败：${failures
           .map(({ trackName, message }) => `${trackName}（${message}）`)
@@ -369,6 +371,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
 
     isTrackActionPending.value = true;
     trackActionError.value = "";
+    trackActionMessage.value = "";
     try {
       const result = await deleteLibraryTrack(trackId);
       if (result.status !== "not-deleted") await refreshLibrary();
@@ -472,6 +475,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
       }
       if (deletedCount > 0) await refreshLibrary();
       trackActionError.value = failures.length ? failures.join("、") : "";
+      trackActionMessageType.value = "success";
       trackActionMessage.value = `已从曲库删除 ${deletedCount} 首曲目。`;
       return true;
     });
@@ -543,6 +547,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     isTrackActionPending,
     trackActionError,
     trackActionMessage,
+    trackActionMessageType,
     currentTrack,
     activeQueueRowKey,
     selectedGroup,
