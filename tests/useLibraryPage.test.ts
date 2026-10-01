@@ -30,6 +30,11 @@ let availableTracks = [track];
 let playlistAddCalls: number[] = [];
 let playlistAddFailures = new Map<number, Error>();
 let queueNextBatchCalls: number[][] = [];
+let queueEndBatchCalls: number[][] = [];
+let albumTrackRequests: Record<string, unknown>[] = [];
+let albumTracksError: Error | null = null;
+let databaseDeleteFailures = new Map<number, Error>();
+let databaseDeleteCalls: number[] = [];
 
 let invokeCalls: string[] = [];
 let databaseDeleteError: Error | null = null;
@@ -54,7 +59,18 @@ mock.module("@tauri-apps/api/core", () => ({
     }
     if (command === "list_album_artists") return [artist];
     if (command === "list_albums") return [album];
-    if (command === "list_album_tracks") return availableTracks;
+    if (command === "list_album_tracks") {
+      albumTrackRequests.push(args ?? {});
+      if (albumTracksError) throw albumTracksError;
+      return availableTracks;
+    }
+    if (command === "remove_track_from_library") {
+      const trackId = args?.trackId as number;
+      databaseDeleteCalls.push(trackId);
+      const error = databaseDeleteFailures.get(trackId);
+      if (error) throw error;
+      availableTracks = availableTracks.filter((entry) => entry.id !== trackId);
+    }
     if (command === "add_track_to_playlist") {
       const trackId = args?.trackId as number;
       playlistAddCalls.push(trackId);
@@ -101,7 +117,10 @@ mock.module("@/playback/session", () => ({
       queueNextBatchCalls.push(tracksToAdd.map(({ trackId }) => trackId));
       return true;
     },
-    addTracksToQueueEnd: async () => true,
+    addTracksToQueueEnd: async (tracksToAdd: { trackId: number }[]) => {
+      queueEndBatchCalls.push(tracksToAdd.map(({ trackId }) => trackId));
+      return true;
+    },
     beginSeeking: () => {
       mockedIsSeeking.value = true;
     },
@@ -166,6 +185,11 @@ beforeEach(() => {
   playlistAddCalls = [];
   playlistAddFailures = new Map();
   queueNextBatchCalls = [];
+  queueEndBatchCalls = [];
+  albumTrackRequests = [];
+  albumTracksError = null;
+  databaseDeleteFailures = new Map();
+  databaseDeleteCalls = [];
   databaseDeleteError = null;
   queueRemovalResult = { status: "not-found" };
   queueRemovalError = null;
@@ -188,6 +212,78 @@ afterEach(() => {
   } else {
     Reflect.deleteProperty(globalThis, "window");
   }
+});
+
+describe("library album actions", () => {
+  const selection = { albumArtist: "Other artist", album: "Other album" };
+
+  it("loads the target album without expanding it and queues all tracks in order", async () => {
+    availableTracks = [track, secondTrack, thirdTrack];
+    const page = mountLibraryPage();
+    await settleRequests();
+
+    expect(await page.addAlbumToNext(selection)).toBe(true);
+    expect(await page.addAlbumToQueueEnd(selection)).toBe(true);
+    expect(albumTrackRequests).toEqual([selection, selection]);
+    expect(queueNextBatchCalls).toEqual([[track.id, secondTrack.id, thirdTrack.id]]);
+    expect(queueEndBatchCalls).toEqual([[track.id, secondTrack.id, thirdTrack.id]]);
+    expect(page.selectedAlbum.value).toBeNull();
+    expect(page.tracks.value).toEqual([]);
+  });
+
+  it("adds the whole album to a playlist and continues after an item fails", async () => {
+    availableTracks = [track, secondTrack, thirdTrack];
+    playlistAddFailures.set(secondTrack.id, new Error("permission denied"));
+    const page = mountLibraryPage();
+    await settleRequests();
+
+    const result = await page.addAlbumToPlaylist(selection, 3);
+
+    expect(result.successfulTrackIds).toEqual([track.id, thirdTrack.id]);
+    expect(playlistAddCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
+    expect(page.trackActionMessage.value).toContain("1 首失败");
+    expect(page.isTrackActionPending.value).toBe(false);
+  });
+
+  it("deletes every album track and cleans the queue with one library refresh", async () => {
+    availableTracks = [track, secondTrack, thirdTrack];
+    const page = mountLibraryPage();
+    await settleRequests();
+
+    const result = await page.removeAlbumFromLibrary(selection);
+
+    expect(result).toEqual({ completed: true, deletedCount: 3, message: "" });
+    expect(databaseDeleteCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
+    expect(queueRemovalCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
+    expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(2);
+  });
+
+  it("reports partial deletion and continues deleting the remaining tracks", async () => {
+    availableTracks = [track, secondTrack, thirdTrack];
+    databaseDeleteFailures.set(secondTrack.id, new Error("database busy"));
+    const page = mountLibraryPage();
+    await settleRequests();
+
+    const result = await page.removeAlbumFromLibrary(selection);
+
+    expect(result.completed).toBe(false);
+    expect(result.deletedCount).toBe(2);
+    expect(result.message).toContain("Second song（从曲库删除失败：database busy）");
+    expect(queueRemovalCalls).toEqual([track.id, thirdTrack.id]);
+  });
+
+  it("reports a fetch failure without modifying the queue or database", async () => {
+    const page = mountLibraryPage();
+    await settleRequests();
+    albumTracksError = new Error("database unavailable");
+
+    expect(await page.addAlbumToNext(selection)).toBe(false);
+    expect((await page.removeAlbumFromLibrary(selection)).completed).toBe(false);
+    expect(queueNextBatchCalls).toEqual([]);
+    expect(databaseDeleteCalls).toEqual([]);
+    expect(page.trackActionError.value).toContain("database unavailable");
+    expect(page.isTrackActionPending.value).toBe(false);
+  });
 });
 
 describe("library track actions", () => {

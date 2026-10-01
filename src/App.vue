@@ -7,6 +7,8 @@ import PlayingPage from "@/playing/PlayingPage.vue";
 import PlaybackBar from "@/playback/ui/PlaybackBar.vue";
 import AlbumBrowser from "@/library/ui/AlbumBrowser.vue";
 import DeleteTrackDialog from "@/library/ui/DeleteTrackDialog.vue";
+import DeleteAlbumDialog from "@/library/ui/DeleteAlbumDialog.vue";
+import type { LibraryAlbumSelection } from "@/library/selection";
 import ArtistList from "@/library/ui/ArtistList.vue";
 import CreatePlaylistDialog from "@/playlist/ui/CreatePlaylistDialog.vue";
 import DeletePlaylistDialog from "@/playlist/ui/DeletePlaylistDialog.vue";
@@ -46,6 +48,10 @@ const {
   addTracksToQueueEnd,
   addTracksToPlaylist,
   removeTrackFromLibrary,
+  addAlbumToNext,
+  addAlbumToQueueEnd,
+  addAlbumToPlaylist,
+  removeAlbumFromLibrary,
 } = useLibraryPage(libraryActive);
 const playlistActive = computed(() => activePage.value === "Playlist");
 const {
@@ -79,6 +85,9 @@ const deleteTrackDialog = ref<InstanceType<typeof DeleteTrackDialog> | null>(nul
 const playlistList = ref<InstanceType<typeof PlaylistList> | null>(null);
 const renamePlaylistDialog = ref<InstanceType<typeof RenamePlaylistDialog> | null>(null);
 const deletePlaylistDialog = ref<InstanceType<typeof DeletePlaylistDialog> | null>(null);
+const deleteAlbumDialog = ref<InstanceType<typeof DeleteAlbumDialog> | null>(null);
+const deleteAlbumTarget = ref<LibraryAlbumSelection | null>(null);
+const deleteAlbumDialogError = ref("");
 const deleteTrackTarget = ref<TrackSummary | null>(null);
 const deleteTrackDialogError = ref("");
 const managementPlaylistId = ref<number | null>(null);
@@ -258,6 +267,35 @@ async function addTracksToExistingPlaylist(trackIds: number[], playlistId: numbe
   if (result.successfulTrackIds.length > 0) await refreshPlaylists(undefined, true);
 }
 
+async function addAlbumToExistingPlaylist(album: LibraryAlbumSelection, playlistId: number) {
+  const result = await addAlbumToPlaylist(album, playlistId);
+  if (result.successfulTrackIds.length > 0) await refreshPlaylists(undefined, true);
+}
+
+function requestAlbumDeletion(album: LibraryAlbumSelection) {
+  if (isTrackActionPending.value) return;
+  deleteAlbumTarget.value = album;
+  deleteAlbumDialogError.value = "";
+  void nextTick(() => deleteAlbumDialog.value?.show());
+}
+
+function cancelAlbumDeletion() {
+  deleteAlbumTarget.value = null;
+  deleteAlbumDialogError.value = "";
+}
+
+async function confirmAlbumDeletion(album: LibraryAlbumSelection) {
+  if (deleteAlbumTarget.value !== album) return;
+  const result = await removeAlbumFromLibrary(album);
+  if (result.deletedCount > 0) await refreshPlaylists(undefined, true);
+  if (!result.completed) {
+    deleteAlbumDialogError.value = result.message;
+    return;
+  }
+  deleteAlbumDialog.value?.close();
+  cancelAlbumDeletion();
+}
+
 function requestTrackDeletion(trackId: number) {
   const track = tracks.value.find((entry) => entry.id === trackId);
   if (!track) return;
@@ -342,6 +380,10 @@ async function confirmTrackDeletion(trackId: number) {
             @add-tracks-to-queue-end="addTracksToQueueEnd"
             @add-tracks-to-playlist="addTracksToExistingPlaylist"
             @delete-track="requestTrackDeletion"
+            @add-album-to-next="addAlbumToNext"
+            @add-album-to-queue-end="addAlbumToQueueEnd"
+            @add-album-to-playlist="addAlbumToExistingPlaylist"
+            @delete-album="requestAlbumDeletion"
           />
           <PlaylistBrowser
             v-else-if="activePage === 'Playlist'"
@@ -375,6 +417,15 @@ async function confirmTrackDeletion(trackId: number) {
       v-if="activePage === 'Playlist'"
       ref="createPlaylistDialog"
       @created="onPlaylistCreated"
+    />
+    <DeleteAlbumDialog
+      v-if="deleteAlbumTarget"
+      ref="deleteAlbumDialog"
+      :album="deleteAlbumTarget"
+      :pending="isTrackActionPending"
+      :error="deleteAlbumDialogError"
+      @confirm="confirmAlbumDeletion"
+      @cancel="cancelAlbumDeletion"
     />
     <DeleteTrackDialog
       v-if="deleteTrackTarget"

@@ -8,7 +8,11 @@
       :aria-expanded="isSelected"
       :title="artworkLoadFailed ? '专辑封面加载失败' : undefined"
       type="button"
+      aria-haspopup="menu"
+      :aria-controls="props.isContextMenuOpen ? 'album-context-menu' : undefined"
       @click="emit('select')"
+      @contextmenu="openAlbumContextMenu"
+      @keydown="handleContextMenuKeydown"
     >
       <span
         aria-hidden="true"
@@ -55,11 +59,34 @@ const props = defineProps<{
   coverIndex: number;
   isSelected: boolean;
   isFocused: boolean;
+  isContextMenuOpen?: boolean;
 }>();
 
 const emit = defineEmits<{
   select: [];
+  contextMenu: [
+    request: { x: number; y: number; trigger: InstanceType<typeof globalThis.HTMLButtonElement> },
+  ];
 }>();
+
+function openAlbumContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
+  event.preventDefault();
+  event.stopPropagation();
+  emit("contextMenu", {
+    x: event.clientX,
+    y: event.clientY,
+    trigger: event.currentTarget as InstanceType<typeof globalThis.HTMLButtonElement>,
+  });
+}
+
+function handleContextMenuKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+  if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const trigger = event.currentTarget as InstanceType<typeof globalThis.HTMLButtonElement>;
+  const bounds = trigger.getBoundingClientRect();
+  emit("contextMenu", { x: bounds.left, y: bounds.bottom, trigger });
+}
 
 const artworkUrl = ref<string | null>(null);
 const artworkLoadFailed = ref(false);

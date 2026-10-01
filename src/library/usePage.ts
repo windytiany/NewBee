@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { usePersistentLibrarySelection } from "@/library/selection";
+import type { LibraryAlbumSelection } from "@/library/selection";
 import { usePlaybackSession } from "@/playback/session";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/library/scan";
 import type { AlbumArtistSummary } from "@/types/artist";
@@ -315,30 +316,40 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     trackActionError.value = "";
     trackActionMessage.value = "";
     try {
-      for (const trackId of trackIds) {
-        const track = findLibraryTrack(trackId);
-        if (!track) {
-          failures.push({
-            trackId,
-            trackName: `曲目 ${trackId}`,
-            message: "曲目已不可用",
-          });
-          continue;
-        }
-
-        try {
-          await invoke<void>("add_track_to_playlist", { trackId, playlistId });
-          successfulTrackIds.push(trackId);
-        } catch (error) {
-          failures.push({
-            trackId,
-            trackName: track.title ?? `曲目 ${trackId}`,
-            message: errorMessage(error),
-          });
-        }
-      }
+      return await appendSourceTracksToPlaylist(trackIds, playlistId, tracks.value);
     } finally {
       isTrackActionPending.value = false;
+    }
+  }
+
+  async function appendSourceTracksToPlaylist(
+    trackIds: readonly number[],
+    playlistId: number,
+    sourceTracks: readonly TrackSummary[],
+  ) {
+    const successfulTrackIds: number[] = [];
+    const failures: { trackId: number; trackName: string; message: string }[] = [];
+    for (const trackId of trackIds) {
+      const track = sourceTracks.find((entry) => entry.id === trackId);
+      if (!track) {
+        failures.push({
+          trackId,
+          trackName: `曲目 ${trackId}`,
+          message: "曲目已不可用",
+        });
+        continue;
+      }
+
+      try {
+        await invoke<void>("add_track_to_playlist", { trackId, playlistId });
+        successfulTrackIds.push(trackId);
+      } catch (error) {
+        failures.push({
+          trackId,
+          trackName: track.title ?? `曲目 ${trackId}`,
+          message: errorMessage(error),
+        });
+      }
     }
 
     trackActionMessage.value = failures.length
@@ -359,58 +370,116 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     isTrackActionPending.value = true;
     trackActionError.value = "";
     try {
-      try {
-        await invoke<void>("remove_track_from_library", { trackId });
-      } catch (error) {
-        const message = `从曲库删除失败：${errorMessage(error)}`;
-        trackActionError.value = message;
-        return { status: "not-deleted", message };
-      }
-
-      let queueResult:
-        | Awaited<ReturnType<typeof removeTrackFromQueue>>
-        | { status: "queue-error"; message: string };
-      try {
-        queueResult = await removeTrackFromQueue(trackId);
-      } catch (error) {
-        queueResult = { status: "queue-error", message: errorMessage(error) };
-      }
-      await refreshLibrary();
-
-      if (queueResult.status === "removed" || queueResult.status === "not-found") {
-        return { status: "deleted" };
-      }
-
-      let issue: Extract<
-        LibraryTrackRemovalResult,
-        { status: "deleted-queue-sync-failed" }
-      >["issue"];
-      let message: string;
-      switch (queueResult.status) {
-        case "stop-failed":
-          issue = "stop-failed";
-          message = `曲库索引已删除，但停止当前播放失败：${queueResult.message}`;
-          break;
-        case "stop-unconfirmed":
-          issue = "stop-unconfirmed";
-          message = "曲库索引已删除，但无法确认当前播放已停止，未推进下一首。";
-          break;
-        case "superseded":
-          issue = "superseded";
-          message = "曲库索引已删除，但队列清理已被较新的播放操作取代。";
-          break;
-        case "queue-error":
-          issue = "queue-error";
-          message = `曲库索引已删除，但播放队列同步失败：${queueResult.message}`;
-          break;
-        default:
-          throw new Error("Unexpected queue removal result.");
-      }
-      trackActionError.value = message;
-      return { status: "deleted-queue-sync-failed", issue, message };
+      const result = await deleteLibraryTrack(trackId);
+      if (result.status !== "not-deleted") await refreshLibrary();
+      return result;
     } finally {
       isTrackActionPending.value = false;
     }
+  }
+
+  async function deleteLibraryTrack(trackId: number): Promise<LibraryTrackRemovalResult> {
+    try {
+      await invoke<void>("remove_track_from_library", { trackId });
+    } catch (error) {
+      const message = `从曲库删除失败：${errorMessage(error)}`;
+      trackActionError.value = message;
+      return { status: "not-deleted", message };
+    }
+
+    let queueResult:
+      Awaited<ReturnType<typeof removeTrackFromQueue>> | { status: "queue-error"; message: string };
+    try {
+      queueResult = await removeTrackFromQueue(trackId);
+    } catch (error) {
+      queueResult = { status: "queue-error", message: errorMessage(error) };
+    }
+
+    if (queueResult.status === "removed" || queueResult.status === "not-found") {
+      return { status: "deleted" };
+    }
+
+    let issue: Extract<LibraryTrackRemovalResult, { status: "deleted-queue-sync-failed" }>["issue"];
+    let message: string;
+    switch (queueResult.status) {
+      case "stop-failed":
+        issue = "stop-failed";
+        message = `曲库索引已删除，但停止当前播放失败：${queueResult.message}`;
+        break;
+      case "stop-unconfirmed":
+        issue = "stop-unconfirmed";
+        message = "曲库索引已删除，但无法确认当前播放已停止，未推进下一首。";
+        break;
+      case "superseded":
+        issue = "superseded";
+        message = "曲库索引已删除，但队列清理已被较新的播放操作取代。";
+        break;
+      case "queue-error":
+        issue = "queue-error";
+        message = `曲库索引已删除，但播放队列同步失败：${queueResult.message}`;
+        break;
+      default:
+        throw new Error("Unexpected queue removal result.");
+    }
+    trackActionError.value = message;
+    return { status: "deleted-queue-sync-failed", issue, message };
+  }
+
+  function loadAlbumActionTracks(selection: LibraryAlbumSelection) {
+    return invoke<TrackSummary[]>("list_album_tracks", selection);
+  }
+
+  function addAlbumToNext(selection: LibraryAlbumSelection) {
+    return runTrackAction("添加专辑为下一首", async () => {
+      const sourceTracks = await loadAlbumActionTracks(selection);
+      return sourceTracks.length > 0 && enqueueTracksToNext(sourceTracks.map(toQueueTrack));
+    });
+  }
+
+  function addAlbumToQueueEnd(selection: LibraryAlbumSelection) {
+    return runTrackAction("添加专辑到队尾", async () => {
+      const sourceTracks = await loadAlbumActionTracks(selection);
+      return sourceTracks.length > 0 && enqueueTracksToQueueEnd(sourceTracks.map(toQueueTrack));
+    });
+  }
+
+  async function addAlbumToPlaylist(selection: LibraryAlbumSelection, playlistId: number) {
+    let successfulTrackIds: number[] = [];
+    await runTrackAction("添加专辑到播放列表", async () => {
+      const sourceTracks = await loadAlbumActionTracks(selection);
+      const result = await appendSourceTracksToPlaylist(
+        sourceTracks.map((track) => track.id),
+        playlistId,
+        sourceTracks,
+      );
+      successfulTrackIds = result.successfulTrackIds;
+      return sourceTracks.length > 0;
+    });
+    return { successfulTrackIds };
+  }
+
+  async function removeAlbumFromLibrary(selection: LibraryAlbumSelection) {
+    let deletedCount = 0;
+    const failures: string[] = [];
+    const completed = await runTrackAction("从曲库删除专辑", async () => {
+      const sourceTracks = await loadAlbumActionTracks(selection);
+      for (const track of sourceTracks) {
+        const result = await deleteLibraryTrack(track.id);
+        if (result.status !== "not-deleted") deletedCount++;
+        if (result.status !== "deleted") {
+          failures.push(`${track.title ?? `曲目 ${track.id}`}（${result.message}）`);
+        }
+      }
+      if (deletedCount > 0) await refreshLibrary();
+      trackActionError.value = failures.length ? failures.join("、") : "";
+      trackActionMessage.value = `已从曲库删除 ${deletedCount} 首曲目。`;
+      return true;
+    });
+    return {
+      completed: completed && failures.length === 0,
+      deletedCount,
+      message: trackActionError.value,
+    };
   }
 
   function onLibraryScanCompleted() {
@@ -487,5 +556,9 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     addTracksToQueueEnd,
     addTracksToPlaylist,
     removeTrackFromLibrary,
+    addAlbumToNext,
+    addAlbumToQueueEnd,
+    addAlbumToPlaylist,
+    removeAlbumFromLibrary,
   };
 }

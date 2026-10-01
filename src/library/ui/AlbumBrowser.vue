@@ -47,7 +47,9 @@
               :cover-index="row.startIndex + index"
               :is-selected="isSelectedAlbum(album)"
               :is-focused="albumFocus.isFocused(getAlbumKey(album))"
+              :is-context-menu-open="albumMenu?.contextMenu?.payload.album === album.album"
               @select="toggleAlbum(album)"
+              @context-menu="openAlbumContextMenu(album, $event)"
             />
           </div>
           <div v-if="row.selectedAlbum" class="relative">
@@ -85,6 +87,20 @@
       </div>
     </template>
     <p v-else class="text-spotify-muted px-5 py-6 text-sm sm:px-8">请选择专辑演出者。</p>
+    <AlbumContextMenu
+      ref="albumMenu"
+      :scope="albumListScope"
+      :album-keys="albumItemKeys"
+      :pending="props.trackActionPending"
+      :playlists="props.playlists"
+      :playlists-loading="props.playlistsLoading"
+      :playlists-error="props.playlistsError"
+      @refresh-playlists="emit('refreshPlaylists')"
+      @add-to-next="emit('addAlbumToNext', $event)"
+      @add-to-queue-end="emit('addAlbumToQueueEnd', $event)"
+      @add-to-playlist="(album, playlistId) => emit('addAlbumToPlaylist', album, playlistId)"
+      @delete-album="emit('deleteAlbum', $event)"
+    />
   </section>
 </template>
 
@@ -98,6 +114,7 @@ import type { Playlist } from "@/types/playlist";
 import type { TrackSummary } from "@/types/track";
 import AlbumDetail from "@/library/ui/AlbumDetail.vue";
 import AlbumCard from "@/library/ui/AlbumCard.vue";
+import AlbumContextMenu from "@/library/ui/AlbumContextMenu.vue";
 
 type AlbumBrowserRow = {
   id: string;
@@ -136,7 +153,25 @@ const emit = defineEmits<{
   addTracksToQueueEnd: [trackIds: number[]];
   addTracksToPlaylist: [trackIds: number[], playlistId: number];
   deleteTrack: [trackId: number];
+  addAlbumToNext: [album: LibraryAlbumSelection];
+  addAlbumToQueueEnd: [album: LibraryAlbumSelection];
+  addAlbumToPlaylist: [album: LibraryAlbumSelection, playlistId: number];
+  deleteAlbum: [album: LibraryAlbumSelection];
 }>();
+
+const albumMenu = ref<InstanceType<typeof AlbumContextMenu> | null>(null);
+
+function openAlbumContextMenu(
+  album: AlbumSummary,
+  request: { x: number; y: number; trigger: InstanceType<typeof globalThis.HTMLButtonElement> },
+) {
+  if (!props.artist) return;
+  albumFocus.focusItem(getAlbumKey(album));
+  albumMenu.value?.open({
+    ...request,
+    album: { albumArtist: props.artist.albumArtist, album: album.album },
+  });
+}
 
 const columnCount = ref(2);
 const albumListScope = computed(() =>
