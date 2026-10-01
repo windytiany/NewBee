@@ -8,6 +8,7 @@ export type TrackArtworkStatus = "loading" | "ready" | "fallback";
 type ArtworkSnapshot = {
   status: TrackArtworkStatus;
   url: string | null;
+  error: string;
 };
 
 type ArtworkSubscriber = (snapshot: ArtworkSnapshot) => void;
@@ -16,11 +17,13 @@ type SharedArtwork = {
   trackId: number;
   status: TrackArtworkStatus;
   url: string | null;
+  error: string;
   pendingUrl: string | null;
   decoder: HTMLImageElement | null;
   generation: number;
   subscribers: Set<ArtworkSubscriber>;
   retiredUrls: Set<string>;
+  retainedUrls: Map<string, number>;
 };
 
 const sharedArtworkByTrackId = new Map<number, SharedArtwork>();
@@ -28,9 +31,11 @@ const sharedArtworkByTrackId = new Map<number, SharedArtwork>();
 export function useTrackArtwork(trackId: MaybeRefOrGetter<number | null>): {
   status: Readonly<Ref<TrackArtworkStatus>>;
   url: Readonly<Ref<string | null>>;
+  error: Readonly<Ref<string>>;
 } {
   const status = ref<TrackArtworkStatus>("fallback");
   const url = ref<string | null>(null);
+  const error = ref("");
   let currentTrackId: number | null = null;
   let unsubscribe: (() => void) | null = null;
 
@@ -41,6 +46,7 @@ export function useTrackArtwork(trackId: MaybeRefOrGetter<number | null>): {
       unsubscribe?.();
       unsubscribe = null;
       url.value = null;
+      error.value = "";
 
       if (nextTrackId === null) {
         status.value = "fallback";
@@ -52,6 +58,7 @@ export function useTrackArtwork(trackId: MaybeRefOrGetter<number | null>): {
         if (currentTrackId !== nextTrackId) return;
         status.value = snapshot.status;
         url.value = snapshot.url;
+        error.value = snapshot.error;
       });
     },
     { immediate: true, flush: "sync" },
@@ -64,7 +71,31 @@ export function useTrackArtwork(trackId: MaybeRefOrGetter<number | null>): {
     stop();
   });
 
-  return { status: readonly(status), url: readonly(url) };
+  return { status: readonly(status), url: readonly(url), error: readonly(error) };
+}
+
+/** Keeps the decoded URL alive until a displayed artwork's leave transition finishes. */
+export function retainTrackArtwork(trackId: number): () => void {
+  const unsubscribe = subscribeToTrackArtwork(trackId, () => {});
+  const entry = sharedArtworkByTrackId.get(trackId);
+  if (!entry) return unsubscribe;
+  const url = entry.url;
+  if (url) entry.retainedUrls.set(url, (entry.retainedUrls.get(url) ?? 0) + 1);
+  let released = false;
+
+  return () => {
+    if (released) return;
+    released = true;
+    if (url) {
+      const remaining = (entry.retainedUrls.get(url) ?? 1) - 1;
+      if (remaining > 0) entry.retainedUrls.set(url, remaining);
+      else {
+        entry.retainedUrls.delete(url);
+        revokeRetiredUrl(entry, url);
+      }
+    }
+    unsubscribe();
+  };
 }
 
 /** Reloads every currently subscribed artwork, for example after a library scan. */
@@ -82,11 +113,13 @@ function subscribeToTrackArtwork(trackId: number, subscriber: ArtworkSubscriber)
       trackId,
       status: "loading",
       url: null,
+      error: "",
       pendingUrl: null,
       decoder: null,
       generation: 0,
       subscribers: new Set(),
       retiredUrls: new Set(),
+      retainedUrls: new Map(),
     };
     sharedArtworkByTrackId.set(trackId, entry);
   }
@@ -95,7 +128,7 @@ function subscribeToTrackArtwork(trackId: number, subscriber: ArtworkSubscriber)
   if (isNewEntry) {
     startArtworkLoad(entry);
   } else {
-    subscriber({ status: entry.status, url: entry.url });
+    subscriber({ status: entry.status, url: entry.url, error: entry.error });
   }
 
   return () => {
@@ -113,6 +146,7 @@ function startArtworkLoad(entry: SharedArtwork) {
   entry.pendingUrl = null;
   detachDecoder(entry);
   entry.status = "loading";
+  entry.error = "";
 
   for (const previousUrl of previousUrls) retireUrl(entry, previousUrl);
   publish(entry);
@@ -148,8 +182,10 @@ async function loadArtwork(entry: SharedArtwork, generation: number) {
     entry.url = imageUrl;
     entry.status = "ready";
     publish(entry);
-  } catch {
+  } catch (error) {
     if (!isCurrent(entry, generation)) return;
+    const message = error instanceof Error ? error.message : String(error ?? "未知错误");
+    entry.error = `读取封面失败，已显示占位图：${message}`;
     showFallback(entry);
   }
 }
@@ -167,7 +203,7 @@ function showFallback(entry: SharedArtwork) {
 }
 
 function publish(entry: SharedArtwork) {
-  const snapshot = { status: entry.status, url: entry.url };
+  const snapshot = { status: entry.status, url: entry.url, error: entry.error };
   for (const subscriber of [...entry.subscribers]) {
     if (entry.subscribers.has(subscriber)) subscriber(snapshot);
   }
@@ -188,7 +224,7 @@ function retireUrl(entry: SharedArtwork, url: string) {
 }
 
 function revokeRetiredUrl(entry: SharedArtwork, url: string) {
-  if (!entry.retiredUrls.delete(url)) return;
+  if (entry.retainedUrls.has(url) || !entry.retiredUrls.delete(url)) return;
   globalThis.URL.revokeObjectURL(url);
 }
 
@@ -214,5 +250,6 @@ function releaseEntry(entry: SharedArtwork) {
   entry.url = null;
   entry.pendingUrl = null;
   entry.retiredUrls.clear();
+  entry.retainedUrls.clear();
   for (const url of urls) globalThis.URL.revokeObjectURL(url);
 }

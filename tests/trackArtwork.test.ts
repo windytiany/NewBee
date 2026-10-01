@@ -4,8 +4,8 @@ import * as Vue from "vue";
 import { effectScope, nextTick, ref } from "vue";
 import type { Ref } from "vue";
 import { compileScript, parse } from "@vue/compiler-sfc";
-import * as TypeScript from "typescript";
-import type { TrackArtwork } from "@/types/track";
+import TypeScript from "typescript";
+import type { TrackArtwork, TrackDetails } from "@/types/track";
 
 type Deferred<Value> = {
   promise: Promise<Value>;
@@ -24,6 +24,7 @@ function deferred<Value>(): Deferred<Value> {
 }
 
 let artworkRequest: (trackId: number) => Promise<TrackArtwork | null>;
+let detailsRequest: (trackId: number) => Promise<TrackDetails | null>;
 let decodeImage: (image: TestImage) => Promise<void>;
 let invokedTrackIds: number[];
 let revokedUrls: string[];
@@ -32,6 +33,21 @@ let decodeCount: number;
 let imageInstances: TestImage[];
 const mountedScopes: Array<{ stop: () => void }> = [];
 const mountedApps: Array<{ unmount: () => void }> = [];
+const pendingLeaves: Array<() => void> = [];
+const testTransition = Vue.defineComponent({
+  inheritAttrs: false,
+  setup:
+    (_props, { attrs, slots }) =>
+    () =>
+      Vue.h(
+        Vue.BaseTransition,
+        {
+          ...attrs,
+          onLeave: (_element: unknown, done: () => void) => pendingLeaves.push(done),
+        },
+        slots,
+      ),
+});
 const originalImage = Object.getOwnPropertyDescriptor(globalThis, "Image");
 const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
 const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
@@ -53,21 +69,23 @@ class TestImage {
 }
 
 mock.module("@tauri-apps/api/core", () => ({
-  invoke: (_command: string, args?: { trackId: number }) => {
-    if (!args) throw new Error("Artwork request is missing its track ID.");
+  invoke: (command: string, args?: { trackId: number }) => {
+    if (!args) throw new Error("Track request is missing its track ID.");
+    if (command === "get_track") return detailsRequest(args.trackId);
     invokedTrackIds.push(args.trackId);
     return artworkRequest(args.trackId);
   },
 }));
 
 const artworkModule = await import("@/artwork/trackArtwork");
-const { useTrackArtwork } = artworkModule;
+const trackInfoModule = await import("@/playback/useTrackInfo");
+const { useTrackArtwork, invalidateTrackArtworkCache, retainTrackArtwork } = artworkModule;
 const bunRuntime = globalThis as typeof globalThis & {
   Bun: { file: (path: URL) => { text: () => Promise<string> } };
 };
 
-function createTrackArtworkComponent(source: string) {
-  const { descriptor } = parse(source, { filename: "src/artwork/ui/TrackArtwork.vue" });
+function createTrackArtworkComponent(source: string, filename = "src/artwork/ui/TrackArtwork.vue") {
+  const { descriptor } = parse(source, { filename });
   const compiled = compileScript(descriptor, { id: "track-artwork-test", inlineTemplate: true });
   const output = TypeScript.transpileModule(compiled.content, {
     compilerOptions: {
@@ -77,8 +95,9 @@ function createTrackArtworkComponent(source: string) {
   }).outputText;
   const module = { exports: {} as Record<string, unknown> };
   const modules: Record<string, unknown> = {
-    vue: Vue,
+    vue: { ...Vue, Transition: testTransition },
     "@/artwork/trackArtwork": artworkModule,
+    "@/playback/useTrackInfo": trackInfoModule,
   };
   new Function("require", "module", "exports", output)(
     (name: string) => modules[name],
@@ -91,6 +110,32 @@ function createTrackArtworkComponent(source: string) {
 const trackArtworkComponent = createTrackArtworkComponent(
   await bunRuntime.Bun.file(new URL("../src/artwork/ui/TrackArtwork.vue", import.meta.url)).text(),
 );
+
+const transitionArtworkComponent = createTrackArtworkComponent(
+  await bunRuntime.Bun.file(
+    new URL("../src/playback/ui/TransitionNowPlaying.vue", import.meta.url),
+  ).text(),
+  "src/playback/ui/TransitionNowPlaying.vue",
+);
+
+function createDetails(trackId: number): TrackDetails {
+  return {
+    id: trackId,
+    path: `/music/${trackId}.mp3`,
+    title: `Title ${trackId}`,
+    artist: `Artist ${trackId}`,
+    album: `Album ${trackId}`,
+    albumArtist: null,
+    releaseDate: null,
+    discNumber: null,
+    trackNumber: null,
+    durationMs: 180_000,
+    codec: "mp3",
+    sampleRateHz: 44_100,
+    bitrateKbps: 320,
+    channels: 2,
+  };
+}
 
 function mountArtwork(trackId: Ref<number | null> | number) {
   let artwork!: ReturnType<typeof useTrackArtwork>;
@@ -117,7 +162,10 @@ type ArtworkHostNode = {
   text: string;
 };
 
-function mountArtworkComponent(trackId: Ref<number | null>) {
+function mountArtworkComponent(
+  trackId: Ref<number | null>,
+  component: Vue.Component = trackArtworkComponent,
+) {
   const renderer = Vue.createRenderer<ArtworkHostNode, ArtworkHostNode>({
     patchProp: (node, key, _previous, next) => {
       node.props[key] = next;
@@ -134,7 +182,12 @@ function mountArtworkComponent(trackId: Ref<number | null>) {
       if (index >= 0) node.parent.children.splice(index, 1);
       node.parent = null;
     },
-    createElement: (type) => ({ type, props: {}, children: [], parent: null, text: "" }),
+    createElement: (type) => {
+      const node: ArtworkHostNode = { type, props: {}, children: [], parent: null, text: "" };
+      return Object.assign(node, {
+        getAttribute: (name: string) => node.props[name] ?? null,
+      });
+    },
     createText: (text) => ({ type: "#text", props: {}, children: [], parent: null, text }),
     createComment: (text) => ({ type: "#comment", props: {}, children: [], parent: null, text }),
     setText: (node, text) => {
@@ -154,9 +207,36 @@ function mountArtworkComponent(trackId: Ref<number | null>) {
   const app = renderer.createApp({
     setup: () => () =>
       Vue.h(
-        trackArtworkComponent,
-        { trackId: trackId.value, alt: "cover" },
-        { default: () => Vue.h("span", { "data-test": "fallback" }, "fallback") },
+        component,
+        component === trackArtworkComponent
+          ? { trackId: trackId.value, alt: "cover" }
+          : {
+              track:
+                trackId.value === null
+                  ? null
+                  : {
+                      trackId: trackId.value,
+                      title: `Queue ${trackId.value}`,
+                      artist: `Queue artist ${trackId.value}`,
+                    },
+            },
+        component === trackArtworkComponent
+          ? { default: () => Vue.h("span", { "data-test": "fallback" }, "fallback") }
+          : {
+              default: (snapshot: {
+                track: { title: string | null } | null;
+                details: TrackDetails | null;
+                artworkUrl: string | null;
+                detailsError: string;
+              }) => [
+                Vue.h("h1", snapshot.details?.title ?? snapshot.track?.title ?? ""),
+                Vue.h("p", snapshot.details?.album ?? ""),
+                Vue.h("div", { "data-test": "details-error" }, snapshot.detailsError),
+                snapshot.artworkUrl
+                  ? Vue.h("img", { src: snapshot.artworkUrl })
+                  : Vue.h("span", { "data-test": "fallback" }, "fallback"),
+              ],
+            },
       ),
   });
   app.mount(root);
@@ -180,6 +260,7 @@ beforeEach(() => {
   decodeCount = 0;
   imageInstances = [];
   artworkRequest = async () => ({ status: "available", mimeType: "image/png", data: [1, 2, 3] });
+  detailsRequest = async (trackId) => createDetails(trackId);
   decodeImage = async () => {};
   Object.defineProperty(globalThis, "Image", { configurable: true, value: TestImage });
   Object.defineProperty(URL, "createObjectURL", {
@@ -193,6 +274,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const finish of pendingLeaves.splice(0)) finish();
   for (const app of mountedApps.splice(0)) app.unmount();
   for (const scope of mountedScopes.splice(0)) scope.stop();
   for (const [target, key, descriptor] of [
@@ -205,7 +287,209 @@ afterEach(() => {
   }
 });
 
+describe("播放封面与元数据同步过渡", () => {
+  it("封面先就绪时也保留整份旧展示，直到元数据完成", async () => {
+    const request = deferred<TrackDetails | null>();
+    detailsRequest = (trackId) =>
+      trackId === 111 ? request.promise : Promise.resolve(createDetails(trackId));
+    const source = ref<number | null>(110);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+
+    source.value = 111;
+    await settleArtwork();
+    expect(imageInstances).toHaveLength(2);
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 110");
+    expect(findArtworkNode(root, "p")?.text).toBe("Album 110");
+    expect(pendingLeaves).toHaveLength(0);
+
+    request.resolve(createDetails(111));
+    await settleArtwork();
+    expect(pendingLeaves).toHaveLength(1);
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-2");
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 111");
+    expect(findArtworkNode(root, "p")?.text).toBe("Album 111");
+  });
+
+  it("迟到的旧元数据不会覆盖新曲目", async () => {
+    const request = deferred<TrackDetails | null>();
+    detailsRequest = (trackId) =>
+      trackId === 113 ? request.promise : Promise.resolve(createDetails(trackId));
+    const source = ref<number | null>(112);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+    source.value = 113;
+    await settleArtwork();
+    source.value = 114;
+    await settleArtwork();
+    request.resolve(createDetails(113));
+    await settleArtwork();
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 114");
+    expect(findArtworkNode(root, "p")?.text).toBe("Album 114");
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-3");
+  });
+
+  it("元数据失败时使用当前歌曲摘要，而不是保留上一首的信息", async () => {
+    detailsRequest = async (trackId) => {
+      if (trackId === 116) throw new Error("database unavailable");
+      return createDetails(trackId);
+    };
+    const source = ref<number | null>(115);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+    source.value = 116;
+    await settleArtwork();
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "h1")?.text).toBe("Queue 116");
+    expect(findArtworkNode(root, "p")?.text).toBe("");
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-2");
+  });
+
+  it("元数据等待期间卸载会释放新旧图片资源", async () => {
+    const request = deferred<TrackDetails | null>();
+    detailsRequest = (trackId) =>
+      trackId === 118 ? request.promise : Promise.resolve(createDetails(trackId));
+    const source = ref<number | null>(117);
+    mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+    source.value = 118;
+    await settleArtwork();
+    mountedApps.pop()?.unmount();
+    expect(new Set(revokedUrls)).toEqual(new Set(["blob:artwork-1", "blob:artwork-2"]));
+    request.resolve(createDetails(118));
+    await settleArtwork();
+    expect(revokedUrls).toHaveLength(2);
+  });
+
+  it("首次请求及解码期间不显示默认图", async () => {
+    const decoding = deferred<void>();
+    decodeImage = () => decoding.promise;
+    const root = mountArtworkComponent(ref(101), transitionArtworkComponent);
+    await settleArtwork();
+    expect(findArtworkNode(root, "span")).toBeNull();
+    expect(findArtworkNode(root, "img")).toBeNull();
+
+    decoding.resolve();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    expect(findArtworkNode(root, "span")).toBeNull();
+  });
+
+  it("切歌保留旧图，解码成功后切换，退出动画完成才释放旧 URL", async () => {
+    const request = deferred<TrackArtwork | null>();
+    const decoding = deferred<void>();
+    artworkRequest = (trackId) =>
+      trackId === 103
+        ? request.promise
+        : Promise.resolve({ status: "available", mimeType: "image/png", data: [1] });
+    decodeImage = () => (++decodeCount === 2 ? decoding.promise : Promise.resolve());
+    const source = ref<number | null>(102);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+
+    source.value = 103;
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 102");
+    expect(findArtworkNode(root, "p")?.text).toBe("Album 102");
+    expect(findArtworkNode(root, "span")).toBeNull();
+    expect(revokedUrls).toEqual([]);
+
+    request.resolve({ status: "available", mimeType: "image/png", data: [2] });
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    expect(findArtworkNode(root, "span")).toBeNull();
+
+    decoding.resolve();
+    await settleArtwork();
+    expect(invokedTrackIds).toEqual([102, 103]);
+    expect(pendingLeaves).toHaveLength(1);
+    expect(revokedUrls).toEqual([]);
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-2");
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 103");
+    expect(findArtworkNode(root, "p")?.text).toBe("Album 103");
+    expect(revokedUrls).toEqual(["blob:artwork-1"]);
+  });
+
+  it("确认无封面后才从旧封面切换到默认图", async () => {
+    const request = deferred<TrackArtwork | null>();
+    artworkRequest = (trackId) =>
+      trackId === 105
+        ? request.promise
+        : Promise.resolve({ status: "available", mimeType: "image/png", data: [1] });
+    const source = ref<number | null>(104);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+    source.value = 105;
+    await settleArtwork();
+    expect(findArtworkNode(root, "span")).toBeNull();
+    expect(findArtworkNode(root, "img")).not.toBeNull();
+
+    request.resolve({ status: "noArtwork" });
+    await settleArtwork();
+    expect(findArtworkNode(root, "span")).not.toBeNull();
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")).toBeNull();
+    expect(revokedUrls).toEqual(["blob:artwork-1"]);
+  });
+
+  it("连续切歌不展示迟到的中间封面，清空曲目后释放旧图", async () => {
+    const oldDecode = deferred<void>();
+    decodeImage = () => (++decodeCount === 2 ? oldDecode.promise : Promise.resolve());
+    const source = ref<number | null>(106);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+    source.value = 107;
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    source.value = 108;
+    await settleArtwork();
+    oldDecode.resolve();
+    await settleArtwork();
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-3");
+    expect(findArtworkNode(root, "span")).toBeNull();
+
+    source.value = null;
+    await settleArtwork();
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")).toBeNull();
+    expect(findArtworkNode(root, "span")).not.toBeNull();
+    expect(new Set(revokedUrls)).toEqual(
+      new Set(["blob:artwork-1", "blob:artwork-2", "blob:artwork-3"]),
+    );
+  });
+});
+
 describe("曲目封面加载", () => {
+  it("缓存刷新时仍保留正在退出的 URL，最后一次释放才回收", async () => {
+    const { artwork } = mountArtwork(109);
+    await settleArtwork();
+    const releaseFirst = retainTrackArtwork(109);
+    const releaseSecond = retainTrackArtwork(109);
+
+    invalidateTrackArtworkCache();
+    await settleArtwork();
+    expect(artwork.url.value).toBe("blob:artwork-2");
+    expect(revokedUrls).toEqual([]);
+    releaseFirst();
+    releaseFirst();
+    expect(revokedUrls).toEqual([]);
+    releaseSecond();
+    expect(revokedUrls).toEqual(["blob:artwork-1"]);
+  });
+
   it("两处封面共享请求，并在最后一个订阅者释放时回收资源", async () => {
     const first = mountArtwork(71);
     const second = mountArtwork(71);
@@ -274,6 +558,7 @@ describe("曲目封面加载", () => {
     const requestFailureRoot = mountArtworkComponent(ref(74));
     await settleArtwork();
     expect(requestFailure.artwork.status.value).toBe("fallback");
+    expect(requestFailure.artwork.error.value).toContain("database unavailable");
     expect(findArtworkNode(requestFailureRoot, "span")).not.toBeNull();
 
     const decodeFailure = mountArtwork(75);
@@ -281,6 +566,7 @@ describe("曲目封面加载", () => {
     await settleArtwork();
     expect(decodeFailure.artwork.status.value).toBe("fallback");
     expect(decodeFailure.artwork.url.value).toBeNull();
+    expect(decodeFailure.artwork.error.value).toContain("image decode failed");
     expect(findArtworkNode(decodeFailureRoot, "span")).not.toBeNull();
   });
 

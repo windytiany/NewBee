@@ -1,28 +1,22 @@
 // @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { effectScope, nextTick, ref } from "vue";
-import type { EffectScope, MaybeRefOrGetter, Ref } from "vue";
+import type { EffectScope, MaybeRefOrGetter } from "vue";
 import { useTrackInfo } from "@/playback/useTrackInfo";
 import type { TrackInfoInvoker } from "@/playback/useTrackInfo";
-import type { TrackArtwork, TrackDetails } from "@/types/track";
+import type { TrackDetails } from "@/types/track";
 
-type TrackInfoCommand = "get_track" | "get_track_artwork";
-type TrackInfoCall = { command: TrackInfoCommand; trackId: number };
-type TrackInfoHandler = (command: TrackInfoCommand, trackId: number) => unknown | Promise<unknown>;
 type Deferred<Value> = {
   promise: Promise<Value>;
   resolve: (value: Value) => void;
-  reject: (error: Error) => void;
 };
 
 function deferred<Value>(): Deferred<Value> {
   let resolve!: (value: Value) => void;
-  let reject!: (error: Error) => void;
-  const promise = new Promise<Value>((resolvePromise, rejectPromise) => {
+  const promise = new Promise<Value>((resolvePromise) => {
     resolve = resolvePromise;
-    reject = rejectPromise;
   });
-  return { promise, resolve, reject };
+  return { promise, resolve };
 }
 
 function createTrackDetails(id: number): TrackDetails {
@@ -44,23 +38,17 @@ function createTrackDetails(id: number): TrackDetails {
   };
 }
 
-function createArtwork(byte = 1): TrackArtwork {
-  return { status: "available", mimeType: "image/png", data: [byte] };
-}
-
-function createInvoker(handler: TrackInfoHandler, calls: TrackInfoCall[]): TrackInfoInvoker {
-  return async <Result>(command: TrackInfoCommand, args: { trackId: number }) => {
-    calls.push({ command, trackId: args.trackId });
-    return (await handler(command, args.trackId)) as Result;
+function createInvoker(
+  handler: (trackId: number) => unknown | Promise<unknown>,
+  calls: number[] = [],
+): TrackInfoInvoker {
+  return async <Result>(_command: "get_track", args: { trackId: number }) => {
+    calls.push(args.trackId);
+    return (await handler(args.trackId)) as Result;
   };
 }
 
 const scopes: EffectScope[] = [];
-const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
-const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
-let createdUrls: string[];
-let revokedUrls: string[];
-let nextObjectUrl: number;
 
 function mountTrackInfo(trackId: MaybeRefOrGetter<number | null>, invoke: TrackInfoInvoker) {
   const scope = effectScope();
@@ -76,175 +64,107 @@ async function settleRequests() {
   await Promise.resolve();
   await Promise.resolve();
   await nextTick();
-  await Promise.resolve();
 }
-
-function restoreDescriptor(
-  target: object,
-  key: PropertyKey,
-  descriptor: PropertyDescriptor | undefined,
-) {
-  if (descriptor) Object.defineProperty(target, key, descriptor);
-  else Reflect.deleteProperty(target, key);
-}
-
-beforeEach(() => {
-  createdUrls = [];
-  revokedUrls = [];
-  nextObjectUrl = 0;
-  Object.defineProperty(URL, "createObjectURL", {
-    configurable: true,
-    value: () => {
-      const url = `blob:track-info-${++nextObjectUrl}`;
-      createdUrls.push(url);
-      return url;
-    },
-  });
-  Object.defineProperty(URL, "revokeObjectURL", {
-    configurable: true,
-    value: (url: string) => revokedUrls.push(url),
-  });
-});
 
 afterEach(() => {
   for (const scope of scopes.splice(0)) scope.stop();
-  restoreDescriptor(URL, "createObjectURL", originalCreateObjectURL);
-  restoreDescriptor(URL, "revokeObjectURL", originalRevokeObjectURL);
 });
 
 describe("useTrackInfo", () => {
-  it("独立加载详情和封面", async () => {
-    const detailsRequest = deferred<TrackDetails | null>();
-    const artworkRequest = deferred<TrackArtwork | null>();
-    const calls: TrackInfoCall[] = [];
-    const invoke = createInvoker(
-      (command) => (command === "get_track" ? detailsRequest.promise : artworkRequest.promise),
-      calls,
+  it("加载详情，不再单独请求封面", async () => {
+    const request = deferred<TrackDetails | null>();
+    const calls: number[] = [];
+    const { trackInfo } = mountTrackInfo(
+      ref(41),
+      createInvoker(() => request.promise, calls),
     );
-    const { trackInfo } = mountTrackInfo(ref<number | null>(41), invoke);
-
-    expect(calls).toEqual([
-      { command: "get_track", trackId: 41 },
-      { command: "get_track_artwork", trackId: 41 },
-    ]);
+    expect(calls).toEqual([41]);
     expect(trackInfo.isLoading.value).toBe(true);
 
-    detailsRequest.resolve(createTrackDetails(41));
+    request.resolve(createTrackDetails(41));
     await settleRequests();
     expect(trackInfo.currentTrackDetails.value?.id).toBe(41);
     expect(trackInfo.isLoading.value).toBe(false);
-    expect(trackInfo.currentTrackArtworkUrl.value).toBeNull();
-    expect(trackInfo.currentTrackArtworkError.value).toBe("");
-
-    artworkRequest.resolve(createArtwork());
-    await settleRequests();
-    expect(trackInfo.currentTrackArtworkUrl.value).toBe("blob:track-info-1");
     expect(trackInfo.currentTrackDetailsError.value).toBe("");
-    expect(revokedUrls).toEqual([]);
   });
 
-  it("快速切歌后忽略旧请求，并在清空曲目时清除状态", async () => {
-    const requests = new Map<
-      number,
-      { details: Deferred<TrackDetails | null>; artwork: Deferred<TrackArtwork | null> }
-    >();
-    const calls: TrackInfoCall[] = [];
-    const invoke = createInvoker((command, trackId) => {
-      let request = requests.get(trackId);
-      if (!request) {
-        request = { details: deferred(), artwork: deferred() };
-        requests.set(trackId, request);
-      }
-      return command === "get_track" ? request.details.promise : request.artwork.promise;
+  it("快速切歌后忽略旧详情，并在清空曲目时清除状态", async () => {
+    const requests = new Map<number, Deferred<TrackDetails | null>>();
+    const calls: number[] = [];
+    const invoke = createInvoker((trackId) => {
+      const request = deferred<TrackDetails | null>();
+      requests.set(trackId, request);
+      return request.promise;
     }, calls);
-    const currentTrackId = ref<number | null>(51);
-    const { trackInfo } = mountTrackInfo(currentTrackId, invoke);
+    const source = ref<number | null>(51);
+    const { trackInfo } = mountTrackInfo(source, invoke);
 
-    currentTrackId.value = 52;
-    requests.get(52)?.details.resolve(createTrackDetails(52));
-    requests.get(52)?.artwork.resolve(createArtwork(2));
+    source.value = 52;
+    requests.get(52)?.resolve(createTrackDetails(52));
+    await settleRequests();
+    requests.get(51)?.resolve(createTrackDetails(51));
     await settleRequests();
     expect(trackInfo.currentTrackDetails.value?.id).toBe(52);
-    expect(trackInfo.currentTrackArtworkUrl.value).toBe("blob:track-info-1");
     expect(trackInfo.isLoading.value).toBe(false);
+    expect(calls).toEqual([51, 52]);
 
-    requests.get(51)?.details.resolve(createTrackDetails(51));
-    requests.get(51)?.artwork.resolve(createArtwork(1));
-    await settleRequests();
-    expect(trackInfo.currentTrackDetails.value?.id).toBe(52);
-    expect(trackInfo.currentTrackArtworkUrl.value).toBe("blob:track-info-1");
-    expect(createdUrls).toEqual(["blob:track-info-1"]);
-    expect(calls.map(({ trackId }) => trackId)).toEqual([51, 51, 52, 52]);
-
-    currentTrackId.value = null;
+    source.value = null;
     expect(trackInfo.currentTrackDetails.value).toBeNull();
-    expect(trackInfo.currentTrackArtworkUrl.value).toBeNull();
     expect(trackInfo.isLoading.value).toBe(false);
-    expect(revokedUrls).toEqual(["blob:track-info-1"]);
+    expect(trackInfo.currentTrackDetailsError.value).toBe("");
   });
 
   it("拒绝与请求 trackId 不匹配的详情", async () => {
-    const calls: TrackInfoCall[] = [];
-    const invoke = createInvoker(
-      (command) => (command === "get_track" ? createTrackDetails(62) : { status: "noArtwork" }),
-      calls,
+    const { trackInfo } = mountTrackInfo(
+      61,
+      createInvoker(() => createTrackDetails(62)),
     );
-    const { trackInfo } = mountTrackInfo(61, invoke);
-
     await settleRequests();
-
     expect(trackInfo.currentTrackDetails.value).toBeNull();
     expect(trackInfo.currentTrackDetailsError.value).toBe("返回的曲目详情与当前播放曲目不匹配。");
     expect(trackInfo.isLoading.value).toBe(false);
-    expect(trackInfo.currentTrackArtworkError.value).toBe("");
   });
 
-  it("分别报告详情与封面请求错误", async () => {
-    const calls: TrackInfoCall[] = [];
-    const invoke = createInvoker((command) => {
-      throw new Error(command === "get_track" ? "database unavailable" : "artwork unavailable");
-    }, calls);
-    const { trackInfo } = mountTrackInfo(71, invoke);
-
-    await settleRequests();
-
-    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败：database unavailable");
-    expect(trackInfo.currentTrackArtworkError.value).toBe(
-      "读取封面失败，已显示占位图：artwork unavailable",
+  it("未找到详情时报告错误", async () => {
+    const { trackInfo } = mountTrackInfo(
+      63,
+      createInvoker(() => null),
     );
+    await settleRequests();
+    expect(trackInfo.currentTrackDetailsError.value).toBe("未找到正在播放曲目的详情。");
+    expect(trackInfo.isLoading.value).toBe(false);
+  });
+
+  it("报告详情请求错误", async () => {
+    const { trackInfo } = mountTrackInfo(
+      71,
+      createInvoker(() => {
+        throw new Error("database unavailable");
+      }),
+    );
+    await settleRequests();
+    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败：database unavailable");
     expect(trackInfo.isLoading.value).toBe(false);
   });
 
   it("格式化非 Error 拒绝值", async () => {
-    const calls: TrackInfoCall[] = [];
-    const invoke = createInvoker(() => Promise.reject("backend unavailable"), calls);
-    const { trackInfo } = mountTrackInfo(72, invoke);
-
-    await settleRequests();
-
-    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败：backend unavailable");
-    expect(trackInfo.currentTrackArtworkError.value).toBe(
-      "读取封面失败，已显示占位图：backend unavailable",
+    const { trackInfo } = mountTrackInfo(
+      72,
+      createInvoker(() => Promise.reject("backend unavailable")),
     );
+    await settleRequests();
+    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败：backend unavailable");
   });
 
-  it("切歌和销毁 scope 时回收封面 Blob URL", async () => {
-    const calls: TrackInfoCall[] = [];
-    const invoke = createInvoker((command, trackId) => {
-      return command === "get_track" ? createTrackDetails(trackId) : createArtwork(trackId);
-    }, calls);
-    const currentTrackId: Ref<number | null> = ref(81);
-    const { trackInfo, scope } = mountTrackInfo(currentTrackId, invoke);
-
-    await settleRequests();
-    expect(trackInfo.currentTrackArtworkUrl.value).toBe("blob:track-info-1");
-
-    currentTrackId.value = 82;
-    expect(revokedUrls).toEqual(["blob:track-info-1"]);
-    await settleRequests();
-    expect(trackInfo.currentTrackArtworkUrl.value).toBe("blob:track-info-2");
-
+  it("销毁 scope 后忽略迟到的结果", async () => {
+    const request = deferred<TrackDetails | null>();
+    const { trackInfo, scope } = mountTrackInfo(
+      81,
+      createInvoker(() => request.promise),
+    );
     scope.stop();
-    expect(revokedUrls).toEqual(["blob:track-info-1", "blob:track-info-2"]);
+    request.resolve(createTrackDetails(81));
+    await settleRequests();
+    expect(trackInfo.currentTrackDetails.value).toBeNull();
   });
 });
