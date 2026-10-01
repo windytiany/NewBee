@@ -2,8 +2,8 @@
   <article class="group min-w-0">
     <button
       data-item-interaction
-      class="focus-visible:bg-spotify-track block w-full rounded-md text-center outline-none"
-      :class="isFocused ? 'bg-spotify-track' : isSelected ? 'bg-white/10' : ''"
+      class="focus-visible:ring-spotify-green block w-full rounded-md text-center outline-none focus-visible:bg-transparent focus-visible:ring-2"
+      :class="isFocused ? 'ring-spotify-green ring-2' : isSelected ? 'bg-white/10' : ''"
       :aria-label="`查看专辑 ${album.album ?? '未知专辑'}`"
       :aria-expanded="isSelected"
       :title="artworkLoadFailed ? '专辑封面加载失败' : undefined"

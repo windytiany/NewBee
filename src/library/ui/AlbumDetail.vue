@@ -28,7 +28,9 @@
             <Play aria-hidden="true" class="ml-0.5 size-4 fill-current" />
           </button>
         </div>
-        <p class="text-spotify-muted mt-1 truncate text-sm">{{ props.album.year ?? "年份未知" }}</p>
+        <p class="text-spotify-muted mt-1 truncate text-base">
+          {{ props.albumArtist ?? "未知演出者" }} ({{ props.album.year ?? "年份未知" }})
+        </p>
       </div>
       <button
         aria-label="收起专辑曲目"
@@ -49,13 +51,18 @@
     </p>
     <ol
       v-else-if="props.tracks.length > 0"
-      class="grid gap-x-8 sm:grid-flow-col sm:grid-cols-2"
-      :style="{ gridTemplateRows: `repeat(${Math.ceil(props.tracks.length / 2)}, auto)` }"
+      ref="trackListElement"
+      class="grid gap-x-8"
+      :class="trackColumnCount === 2 ? 'grid-flow-col grid-cols-2' : 'grid-cols-1'"
+      :style="{
+        gridTemplateRows: `repeat(${Math.ceil(props.tracks.length / trackColumnCount)}, auto)`,
+      }"
     >
       <AlbumTrack
         v-for="(track, index) in props.tracks"
         :key="track.id"
         :track="track"
+        :album-artist="props.albumArtist"
         :index="index"
         :is-focused="trackFocus.isFocused(String(track.id))"
         :is-selected="trackFocus.isSelected(String(track.id))"
@@ -173,6 +180,7 @@ import type { AlbumSummary } from "@/types/album";
 import type { Playlist } from "@/types/playlist";
 import type { TrackSummary } from "@/types/track";
 import AlbumTrack from "@/library/ui/AlbumTrack.vue";
+import { useAlbumTrackColumns } from "@/library/useAlbumTrackColumns";
 
 type TrackContextMenuTrigger = {
   trackId: number;
@@ -209,6 +217,9 @@ const emit = defineEmits<{
   addTracksToPlaylist: [trackIds: number[], playlistId: number];
   deleteTrack: [trackId: number];
 }>();
+
+const trackListElement = ref<InstanceType<typeof globalThis.HTMLOListElement> | null>(null);
+const trackColumnCount = useAlbumTrackColumns(trackListElement);
 
 const trackListScope = computed(() =>
   JSON.stringify(["library", "album-tracks", props.albumArtist, props.album.album]),

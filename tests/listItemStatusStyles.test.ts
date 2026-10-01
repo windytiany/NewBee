@@ -81,9 +81,10 @@ function expectBackgroundOnly(file: SfcFile, hasMultiSelectBackground: boolean) 
 }
 
 describe("列表条目状态样式", () => {
-  it("焦点和多选只使用背景，不显示状态 ring 或焦点 outline", () => {
+  it("除专辑卡片外，焦点和多选只使用背景，不显示状态 ring 或焦点 outline", () => {
     const withoutMultiSelectBackground = new Set(["PlaylistListItem.vue", "ArtistListItem.vue"]);
     for (const file of componentFiles) {
+      if (file.path.endsWith("AlbumCard.vue")) continue;
       const hasSelectionBackground = ![...withoutMultiSelectBackground].some((suffix) =>
         file.path.endsWith(suffix),
       );
@@ -96,6 +97,19 @@ describe("列表条目状态样式", () => {
         expect(classes).not.toContain("focus-visible:outline");
       }
     }
+  });
+
+  it("专辑卡片焦点只显示绿色线框，非焦点选中背景保持不变", () => {
+    const file = findFile("AlbumCard.vue");
+    const button = elements(file.template).find(({ tag }) => tag === "button");
+    if (!button) throw new Error("Album button was not rendered.");
+    expect(staticClass(button)).toContain("focus-visible:ring-spotify-green");
+    expect(staticClass(button)).toContain("focus-visible:ring-2");
+    expect(staticClass(button)).toContain("focus-visible:bg-transparent");
+    expect(staticClass(button)).toContain("outline-none");
+    expect(classBinding(button)).toContain("isFocused ? 'ring-spotify-green ring-2'");
+    expect(classBinding(button)).toContain("isSelected ? 'bg-white/10'");
+    expect(file.templateSource).not.toContain("bg-spotify-track");
   });
 
   it("焦点不改变歌单、艺术家或专辑名称颜色", () => {

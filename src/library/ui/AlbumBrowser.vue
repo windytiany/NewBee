@@ -50,27 +50,37 @@
               @select="toggleAlbum(album)"
             />
           </div>
-          <AlbumDetail
-            v-if="row.selectedAlbum"
-            :album="row.selectedAlbum"
-            :album-artist="props.artist.albumArtist"
-            :tracks="props.tracks"
-            :current-track-id="props.currentTrackId"
-            :tracks-loading="props.tracksLoading"
-            :tracks-error="props.tracksError"
-            :playlists="props.playlists"
-            :playlists-loading="props.playlistsLoading"
-            :playlists-error="props.playlistsError"
-            :track-action-pending="props.trackActionPending"
-            @close="closeAlbum(row.selectedAlbum)"
-            @play-track="emit('playTrack', $event)"
-            @play-album="emit('playAlbum')"
-            @refresh-playlists="emit('refreshPlaylists')"
-            @add-tracks-to-next="emit('addTracksToNext', $event)"
-            @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
-            @add-tracks-to-playlist="addTracksToPlaylist"
-            @delete-track="emit('deleteTrack', $event)"
-          />
+          <div v-if="row.selectedAlbum" class="relative">
+            <div
+              aria-hidden="true"
+              class="pointer-events-none absolute inset-x-0 top-px z-10 grid grid-cols-2 gap-x-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4"
+            >
+              <span
+                class="border-b-spotify-interactive -translate-y-full justify-self-center border-x-12 border-b-12 border-x-transparent"
+                :style="{ gridColumn: row.albums.findIndex(isSelectedAlbum) + 1 }"
+              ></span>
+            </div>
+            <AlbumDetail
+              :album="row.selectedAlbum"
+              :album-artist="props.artist.albumArtist"
+              :tracks="props.tracks"
+              :current-track-id="props.currentTrackId"
+              :tracks-loading="props.tracksLoading"
+              :tracks-error="props.tracksError"
+              :playlists="props.playlists"
+              :playlists-loading="props.playlistsLoading"
+              :playlists-error="props.playlistsError"
+              :track-action-pending="props.trackActionPending"
+              @close="closeAlbum(row.selectedAlbum)"
+              @play-track="emit('playTrack', $event)"
+              @play-album="emit('playAlbum')"
+              @refresh-playlists="emit('refreshPlaylists')"
+              @add-tracks-to-next="emit('addTracksToNext', $event)"
+              @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
+              @add-tracks-to-playlist="addTracksToPlaylist"
+              @delete-track="emit('deleteTrack', $event)"
+            />
+          </div>
         </template>
       </div>
     </template>

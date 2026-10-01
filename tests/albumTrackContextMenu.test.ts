@@ -142,6 +142,7 @@ function createComponent(source: string) {
     "@/interaction/contextMenu": contextMenuModule,
     "@/interaction/itemFocus": { useItemFocusList: useTestItemFocusList },
     "@/library/ui/AlbumTrack.vue": { __esModule: true, default: AlbumTrack },
+    "@/library/useAlbumTrackColumns": { useAlbumTrackColumns: () => Vue.ref(2) },
   };
   const requireModule = (name: string) => modules[name];
   new Function("require", "module", "exports", output)(requireModule, module, module.exports);
@@ -333,6 +334,16 @@ afterEach(() => {
 });
 
 describe("专辑曲目上下文菜单目标", () => {
+  it("标题区显示专辑标题和专辑艺术家（年份）", () => {
+    const root = mountAlbumDetail();
+    const heading = findNode(root, (node) => node.type === "h2");
+    expect(heading && getTextContent(heading)).toBe("Album");
+    const metadata = findNode(
+      root,
+      (node) => node.type === "p" && getTextContent(node).includes("Artist"),
+    );
+    expect(metadata && getTextContent(metadata).trim()).toBe("Artist (2024)");
+  });
   it("右键已选中的曲目保留目标集，菜单按钮点击不清除目标，且多选删除禁用", async () => {
     const root = mountAlbumDetail();
     const first = findTrackButton(root, 1);

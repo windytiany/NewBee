@@ -2,6 +2,7 @@
   <li class="min-w-0 border-b border-white/10">
     <button
       data-item-interaction
+      data-album-track-row
       class="focus-visible:bg-spotify-track flex w-full min-w-0 items-center gap-3 rounded-md py-2.5 pr-3 text-left text-sm transition-colors outline-none"
       :class="
         props.isFocused ? 'bg-spotify-track' : props.isSelected ? 'bg-white/10' : 'hover:bg-white/5'
@@ -25,10 +26,17 @@
         class="text-spotify-green size-4 shrink-0"
       />
       <span
+        data-album-track-label
         class="min-w-0 flex-1 truncate font-medium"
+        :title="trackLabel"
         :class="props.isCurrentTrack ? 'text-spotify-green' : 'text-white'"
       >
-        {{ props.track.title ?? "未知曲目" }}
+        <span data-album-track-content class="inline-block">
+          {{ props.track.title ?? "未知曲目"
+          }}<span v-if="showArtist" class="text-spotify-muted ml-3 font-normal"
+            >[{{ props.track.artist }}]</span
+          >
+        </span>
       </span>
       <span class="text-spotify-muted shrink-0 tabular-nums">
         {{ formatTrackDuration(props.track.durationMs) ?? "时长未知" }}
@@ -38,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { AudioLines } from "@lucide/vue";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { TrackSummary } from "@/types/track.ts";
@@ -45,12 +54,21 @@ import { formatTrackDuration } from "@/utils/formatTrack.ts";
 
 const props = defineProps<{
   track: TrackSummary;
+  albumArtist: string | null;
   index: number;
   isFocused: boolean;
   isSelected: boolean;
   isCurrentTrack: boolean;
   isContextMenuOpen: boolean;
 }>();
+
+const showArtist = computed(
+  () => Boolean(props.track.artist) && props.track.artist !== props.albumArtist,
+);
+const trackLabel = computed(() => {
+  const title = props.track.title ?? "未知曲目";
+  return showArtist.value ? `${title} [${props.track.artist}]` : title;
+});
 
 const emit = defineEmits<{
   select: [modifiers: ItemSelectionModifiers];
