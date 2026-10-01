@@ -60,7 +60,7 @@ const {
   playlistTracksError,
   isPlaylistActionPending,
   playlistActionError,
-  playlistActionMessage,
+  dismissPlaylistActionError,
   coverTrackId,
   isCoverPending,
   selectPlaylist,
@@ -357,13 +357,13 @@ async function confirmTrackDeletion(trackId: number) {
             :tracks-error="playlistTracksError"
             :is-playlist-action-pending="isPlaylistActionPending"
             :playlist-action-error="playlistActionError"
-            :playlist-action-message="playlistActionMessage"
             @play-track="playTrackFromPlaylist"
             @play-playlist="playPlaylistFromPage"
             @add-playlist-items-to-next="addPlaylistItemsToNext"
             @add-playlist-items-to-queue-end="addPlaylistItemsToQueueEnd"
             @remove-playlist-items="removePlaylistItems"
             @reorder-playlist-items="reorderPlaylistItems"
+            @dismiss-playlist-action-error="dismissPlaylistActionError"
           />
         </template>
         <template #playing>

@@ -53,6 +53,8 @@ const tracks: PlaylistTrackData[] = [
     durationMs: 120,
   },
 ];
+const playlistActionError = Vue.ref("");
+const isPlaylistActionPending = Vue.ref(false);
 const mountedApps: Array<{ unmount: () => void }> = [];
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -173,7 +175,7 @@ function createComponent(source: string) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@lucide/vue": { DiscAlbum: icon, Play: icon },
+    "@lucide/vue": { DiscAlbum: icon, Play: icon, X: icon },
     "@/interaction/contextMenu": contextMenuModule,
     "@/interaction/itemFocus": { useItemFocusList: useTestItemFocusList },
     "@/playlist/dragReorder": dragReorderModule,
@@ -311,9 +313,11 @@ function mountPlaylistBrowser() {
         hasPlaylists: true,
         isLoadingTracks: false,
         tracksError: "",
-        isPlaylistActionPending: false,
-        playlistActionError: "",
-        playlistActionMessage: "",
+        isPlaylistActionPending: isPlaylistActionPending.value,
+        playlistActionError: playlistActionError.value,
+        onDismissPlaylistActionError: () => {
+          playlistActionError.value = "";
+        },
         onAddPlaylistItemsToNext: (ids: number[]) => emitted.addToNext.push(ids),
         onAddPlaylistItemsToQueueEnd: (ids: number[]) => emitted.addToQueueEnd.push(ids),
       }),
@@ -394,6 +398,8 @@ beforeEach(() => {
   itemFocusManager = createItemFocusManager();
   addToNextCalls = [];
   addToQueueEndCalls = [];
+  playlistActionError.value = "";
+  isPlaylistActionPending.value = false;
   focusedNode = null;
   Object.defineProperty(globalThis, "document", {
     configurable: true,
@@ -421,6 +427,25 @@ afterEach(() => {
 });
 
 describe("歌单曲目上下文菜单", () => {
+  it("操作错误显示可关闭 toast，且不显示普通操作状态", async () => {
+    playlistActionError.value = "保存歌单排序失败：database unavailable";
+    isPlaylistActionPending.value = true;
+    const root = mountPlaylistBrowser();
+    await settle();
+
+    const toast = findNode(root, (node) => node.props.role === "alert");
+    expect(toast && getTextContent(toast)).toContain("database unavailable");
+    expect(getTextContent(root)).not.toContain("正在处理歌单操作");
+    expect(getTextContent(root)).not.toContain("已保存");
+
+    const closeButton = findNode(root, (node) => node.props["aria-label"] === "关闭错误通知");
+    if (!closeButton) throw new Error("Toast close button was not rendered.");
+    clickNode(closeButton);
+    await settle();
+
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+  });
+
   it("右键已选中行保留多选目标并按歌单顺序触发操作", async () => {
     const root = mountPlaylistBrowser();
     const first = findTrackButton(root, 101);

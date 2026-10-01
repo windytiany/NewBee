@@ -68,7 +68,7 @@ function createPlaylistBrowserComponent(source: string) {
   const icon = createIcon();
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon },
+    "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon, X: icon },
     "@/interaction/contextMenu": {
       useContextMenu: () => ({
         request: Vue.ref(null),
@@ -205,7 +205,6 @@ function mountPlaylistBrowser() {
         tracksError: "",
         isPlaylistActionPending: false,
         playlistActionError: "",
-        playlistActionMessage: "",
         onReorderPlaylistItems: (ids: number[]) => emittedReorders.push(ids),
       }),
   });

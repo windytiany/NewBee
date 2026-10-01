@@ -251,6 +251,8 @@ describe("歌单页面操作", () => {
     expect(page.coverTrackId.value).toBe(501);
     expect(page.selectedPlaylist.value?.coverTrackId).toBe(501);
     expect(page.playlistActionError.value).toContain("database unavailable");
+    page.dismissPlaylistActionError();
+    expect(page.playlistActionError.value).toBe("");
   });
 
   it("迟到的旧歌单曲目请求不会覆盖新选择", async () => {
@@ -308,7 +310,6 @@ describe("歌单页面操作", () => {
     expect(page.playlistTracks.value).toEqual(secondPlaylistTracks);
     expect(page.coverTrackId.value).toBe(601);
     expect(page.playlistActionError.value).toBe("");
-    expect(page.playlistActionMessage.value).toBe("");
   });
 
   it("重命名会清理名称、保持当前选择且不修改播放队列", async () => {
@@ -434,7 +435,6 @@ describe("歌单页面操作", () => {
     expect(page.selectedPlaylistId.value).toBe(secondPlaylist.id);
     expect(page.playlistTracks.value).toEqual(secondPlaylistTracks);
     expect(page.playlistActionError.value).toBe("");
-    expect(page.playlistActionMessage.value).toBe("");
     expect(addToNextBatches).toEqual([]);
     expect(addToQueueEndBatches).toEqual([]);
   });

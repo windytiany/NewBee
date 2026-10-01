@@ -63,19 +63,6 @@
           <span class="text-right">时长</span>
         </div>
 
-        <p
-          v-if="props.isPlaylistActionPending"
-          class="text-spotify-muted py-2 text-sm"
-          role="status"
-        >
-          正在处理歌单操作…
-        </p>
-        <p v-else-if="props.playlistActionError" class="py-2 text-sm text-red-300" role="alert">
-          {{ props.playlistActionError }}
-        </p>
-        <p v-else-if="props.playlistActionMessage" class="py-2 text-sm text-white/80" role="status">
-          {{ props.playlistActionMessage }}
-        </p>
         <p v-if="props.isLoadingTracks" class="text-spotify-muted py-4 text-sm" role="status">
           正在读取歌单曲目…
         </p>
@@ -176,12 +163,28 @@
       <p v-else-if="!props.hasPlaylists" class="text-spotify-muted text-sm">还没有歌单。</p>
       <p v-else class="text-spotify-muted text-sm">请选择一个歌单。</p>
     </div>
+
+    <div
+      v-if="props.playlistActionError"
+      class="bg-spotify-interactive fixed right-4 bottom-24 z-100 flex max-w-[min(28rem,calc(100vw-2rem))] items-start gap-3 rounded-xl px-4 py-3 text-sm text-red-100 shadow-xl ring-1 ring-white/10"
+      role="alert"
+    >
+      <p class="min-w-0 flex-1 whitespace-pre-wrap">{{ props.playlistActionError }}</p>
+      <button
+        aria-label="关闭错误通知"
+        class="focus-visible:outline-spotify-green -mr-1 -ml-1 rounded p-1 text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2"
+        type="button"
+        @click="emit('dismissPlaylistActionError')"
+      >
+        <X aria-hidden="true" class="size-4" />
+      </button>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
-import { DiscAlbum, Files, Play } from "@lucide/vue";
+import { DiscAlbum, Files, Play, X } from "@lucide/vue";
 import { useContextMenu } from "@/interaction/contextMenu";
 import { useItemFocusList } from "@/interaction/itemFocus";
 import { createPlaylistDragReorder } from "@/playlist/dragReorder";
@@ -204,7 +207,6 @@ const props = withDefaults(
     tracksError: string;
     isPlaylistActionPending: boolean;
     playlistActionError: string;
-    playlistActionMessage: string;
   }>(),
   {
     coverTrackId: null,
@@ -275,6 +277,7 @@ const emit = defineEmits<{
   addPlaylistItemsToQueueEnd: [playlistItemIds: number[]];
   removePlaylistItems: [playlistItemIds: number[]];
   reorderPlaylistItems: [orderedPlaylistItemIds: number[]];
+  dismissPlaylistActionError: [];
 }>();
 
 function getTrackRowKey(playlistItemId: number) {

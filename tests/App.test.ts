@@ -94,7 +94,7 @@ function createComponent(source: string) {
     playlistTracksError: Vue.ref(""),
     isPlaylistActionPending: Vue.ref(false),
     playlistActionError: Vue.ref(""),
-    playlistActionMessage: Vue.ref(""),
+    dismissPlaylistActionError: () => {},
     coverTrackId: Vue.ref(playlist.coverTrackId),
     isCoverPending: Vue.ref(false),
     selectPlaylist: () => {},

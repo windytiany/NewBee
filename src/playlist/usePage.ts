@@ -35,7 +35,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   const playlistsError = ref("");
   const playlistTracksError = ref("");
   const playlistActionError = ref("");
-  const playlistActionMessage = ref("");
   const pendingPlaylistActionIds = ref(new Set<number>());
   const pendingPlaylistIds = computed<readonly number[]>(() => [...pendingPlaylistActionIds.value]);
   const isPlaylistActionPending = computed(
@@ -113,7 +112,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     if (!context) return null;
 
     playlistActionError.value = "";
-    playlistActionMessage.value = "";
     return context;
   }
 
@@ -126,19 +124,15 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   function setPlaylistActionError(context: PlaylistActionContext, message: string) {
     if (!isCurrentPlaylistAction(context)) return;
     playlistActionError.value = message;
-    playlistActionMessage.value = "";
-  }
-
-  function setPlaylistActionMessage(context: PlaylistActionContext, message: string) {
-    if (!isCurrentPlaylistAction(context)) return;
-    playlistActionError.value = "";
-    playlistActionMessage.value = message;
   }
 
   function reportPlaylistActionError(playlistId: number, message: string) {
     if (selectedPlaylistId.value !== playlistId) return;
     playlistActionError.value = message;
-    playlistActionMessage.value = "";
+  }
+
+  function dismissPlaylistActionError() {
+    playlistActionError.value = "";
   }
 
   function getLoadedPlaylistTracks(playlistId: number) {
@@ -382,7 +376,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   async function enqueuePlaylistItems(
     playlistItemIds: readonly number[],
     actionName: string,
-    successMessage: (count: number) => string,
     enqueue: (tracks: readonly NewQueueTrack[]) => Promise<boolean>,
   ) {
     if (playlistItemIds.length === 0) return;
@@ -398,10 +391,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
       const accepted = await enqueue(toNewQueueTracks(targetTracks));
       if (!accepted) {
         setPlaylistActionError(context, `${actionName}失败：播放队列未接受本次操作。`);
-        return;
       }
-
-      setPlaylistActionMessage(context, successMessage(targetTracks.length));
     } catch (error) {
       setPlaylistActionError(context, `${actionName}失败：${errorMessage(error)}`);
     } finally {
@@ -410,21 +400,11 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   }
 
   function addPlaylistItemsToNext(playlistItemIds: readonly number[]) {
-    return enqueuePlaylistItems(
-      playlistItemIds,
-      "添加为下一首",
-      (count) => `已将 ${count} 个歌单条目添加为下一首。`,
-      addTracksToNext,
-    );
+    return enqueuePlaylistItems(playlistItemIds, "添加为下一首", addTracksToNext);
   }
 
   function addPlaylistItemsToQueueEnd(playlistItemIds: readonly number[]) {
-    return enqueuePlaylistItems(
-      playlistItemIds,
-      "添加到队尾",
-      (count) => `已将 ${count} 个歌单条目添加到队尾。`,
-      addTracksToQueueEnd,
-    );
+    return enqueuePlaylistItems(playlistItemIds, "添加到队尾", addTracksToQueueEnd);
   }
 
   async function renamePlaylist(
@@ -527,7 +507,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
         trackCount: remainingTracks.length,
         coverTrackId: remainingTracks[0]?.trackId ?? null,
       });
-      setPlaylistActionMessage(context, `已从歌单移除 ${targetIds.length} 个条目。`);
     } catch (error) {
       setPlaylistActionError(context, `移除歌单条目失败：${errorMessage(error)}`);
     } finally {
@@ -609,7 +588,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
         playlistId,
         orderedPlaylistItemIds: orderedIds,
       });
-      setPlaylistActionMessage(context, "歌单排序已保存。");
     } catch (error) {
       if (
         selectedPlaylistId.value === playlistId &&
@@ -659,7 +637,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     (playlistId) => {
       ++playlistContextGeneration;
       playlistActionError.value = "";
-      playlistActionMessage.value = "";
       setPlaylistTracksSource(playlistId);
     },
     { flush: "sync" },
@@ -697,7 +674,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     pendingPlaylistIds,
     isPlaylistActionPending,
     playlistActionError,
-    playlistActionMessage,
+    dismissPlaylistActionError,
     coverTrackId,
     isCoverPending,
     selectPlaylist,

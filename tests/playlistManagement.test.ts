@@ -229,7 +229,7 @@ const appModules: Record<string, unknown> = {
       playlistTracksError: Vue.ref(""),
       isPlaylistActionPending: Vue.ref(false),
       playlistActionError: Vue.ref(""),
-      playlistActionMessage: Vue.ref(""),
+      dismissPlaylistActionError: () => {},
       coverTrackId: Vue.computed(() => selectedPlaylist.value?.coverTrackId ?? null),
       isCoverPending: Vue.ref(false),
       selectPlaylist: (playlist: Playlist) => {
