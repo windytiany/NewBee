@@ -1,57 +1,186 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <section
-    aria-label="Lyrics"
-    class="lyrics-scroll-container max-h-[min(68vh,40rem)] w-full overflow-y-auto py-2"
-  >
-    <ol class="mx-auto max-w-5xl space-y-2" :class="{ 'px-6': !props.compact }">
-      <li
-        v-for="(lyric, index) in lyrics"
-        :key="lyric"
-        :aria-current="index === activeLyricIndex ? 'true' : undefined"
-        class="leading-tight font-bold tracking-tight transition-colors"
-        :class="[
-          props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
-          index === activeLyricIndex ? 'text-white' : 'text-spotify-muted/45',
-        ]"
+  <div class="w-full">
+    <div
+      v-if="props.visible && props.lyrics.kind === 'synced' && followState === 'browsing'"
+      class="mb-2 flex justify-center"
+    >
+      <button
+        type="button"
+        class="bg-spotify-interactive text-spotify-muted rounded-full px-4 py-2 text-sm transition-colors hover:text-white"
+        @click="returnToCurrentLyric"
       >
-        {{ lyric }}
-      </li>
-    </ol>
-  </section>
+        回到当前歌词
+      </button>
+    </div>
+    <section
+      v-show="props.visible"
+      ref="containerElement"
+      aria-label="Lyrics"
+      class="lyrics-scroll-container focus-visible:outline-spotify-green max-h-[min(68vh,40rem)] w-full overflow-y-auto py-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+      tabindex="0"
+      @wheel.passive="handleWheel"
+      @touchstart.passive="handleTouchStart"
+      @touchmove.passive="handleTouchMove"
+      @touchend.passive="clearTouchOrigin"
+      @touchcancel.passive="clearTouchOrigin"
+      @keydown="handleKeydown"
+    >
+      <div ref="contentElement">
+        <div
+          v-if="props.lyrics.kind === 'none'"
+          class="text-spotify-muted/45 mx-auto max-w-5xl leading-tight font-bold tracking-tight"
+          :class="[
+            props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
+            { 'px-6': !props.compact },
+          ]"
+        >
+          暂无内嵌歌词
+        </div>
+        <p
+          v-else-if="props.lyrics.kind === 'plain'"
+          class="text-spotify-muted/45 mx-auto max-w-5xl leading-tight font-bold tracking-tight break-words whitespace-pre-wrap"
+          :class="[
+            props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
+            { 'px-6': !props.compact },
+          ]"
+        >
+          {{ props.lyrics.text }}
+        </p>
+        <ol
+          v-else
+          ref="listElement"
+          class="mx-auto max-w-5xl space-y-2"
+          :class="{ 'px-6': !props.compact }"
+          :style="{
+            paddingBlockStart: `${edgePadding.top}px`,
+            paddingBlockEnd: `${edgePadding.bottom}px`,
+          }"
+        >
+          <li
+            v-for="(line, index) in props.lyrics.lines"
+            :key="index"
+            :ref="(element) => setLineElement(index, element)"
+            :aria-current="index === props.activeIndex ? 'true' : undefined"
+            class="leading-tight font-bold tracking-tight transition-colors"
+            :class="[
+              props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
+              index >= props.activeGroupStartIndex && index <= props.activeIndex
+                ? 'text-white'
+                : 'text-spotify-muted/45',
+              { 'min-h-[1.25em]': line.text.trim().length === 0 },
+            ]"
+          >
+            <button
+              v-if="line.text.trim().length > 0"
+              type="button"
+              :disabled="!props.canSeek"
+              class="block w-full cursor-pointer appearance-none border-0 bg-transparent p-0 text-left font-[inherit] text-inherit disabled:cursor-not-allowed"
+              @click="emit('seek', line.startMs)"
+            >
+              {{ line.text }}
+            </button>
+          </li>
+        </ol>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup lang="ts">
-const props = withDefaults(defineProps<{ compact?: boolean }>(), {
-  compact: false,
-});
+import { ref, shallowRef } from "vue";
+import type { ComponentPublicInstance } from "vue";
+import { isLyricsScrollKey, useLyricsFollow } from "@/playing/useLyricsFollow";
+import type { TrackLyrics } from "@/playing/types";
 
-const activeLyricIndex = 8;
-const lyrics = [
-  "Somewhere in the afterglow",
-  "We let the whole world fade away",
-  "Every heartbeat finds the rhythm",
-  "The city wakes beneath a silver sky",
-  "I held my breath and counted every light",
-  "You said the morning always comes around",
-  "We crossed the empty streets without a sound",
-  "And though the night kept pulling us apart",
-  "Even when the streets are empty and every window has gone dark, I can still hear the echoes of everything we promised each other when the night was young.",
-  "The radio was playing our old song",
-  "Maybe we were chasing something neither of us could name, following the headlights until the whole horizon opened up before us.",
-  "I can feel the summer fading in the air",
-  "The windows glow like candles in the rain",
-  "We kept on driving past the edge of town",
-  "We followed the headlights until the highway disappeared into the mountains, then kept driving beneath the open sky because neither of us was ready to go home.",
-  "The morning found us still awake",
-  "You left your coat beside the door",
-  "Still I remember every word you said",
-  "Every little promise sounded like a place we could return to when the world became too loud and we needed somewhere quiet to begin again.",
-  "The road was shining after all the rain",
-  "When the last train disappeared beyond the station, we stayed a little longer just to see the city turn from blue to gold.",
-  "Maybe the story isn't over yet",
-  "We keep walking toward the light",
-];
+type BrowserElement = InstanceType<typeof globalThis.Element>;
+type BrowserHTMLElement = InstanceType<typeof globalThis.HTMLElement>;
+type BrowserHTMLOListElement = InstanceType<typeof globalThis.HTMLOListElement>;
+type BrowserTouchEvent = InstanceType<typeof globalThis.TouchEvent>;
+type BrowserKeyboardEvent = InstanceType<typeof globalThis.KeyboardEvent>;
+
+const props = withDefaults(
+  defineProps<{
+    compact?: boolean;
+    lyrics: TrackLyrics;
+    activeIndex: number;
+    activeGroupStartIndex: number;
+    canSeek: boolean;
+    trackId: number | null;
+    visible: boolean;
+    isSeeking: boolean;
+  }>(),
+  {
+    compact: false,
+  },
+);
+
+const emit = defineEmits<{ seek: [startMs: number] }>();
+const containerElement = shallowRef<BrowserHTMLElement | null>(null);
+const contentElement = shallowRef<BrowserHTMLElement | null>(null);
+const listElement = shallowRef<BrowserHTMLOListElement | null>(null);
+const lineElements = new Map<number, BrowserHTMLElement>();
+const edgePadding = ref({ top: 0, bottom: 0 });
+const lyricsFollow = useLyricsFollow({
+  trackId: () => props.trackId,
+  visible: () => props.visible,
+  compact: () => props.compact,
+  isSeeking: () => props.isSeeking,
+  activeGroupStartIndex: () => props.activeGroupStartIndex,
+  container: () => containerElement.value,
+  content: () => contentElement.value,
+  line: (index) => lineElements.get(index) ?? null,
+  lineCount: () => (props.lyrics.kind === "synced" ? props.lyrics.lines.length : 0),
+  setEdgePadding: (top, bottom) => {
+    if (edgePadding.value.top !== top || edgePadding.value.bottom !== bottom) {
+      edgePadding.value = { top, bottom };
+    }
+    if (listElement.value !== null) {
+      listElement.value.style.paddingBlockStart = `${top}px`;
+      listElement.value.style.paddingBlockEnd = `${bottom}px`;
+    }
+  },
+});
+const followState = lyricsFollow.state;
+let touchOrigin: { x: number; y: number } | null = null;
+
+function setLineElement(index: number, element: BrowserElement | ComponentPublicInstance | null) {
+  if (element instanceof globalThis.HTMLElement) lineElements.set(index, element);
+  else lineElements.delete(index);
+}
+
+function handleWheel() {
+  lyricsFollow.startBrowsing();
+}
+
+function handleTouchStart(event: BrowserTouchEvent) {
+  const touch = event.touches[0];
+  touchOrigin = touch === undefined ? null : { x: touch.clientX, y: touch.clientY };
+}
+
+function handleTouchMove(event: BrowserTouchEvent) {
+  const touch = event.touches[0];
+  if (touchOrigin === null || touch === undefined) return;
+  if (Math.abs(touch.clientX - touchOrigin.x) + Math.abs(touch.clientY - touchOrigin.y) < 4) return;
+  touchOrigin = null;
+  lyricsFollow.startBrowsing();
+}
+
+function clearTouchOrigin() {
+  touchOrigin = null;
+}
+
+function handleKeydown(event: BrowserKeyboardEvent) {
+  const target = event.target;
+  const isInteractiveTarget =
+    target instanceof globalThis.Element &&
+    target.closest('button, a[href], input, select, textarea, [contenteditable="true"]') !== null;
+  if (isLyricsScrollKey(event.key, event.code, isInteractiveTarget)) lyricsFollow.startBrowsing();
+}
+
+function returnToCurrentLyric() {
+  lyricsFollow.returnToCurrentLyric();
+}
 </script>
 
 <style scoped>

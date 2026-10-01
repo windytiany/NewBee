@@ -1,4 +1,5 @@
 mod database;
+pub mod lyrics;
 mod playback;
 mod scan;
 
@@ -32,6 +33,7 @@ pub fn run() {
             database::commands::add_music_library_directory,
             database::commands::remove_music_library_directory,
             scan::scan_music_library,
+            lyrics::get_track_lyrics,
             database::commands::list_album_artists,
             database::commands::list_albums,
             database::commands::get_album_artwork,

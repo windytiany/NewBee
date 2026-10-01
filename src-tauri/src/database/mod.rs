@@ -128,6 +128,12 @@ pub struct TrackDetails {
     channels: Option<i64>,
 }
 
+impl TrackDetails {
+    pub(crate) fn path(&self) -> &str {
+        &self.path
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicLibraryDirectory {

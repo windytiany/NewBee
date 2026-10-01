@@ -58,129 +58,17 @@
 </template>
 
 <script setup lang="ts">
-import { invoke } from "@tauri-apps/api/core";
-import { onBeforeUnmount, ref, watch } from "vue";
 import { Disc3 } from "@lucide/vue";
 import { usePlaybackSession } from "@/playback/session";
-import type { TrackArtwork, TrackDetails } from "@/types/track";
+import { useTrackInfo } from "@/playback/useTrackInfo";
 import { formatAudioSummary } from "@/utils/formatTrack.ts";
 
 const { currentTrack } = usePlaybackSession().state;
-const currentTrackDetails = ref<TrackDetails | null>(null);
-const currentTrackArtworkUrl = ref<string | null>(null);
-const isLoading = ref(false);
-const currentTrackDetailsError = ref("");
-const currentTrackArtworkError = ref("");
-let currentTrackDetailsRequestGeneration = 0;
-let currentTrackArtworkRequestGeneration = 0;
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return typeof error === "string" ? error : "未知错误";
-}
-
-function revokeCurrentTrackArtwork() {
-  const artworkUrl = currentTrackArtworkUrl.value;
-  if (artworkUrl) globalThis.URL.revokeObjectURL(artworkUrl);
-  currentTrackArtworkUrl.value = null;
-}
-
-function syncCurrentTrackInfo(trackId: number | null) {
-  ++currentTrackDetailsRequestGeneration;
-  ++currentTrackArtworkRequestGeneration;
-  currentTrackDetails.value = null;
-  isLoading.value = trackId !== null;
-  currentTrackDetailsError.value = "";
-  currentTrackArtworkError.value = "";
-  revokeCurrentTrackArtwork();
-
-  if (trackId === null) return;
-  void loadCurrentTrackDetails(trackId);
-  void loadCurrentTrackArtwork(trackId);
-}
-
-async function loadCurrentTrackDetails(trackId: number) {
-  const generation = ++currentTrackDetailsRequestGeneration;
-  isLoading.value = true;
-  currentTrackDetailsError.value = "";
-
-  try {
-    const result = await invoke<TrackDetails | null>("get_track", { trackId });
-    if (
-      generation !== currentTrackDetailsRequestGeneration ||
-      currentTrack.value?.trackId !== trackId
-    ) {
-      return;
-    }
-
-    if (!result) {
-      currentTrackDetailsError.value = "未找到正在播放曲目的详情。";
-      return;
-    }
-    if (result.id !== trackId) {
-      currentTrackDetailsError.value = "返回的曲目详情与当前播放曲目不匹配。";
-      return;
-    }
-
-    currentTrackDetails.value = result;
-  } catch (error) {
-    if (
-      generation !== currentTrackDetailsRequestGeneration ||
-      currentTrack.value?.trackId !== trackId
-    ) {
-      return;
-    }
-    currentTrackDetailsError.value = `读取曲目详情失败：${errorMessage(error)}`;
-  } finally {
-    if (
-      generation === currentTrackDetailsRequestGeneration &&
-      currentTrack.value?.trackId === trackId
-    ) {
-      isLoading.value = false;
-    }
-  }
-}
-
-async function loadCurrentTrackArtwork(trackId: number) {
-  const generation = ++currentTrackArtworkRequestGeneration;
-  revokeCurrentTrackArtwork();
-  currentTrackArtworkError.value = "";
-
-  try {
-    const artwork = await invoke<TrackArtwork | null>("get_track_artwork", { trackId });
-    if (
-      generation !== currentTrackArtworkRequestGeneration ||
-      currentTrack.value?.trackId !== trackId
-    ) {
-      return;
-    }
-
-    if (!artwork || artwork.status !== "available") {
-      revokeCurrentTrackArtwork();
-      return;
-    }
-
-    const imageBlob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
-      type: artwork.mimeType,
-    });
-    currentTrackArtworkUrl.value = globalThis.URL.createObjectURL(imageBlob);
-  } catch (error) {
-    if (
-      generation !== currentTrackArtworkRequestGeneration ||
-      currentTrack.value?.trackId !== trackId
-    ) {
-      return;
-    }
-    revokeCurrentTrackArtwork();
-    currentTrackArtworkError.value = `读取封面失败，已显示占位图：${errorMessage(error)}`;
-  }
-}
-
-watch(() => currentTrack.value?.trackId ?? null, syncCurrentTrackInfo, { immediate: true });
-
-onBeforeUnmount(() => {
-  ++currentTrackDetailsRequestGeneration;
-  ++currentTrackArtworkRequestGeneration;
-  revokeCurrentTrackArtwork();
-});
+const {
+  currentTrackDetails,
+  currentTrackArtworkUrl,
+  isLoading,
+  currentTrackDetailsError,
+  currentTrackArtworkError,
+} = useTrackInfo(() => currentTrack.value?.trackId ?? null);
 </script>
