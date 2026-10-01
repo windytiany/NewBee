@@ -253,6 +253,7 @@ describe("library album actions", () => {
     const result = await page.removeAlbumFromLibrary(selection);
 
     expect(result).toEqual({ completed: true, deletedCount: 3, message: "" });
+    expect(page.trackActionMessage.value).toBe("");
     expect(databaseDeleteCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
     expect(queueRemovalCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
     expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(2);
@@ -268,6 +269,7 @@ describe("library album actions", () => {
 
     expect(result.completed).toBe(false);
     expect(result.deletedCount).toBe(2);
+    expect(page.trackActionMessage.value).toBe("已从曲库删除 2 首曲目。");
     expect(result.message).toContain("Second song（从曲库删除失败：database busy）");
     expect(queueRemovalCalls).toEqual([track.id, thirdTrack.id]);
   });

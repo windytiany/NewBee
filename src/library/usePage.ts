@@ -476,7 +476,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
       if (deletedCount > 0) await refreshLibrary();
       trackActionError.value = failures.length ? failures.join("、") : "";
       trackActionMessageType.value = "success";
-      trackActionMessage.value = `已从曲库删除 ${deletedCount} 首曲目。`;
+      trackActionMessage.value = failures.length ? `已从曲库删除 ${deletedCount} 首曲目。` : "";
       return true;
     });
     return {

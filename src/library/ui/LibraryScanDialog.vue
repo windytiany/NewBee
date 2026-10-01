@@ -84,9 +84,11 @@
           </button>
           <button
             class="bg-spotify-green focus-visible:outline-spotify-green rounded-full px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!isTauriApp || isScanning || directories.length === 0"
+            :disabled="
+              !isTauriApp || isScanning || isLoadingDirectories || directories.length === 0
+            "
             type="button"
-            @click="scanMusicLibrary"
+            @click="startScan"
           >
             {{ isScanning ? "正在扫描…" : "开始扫描" }}
           </button>
@@ -130,6 +132,18 @@ function closeDialog() {
   dialogElement.value?.close();
 }
 
+function startScan() {
+  if (
+    !isTauriApp ||
+    isScanning.value ||
+    isLoadingDirectories.value ||
+    directories.value.length === 0
+  )
+    return;
+  void scanMusicLibrary();
+  closeDialog();
+}
+
 async function refreshDirectories() {
   isLoadingDirectories.value = true;
   directoryLoadFailed.value = false;
@@ -154,10 +168,7 @@ async function addDirectory() {
 
     const added = await invoke<boolean>("add_music_library_directory", { path: selectedPath });
     await refreshDirectories();
-    notify({
-      type: added ? "success" : "info",
-      message: added ? "目录已保存。" : "该目录已经保存。",
-    });
+    if (!added) notify({ type: "info", message: "该目录已经保存。" });
   } catch (error) {
     notify({
       type: "error",
@@ -171,7 +182,6 @@ async function removeDirectory(directory: LibraryDirectory) {
   try {
     await invoke("remove_music_library_directory", { id: directory.id });
     directories.value = directories.value.filter((saved) => saved.id !== directory.id);
-    notify({ type: "success", message: "目录已移除，已入库歌曲保留。" });
   } catch (error) {
     notify({
       type: "error",

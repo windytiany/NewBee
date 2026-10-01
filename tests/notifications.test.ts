@@ -38,14 +38,14 @@ function createClock() {
 afterEach(() => notifications.clear());
 
 describe("notification center", () => {
-  it("success/info expire after five seconds, warning/error remain dismissable", () => {
+  it("success/info expire after four seconds, warning/error remain dismissable", () => {
     const { clock, advance } = createClock();
     const center = createNotificationCenter(clock);
     center.notify({ type: "success", message: "saved" });
     center.notify({ type: "info", message: "already saved" });
     const warning = center.notify({ type: "warning", message: "partially saved" });
     const error = center.notify({ type: "error", message: "failed" });
-    advance(4_999);
+    advance(3_999);
     expect(center.items.value).toHaveLength(4);
     advance(1);
     expect(center.visible.value.map(({ id }) => id)).toEqual([warning, error]);
@@ -66,7 +66,7 @@ describe("notification center", () => {
     expect(center.items.value).toHaveLength(4);
     center.dismiss(errors[0]);
     expect(center.visible.value.map(({ id }) => id)).toEqual([errors[1], errors[2], queued]);
-    advance(4_999);
+    advance(3_999);
     expect(center.items.value).toHaveLength(3);
     advance(1);
     expect(center.items.value).toHaveLength(2);
@@ -85,7 +85,7 @@ describe("notification center", () => {
     advance(10_000);
     expect(center.items.value).toHaveLength(1);
     center.pause(id, "focus", false);
-    advance(2_999);
+    advance(1_999);
     expect(center.items.value).toHaveLength(1);
     advance(1);
     expect(center.items.value).toEqual([]);
@@ -108,9 +108,9 @@ describe("notification center", () => {
     const { clock, advance, tasks } = createClock();
     const center = createNotificationCenter(clock);
     const id = center.notify({ type: "info", message: "saved", key: "directory" });
-    advance(4_000);
+    advance(3_000);
     center.notify({ type: "info", message: "saved", key: "directory" });
-    advance(4_999);
+    advance(3_999);
     expect(center.items.value).toHaveLength(1);
     center.dismiss(id);
     expect(tasks.size).toBe(0);
@@ -131,7 +131,7 @@ describe("notification center", () => {
     advance(60_000);
     expect(center.items.value).toHaveLength(1);
     center.pause(id, "focus", false);
-    advance(5_000);
+    advance(4_000);
     expect(center.items.value).toEqual([]);
   });
 
