@@ -99,16 +99,20 @@ describe("列表条目状态样式", () => {
     }
   });
 
-  it("专辑卡片焦点只显示绿色线框，非焦点选中背景保持不变", () => {
+  it("专辑卡片悬停只改变背景，焦点显示绿色线框，选中不改变背景", () => {
     const file = findFile("AlbumCard.vue");
     const button = elements(file.template).find(({ tag }) => tag === "button");
     if (!button) throw new Error("Album button was not rendered.");
     expect(staticClass(button)).toContain("focus-visible:ring-spotify-green");
     expect(staticClass(button)).toContain("focus-visible:ring-2");
-    expect(staticClass(button)).toContain("focus-visible:bg-transparent");
+    expect(staticClass(button)).toContain("hover:bg-white/5");
+    expect(staticClass(button)).toContain("transition-colors");
     expect(staticClass(button)).toContain("outline-none");
     expect(classBinding(button)).toContain("isFocused ? 'ring-spotify-green ring-2'");
-    expect(classBinding(button)).toContain("isSelected ? 'bg-white/10'");
+    expect(classBinding(button)).not.toContain("isSelected");
+    expect(file.templateSource).not.toContain("bg-white/10");
+    expect(file.templateSource).not.toContain("translate-y");
+    expect(file.templateSource).not.toContain("transition-transform");
     expect(file.templateSource).not.toContain("bg-spotify-track");
   });
 
