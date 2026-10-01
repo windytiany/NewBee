@@ -8,19 +8,13 @@
     ></span>
     <div
       class="grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-1 transition-colors sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
-      :class="
-        isFocused
-          ? 'bg-spotify-track'
-          : isSelected
-            ? 'bg-white/10 ring-1 ring-white/10 ring-inset'
-            : 'hover:bg-white/5'
-      "
+      :class="isFocused ? 'bg-spotify-track' : isSelected ? 'bg-white/10' : 'hover:bg-white/5'"
     >
       <button
         data-item-interaction
         :aria-label="`拖动重排第 ${trackNumber} 首`"
         :disabled="isDragDisabled"
-        class="focus-visible:outline-spotify-green text-spotify-muted grid h-full min-h-10 w-full touch-none place-items-center rounded-sm transition-colors select-none focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-40"
+        class="text-spotify-muted focus-visible:bg-spotify-track grid h-full min-h-10 w-full touch-none place-items-center rounded-sm transition-colors outline-none select-none disabled:cursor-not-allowed disabled:opacity-40"
         :class="isDragging ? 'text-spotify-green cursor-grabbing' : 'cursor-grab hover:text-white'"
         type="button"
         @pointerdown.stop="emit('reorderPointerDown', track.playlistItemId, $event)"
@@ -32,7 +26,7 @@
       <button
         data-item-interaction
         data-playlist-track-select
-        class="focus-visible:outline-spotify-green col-start-2 col-end-[-1] grid w-full grid-cols-[minmax(0,1fr)_3rem] items-center gap-3 rounded-md py-2.5 pl-0 text-left text-sm transition-colors focus-visible:outline-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
+        class="focus-visible:bg-spotify-track col-start-2 col-end-[-1] grid w-full grid-cols-[minmax(0,1fr)_3rem] items-center gap-3 rounded-md py-2.5 pl-0 text-left text-sm transition-colors outline-none sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
         :class="isDragging ? 'cursor-grabbing' : 'cursor-grab'"
         :aria-pressed="isSelected ? true : undefined"
         aria-haspopup="menu"
@@ -48,7 +42,7 @@
         <span class="flex min-w-0 flex-col gap-0.5">
           <span
             class="truncate font-medium"
-            :class="isCurrentTrack || isFocused ? 'text-spotify-green' : 'text-white'"
+            :class="isCurrentTrack ? 'text-spotify-green' : 'text-white'"
           >
             {{ track.title ?? "未知曲目" }}
           </span>

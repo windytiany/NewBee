@@ -2,7 +2,7 @@
   <li>
     <button
       data-item-interaction
-      class="focus-visible:outline-spotify-green flex w-full min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors focus-visible:outline-2"
+      class="focus-visible:bg-spotify-track flex w-full min-w-0 items-center gap-2.5 rounded-md px-2 py-1 text-left transition-colors outline-none"
       :class="isFocused ? 'bg-spotify-track' : 'hover:bg-white/5'"
       :aria-current="isSelected ? 'true' : undefined"
       type="button"
@@ -15,10 +15,7 @@
         <UserRound class="size-6" />
       </span>
       <span class="flex min-w-0 flex-col">
-        <span
-          class="truncate text-sm font-medium"
-          :class="isFocused ? 'text-spotify-green' : 'text-white'"
-        >
+        <span class="truncate text-sm font-medium text-white">
           {{ name }}
         </span>
         <span class="text-spotify-muted text-xs">{{ albumCount }} 张专辑</span>
