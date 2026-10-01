@@ -65,17 +65,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
 import { usePlaybackSession } from "@/playback/session";
 import Lyrics from "@/playing/ui/Lyrics.vue";
 import TrackDetail from "@/playing/ui/TrackDetail.vue";
 import { canSeekLyrics, seekToLyric } from "@/playing/seek";
 import { usePlayingLyrics } from "@/playing/useLyrics";
+import {
+  usePersistentPlayingPresentation,
+  type PlayingPresentation as Presentation,
+} from "@/playing/presentation";
 
-type Presentation = "track" | "lyrics" | "both";
-
-const presentation = ref<Presentation>("track");
+const { presentation } = usePersistentPlayingPresentation();
 const session = usePlaybackSession();
 const { currentTrack, playbackStatus, isSeeking } = session.state;
 const {
