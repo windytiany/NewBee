@@ -24,8 +24,7 @@ function loadSidebarLayout(): SidebarLayout {
 
     const parsedLayout: unknown = JSON.parse(serializedLayout);
     if (typeof parsedLayout !== "object" || parsedLayout === null || Array.isArray(parsedLayout)) {
-      console.error("Saved sidebar layout has an invalid format; using adaptive defaults.");
-      return { ...EMPTY_LAYOUT };
+      throw new Error("Saved sidebar layout has an invalid format.");
     }
 
     const layout = parsedLayout as Record<string, unknown>;
@@ -35,7 +34,10 @@ function loadSidebarLayout(): SidebarLayout {
       rightTopHeight: readStoredNumber(layout.rightTopHeight),
     };
   } catch (error) {
-    console.error("Could not read the saved sidebar layout; using adaptive defaults.", error);
+    console.error(
+      "Could not read or validate the saved sidebar layout; using adaptive defaults.",
+      error,
+    );
     return { ...EMPTY_LAYOUT };
   }
 }

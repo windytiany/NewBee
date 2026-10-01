@@ -55,9 +55,9 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
     }
   }
 
-  async function startCurrentTrack(trackId: number, generation: number) {
+  function startCurrentTrack(trackId: number, generation: number): Promise<boolean> {
     const track = options.currentTrack.value;
-    if (track === null) return false;
+    if (track === null) return Promise.resolve(false);
 
     const rowKey = options.currentRowKey.value;
     const queueItem = options.displayedTracks.value.find((item) => item.rowKey === rowKey);
