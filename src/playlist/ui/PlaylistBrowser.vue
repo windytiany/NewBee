@@ -63,16 +63,21 @@
           <span class="text-right">时长</span>
         </div>
 
-        <p v-if="props.isLoadingTracks" class="text-spotify-muted py-4 text-sm" role="status">
-          正在读取歌单曲目…
-        </p>
         <p
-          v-else-if="!props.playlistsError && !props.tracksError && props.tracks.length === 0"
+          v-if="
+            !props.isLoadingTracks &&
+            !props.playlistsError &&
+            !props.tracksError &&
+            props.tracks.length === 0
+          "
           class="text-spotify-muted py-4 text-sm"
         >
           此歌单暂无歌曲。
         </p>
-        <ol v-else-if="!props.playlistsError && !props.tracksError" ref="trackListElement">
+        <ol
+          v-else-if="!props.isLoadingTracks && !props.playlistsError && !props.tracksError"
+          ref="trackListElement"
+        >
           <PlaylistTrack
             v-for="(track, index) in props.tracks"
             :key="track.playlistItemId"
@@ -151,16 +156,18 @@
     </template>
 
     <div v-else class="grid min-h-0 flex-1 place-items-center px-5 text-center">
-      <p v-if="props.isLoadingPlaylists" class="text-spotify-muted text-sm" role="status">
-        正在读取歌单…
-      </p>
       <p
-        v-else-if="!props.playlistsError && !props.hasPlaylists"
+        v-if="!props.isLoadingPlaylists && !props.playlistsError && !props.hasPlaylists"
         class="text-spotify-muted text-sm"
       >
         还没有歌单。
       </p>
-      <p v-else-if="!props.playlistsError" class="text-spotify-muted text-sm">请选择一个歌单。</p>
+      <p
+        v-else-if="!props.isLoadingPlaylists && !props.playlistsError"
+        class="text-spotify-muted text-sm"
+      >
+        请选择一个歌单。
+      </p>
     </div>
   </section>
 </template>

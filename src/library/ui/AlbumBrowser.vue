@@ -1,6 +1,7 @@
 <template>
   <section
     aria-labelledby="album-browser-heading"
+    :aria-busy="props.trackActionPending || props.albumsLoading"
     class="sidebar-scrollbars bg-spotify-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto text-white"
   >
     <template v-if="props.artist">
@@ -11,22 +12,15 @@
       </header>
 
       <p
-        v-if="props.trackActionPending"
-        class="text-spotify-muted px-5 text-sm sm:px-8"
-        role="status"
-      >
-        正在处理曲目操作…
-      </p>
-      <p v-if="props.albumsLoading" class="text-spotify-muted px-5 text-sm sm:px-8" role="status">
-        正在读取专辑…
-      </p>
-      <p
-        v-else-if="!props.albumsError && props.albums.length === 0"
+        v-if="!props.albumsLoading && !props.albumsError && props.albums.length === 0"
         class="text-spotify-muted px-5 text-sm sm:px-8"
       >
         此专辑演出者暂无专辑。
       </p>
-      <div v-else-if="!props.albumsError" class="flex flex-col gap-6 px-5 pb-8 sm:px-8">
+      <div
+        v-else-if="!props.albumsLoading && !props.albumsError"
+        class="flex flex-col gap-6 px-5 pb-8 sm:px-8"
+      >
         <template v-for="row in albumRows" :key="row.id">
           <div class="grid grid-cols-2 gap-x-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4">
             <AlbumCard

@@ -31,14 +31,7 @@
       :class="presentation === 'both' ? 'min-w-0 md:h-full md:min-h-0' : 'max-w-none'"
     >
       <p
-        v-if="lyricsState.status === 'loading'"
-        class="text-spotify-muted mx-auto max-w-5xl px-6 py-8 text-center text-lg"
-        role="status"
-      >
-        正在加载歌词…
-      </p>
-      <p
-        v-else-if="lyricsState.status === 'idle'"
+        v-if="lyricsState.status === 'idle'"
         class="text-spotify-muted mx-auto max-w-5xl px-6 py-8 text-center text-lg"
       >
         未选择歌曲

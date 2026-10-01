@@ -185,6 +185,20 @@ describe("album context menu", () => {
     expect(menu.calls).toEqual([{ name: "playlist", args: [album, 3] }]);
   });
 
+  it("does not render progress text or an empty state while playlists are loading", async () => {
+    const menu = mountMenu();
+    menu.props.playlistsLoading = true;
+    menu.props.playlists = [];
+    await menu.open();
+    menu.click("添加到播放列表");
+    await Vue.nextTick();
+    expect(findNodes(menu.root, (node) => node.text.includes("正在"))).toHaveLength(0);
+    expect(findNodes(menu.root, (node) => node.text.includes("暂无可用歌单"))).toHaveLength(0);
+    menu.props.playlistsLoading = false;
+    await Vue.nextTick();
+    expect(findNodes(menu.root, (node) => node.text.includes("暂无可用歌单"))).toHaveLength(1);
+  });
+
   it("blocks actions while pending and closes when the album disappears", async () => {
     const menu = mountMenu();
     await menu.open();

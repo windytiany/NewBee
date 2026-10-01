@@ -74,10 +74,7 @@
       </div>
 
       <footer class="border-t border-white/10 px-5 py-4">
-        <p v-if="isScanning" class="text-spotify-green text-sm" role="status">
-          正在扫描音乐文件，请稍候…
-        </p>
-        <div class="mt-4 flex justify-end gap-2">
+        <div class="flex justify-end gap-2">
           <button
             class="focus-visible:outline-spotify-green rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2"
             type="button"

@@ -43,14 +43,7 @@
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       <p
-        v-if="props.isLoading && props.artists.length === 0"
-        class="text-spotify-muted px-2 py-3 text-sm"
-        role="status"
-      >
-        正在读取专辑演出者…
-      </p>
-      <p
-        v-else-if="!props.isLoading && !props.error && props.artists.length === 0"
+        v-if="!props.isLoading && !props.error && props.artists.length === 0"
         class="text-spotify-muted px-2 py-3 text-sm"
       >
         音乐库中暂无专辑演出者。

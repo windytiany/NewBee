@@ -12,16 +12,13 @@
     </h2>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
-      <p v-if="props.isLoading" class="text-spotify-muted px-2 py-3 text-sm" role="status">
-        正在读取曲目…
-      </p>
       <p
-        v-else-if="!props.error && props.tracks.length === 0"
+        v-if="!props.isLoading && !props.error && props.tracks.length === 0"
         class="text-spotify-muted px-2 py-3 text-sm"
       >
         {{ props.emptyMessage }}
       </p>
-      <ul v-else-if="!props.error" ref="listElement" class="space-y-1">
+      <ul v-else-if="!props.isLoading && !props.error" ref="listElement" class="space-y-1">
         <QueueRow
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"

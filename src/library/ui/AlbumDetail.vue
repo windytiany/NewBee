@@ -43,11 +43,8 @@
     </header>
 
     <h3 class="sr-only">曲目</h3>
-    <p v-if="props.tracksLoading" class="text-spotify-muted py-3 text-sm" role="status">
-      正在读取曲目…
-    </p>
     <ol
-      v-else-if="!props.tracksError && props.tracks.length > 0"
+      v-if="!props.tracksLoading && !props.tracksError && props.tracks.length > 0"
       ref="trackListElement"
       class="grid gap-x-8"
       :class="trackColumnCount === 2 ? 'grid-flow-col grid-cols-2' : 'grid-cols-1'"
@@ -70,7 +67,12 @@
         @context-menu="openTrackContextMenu"
       />
     </ol>
-    <p v-else-if="!props.tracksError" class="text-spotify-muted py-3 text-sm">此专辑暂无曲目。</p>
+    <p
+      v-else-if="!props.tracksLoading && !props.tracksError"
+      class="text-spotify-muted py-3 text-sm"
+    >
+      此专辑暂无曲目。
+    </p>
 
     <div
       v-if="contextMenu"
