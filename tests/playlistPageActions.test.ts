@@ -310,4 +310,132 @@ describe("歌单页面操作", () => {
     expect(page.playlistActionError.value).toBe("");
     expect(page.playlistActionMessage.value).toBe("");
   });
+
+  it("重命名会清理名称、保持当前选择且不修改播放队列", async () => {
+    const page = await mountLoadedPlaylistPage();
+    const renamedPlaylist = { ...firstPlaylist, name: "Renamed" };
+    let renameArguments: Record<string, unknown> | undefined;
+    invokeHandler = async (command, args) => {
+      if (command === "list_playlists") return [renamedPlaylist, secondPlaylist];
+      if (command === "list_playlist_tracks") return firstPlaylistTracks;
+      if (command === "rename_playlist") renameArguments = args;
+      return undefined;
+    };
+
+    const result = await page.renamePlaylist(firstPlaylist.id, "  Renamed  ");
+    await settleRequests();
+
+    expect(result).toEqual({ status: "success" });
+    expect(renameArguments).toEqual({ playlistId: firstPlaylist.id, name: "Renamed" });
+    expect(page.playlists.value[0]?.name).toBe("Renamed");
+    expect(page.selectedPlaylistId.value).toBe(firstPlaylist.id);
+    expect(addToNextBatches).toEqual([]);
+    expect(addToQueueEndBatches).toEqual([]);
+  });
+
+  it("删除非当前歌单保留右侧选择和曲目", async () => {
+    const page = await mountLoadedPlaylistPage();
+    page.selectPlaylist(secondPlaylist);
+    await settleRequests();
+    invokeHandler = async () => undefined;
+
+    const result = await page.deletePlaylist(firstPlaylist.id);
+
+    expect(result).toEqual({ status: "success" });
+    expect(page.playlists.value.map(({ id }) => id)).toEqual([secondPlaylist.id]);
+    expect(page.selectedPlaylistId.value).toBe(secondPlaylist.id);
+    expect(page.selectedPlaylist.value).toEqual(secondPlaylist);
+    expect(page.playlistTracks.value).toEqual(secondPlaylistTracks);
+    expect(addToNextBatches).toEqual([]);
+    expect(addToQueueEndBatches).toEqual([]);
+  });
+
+  it("删除当前歌单清空选择而不自动选择相邻歌单", async () => {
+    const page = await mountLoadedPlaylistPage();
+    invokeHandler = async () => undefined;
+
+    const result = await page.deletePlaylist(firstPlaylist.id);
+
+    expect(result).toEqual({ status: "success" });
+    expect(page.playlists.value.map(({ id }) => id)).toEqual([secondPlaylist.id]);
+    expect(page.selectedPlaylistId.value).toBeNull();
+    expect(page.selectedPlaylist.value).toBeNull();
+    expect(page.playlistTracks.value).toEqual([]);
+    expect(
+      invokeCalls.some(
+        ({ command, args }) =>
+          command === "list_playlist_tracks" && args?.playlistId === secondPlaylist.id,
+      ),
+    ).toBe(false);
+    expect(addToNextBatches).toEqual([]);
+    expect(addToQueueEndBatches).toEqual([]);
+  });
+
+  it("重命名使迟到的旧列表读取失效并保持新上下文", async () => {
+    const page = await mountLoadedPlaylistPage();
+    const staleRead = deferred<unknown>();
+    const renameRequest = deferred<unknown>();
+    let listCalls = 0;
+    const renamedPlaylist = { ...firstPlaylist, name: "Renamed" };
+    invokeHandler = async (command) => {
+      if (command === "list_playlists") {
+        listCalls += 1;
+        return listCalls === 1 ? staleRead.promise : [renamedPlaylist, secondPlaylist];
+      }
+      if (command === "list_playlist_tracks") return firstPlaylistTracks;
+      if (command === "rename_playlist") return renameRequest.promise;
+      return undefined;
+    };
+
+    const staleRefresh = page.refreshPlaylists(undefined, true);
+    const rename = page.renamePlaylist(firstPlaylist.id, "Renamed");
+    renameRequest.resolve(undefined);
+    await rename;
+    await settleRequests();
+    staleRead.resolve([firstPlaylist, secondPlaylist]);
+    await staleRefresh;
+    await settleRequests();
+
+    expect(listCalls).toBe(2);
+    expect(page.playlists.value[0]?.name).toBe("Renamed");
+    expect(page.selectedPlaylistId.value).toBe(firstPlaylist.id);
+    expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
+    expect(addToNextBatches).toEqual([]);
+    expect(addToQueueEndBatches).toEqual([]);
+  });
+
+  it("迟到的删除结果不会覆盖新选择", async () => {
+    const page = await mountLoadedPlaylistPage();
+    const deleteRequest = deferred<unknown>();
+    let serverPlaylists = [firstPlaylist, secondPlaylist];
+    invokeHandler = async (command, args) => {
+      if (command === "list_playlists") return serverPlaylists;
+      if (command === "list_playlist_tracks") {
+        return getNumberArgument(args, "playlistId") === firstPlaylist.id
+          ? firstPlaylistTracks
+          : secondPlaylistTracks;
+      }
+      if (command === "delete_playlist") {
+        await deleteRequest.promise;
+        serverPlaylists = serverPlaylists.filter(({ id }) => id !== firstPlaylist.id);
+      }
+      return undefined;
+    };
+
+    const deletion = page.deletePlaylist(firstPlaylist.id);
+    page.selectPlaylist(secondPlaylist);
+    await settleRequests();
+    deleteRequest.resolve(undefined);
+    const result = await deletion;
+    await settleRequests();
+
+    expect(result).toEqual({ status: "success" });
+    expect(page.playlists.value.map(({ id }) => id)).toEqual([secondPlaylist.id]);
+    expect(page.selectedPlaylistId.value).toBe(secondPlaylist.id);
+    expect(page.playlistTracks.value).toEqual(secondPlaylistTracks);
+    expect(page.playlistActionError.value).toBe("");
+    expect(page.playlistActionMessage.value).toBe("");
+    expect(addToNextBatches).toEqual([]);
+    expect(addToQueueEndBatches).toEqual([]);
+  });
 });

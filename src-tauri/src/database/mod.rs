@@ -438,6 +438,36 @@ impl Database {
         Ok(connection.last_insert_rowid())
     }
 
+    pub fn rename_playlist(&self, playlist_id: i64, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("Playlist name cannot be empty".to_owned());
+        }
+
+        let connection = self.connection()?;
+        let affected_rows = connection
+            .execute(
+                "UPDATE playlists SET name = ?1 WHERE id = ?2",
+                params![name, playlist_id],
+            )
+            .map_err(|error| format!("Failed to rename playlist {playlist_id}: {error}"))?;
+        if affected_rows == 0 {
+            return Err(format!("Playlist {playlist_id} was not found"));
+        }
+        Ok(())
+    }
+
+    pub fn delete_playlist(&self, playlist_id: i64) -> Result<(), String> {
+        let connection = self.connection()?;
+        let affected_rows = connection
+            .execute("DELETE FROM playlists WHERE id = ?1", [playlist_id])
+            .map_err(|error| format!("Failed to delete playlist {playlist_id}: {error}"))?;
+        if affected_rows == 0 {
+            return Err(format!("Playlist {playlist_id} was not found"));
+        }
+        Ok(())
+    }
+
     pub fn add_track_to_playlist(&self, playlist_id: i64, track_id: i64) -> Result<(), String> {
         let mut connection = self.connection()?;
         let transaction = connection
@@ -856,6 +886,107 @@ mod tests {
                 )
                 .unwrap();
         }
+    }
+
+    #[test]
+    fn renaming_playlist_trims_name_and_preserves_items_and_allows_duplicates() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("Favorites").unwrap();
+        let duplicate_name_id = database.create_playlist("Renamed").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(&database, 2, Some("Artist"), Some("Album"), 2, None);
+        database.add_track_to_playlist(playlist_id, 2).unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        let original_items = database.list_playlist_tracks(playlist_id).unwrap();
+
+        database
+            .rename_playlist(playlist_id, "  Renamed  ")
+            .unwrap();
+
+        let playlists = database.list_playlists().unwrap();
+        assert_eq!(
+            playlists
+                .iter()
+                .filter(|playlist| playlist.name == "Renamed")
+                .count(),
+            2
+        );
+        let renamed_playlist = playlists
+            .iter()
+            .find(|playlist| playlist.id == playlist_id)
+            .unwrap();
+        assert_eq!(renamed_playlist.name, "Renamed");
+        assert_eq!(renamed_playlist.cover_track_id, Some(2));
+        assert_eq!(
+            database
+                .list_playlist_tracks(playlist_id)
+                .unwrap()
+                .iter()
+                .map(|item| item.playlist_item_id)
+                .collect::<Vec<_>>(),
+            original_items
+                .iter()
+                .map(|item| item.playlist_item_id)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            database
+                .rename_playlist(duplicate_name_id, "  ")
+                .unwrap_err(),
+            "Playlist name cannot be empty"
+        );
+        assert_eq!(
+            database.rename_playlist(99, "Missing").unwrap_err(),
+            "Playlist 99 was not found"
+        );
+    }
+
+    #[test]
+    fn deleting_playlist_cascades_items_but_preserves_tracks_and_other_playlists() {
+        let database = Database::open(":memory:").unwrap();
+        let playlist_id = database.create_playlist("To delete").unwrap();
+        let other_playlist_id = database.create_playlist("Keep").unwrap();
+        insert_track(&database, 1, Some("Artist"), Some("Album"), 1, None);
+        insert_track(&database, 2, Some("Artist"), Some("Album"), 2, None);
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database.add_track_to_playlist(playlist_id, 1).unwrap();
+        database
+            .add_track_to_playlist(other_playlist_id, 2)
+            .unwrap();
+        let other_item_id =
+            database.list_playlist_tracks(other_playlist_id).unwrap()[0].playlist_item_id;
+        let foreign_keys_enabled: i64 = database
+            .connection()
+            .unwrap()
+            .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(foreign_keys_enabled, 1);
+
+        database.delete_playlist(playlist_id).unwrap();
+
+        assert_eq!(
+            database
+                .list_playlists()
+                .unwrap()
+                .iter()
+                .map(|playlist| playlist.id)
+                .collect::<Vec<_>>(),
+            vec![other_playlist_id]
+        );
+        assert!(database
+            .list_playlist_tracks(playlist_id)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            database.list_playlist_tracks(other_playlist_id).unwrap()[0].playlist_item_id,
+            other_item_id
+        );
+        assert!(database.get_track(1).unwrap().is_some());
+        assert!(database.get_track(2).unwrap().is_some());
+        assert_eq!(
+            database.delete_playlist(99).unwrap_err(),
+            "Playlist 99 was not found"
+        );
     }
 
     #[test]

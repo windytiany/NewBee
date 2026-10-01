@@ -38,6 +38,8 @@ pub fn run() {
             database::commands::list_album_tracks,
             database::commands::remove_track_from_library,
             database::commands::create_playlist,
+            database::commands::rename_playlist,
+            database::commands::delete_playlist,
             database::commands::add_track_to_playlist,
             database::commands::list_playlists,
             database::commands::list_playlist_tracks,

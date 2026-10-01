@@ -17,6 +17,7 @@ type PlaylistActionContext = {
   playlistId: number;
   generation: number;
 };
+type PlaylistManagementResult = { status: "success" } | { status: "error"; message: string };
 
 export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   const {
@@ -36,6 +37,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   const playlistActionError = ref("");
   const playlistActionMessage = ref("");
   const pendingPlaylistActionIds = ref(new Set<number>());
+  const pendingPlaylistIds = computed<readonly number[]>(() => [...pendingPlaylistActionIds.value]);
   const isPlaylistActionPending = computed(
     () =>
       selectedPlaylistId.value !== null &&
@@ -95,17 +97,24 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     );
   }
 
-  function beginPlaylistAction(playlistId: number): PlaylistActionContext | null {
-    if (selectedPlaylistId.value !== playlistId || pendingPlaylistActionIds.value.has(playlistId)) {
-      return null;
-    }
+  function lockPlaylistAction(playlistId: number): PlaylistActionContext | null {
+    if (pendingPlaylistActionIds.value.has(playlistId)) return null;
 
     const pendingIds = new Set(pendingPlaylistActionIds.value);
     pendingIds.add(playlistId);
     pendingPlaylistActionIds.value = pendingIds;
+    return { playlistId, generation: playlistContextGeneration };
+  }
+
+  function beginPlaylistAction(playlistId: number): PlaylistActionContext | null {
+    if (selectedPlaylistId.value !== playlistId) return null;
+
+    const context = lockPlaylistAction(playlistId);
+    if (!context) return null;
+
     playlistActionError.value = "";
     playlistActionMessage.value = "";
-    return { playlistId, generation: playlistContextGeneration };
+    return context;
   }
 
   function finishPlaylistAction(context: PlaylistActionContext) {
@@ -418,6 +427,66 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     );
   }
 
+  async function renamePlaylist(
+    playlistId: number,
+    name: string,
+  ): Promise<PlaylistManagementResult> {
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      return { status: "error", message: "歌单名称不能为空。" };
+    }
+    if (!playlists.value.some(({ id }) => id === playlistId)) {
+      return { status: "error", message: "目标歌单不存在。" };
+    }
+
+    const context = lockPlaylistAction(playlistId);
+    if (!context) {
+      return { status: "error", message: "该歌单正在处理中，请稍后重试。" };
+    }
+
+    let mutationStarted = false;
+    try {
+      beginPlaylistDataMutation(playlistId);
+      mutationStarted = true;
+      await invoke<void>("rename_playlist", { playlistId, name: normalizedName });
+
+      const summary = playlists.value.find(({ id }) => id === playlistId);
+      if (summary) replacePlaylistSummary({ ...summary, name: normalizedName });
+      deferPlaylistRefresh(undefined, true);
+      return { status: "success" };
+    } catch (error) {
+      return { status: "error", message: errorMessage(error) };
+    } finally {
+      finishPlaylistAction(context);
+      if (mutationStarted) finishPlaylistDataMutation(playlistId);
+    }
+  }
+
+  async function deletePlaylist(playlistId: number): Promise<PlaylistManagementResult> {
+    if (!playlists.value.some(({ id }) => id === playlistId)) {
+      return { status: "error", message: "目标歌单不存在。" };
+    }
+
+    const context = lockPlaylistAction(playlistId);
+    if (!context) {
+      return { status: "error", message: "该歌单正在处理中，请稍后重试。" };
+    }
+
+    let mutationStarted = false;
+    try {
+      beginPlaylistDataMutation(playlistId);
+      mutationStarted = true;
+      await invoke<void>("delete_playlist", { playlistId });
+      setAvailablePlaylists(playlists.value.filter(({ id }) => id !== playlistId));
+      return { status: "success" };
+    } catch (error) {
+      return { status: "error", message: errorMessage(error) };
+    } finally {
+      finishPlaylistAction(context);
+      if (mutationStarted) finishPlaylistDataMutation(playlistId);
+    }
+  }
+
   async function removePlaylistItems(playlistItemIds: readonly number[]) {
     const targetIds = [...playlistItemIds];
     if (targetIds.length === 0) return;
@@ -462,8 +531,8 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     } catch (error) {
       setPlaylistActionError(context, `移除歌单条目失败：${errorMessage(error)}`);
     } finally {
-      if (mutationStarted) finishPlaylistDataMutation(playlistId);
       finishPlaylistAction(context);
+      if (mutationStarted) finishPlaylistDataMutation(playlistId);
     }
   }
 
@@ -553,8 +622,8 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
       if (isPlaylistItemSetMismatch(error)) deferPlaylistRefresh();
       setPlaylistActionError(context, `保存歌单排序失败：${errorMessage(error)}`);
     } finally {
-      if (mutationStarted) finishPlaylistDataMutation(playlistId);
       finishPlaylistAction(context);
+      if (mutationStarted) finishPlaylistDataMutation(playlistId);
     }
   }
 
@@ -625,6 +694,7 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     isLoadingPlaylistTracks,
     playlistsError,
     playlistTracksError,
+    pendingPlaylistIds,
     isPlaylistActionPending,
     playlistActionError,
     playlistActionMessage,
@@ -635,6 +705,8 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     playPlaylistFromPage,
     addPlaylistItemsToNext,
     addPlaylistItemsToQueueEnd,
+    renamePlaylist,
+    deletePlaylist,
     removePlaylistItems,
     reorderPlaylistItems,
     refreshPlaylists,

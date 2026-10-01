@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileScript, parse } from "@vue/compiler-sfc";
-import * as TypeScript from "typescript";
+import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import type { Playlist } from "@/types/playlist";
 
 const playlist: Playlist = {
@@ -41,10 +41,10 @@ const libraryTrackActionError = Vue.ref("");
 function createComponent(source: string) {
   const { descriptor } = parse(source, { filename: "src/App.vue" });
   const compiled = compileScript(descriptor, { id: "app-test", inlineTemplate: true });
-  const output = TypeScript.transpileModule(compiled.content, {
+  const output = transpileModule(compiled.content, {
     compilerOptions: {
-      module: TypeScript.ModuleKind.CommonJS,
-      target: TypeScript.ScriptTarget.ES2022,
+      module: ModuleKind.CommonJS,
+      target: ScriptTarget.ES2022,
     },
   }).outputText;
   const module = { exports: {} as Record<string, unknown> };
@@ -89,6 +89,7 @@ function createComponent(source: string) {
     playlistTracks: Vue.ref([]),
     isLoadingPlaylists: Vue.ref(false),
     isLoadingPlaylistTracks: Vue.ref(false),
+    pendingPlaylistIds: Vue.ref([]),
     playlistsError: Vue.ref(""),
     playlistTracksError: Vue.ref(""),
     isPlaylistActionPending: Vue.ref(false),
@@ -97,6 +98,8 @@ function createComponent(source: string) {
     coverTrackId: Vue.ref(playlist.coverTrackId),
     isCoverPending: Vue.ref(false),
     selectPlaylist: () => {},
+    renamePlaylist: async () => ({ status: "success" }),
+    deletePlaylist: async () => ({ status: "success" }),
     playTrackFromPlaylist: () => {},
     playPlaylistFromPage: () => {},
     addPlaylistItemsToNext: () => {},
@@ -173,6 +176,8 @@ function createComponent(source: string) {
     "@/playlist/ui/CreatePlaylistDialog.vue",
     "@/playlist/ui/PlaylistBrowser.vue",
     "@/playlist/ui/PlaylistList.vue",
+    "@/playlist/ui/RenamePlaylistDialog.vue",
+    "@/playlist/ui/DeletePlaylistDialog.vue",
     "@/navigation/TopBar.vue",
   ]) {
     modules[name] = defaultModule(passiveComponent);

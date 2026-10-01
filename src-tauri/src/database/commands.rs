@@ -82,6 +82,20 @@ pub fn create_playlist(name: String, state: tauri::State<'_, Database>) -> Resul
 }
 
 #[tauri::command]
+pub fn rename_playlist(
+    playlist_id: i64,
+    name: String,
+    state: tauri::State<'_, Database>,
+) -> Result<(), String> {
+    state.rename_playlist(playlist_id, &name)
+}
+
+#[tauri::command]
+pub fn delete_playlist(playlist_id: i64, state: tauri::State<'_, Database>) -> Result<(), String> {
+    state.delete_playlist(playlist_id)
+}
+
+#[tauri::command]
 pub fn list_playlists(state: tauri::State<'_, Database>) -> Result<Vec<PlaylistSummary>, String> {
     state.list_playlists()
 }
