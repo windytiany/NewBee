@@ -1,37 +1,40 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div class="w-full">
-    <div
-      v-if="props.visible && props.lyrics.kind === 'synced' && followState === 'browsing'"
-      class="mb-2 flex justify-center"
-    >
-      <button
-        type="button"
-        class="bg-spotify-interactive text-spotify-muted rounded-full px-4 py-2 text-sm transition-colors hover:text-white"
-        @click="returnToCurrentLyric"
-      >
-        回到当前歌词
-      </button>
-    </div>
+  <div
+    class="relative w-full"
+    :class="{ 'md:flex md:h-full md:min-h-0 md:flex-col': props.compact }"
+  >
     <section
       v-show="props.visible"
       ref="containerElement"
       aria-label="Lyrics"
-      class="lyrics-scroll-container focus-visible:outline-spotify-green max-h-[min(68vh,40rem)] w-full overflow-y-auto py-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+      class="lyrics-scroll-container focus-visible:outline-spotify-green w-full overflow-y-auto py-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+      :class="
+        props.compact
+          ? 'max-h-[min(76vh,52rem)] md:max-h-none md:min-h-0 md:flex-1'
+          : 'max-h-[min(68vh,40rem)]'
+      "
       tabindex="0"
+      @scroll.passive="lyricsFollow.handleScroll"
+      @pointerdown="lyricsFollow.beginInteraction"
+      @pointerup="lyricsFollow.endInteraction"
+      @pointercancel="lyricsFollow.endInteraction"
+      @pointerleave="lyricsFollow.endInteraction"
       @wheel.passive="handleWheel"
       @touchstart.passive="handleTouchStart"
       @touchmove.passive="handleTouchMove"
       @touchend.passive="clearTouchOrigin"
       @touchcancel.passive="clearTouchOrigin"
       @keydown="handleKeydown"
+      @keyup="lyricsFollow.endInteraction"
+      @blur="lyricsFollow.endInteraction"
     >
       <div ref="contentElement">
         <div
           v-if="props.lyrics.kind === 'none'"
           class="text-spotify-muted/45 mx-auto max-w-5xl leading-tight font-bold tracking-tight"
           :class="[
-            props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
+            props.compact ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-3xl sm:text-4xl md:text-5xl',
             { 'px-6': !props.compact },
           ]"
         >
@@ -41,7 +44,7 @@
           v-else-if="props.lyrics.kind === 'plain'"
           class="text-spotify-muted/45 mx-auto max-w-5xl leading-tight font-bold tracking-tight break-words whitespace-pre-wrap"
           :class="[
-            props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
+            props.compact ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-3xl sm:text-4xl md:text-5xl',
             { 'px-6': !props.compact },
           ]"
         >
@@ -64,7 +67,9 @@
             :aria-current="index === props.activeIndex ? 'true' : undefined"
             class="leading-tight font-bold tracking-tight transition-colors"
             :class="[
-              props.compact ? 'text-2xl md:text-3xl' : 'text-3xl sm:text-4xl md:text-5xl',
+              props.compact
+                ? 'text-2xl md:text-3xl lg:text-4xl'
+                : 'text-3xl sm:text-4xl md:text-5xl',
               index >= props.activeGroupStartIndex && index <= props.activeIndex
                 ? 'text-white'
                 : 'text-spotify-muted/45',
@@ -84,11 +89,22 @@
         </ol>
       </div>
     </section>
+    <button
+      v-if="props.visible && props.lyrics.kind === 'synced' && followState === 'browsing'"
+      type="button"
+      aria-label="恢复歌词跟随"
+      title="恢复歌词跟随"
+      class="bg-spotify-interactive text-spotify-muted focus-visible:outline-spotify-green absolute right-4 bottom-4 z-10 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:bg-[#282828] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+      @click="returnToCurrentLyric"
+    >
+      <RefreshCw aria-hidden="true" class="size-5" />
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, shallowRef } from "vue";
+import { RefreshCw } from "@lucide/vue";
 import type { ComponentPublicInstance } from "vue";
 import { isLyricsScrollKey, useLyricsFollow } from "@/playing/useLyricsFollow";
 import type { TrackLyrics } from "@/playing/types";
@@ -127,6 +143,7 @@ const lyricsFollow = useLyricsFollow({
   compact: () => props.compact,
   isSeeking: () => props.isSeeking,
   activeGroupStartIndex: () => props.activeGroupStartIndex,
+  activeIndex: () => props.activeIndex,
   container: () => containerElement.value,
   content: () => contentElement.value,
   line: (index) => lineElements.get(index) ?? null,
@@ -154,6 +171,7 @@ function handleWheel() {
 }
 
 function handleTouchStart(event: BrowserTouchEvent) {
+  lyricsFollow.beginInteraction();
   const touch = event.touches[0];
   touchOrigin = touch === undefined ? null : { x: touch.clientX, y: touch.clientY };
 }
@@ -168,6 +186,7 @@ function handleTouchMove(event: BrowserTouchEvent) {
 
 function clearTouchOrigin() {
   touchOrigin = null;
+  lyricsFollow.endInteraction();
 }
 
 function handleKeydown(event: BrowserKeyboardEvent) {
@@ -175,7 +194,10 @@ function handleKeydown(event: BrowserKeyboardEvent) {
   const isInteractiveTarget =
     target instanceof globalThis.Element &&
     target.closest('button, a[href], input, select, textarea, [contenteditable="true"]') !== null;
-  if (isLyricsScrollKey(event.key, event.code, isInteractiveTarget)) lyricsFollow.startBrowsing();
+  if (isLyricsScrollKey(event.key, event.code, isInteractiveTarget)) {
+    lyricsFollow.beginInteraction();
+    lyricsFollow.startBrowsing();
+  }
 }
 
 function returnToCurrentLyric() {

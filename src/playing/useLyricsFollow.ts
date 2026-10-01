@@ -1,6 +1,8 @@
 import { onMounted, onScopeDispose, readonly, ref, watch } from "vue";
 import type { Ref } from "vue";
 
+const LYRICS_RESUME_IDLE_MS = 1200;
+
 export type LyricsFollowState = "following" | "browsing";
 export type LyricsScrollBehavior = "instant" | "smooth";
 
@@ -10,6 +12,7 @@ export type LyricsFollowInputs = {
   compact: boolean;
   isSeeking: boolean;
   activeGroupStartIndex: number;
+  activeIndex: number;
   lineCount: number;
 };
 
@@ -29,6 +32,8 @@ export type LyricsFollowLine = {
 export type LyricsFollowAdapter = {
   schedule(callback: () => void): number;
   cancelScheduled(handle: number): void;
+  scheduleIdle(callback: () => void): number;
+  cancelIdle(handle: number): void;
   getContainer(): LyricsFollowContainer | null;
   getLine(index: number): LyricsFollowLine | null;
   getLineCount(): number;
@@ -43,6 +48,9 @@ export type LyricsFollowCoordinator = {
   readonly state: Readonly<Ref<LyricsFollowState>>;
   update(inputs: LyricsFollowInputs): void;
   startBrowsing(): void;
+  handleScroll(): void;
+  beginInteraction(): void;
+  endInteraction(): void;
   returnToCurrentLyric(): void;
   handleResize(): void;
   dispose(): void;
@@ -96,6 +104,49 @@ export function createLyricsFollowCoordinator(
   let motionInProgress = false;
   let stopObservingResize: (() => void) | null = null;
   let disposed = false;
+  let idleHandle: number | null = null;
+  let idleVersion = 0;
+  let interacting = false;
+
+  function cancelIdle() {
+    idleVersion += 1;
+    if (idleHandle !== null) adapter.cancelIdle(idleHandle);
+    idleHandle = null;
+  }
+
+  function scheduleResume() {
+    cancelIdle();
+    if (
+      disposed ||
+      !inputs?.visible ||
+      inputs.isSeeking ||
+      interacting ||
+      followState.value !== "browsing"
+    )
+      return;
+    const version = idleVersion;
+    idleHandle = adapter.scheduleIdle(() => {
+      if (version !== idleVersion || disposed) return;
+      idleHandle = null;
+      const container = adapter.getContainer();
+      if (container === null || inputs === null || container.clientHeight <= 0) return;
+      for (
+        let index = Math.max(0, inputs.activeGroupStartIndex);
+        index <= inputs.activeIndex;
+        index += 1
+      ) {
+        const line = adapter.getLine(index);
+        if (
+          line !== null &&
+          line.top < container.top + container.clientHeight &&
+          line.top + line.height > container.top
+        ) {
+          returnToCurrentLyric();
+          return;
+        }
+      }
+    });
+  }
 
   const stopReducedMotionListener = adapter.onReducedMotionChange(() => {
     if (!adapter.prefersReducedMotion() || !motionInProgress) return;
@@ -184,6 +235,8 @@ export function createLyricsFollowCoordinator(
     inputs = next;
 
     if (trackChanged) {
+      cancelIdle();
+      interacting = false;
       cancelWork(previous.visible);
       followState.value = "following";
       syncResizeObservation();
@@ -192,6 +245,8 @@ export function createLyricsFollowCoordinator(
     }
 
     if (!next.visible) {
+      cancelIdle();
+      interacting = false;
       if (previous?.visible) cancelWork(true);
       syncResizeObservation();
       return;
@@ -200,11 +255,13 @@ export function createLyricsFollowCoordinator(
     syncResizeObservation();
     if (previous === null || !previous.visible) {
       if (canLocate()) schedulePosition("instant");
+      else scheduleResume();
       return;
     }
 
     if (previous.isSeeking !== next.isSeeking) {
       if (next.isSeeking) {
+        cancelIdle();
         cancelWork(true);
         return;
       }
@@ -214,7 +271,11 @@ export function createLyricsFollowCoordinator(
       }
     }
 
-    if (next.isSeeking || followState.value === "browsing") return;
+    if (next.isSeeking) return;
+    if (followState.value === "browsing") {
+      if (idleHandle === null) scheduleResume();
+      return;
+    }
     if (previous.lineCount !== next.lineCount) {
       schedulePosition("instant");
       return;
@@ -234,23 +295,44 @@ export function createLyricsFollowCoordinator(
   }
 
   function startBrowsing() {
-    if (disposed || followState.value === "browsing") return;
-    followState.value = "browsing";
-    cancelWork(true);
+    if (disposed) return;
+    if (followState.value !== "browsing") {
+      followState.value = "browsing";
+      cancelWork(true);
+    }
+    scheduleResume();
+  }
+
+  function handleScroll() {
+    if (followState.value === "browsing") scheduleResume();
+  }
+
+  function beginInteraction() {
+    if (disposed) return;
+    interacting = true;
+    cancelIdle();
+  }
+
+  function endInteraction() {
+    interacting = false;
+    scheduleResume();
   }
 
   function returnToCurrentLyric() {
     if (disposed) return;
+    cancelIdle();
     followState.value = "following";
     if (canLocate()) schedulePosition("smooth");
   }
 
   function handleResize() {
     if (canLocate()) schedulePosition("instant");
+    else scheduleResume();
   }
 
   function dispose() {
     if (disposed) return;
+    cancelIdle();
     cancelWork(true);
     disposed = true;
     stopResizeObservation();
@@ -261,6 +343,9 @@ export function createLyricsFollowCoordinator(
     state: readonly(followState),
     update,
     startBrowsing,
+    handleScroll,
+    beginInteraction,
+    endInteraction,
     returnToCurrentLyric,
     handleResize,
     dispose,
@@ -273,6 +358,7 @@ type LyricsFollowSources = {
   compact: () => boolean;
   isSeeking: () => boolean;
   activeGroupStartIndex: () => number;
+  activeIndex: () => number;
   lineCount: () => number;
   container: () => HTMLElement | null;
   content: () => HTMLElement | null;
@@ -289,6 +375,8 @@ function createDomAdapter(sources: LyricsFollowSources): LyricsFollowAdapter {
   return {
     schedule: (callback) => globalThis.requestAnimationFrame(callback),
     cancelScheduled: (handle) => globalThis.cancelAnimationFrame(handle),
+    scheduleIdle: (callback) => globalThis.window.setTimeout(callback, LYRICS_RESUME_IDLE_MS),
+    cancelIdle: (handle) => globalThis.window.clearTimeout(handle),
     getContainer: () => {
       if (!sources.visible()) return null;
       const element = sources.container();
@@ -371,6 +459,7 @@ export function useLyricsFollow(options: UseLyricsFollowOptions) {
     compact: options.compact(),
     isSeeking: options.isSeeking(),
     activeGroupStartIndex: options.activeGroupStartIndex(),
+    activeIndex: options.activeIndex(),
     lineCount: options.lineCount(),
   });
 
@@ -381,6 +470,7 @@ export function useLyricsFollow(options: UseLyricsFollowOptions) {
       options.compact,
       options.isSeeking,
       options.activeGroupStartIndex,
+      options.activeIndex,
       options.lineCount,
     ],
     () => coordinator.update(readInputs()),
@@ -396,6 +486,9 @@ export function useLyricsFollow(options: UseLyricsFollowOptions) {
   return {
     state: coordinator.state,
     startBrowsing: coordinator.startBrowsing,
+    handleScroll: coordinator.handleScroll,
+    beginInteraction: coordinator.beginInteraction,
+    endInteraction: coordinator.endInteraction,
     returnToCurrentLyric: coordinator.returnToCurrentLyric,
   };
 }

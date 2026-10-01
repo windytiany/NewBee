@@ -1,10 +1,13 @@
 <template>
   <section
     aria-label="Now playing"
-    class="relative flex w-full flex-col items-center justify-center gap-8 py-8"
+    class="relative flex w-full flex-col items-center justify-center gap-8"
     :class="[
-      presentation === 'lyrics' ? 'max-w-none px-0' : 'max-w-6xl px-6',
-      presentation === 'both' ? 'md:flex-row md:gap-14' : '',
+      presentation === 'lyrics'
+        ? 'max-w-none px-0 py-8'
+        : presentation === 'both'
+          ? 'max-w-[88rem] px-6 py-12 md:grid md:h-full md:min-h-0 md:w-[88%] md:grid-cols-2 md:grid-rows-[minmax(0,1fr)] md:gap-[clamp(3rem,6vw,7rem)] md:px-0'
+          : 'max-w-6xl px-6 py-8',
     ]"
   >
     <button
@@ -25,7 +28,7 @@
     <div
       v-show="presentation !== 'track'"
       class="w-full"
-      :class="presentation === 'both' ? 'md:max-w-none md:min-w-0 md:flex-1' : 'max-w-none'"
+      :class="presentation === 'both' ? 'min-w-0 md:h-full md:min-h-0' : 'max-w-none'"
     >
       <p
         v-if="lyricsState.status === 'loading'"

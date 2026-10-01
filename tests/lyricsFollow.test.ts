@@ -19,6 +19,7 @@ function createTestAdapter() {
   let nextHandle = 0;
   const scheduled = new Map<number, () => void>();
   const cancelled = new Map<number, () => void>();
+  const idleCallbacks = new Map<number, () => void>();
   const scrollCalls: ScrollCall[] = [];
   const lookedUpLines: number[] = [];
   const lines = new Map<number, LyricsFollowLine>();
@@ -51,6 +52,14 @@ function createTestAdapter() {
       const callback = scheduled.get(handle);
       if (callback !== undefined) cancelled.set(handle, callback);
       scheduled.delete(handle);
+    },
+    scheduleIdle(callback) {
+      const handle = ++nextHandle;
+      idleCallbacks.set(handle, callback);
+      return handle;
+    },
+    cancelIdle(handle) {
+      idleCallbacks.delete(handle);
     },
     getContainer() {
       containerReads += 1;
@@ -113,6 +122,14 @@ function createTestAdapter() {
       scheduled.clear();
       for (const callback of callbacks) callback();
     },
+    flushIdle() {
+      const callbacks = [...idleCallbacks.values()];
+      idleCallbacks.clear();
+      for (const callback of callbacks) callback();
+    },
+    get pendingIdleCount() {
+      return idleCallbacks.size;
+    },
     runCancelledCallbacks() {
       const callbacks = [...cancelled.values()];
       cancelled.clear();
@@ -138,6 +155,7 @@ function inputs(overrides: Partial<LyricsFollowInputs> = {}): LyricsFollowInputs
     compact: false,
     isSeeking: false,
     activeGroupStartIndex: 0,
+    activeIndex: overrides.activeGroupStartIndex ?? 0,
     lineCount: 0,
     ...overrides,
   };
@@ -173,6 +191,98 @@ describe("歌词跟随定位", () => {
     testAdapter.flushScheduled();
     expect(testAdapter.scrollCalls[testAdapter.scrollCalls.length - 1]?.behavior).toBe("smooth");
     follow.dispose();
+  });
+
+  it("停止操作后，高亮行在视野内自动恢复跟随", () => {
+    const testAdapter = createTestAdapter();
+    testAdapter.addLine(0, { top: 180, height: 40 });
+    const follow = createLyricsFollowCoordinator(testAdapter.adapter);
+    follow.update(inputs());
+    testAdapter.flushScheduled();
+    follow.startBrowsing();
+    expect(follow.state.value).toBe("browsing");
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("following");
+    testAdapter.flushScheduled();
+    expect(testAdapter.scrollCalls[testAdapter.scrollCalls.length - 1]?.behavior).toBe("smooth");
+    expect(testAdapter.pendingIdleCount).toBe(0);
+    follow.dispose();
+  });
+
+  it("高亮行不在视野内保持浏览，滚回可视区域后恢复", () => {
+    const testAdapter = createTestAdapter();
+    testAdapter.addLine(0, { top: 350, height: 40 });
+    const follow = createLyricsFollowCoordinator(testAdapter.adapter);
+    follow.update(inputs());
+    testAdapter.flushScheduled();
+    follow.startBrowsing();
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("browsing");
+    testAdapter.addLine(0, { top: 180, height: 40 });
+    follow.handleScroll();
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("following");
+    follow.dispose();
+  });
+
+  it("同组任意高亮行进入视野即可恢复，播放推进也会重新检查", () => {
+    const testAdapter = createTestAdapter();
+    testAdapter.addLine(0, { top: 40, height: 40 });
+    testAdapter.addLine(1, { top: 150, height: 40 });
+    const follow = createLyricsFollowCoordinator(testAdapter.adapter);
+    follow.update(inputs());
+    testAdapter.flushScheduled();
+    follow.startBrowsing();
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("browsing");
+    follow.update(inputs({ activeIndex: 1 }));
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("following");
+    follow.dispose();
+  });
+
+  it("重复操作重置等待，手指或按键未释放时不自动恢复", () => {
+    const testAdapter = createTestAdapter();
+    testAdapter.addLine(0, { top: 180, height: 40 });
+    const follow = createLyricsFollowCoordinator(testAdapter.adapter);
+    follow.update(inputs());
+    testAdapter.flushScheduled();
+    follow.startBrowsing();
+    follow.startBrowsing();
+    follow.handleScroll();
+    expect(testAdapter.pendingIdleCount).toBe(1);
+    follow.beginInteraction();
+    follow.startBrowsing();
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("browsing");
+    follow.endInteraction();
+    expect(testAdapter.pendingIdleCount).toBe(1);
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("following");
+    follow.dispose();
+  });
+
+  it("隐藏、seek 和卸载时取消自动恢复检查", () => {
+    const testAdapter = createTestAdapter();
+    testAdapter.addLine(0, { top: 180, height: 40 });
+    const follow = createLyricsFollowCoordinator(testAdapter.adapter);
+    follow.update(inputs());
+    testAdapter.flushScheduled();
+    follow.startBrowsing();
+    follow.update(inputs({ visible: false }));
+    expect(testAdapter.pendingIdleCount).toBe(0);
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("browsing");
+    follow.update(inputs());
+    expect(testAdapter.pendingIdleCount).toBe(1);
+    follow.update(inputs({ isSeeking: true }));
+    expect(testAdapter.pendingIdleCount).toBe(0);
+    follow.update(inputs());
+    expect(testAdapter.pendingIdleCount).toBe(1);
+    follow.dispose();
+    expect(testAdapter.pendingIdleCount).toBe(0);
+    testAdapter.flushIdle();
+    expect(follow.state.value).toBe("browsing");
   });
 
   it("切歌从 browsing 重置为 following，并直接定位新曲目", () => {

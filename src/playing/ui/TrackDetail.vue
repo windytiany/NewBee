@@ -2,22 +2,39 @@
   <article
     aria-label="Track details"
     class="w-full"
-    :class="props.horizontal ? 'max-w-5xl' : props.compact ? 'max-w-xs' : 'max-w-sm'"
+    :class="
+      props.horizontal
+        ? 'max-w-5xl'
+        : props.compact
+          ? 'max-w-xl min-w-0 md:h-full md:min-h-0'
+          : 'max-w-sm'
+    "
   >
     <TransitionNowPlaying
       v-slot="{ track, details, artworkUrl, detailsError, artworkError }"
       :track="currentTrack"
+      :class="{ 'md:h-full md:min-h-0': props.compact && !props.horizontal }"
       :content-class="
         props.horizontal
           ? 'grid grid-cols-2 items-center gap-6 text-left sm:gap-10'
           : props.compact
-            ? 'flex flex-col items-center gap-4 text-center'
+            ? 'flex flex-col items-start gap-5 text-left sm:gap-6 md:grid md:h-full md:min-h-0 md:grid-rows-[minmax(0,1fr)_auto]'
             : 'flex flex-col items-center gap-6 text-center'
       "
     >
-      <div class="w-full" :class="props.horizontal ? 'max-w-md justify-self-center' : ''">
+      <div
+        class="w-full"
+        :class="
+          props.horizontal
+            ? 'max-w-md justify-self-center'
+            : props.compact
+              ? 'md:[container-type:size] md:h-full md:min-h-0'
+              : ''
+        "
+      >
         <div
           class="from-spotify-interactive to-spotify-surface grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-linear-to-br via-[#303030] shadow-2xl"
+          :class="{ 'md:w-[min(100cqw,100cqh)]': props.compact && !props.horizontal }"
           :aria-label="artworkUrl ? undefined : '专辑封面占位图'"
           :role="artworkUrl ? undefined : 'img'"
         >
@@ -35,14 +52,17 @@
             stroke-width="1.25"
           />
         </div>
-        <p v-if="artworkError" class="text-spotify-muted mt-2 text-xs" role="status">
-          {{ artworkError }}
-        </p>
       </div>
 
       <div
         class="flex flex-col"
-        :class="props.horizontal ? 'items-start gap-3' : 'items-center gap-1'"
+        :class="
+          props.horizontal
+            ? 'items-start gap-3'
+            : props.compact
+              ? 'w-full items-start gap-2'
+              : 'items-center gap-1'
+        "
       >
         <h1
           class="font-bold tracking-tight"
@@ -50,7 +70,7 @@
             props.horizontal
               ? 'text-4xl sm:text-5xl lg:text-6xl'
               : props.compact
-                ? 'text-2xl'
+                ? 'text-3xl lg:text-4xl'
                 : 'text-3xl sm:text-4xl'
           "
         >
@@ -60,7 +80,11 @@
           v-if="track"
           class="text-spotify-muted"
           :class="
-            props.horizontal ? 'text-xl sm:text-2xl' : props.compact ? 'text-sm' : 'text-base'
+            props.horizontal
+              ? 'text-xl sm:text-2xl'
+              : props.compact
+                ? 'text-xl lg:text-2xl'
+                : 'text-base'
           "
         >
           {{ details?.artist ?? track.artist ?? "未知艺术家" }}
@@ -71,10 +95,15 @@
           :class="
             props.horizontal
               ? 'text-spotify-muted/70 text-lg sm:text-xl'
-              : 'text-spotify-muted/70 text-sm'
+              : props.compact
+                ? 'text-spotify-muted/70 text-lg lg:text-xl'
+                : 'text-spotify-muted/70 text-sm'
           "
         >
           {{ details?.album ?? "未知专辑" }}
+        </p>
+        <p v-if="artworkError" class="text-spotify-muted text-xs" role="status">
+          {{ artworkError }}
         </p>
         <p v-if="detailsError" class="text-sm text-red-300" role="alert">
           {{ detailsError }}
