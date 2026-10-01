@@ -28,6 +28,7 @@ type PlaybackQueueCoordinatorOptions = {
   random?: () => number;
   stopPlayback?: StopPlayback;
   stopStalePlayback?: StopStalePlayback;
+  finishPlayback?: (playbackId: number, canFinish: () => boolean) => Promise<void>;
 };
 type ItemPlaybackResult = "started" | "failed" | "cancelled";
 type PlaybackHistoryAction =
@@ -69,6 +70,7 @@ export class PlaybackQueueCoordinator {
   private readonly random: () => number;
   private readonly stopPlayback: StopPlayback;
   private readonly stopStalePlayback: StopStalePlayback;
+  private readonly finishPlayback: NonNullable<PlaybackQueueCoordinatorOptions["finishPlayback"]>;
 
   constructor(
     private readonly attemptPlayback: AttemptPlayback,
@@ -81,6 +83,7 @@ export class PlaybackQueueCoordinator {
     this.random = options.random ?? Math.random;
     this.stopPlayback = options.stopPlayback ?? (async () => true);
     this.stopStalePlayback = options.stopStalePlayback ?? (async () => {});
+    this.finishPlayback = options.finishPlayback ?? (async () => {});
   }
 
   get snapshot(): PlaybackQueueSnapshot {
@@ -90,7 +93,7 @@ export class PlaybackQueueCoordinator {
       queuePlaybackError: this.failures.join("\n"),
       repeatOneEnabled: this.repeatOneEnabled,
       shuffleEnabled: this.shuffleEnabled,
-      canPlayPrevious: this.historyIndex > 0,
+      canPlayPrevious: this.shuffleEnabled ? this.historyIndex > 0 : this.currentQueueIndex() > 0,
       canPlayNext: this.hasNextTarget(),
     };
   }
@@ -147,12 +150,14 @@ export class PlaybackQueueCoordinator {
   }
 
   playPrevious(): Promise<boolean> {
-    if (this.historyIndex <= 0) return Promise.resolve(false);
+    if (!this.snapshot.canPlayPrevious) return Promise.resolve(false);
 
     const generation = this.beginUserOperation();
     return this.enqueue(() => {
       if (!this.isCurrentOperation(generation)) return Promise.resolve(false);
-      return this.playPreviousFromHistory(generation);
+      return this.shuffleEnabled
+        ? this.playPreviousFromHistory(generation)
+        : this.playSequential(-1, generation, false);
     });
   }
 
@@ -365,9 +370,13 @@ export class PlaybackQueueCoordinator {
   setShuffleEnabled(enabled: boolean) {
     if (this.shuffleEnabled === enabled) return;
     this.shuffleEnabled = enabled;
-    this.remainingCandidates = enabled
-      ? this.orderCandidates(this.remainingCandidates)
-      : this.restoreCandidateOrder(this.remainingCandidates);
+    if (enabled) {
+      this.remainingCandidates = this.orderCandidates(this.remainingCandidates);
+    } else if (this.currentRowKey !== null) {
+      this.remainingCandidates = this.roundTracks.slice(this.currentQueueIndex() + 1);
+    } else {
+      this.remainingCandidates = this.restoreCandidateOrder(this.remainingCandidates);
+    }
     this.publish();
   }
 
@@ -429,12 +438,63 @@ export class PlaybackQueueCoordinator {
     return this.handledEndPlaybackId === playbackId || this.ignoredEndPlaybackId === playbackId;
   }
 
+  private currentQueueIndex() {
+    return this.roundTracks.findIndex((item) => item.rowKey === this.currentRowKey);
+  }
+
   private hasNextTarget() {
+    if (!this.shuffleEnabled && this.currentRowKey !== null) {
+      const index = this.currentQueueIndex();
+      return index >= 0 && index + 1 < this.roundTracks.length;
+    }
     return (
-      this.historyIndex + 1 < this.playbackHistory.length ||
-      this.remainingCandidates.length > 0 ||
-      (this.currentRowKey !== null && this.activePlaybackId !== null)
+      this.historyIndex + 1 < this.playbackHistory.length || this.remainingCandidates.length > 0
     );
+  }
+
+  private async playSequential(direction: -1 | 1, generation: number, stopWhenExhausted: boolean) {
+    const currentIndex = this.currentQueueIndex();
+    if (currentIndex < 0) return false;
+    for (
+      let index = currentIndex + direction;
+      index >= 0 && index < this.roundTracks.length;
+      index += direction
+    ) {
+      if (!this.isCurrentOperation(generation)) return false;
+      const item = this.roundTracks[index];
+      if (!item) continue;
+      const result = await this.playItem(item, generation, { replaceQueue: false });
+      if (result === "cancelled") return false;
+      if (result === "started") {
+        this.remainingCandidates = this.roundTracks.slice(index + 1);
+        this.publish();
+        return true;
+      }
+    }
+    if (direction === 1) {
+      this.remainingCandidates = [];
+      if (stopWhenExhausted) await this.stopCurrentPlayback(generation);
+      else await this.finishCurrentPlayback(generation);
+    }
+    return false;
+  }
+
+  private async finishCurrentPlayback(generation: number) {
+    const playbackId = this.activePlaybackId;
+    if (playbackId === null) return;
+    const canFinish = () =>
+      this.isCurrentOperation(generation) &&
+      this.activePlaybackId === playbackId &&
+      this.handledEndPlaybackId === playbackId &&
+      this.ignoredEndPlaybackId !== playbackId;
+    if (!canFinish()) return;
+    try {
+      await this.finishPlayback(playbackId, canFinish);
+    } catch (error) {
+      if (!canFinish()) return;
+      this.failures = [...this.failures, `播放结束归零失败：${errorMessage(error)}`];
+      this.publish();
+    }
   }
 
   private async playPreviousFromHistory(generation: number) {
@@ -455,6 +515,9 @@ export class PlaybackQueueCoordinator {
   }
 
   private async playNextFromHistory(generation: number, options: { stopWhenExhausted: boolean }) {
+    if (!this.shuffleEnabled && this.currentRowKey !== null) {
+      return this.playSequential(1, generation, options.stopWhenExhausted);
+    }
     for (let index = this.historyIndex + 1; index < this.playbackHistory.length; index += 1) {
       if (!this.isCurrentOperation(generation)) return false;
       const rowKey = this.playbackHistory[index];
@@ -655,6 +718,7 @@ export class PlaybackQueueCoordinator {
       const item = this.remainingCandidates.shift();
       if (!item) {
         if (stopWhenExhausted) await this.stopCurrentPlayback(generation);
+        else await this.finishCurrentPlayback(generation);
         return false;
       }
 

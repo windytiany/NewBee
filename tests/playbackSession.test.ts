@@ -99,6 +99,105 @@ async function settlePendingCallbacks() {
 beforeEach(resetStorage);
 
 describe("playback session", () => {
+  for (const shuffleEnabled of [false, true]) {
+    it(`rewinds and pauses the final track in ${shuffleEnabled ? "shuffle" : "sequential"} mode while retaining its metadata and queue row`, async () => {
+      let activeStatus = playingStatus(1);
+      const commands: string[] = [];
+      const invokeCommand = asPlaybackInvoker((command, args) => {
+        commands.push(command);
+        if (command === "playback_status") return { ...activeStatus };
+        if (command === "play_track") {
+          activeStatus = playingStatus(1);
+          return trackStarted(args?.trackId as number, 1);
+        }
+        if (command === "pause") {
+          activeStatus = { ...activeStatus, isPlaying: false };
+          return;
+        }
+        if (command === "seek_to") {
+          activeStatus = {
+            ...activeStatus,
+            positionMs: args?.positionMs as number,
+            hasEnded: false,
+          };
+          return;
+        }
+        if (command === "resume") {
+          activeStatus = { ...activeStatus, isPlaying: true };
+          return;
+        }
+        throw new Error(`Unexpected playback command: ${command}`);
+      });
+      const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
+      session.setShuffleEnabled(shuffleEnabled);
+      await session.playTracks(tracks(["a", 1], ["b", 2]), "b");
+      await settlePendingCallbacks();
+      activeStatus = endedStatus(1);
+      expect(await session.refreshPlaybackStatus()).toBe(true);
+      expect(session.state.currentTrack.value?.trackId).toBe(2);
+      expect(session.state.currentRowKey.value).toBe("b");
+      expect(session.state.playbackStatus.value).toEqual({
+        hasAudio: true,
+        isPlaying: false,
+        hasEnded: false,
+        positionMs: 0,
+        durationMs: 100,
+      });
+      expect(session.state.canPlayNext.value).toBe(false);
+      expect(session.state.canPlayPrevious.value).toBe(!shuffleEnabled);
+      const commandsAfterEnd = commands.length;
+      await session.refreshPlaybackStatus();
+      expect(commands.slice(commandsAfterEnd)).toEqual(["playback_status"]);
+      expect(await session.togglePlayback(async () => true)).toBe(true);
+      expect(session.state.playbackStatus.value.isPlaying).toBe(true);
+      expect(commands.filter((command) => command === "play_track")).toHaveLength(1);
+      activeStatus = endedStatus(1);
+      await session.refreshPlaybackStatus();
+      expect(session.state.playbackStatus.value.positionMs).toBe(0);
+      expect(commands.filter((command) => command === "pause")).toHaveLength(2);
+    });
+  }
+
+  it("does not rewind a newer track when the end reset is superseded", async () => {
+    const pauseStarted = deferred<void>();
+    const releasePause = deferred<void>();
+    let activeStatus = playingStatus(1);
+    let playbackId = 0;
+    const seekPositions: number[] = [];
+    const invokeCommand = asPlaybackInvoker((command, args) => {
+      if (command === "playback_status") return { ...activeStatus };
+      if (command === "play_track") {
+        playbackId += 1;
+        activeStatus = playingStatus(playbackId);
+        return trackStarted(args?.trackId as number, playbackId);
+      }
+      if (command === "pause") {
+        pauseStarted.resolve();
+        return releasePause.promise;
+      }
+      if (command === "seek_to") {
+        seekPositions.push(args?.positionMs as number);
+        return;
+      }
+      throw new Error(`Unexpected playback command: ${command}`);
+    });
+    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
+    await session.playTracks(tracks(["a", 1], ["b", 2]), "b");
+    await settlePendingCallbacks();
+    activeStatus = endedStatus(1);
+    const ending = session.refreshPlaybackStatus();
+    await pauseStarted.promise;
+    const starting = session.playQueueItem("a");
+    releasePause.resolve();
+    await ending;
+    expect(await starting).toBe(true);
+    await settlePendingCallbacks();
+    expect(seekPositions).toEqual([]);
+    expect(session.state.currentTrack.value?.trackId).toBe(1);
+    expect(session.state.playbackStatus.value.isPlaying).toBe(true);
+    expect(session.state.playbackStatus.value.positionMs).toBe(10);
+  });
+
   it("cleans up A when the later B intent supersedes its pending start", async () => {
     const firstStartStarted = deferred<void>();
     const releaseFirstStart = deferred<ReturnType<typeof trackStarted>>();

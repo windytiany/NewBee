@@ -140,6 +140,10 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     {
       stopPlayback: playbackState.stopPlayback,
       stopStalePlayback: playbackState.stopStalePlayback,
+      finishPlayback: async (playbackId, canFinish) => {
+        await playbackState.finishPlayback(playbackId, canFinish);
+        if (canFinish()) await statusObserver.refreshAfterCommand();
+      },
     },
   );
   coordinator.restoreQueue(initialQueueSnapshot);

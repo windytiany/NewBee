@@ -71,7 +71,40 @@ function createHarness(options: HarnessOptions = {}) {
 }
 
 describe("PlaybackQueueCoordinator manual navigation", () => {
-  it("moves through sequential history despite repeat-one and stops at the end without wrapping", async () => {
+  it("uses queue order for previous when starting in the middle", async () => {
+    const harness = createHarness();
+    await harness.coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2], ["c", 3]), "b");
+    expect(harness.snapshot.canPlayPrevious).toBe(true);
+    expect(await harness.coordinator.playPrevious()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("a");
+    expect(harness.snapshot.canPlayPrevious).toBe(false);
+    expect(await harness.coordinator.playNext()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("b");
+    expect(harness.attempts).toEqual([2, 1, 2]);
+  });
+
+  it("disables next on the last row without clearing current playback", async () => {
+    const harness = createHarness();
+    await harness.coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2]), "b");
+    expect(harness.snapshot.canPlayNext).toBe(false);
+    expect(await harness.coordinator.playNext()).toBe(false);
+    expect(harness.snapshot.currentRowKey).toBe("b");
+    expect(harness.stoppedPlaybackIds).toEqual([]);
+  });
+
+  it("switches from shuffle history to queue order when shuffle is disabled", async () => {
+    const harness = createHarness({ random: () => 0 });
+    harness.coordinator.setShuffleEnabled(true);
+    await harness.coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2], ["c", 3]), "b");
+    expect(harness.snapshot.canPlayPrevious).toBe(false);
+    harness.coordinator.setShuffleEnabled(false);
+    expect(harness.snapshot.canPlayPrevious).toBe(true);
+    expect(await harness.coordinator.playPrevious()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("a");
+    expect(await harness.coordinator.playNext()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("b");
+  });
+  it("moves through queue order despite repeat-one and disables next at the end without wrapping", async () => {
     const harness = createHarness();
     const { coordinator } = harness;
     await coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2], ["c", 3]), "a");
@@ -90,10 +123,10 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(await coordinator.playNext()).toBe(true);
     expect(harness.snapshot.currentRowKey).toBe("c");
 
-    expect(harness.snapshot.canPlayNext).toBe(true);
+    expect(harness.snapshot.canPlayNext).toBe(false);
     expect(await coordinator.playNext()).toBe(false);
-    expect(harness.stoppedPlaybackIds).toEqual([5]);
-    expect(harness.snapshot.currentRowKey).toBeNull();
+    expect(harness.stoppedPlaybackIds).toEqual([]);
+    expect(harness.snapshot.currentRowKey).toBe("c");
     expect(harness.snapshot.canPlayNext).toBe(false);
     expect(harness.attempts).toEqual([1, 2, 1, 2, 3]);
   });
@@ -117,6 +150,37 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(await coordinator.playNext()).toBe(true);
     expect(harness.snapshot.currentRowKey).toBe("b");
     expect(harness.attempts).toEqual([1, 3, 4, 3, 4, 5, 2]);
+    expect(harness.snapshot.canPlayNext).toBe(false);
+    expect(await coordinator.playNext()).toBe(false);
+    expect(harness.snapshot.currentRowKey).toBe("b");
+  });
+
+  it("skips failed previous rows in queue order and preserves duplicate track IDs", async () => {
+    const harness = createHarness({ failedTrackIds: [2] });
+    await harness.coordinator.replaceAndPlay(
+      tracks(["first", 7], ["failed", 2], ["last", 7]),
+      "last",
+    );
+    expect(await harness.coordinator.playPrevious()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("first");
+    expect(harness.snapshot.canPlayPrevious).toBe(false);
+    expect(harness.attempts).toEqual([7, 2, 7]);
+    expect(await harness.coordinator.playNext()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("last");
+    expect(harness.snapshot.canPlayNext).toBe(false);
+  });
+
+  it("disabling shuffle navigates by queue position rather than successful history", async () => {
+    const harness = createHarness({ random: () => 0 });
+    harness.coordinator.setShuffleEnabled(true);
+    await harness.coordinator.replaceAndPlay(tracks(["a", 1], ["b", 2], ["c", 3], ["d", 4]), "a");
+    await harness.coordinator.playNext();
+    expect(harness.snapshot.currentRowKey).toBe("c");
+    harness.coordinator.setShuffleEnabled(false);
+    await harness.coordinator.playPrevious();
+    expect(harness.snapshot.currentRowKey).toBe("b");
+    await harness.coordinator.playNext();
+    expect(harness.snapshot.currentRowKey).toBe("c");
   });
 
   it("continues forward after a target fails and reports the failed track", async () => {
@@ -434,7 +498,9 @@ describe("PlaybackQueueCoordinator manual navigation", () => {
     expect(await coordinator.playPrevious()).toBe(false);
 
     expect(await coordinator.playQueueItem("d")).toBe(true);
-    expect(harness.snapshot.canPlayPrevious).toBe(false);
+    expect(harness.snapshot.canPlayPrevious).toBe(true);
+    expect(await coordinator.playPrevious()).toBe(true);
+    expect(harness.snapshot.currentRowKey).toBe("b");
     expect(await coordinator.replaceAndPlay(tracks(["x", 10], ["y", 11]), "x")).toBe(true);
     expect(harness.snapshot.currentRowKey).toBe("x");
     expect(harness.snapshot.canPlayPrevious).toBe(false);

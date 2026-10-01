@@ -130,6 +130,19 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     return !hasNewerPendingCommand && !hasNewerCurrentTrack;
   }
 
+  async function finishPlayback(playbackId: number, canFinish: () => boolean) {
+    const canReset = () => canFinish() && currentTrack.value?.playbackId === playbackId;
+    if (isPlaybackCommandPending.value || !canReset()) return;
+    isPlaybackCommandPending.value = true;
+    try {
+      await invokeCommand<void>("pause");
+      if (!canReset()) return;
+      await invokeCommand<void>("seek_to", { positionMs: 0 });
+    } finally {
+      isPlaybackCommandPending.value = false;
+    }
+  }
+
   async function startTrack(trackId: number, canStart: () => boolean): Promise<boolean> {
     if (isPlaybackCommandPending.value || !canStart()) return false;
 
@@ -195,6 +208,7 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     startTrack,
     stopPlayback,
     stopStalePlayback,
+    finishPlayback,
     consumePlaybackStartFailure,
   };
 }
