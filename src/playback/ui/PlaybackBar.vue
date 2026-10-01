@@ -115,7 +115,7 @@
         </span>
       </div>
       <span
-        class="pointer-events-none absolute top-10 left-1/2 max-w-56 -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-1"
+        class="pointer-events-none absolute top-10 left-1/2 w-max max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-1"
       >
         <template v-if="currentTrack">
           {{ currentTrack.title ?? "未知曲目" }} - {{ currentTrack.artist ?? "未知演出者" }}
