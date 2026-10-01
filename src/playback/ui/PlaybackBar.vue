@@ -16,15 +16,16 @@
           <SkipBack aria-hidden="true" class="size-4" />
         </button>
         <button
-          :aria-label="playbackStatus.isPlaying ? 'Pause' : 'Play'"
-          class="bg-spotify-green focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          :aria-label="displayedIsPlaying ? 'Pause' : 'Play'"
+          class="bg-spotify-green focus-visible:outline-spotify-green grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
+          :class="{ 'opacity-50': !currentTrack && !canStartRestoredQueue }"
           :disabled="
             isPlaybackCommandPending || isSeeking || (!currentTrack && !canStartRestoredQueue)
           "
           type="button"
           @click="togglePlayback"
         >
-          <Pause v-if="playbackStatus.isPlaying" aria-hidden="true" class="size-5 fill-current" />
+          <Pause v-if="displayedIsPlaying" aria-hidden="true" class="size-5 fill-current" />
           <Play v-else aria-hidden="true" class="size-5 fill-current" />
         </button>
         <button
@@ -178,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { usePlaybackControls } from "@/playback/useControls";
 import { usePlaybackVolume } from "@/playback/useVolume";
 import {
@@ -243,6 +244,7 @@ onMounted(() => {
 
 const {
   playbackStatus,
+  isPlaybackStatusSettled,
   playbackError,
   isSeeking,
   selectedPositionMs,
@@ -269,6 +271,15 @@ onUnmounted(() => {
   globalThis.document.removeEventListener("pointerdown", closeVolumePopoverOnOutsidePointer);
   globalThis.document.removeEventListener("keydown", closeVolumePopoverOnEscape);
 });
+
+const displayedIsPlaying = ref(playbackStatus.value.isPlaying);
+watch(
+  [playbackStatus, isPlaybackCommandPending, isPlaybackStatusSettled],
+  ([status, pending, settled]) => {
+    if (!pending && settled) displayedIsPlaying.value = status.isPlaying;
+  },
+  { immediate: true },
+);
 
 const sliderPositionMs = computed(() =>
   isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,

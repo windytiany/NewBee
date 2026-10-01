@@ -49,6 +49,7 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
   });
   let statusRequestsInFlight = 0;
   let statusRequestVersion = 0;
+  const isStatusUpdatePending = ref(false);
 
   function isStatusForCurrentTrack(status: InternalPlaybackStatus) {
     const track = options.currentTrack.value;
@@ -81,6 +82,7 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
 
     statusRequestsInFlight += 1;
     const requestVersion = ++statusRequestVersion;
+    isStatusUpdatePending.value = true;
     try {
       const status = await options.invokeCommand<InternalPlaybackStatus>("playback_status");
       if (requestVersion !== statusRequestVersion || !isStatusForCurrentTrack(status)) return false;
@@ -99,6 +101,7 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
       return false;
     } finally {
       statusRequestsInFlight -= 1;
+      if (requestVersion === statusRequestVersion) isStatusUpdatePending.value = false;
     }
   }
 
@@ -107,6 +110,7 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
     (track) => {
       statusRequestVersion += 1;
       if (track === null) {
+        isStatusUpdatePending.value = false;
         internalStatus.value = { ...EMPTY_PLAYBACK_STATUS };
         return;
       }
@@ -118,10 +122,14 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
   return Object.freeze({
     internalStatus: readonly(internalStatus),
     status: readonly(publicStatus),
+    isSettled: computed(
+      () => !isStatusUpdatePending.value && isStatusForCurrentTrack(internalStatus.value),
+    ),
     refresh: () => queryPlaybackStatus(false),
     refreshAfterCommand: () => queryPlaybackStatus(true),
     invalidate: () => {
       statusRequestVersion += 1;
+      isStatusUpdatePending.value = false;
     },
   });
 }

@@ -181,6 +181,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
 
   const state = Object.freeze({
     playbackStatus: statusObserver.status,
+    isPlaybackStatusSettled: statusObserver.isSettled,
     playbackError: readonly(playbackError),
     currentTrack: publicCurrentTrack,
     isPlaybackCommandPending: readonly(isPlaybackCommandPending),
