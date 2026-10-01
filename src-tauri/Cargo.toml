@@ -36,3 +36,6 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+[target."cfg(windows)".dependencies]
+windows = { version = "0.61.3", features = ["Foundation", "Media", "Storage_Streams", "Win32_System_WinRT"] }

@@ -79,6 +79,7 @@ impl PlaybackError {
 
 #[tauri::command]
 pub fn play_track(
+    _app: tauri::AppHandle,
     track_id: i64,
     database: State<'_, Database>,
     state: State<'_, PlaybackState>,
@@ -88,6 +89,30 @@ pub fn play_track(
         .ok_or_else(|| format!("Track {track_id} was not found"))?;
     let playback_id = start_playback(Path::new(&track.path), &state)
         .map_err(PlaybackError::into_play_command_message)?;
+
+    #[cfg(windows)]
+    {
+        let active = state
+            .active
+            .lock()
+            .map_err(|_| "Playback state is unavailable".to_owned())?;
+        if active
+            .as_ref()
+            .is_some_and(|playback| playback.playback_id == playback_id)
+        {
+            let fallback_title = Path::new(&track.path)
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            crate::system_media::set_track(
+                &_app,
+                &database,
+                track_id,
+                track.title.as_deref().unwrap_or(fallback_title),
+                track.artist.as_deref().unwrap_or(""),
+            );
+        }
+    }
 
     Ok(NowPlayingTrack {
         track_id,
@@ -121,7 +146,7 @@ pub fn set_volume(volume: u8, state: State<'_, PlaybackState>) -> Result<(), Str
 }
 
 #[tauri::command]
-pub fn pause(state: State<'_, PlaybackState>) -> Result<(), String> {
+pub fn pause(_app: tauri::AppHandle, state: State<'_, PlaybackState>) -> Result<(), String> {
     let active = state
         .active
         .lock()
@@ -130,11 +155,13 @@ pub fn pause(state: State<'_, PlaybackState>) -> Result<(), String> {
         .as_ref()
         .ok_or_else(|| "No audio is loaded".to_owned())?;
     playback.player.pause();
+    #[cfg(windows)]
+    crate::system_media::set_playback(&_app, true, false);
     Ok(())
 }
 
 #[tauri::command]
-pub fn resume(state: State<'_, PlaybackState>) -> Result<(), String> {
+pub fn resume(_app: tauri::AppHandle, state: State<'_, PlaybackState>) -> Result<(), String> {
     let active = state
         .active
         .lock()
@@ -143,11 +170,17 @@ pub fn resume(state: State<'_, PlaybackState>) -> Result<(), String> {
         .as_ref()
         .ok_or_else(|| "No audio is loaded".to_owned())?;
     playback.player.play();
+    #[cfg(windows)]
+    crate::system_media::set_playback(&_app, true, !playback.player.empty());
     Ok(())
 }
 
 #[tauri::command]
-pub fn stop_playback(playback_id: u64, state: State<'_, PlaybackState>) -> Result<bool, String> {
+pub fn stop_playback(
+    _app: tauri::AppHandle,
+    playback_id: u64,
+    state: State<'_, PlaybackState>,
+) -> Result<bool, String> {
     let mut active = state
         .active
         .lock()
@@ -161,6 +194,8 @@ pub fn stop_playback(playback_id: u64, state: State<'_, PlaybackState>) -> Resul
         return Ok(false);
     };
     playback.player.stop();
+    #[cfg(windows)]
+    crate::system_media::set_playback(&_app, false, false);
     Ok(true)
 }
 
@@ -191,7 +226,10 @@ pub fn seek_to(position_ms: u64, state: State<'_, PlaybackState>) -> Result<(), 
 }
 
 #[tauri::command]
-pub fn playback_status(state: State<'_, PlaybackState>) -> Result<PlaybackStatus, String> {
+pub fn playback_status(
+    _app: tauri::AppHandle,
+    state: State<'_, PlaybackState>,
+) -> Result<PlaybackStatus, String> {
     let active = state
         .active
         .lock()
@@ -215,6 +253,8 @@ pub fn playback_status(state: State<'_, PlaybackState>) -> Result<PlaybackStatus
         playback.player.get_pos().min(playback.duration)
     };
     let has_ended = playback_has_ended(has_finished, position, playback.duration);
+    #[cfg(windows)]
+    crate::system_media::set_playback(&_app, true, !playback.player.is_paused() && !has_ended);
 
     Ok(PlaybackStatus {
         has_audio: true,
