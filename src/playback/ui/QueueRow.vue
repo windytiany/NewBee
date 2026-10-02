@@ -55,7 +55,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { AudioLines, Disc3 } from "@lucide/vue";
 import { onBeforeUnmount, ref, watch } from "vue";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
-import type { TrackArtwork } from "@/types/track";
+import type { TrackArtwork } from "@/artwork/types";
 
 const props = withDefaults(
   defineProps<{

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { nextTick, onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
-import type { TrackArtwork } from "@/types/track";
+import type { TrackArtwork } from "@/artwork/types";
 import { notify } from "@/notification/center";
 
 export type TrackArtworkStatus = "loading" | "ready" | "fallback";

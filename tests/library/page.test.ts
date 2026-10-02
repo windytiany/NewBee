@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { createRenderer, ref } from "vue";
 import { evaluateModule, transpileScript } from "../support/moduleLoader";
-import type { useLibraryPage } from "@/library/usePage";
+import type { useLibraryPage } from "@/library/useLibraryPage";
 import { SETTINGS_CHANGED_EVENT } from "@/settings/types";
 
 const artist = { albumArtist: "Artist", albumCount: 1 };
@@ -152,7 +152,9 @@ dependencies["@/playback/session"] = {
 const { useLibraryPage: createLibraryPage } = evaluateModule<{
   useLibraryPage: typeof useLibraryPage;
 }>(
-  transpileScript(await Bun.file(new URL("../../src/library/usePage.ts", import.meta.url)).text()),
+  transpileScript(
+    await Bun.file(new URL("../../src/library/useLibraryPage.ts", import.meta.url)).text(),
+  ),
   dependencies,
 );
 

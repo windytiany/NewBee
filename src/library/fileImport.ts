@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
-import type { LibraryScanResult } from "@/library/scan";
+import type { IngestResult } from "@/library/model";
 import { reportLibraryImport } from "@/library/changes";
 import { notify } from "@/notification/center";
 
@@ -22,7 +22,7 @@ export function useLibraryFileImport() {
         filters: [{ name: "支持的音频文件", extensions }],
       });
       if (!paths || paths.length === 0) return;
-      const result = await invoke<LibraryScanResult>("import_music_files", { paths });
+      const result = await invoke<IngestResult>("import_music_files", { paths });
       notify({
         type: result.failed > 0 ? "warning" : "success",
         message: `导入完成：新增 ${result.added}，更新 ${result.updated}，跳过 ${result.skipped}，读取失败 ${result.failed}`,

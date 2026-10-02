@@ -32,7 +32,7 @@ const page = {
 };
 const modules: Record<string, unknown> = {
   vue: Vue,
-  "@/library/usePage": { useLibraryPage: () => page },
+  "@/library/useLibraryPage": { useLibraryPage: () => page },
   "@/notification/center": { notify },
   "@/notification/useNotification": { useNotification },
 };

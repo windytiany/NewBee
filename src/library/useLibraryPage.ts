@@ -6,10 +6,8 @@ import type { LibraryAlbumSelection } from "@/library/selection";
 import { usePlaybackSession } from "@/playback/session";
 import { LIBRARY_CHANGED_EVENT, reportLibraryRemoval } from "@/library/changes";
 import { SETTINGS_CHANGED_EVENT } from "@/settings/types";
-import type { AlbumArtistSummary } from "@/types/artist";
-import type { AlbumSummary } from "@/types/album";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
-import type { TrackSummary } from "@/types/track";
+import type { AlbumArtistSummary, AlbumSummary, TrackSummary } from "@/library/model";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 type LibraryTrackRemovalResult =
   | { status: "not-deleted"; message: string }

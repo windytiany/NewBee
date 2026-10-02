@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import type { PlaylistAvailability } from "@/playlist/usePlaylistState";
-import type { usePlaylistPage } from "@/playlist/usePage";
+import type { usePlaylistPage } from "@/playlist/usePlaylistPage";
 
 const output = transpileScript(
-  await Bun.file(new URL("../../src/playlist/usePage.ts", import.meta.url)).text(),
+  await Bun.file(new URL("../../src/playlist/usePlaylistPage.ts", import.meta.url)).text(),
 );
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];

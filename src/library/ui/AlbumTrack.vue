@@ -49,8 +49,8 @@
 import { computed } from "vue";
 import { AudioLines } from "@lucide/vue";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
-import type { TrackSummary } from "@/types/track.ts";
-import { formatTrackDuration } from "@/utils/formatTrack.ts";
+import type { TrackSummary } from "@/library/model";
+import { formatTrackDuration } from "@/library/formatTrack";
 
 const props = defineProps<{
   track: TrackSummary;

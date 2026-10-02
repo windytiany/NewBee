@@ -9,7 +9,7 @@ import LibraryWorkspaceDialogs from "@/library/ui/LibraryWorkspaceDialogs.vue";
 import PlaylistList from "@/playlist/ui/PlaylistList.vue";
 import PlaylistWorkspaceContent from "@/playlist/ui/PlaylistWorkspaceContent.vue";
 import PlaylistWorkspaceDialogs from "@/playlist/ui/PlaylistWorkspaceDialogs.vue";
-import PlayingPage from "@/playing/PlayingPage.vue";
+import PlayingPage from "@/playing/ui/PlayingPage.vue";
 import PlaybackBar from "@/playback/ui/PlaybackBar.vue";
 import NotificationHost from "@/notification/ui/NotificationHost.vue";
 import WorkspaceLayout from "@/layout/WorkspaceLayout.vue";

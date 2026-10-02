@@ -1,5 +1,5 @@
 import type { PlaybackQueuePersistenceSnapshot } from "@/playback/queue/persistence";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 export type PlaybackStartFailure = {
   kind: "audio-file-not-found" | "playback-failed";

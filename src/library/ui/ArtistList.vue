@@ -67,7 +67,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
 import { useItemFocusList } from "@/interaction/itemFocus";
-import type { AlbumArtistSummary } from "@/types/artist";
+import type { AlbumArtistSummary } from "@/library/model";
 import ArtistListItem from "@/library/ui/ArtistListItem.vue";
 
 const props = defineProps<{

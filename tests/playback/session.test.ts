@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { createPlaybackSession, type PlaybackStatus } from "@/playback/session";
 import type { PlaybackCommandInvoker } from "@/playback/state";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 const CURRENT_TRACK_STORAGE_KEY = "newbee.current-track";
 const storedValues = new Map<string, string>();

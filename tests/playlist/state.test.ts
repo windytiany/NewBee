@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import { computed, effectScope, isReadonly, nextTick, ref } from "vue";
-import type { Playlist, PlaylistTrackData } from "@/types/playlist";
+import type { PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
 
 type Deferred<Value> = {
   promise: Promise<Value>;
@@ -20,9 +20,9 @@ function deferred<Value>(): Deferred<Value> {
   return { promise, resolve, reject };
 }
 
-const firstPlaylist: Playlist = { id: 1, name: "First", trackCount: 3, coverTrackId: 501 };
-const secondPlaylist: Playlist = { id: 2, name: "Second", trackCount: 1, coverTrackId: 601 };
-const firstPlaylistTracks: PlaylistTrackData[] = [
+const firstPlaylist: PlaylistSummary = { id: 1, name: "First", trackCount: 3, coverTrackId: 501 };
+const secondPlaylist: PlaylistSummary = { id: 2, name: "Second", trackCount: 1, coverTrackId: 601 };
+const firstPlaylistTracks: PlaylistTrackSummary[] = [
   {
     playlistItemId: 201,
     trackId: 501,
@@ -48,7 +48,7 @@ const firstPlaylistTracks: PlaylistTrackData[] = [
     durationMs: 100,
   },
 ];
-const secondPlaylistTracks: PlaylistTrackData[] = [
+const secondPlaylistTracks: PlaylistTrackSummary[] = [
   {
     playlistItemId: 301,
     trackId: 601,
@@ -58,7 +58,7 @@ const secondPlaylistTracks: PlaylistTrackData[] = [
     durationMs: 130,
   },
 ];
-const availablePlaylists = ref<Playlist[]>([]);
+const availablePlaylists = ref<PlaylistSummary[]>([]);
 const selectedPlaylistId = ref<number | null>(null);
 const selectedPlaylist = computed(
   () => availablePlaylists.value.find(({ id }) => id === selectedPlaylistId.value) ?? null,
@@ -85,7 +85,7 @@ dependencies["@/playlist/selection"] = {
     availablePlaylists,
     selectedPlaylistId,
     selectedPlaylist,
-    setAvailablePlaylists(playlists: Playlist[]) {
+    setAvailablePlaylists(playlists: PlaylistSummary[]) {
       availablePlaylists.value = playlists;
       if (!hasLoadedPlaylists) {
         hasLoadedPlaylists = true;
@@ -96,7 +96,7 @@ dependencies["@/playlist/selection"] = {
         selectedPlaylistId.value = null;
       }
     },
-    selectPlaylist(playlist: Playlist) {
+    selectPlaylist(playlist: PlaylistSummary) {
       if (availablePlaylists.value.some(({ id }) => id === playlist.id)) {
         selectedPlaylistId.value = playlist.id;
       }

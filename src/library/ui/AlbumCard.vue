@@ -50,8 +50,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { DiscAlbum } from "@lucide/vue";
-import type { AlbumSummary } from "@/types/album";
-import type { TrackArtwork } from "@/types/track";
+import type { AlbumSummary } from "@/library/model";
+import type { TrackArtwork } from "@/artwork/types";
 
 const props = defineProps<{
   album: AlbumSummary;

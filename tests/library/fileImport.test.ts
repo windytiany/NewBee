@@ -4,7 +4,7 @@ import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { NotificationInput } from "@/notification/center";
 import type { useLibraryFileImport } from "@/library/fileImport";
-import type { LibraryScanResult } from "@/library/scan";
+import type { IngestResult } from "@/library/model";
 import type * as LibraryChanges from "@/library/changes";
 
 const LIBRARY_CHANGED_EVENT = "newbee:library-changed";
@@ -20,7 +20,7 @@ afterEach(() => {
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
   else Reflect.deleteProperty(globalThis, "window");
 });
-const result: LibraryScanResult = { added: 2, updated: 1, skipped: 0, failed: 0 };
+const result: IngestResult = { added: 2, updated: 1, skipped: 0, failed: 0 };
 const extensions = ["mp3", "aac", "m4a", "ogg", "oga", "flac", "wav"];
 
 function createImport({
@@ -157,7 +157,7 @@ describe("audio file import", () => {
 
   it("blocks concurrent pickers and imports across composable instances", async () => {
     const selection = deferred<string[]>();
-    const completion = deferred<LibraryScanResult>();
+    const completion = deferred<IngestResult>();
     const importer = createImport({
       pick: () => selection.promise,
       invoke: async (command) =>

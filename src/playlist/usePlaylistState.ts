@@ -3,8 +3,8 @@ import { computed, readonly, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { usePlaybackSession } from "@/playback/session";
 import { usePersistentPlaylistSelection } from "@/playlist/selection";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
-import type { Playlist, PlaylistTrackData } from "@/types/playlist";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
+import type { PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
 
 type NewQueueTrack = Omit<PlaybackDisplayTrack, "rowKey">;
 type DeferredPlaylistRefresh = {
@@ -28,7 +28,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     setAvailablePlaylists,
     selectPlaylist: setSelectedPlaylist,
   } = usePersistentPlaylistSelection();
-  const playlistTracks = ref<PlaylistTrackData[]>([]);
+  const playlistTracks = ref<PlaylistTrackSummary[]>([]);
   const playlistTracksPlaylistId = ref<number | null>(null);
   const loadedPlaylistTracksId = ref<number | null>(null);
   const isLoadingPlaylists = ref(false);
@@ -145,7 +145,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
   function getTargetPlaylistTracks(
     playlistId: number,
     playlistItemIds: readonly number[],
-  ): PlaylistTrackData[] {
+  ): PlaylistTrackSummary[] {
     const sourceTracks = getLoadedPlaylistTracks(playlistId);
     const availableIds = new Set(sourceTracks.map(({ playlistItemId }) => playlistItemId));
     if (playlistItemIds.some((playlistItemId) => !availableIds.has(playlistItemId))) {
@@ -156,7 +156,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     return sourceTracks.filter(({ playlistItemId }) => targetIds.has(playlistItemId));
   }
 
-  function replacePlaylistSummary(summary: Playlist) {
+  function replacePlaylistSummary(summary: PlaylistSummary) {
     if (!playlists.value.some(({ id }) => id === summary.id)) return false;
 
     setAvailablePlaylists(
@@ -167,7 +167,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
 
   function updatePlaylistSummary(
     playlistId: number,
-    changes: Partial<Pick<Playlist, "trackCount" | "coverTrackId">>,
+    changes: Partial<Pick<PlaylistSummary, "trackCount" | "coverTrackId">>,
   ) {
     const summary = playlists.value.find(({ id }) => id === playlistId);
     if (!summary) return null;
@@ -177,7 +177,10 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     return summary;
   }
 
-  function syncPlaylistSummaryFromTracks(playlistId: number, tracks: readonly PlaylistTrackData[]) {
+  function syncPlaylistSummaryFromTracks(
+    playlistId: number,
+    tracks: readonly PlaylistTrackSummary[],
+  ) {
     updatePlaylistSummary(playlistId, {
       trackCount: tracks.length,
       coverTrackId: tracks[0]?.trackId ?? null,
@@ -251,7 +254,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     isLoadingPlaylistTracks.value = true;
 
     try {
-      const result = await invoke<PlaylistTrackData[]>("list_playlist_tracks", { playlistId });
+      const result = await invoke<PlaylistTrackSummary[]>("list_playlist_tracks", { playlistId });
       if (!isPlaylistTracksRequestCurrent(playlistId, generation, force)) return;
 
       playlistTracks.value = result;
@@ -282,7 +285,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     playlistTracksError.value = "";
 
     try {
-      const result = await invoke<Playlist[]>("list_playlists");
+      const result = await invoke<PlaylistSummary[]>("list_playlists");
       if (!canQuery(force) || generation !== playlistsRequestGeneration) return;
 
       setAvailablePlaylists(result);
@@ -310,7 +313,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     }
   }
 
-  function selectPlaylist(playlist: Playlist) {
+  function selectPlaylist(playlist: PlaylistSummary) {
     if (selectedPlaylistId.value === playlist.id) return;
 
     setSelectedPlaylist(playlist);
@@ -318,7 +321,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
   }
 
   function toPlaybackDisplayTracks(
-    sourceTracks: readonly PlaylistTrackData[],
+    sourceTracks: readonly PlaylistTrackSummary[],
   ): PlaybackDisplayTrack[] {
     return sourceTracks.map((track) => ({
       trackId: track.trackId,
@@ -329,7 +332,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     }));
   }
 
-  function toNewQueueTracks(sourceTracks: readonly PlaylistTrackData[]): NewQueueTrack[] {
+  function toNewQueueTracks(sourceTracks: readonly PlaylistTrackSummary[]): NewQueueTrack[] {
     return sourceTracks.map((track) => ({
       trackId: track.trackId,
       title: track.title,
@@ -520,7 +523,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     if (playlistId === null || pendingPlaylistActionIds.value.has(playlistId)) return;
 
     const orderedIds = [...orderedPlaylistItemIds];
-    let sourceTracks: PlaylistTrackData[];
+    let sourceTracks: PlaylistTrackSummary[];
     try {
       sourceTracks = [...getLoadedPlaylistTracks(playlistId)];
     } catch (error) {

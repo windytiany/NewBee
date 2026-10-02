@@ -92,13 +92,13 @@ import { nextTick, ref, watch } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import { useContextMenu } from "@/interaction/contextMenu";
 import type { LibraryAlbumSelection } from "@/library/selection";
-import type { Playlist } from "@/types/playlist";
+import type { PlaylistSummary } from "@/playlist/model";
 
 const props = defineProps<{
   scope: string;
   albumKeys: string[];
   pending: boolean;
-  playlists: readonly Playlist[];
+  playlists: readonly PlaylistSummary[];
   playlistsLoading: boolean;
   playlistsError: string;
 }>();

@@ -3,7 +3,7 @@ import { effectScope, nextTick, ref } from "vue";
 import type { EffectScope, MaybeRefOrGetter } from "vue";
 import { useTrackInfo } from "@/playback/useTrackInfo";
 import type { TrackInfoInvoker } from "@/playback/useTrackInfo";
-import type { TrackDetails } from "@/types/track";
+import type { TrackDetails } from "@/library/model";
 
 type Deferred<Value> = {
   promise: Promise<Value>;

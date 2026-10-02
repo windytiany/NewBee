@@ -3,7 +3,8 @@ import * as Vue from "vue";
 import { compileSfc, evaluateModule, transpileScript } from "../support/moduleLoader";
 import { createHostRenderer } from "../support/hostRenderer";
 import { notifications, notify } from "@/notification/center";
-import type { useLibraryScan, LibraryScanResult } from "@/library/scan";
+import type { useLibraryScan } from "@/library/scan";
+import type { IngestResult } from "@/library/model";
 
 class HostNode {
   props: Record<string, unknown> = {};
@@ -34,7 +35,7 @@ const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
 let events: string[];
 
-function createScan(invoke: () => Promise<LibraryScanResult>) {
+function createScan(invoke: () => Promise<IngestResult>) {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@tauri-apps/api/core": { invoke },
@@ -192,7 +193,7 @@ describe("library scan dialog", () => {
   });
 
   it("closes immediately and completes scanning even after the dialog unmounts", async () => {
-    let resolveScan!: (result: LibraryScanResult) => void;
+    let resolveScan!: (result: IngestResult) => void;
     const scan = createScan(
       () =>
         new Promise((resolve) => {

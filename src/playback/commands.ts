@@ -6,7 +6,7 @@ import {
   type NowPlayingTrack,
   type PlaybackCommandInvoker,
 } from "@/playback/state";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 type PlaybackSessionCommandOptions = {
   invokeCommand: PlaybackCommandInvoker;

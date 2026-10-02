@@ -179,16 +179,16 @@ import { useContextMenu } from "@/interaction/contextMenu";
 import { useItemFocusList } from "@/interaction/itemFocus";
 import { createPlaylistDragReorder } from "@/playlist/dragReorder";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
-import type { Playlist, PlaylistTrackData } from "@/types/playlist";
+import type { PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
 import PlaylistTrack from "@/playlist/ui/PlaylistTrack.vue";
 import TrackArtwork from "@/artwork/ui/TrackArtwork.vue";
 
 const props = withDefaults(
   defineProps<{
-    playlist: Playlist | null;
+    playlist: PlaylistSummary | null;
     coverTrackId?: number | null;
     isCoverPending?: boolean;
-    tracks: readonly PlaylistTrackData[];
+    tracks: readonly PlaylistTrackSummary[];
     currentRowKey: string | null;
     isLoadingPlaylists: boolean;
     playlistsError: string;

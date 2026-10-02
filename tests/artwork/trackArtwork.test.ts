@@ -7,7 +7,8 @@ import { notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
 import { createHostNode, createHostRenderer } from "../support/hostRenderer";
 import type { HostNode as ArtworkHostNode } from "../support/hostRenderer";
-import type { TrackArtwork, TrackDetails } from "@/types/track";
+import type { TrackArtwork } from "@/artwork/types";
+import type { TrackDetails } from "@/library/model";
 
 type Deferred<Value> = {
   promise: Promise<Value>;

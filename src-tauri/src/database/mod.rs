@@ -99,7 +99,7 @@ pub struct MusicLibraryDirectory {
     display_path: String,
 }
 
-pub struct ScannedTrack {
+pub struct TrackWriteInput {
     pub path: String,
     pub title: Option<String>,
     pub artist: Option<String>,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateModule } from "../support/moduleLoader";
 import { createHostNode, createHostRenderer, findNode } from "../support/hostRenderer";
-import type { PlaylistTrackData } from "@/types/playlist";
+import type { PlaylistTrackSummary } from "@/playlist/model";
 
 function createPlaylistTrackComponent(source: string) {
   const output = compileSfc(source, "src/playlist/ui/PlaylistTrack.vue", {
@@ -10,7 +10,7 @@ function createPlaylistTrackComponent(source: string) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/utils/formatTrack.ts": { formatTrackDuration: () => "0:01" },
+    "@/library/formatTrack": { formatTrackDuration: () => "0:01" },
   };
   return evaluateModule<{ default: Vue.Component }>(output, modules).default;
 }
@@ -18,7 +18,7 @@ function createPlaylistTrackComponent(source: string) {
 const playlistTrack = createPlaylistTrackComponent(
   await Bun.file(new URL("../../src/playlist/ui/PlaylistTrack.vue", import.meta.url)).text(),
 );
-const track: PlaylistTrackData = {
+const track: PlaylistTrackSummary = {
   playlistItemId: 101,
   trackId: 1,
   title: "Track",

@@ -16,7 +16,7 @@ import {
   type PlaybackStartFailure,
   type PlaybackTransition,
 } from "@/playback/state";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 export type { PlaybackStatus } from "@/playback/status";
 

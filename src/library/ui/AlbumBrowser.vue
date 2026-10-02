@@ -92,10 +92,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useItemFocusList } from "@/interaction/itemFocus";
 import type { LibraryAlbumSelection } from "@/library/selection";
-import type { AlbumArtistSummary } from "@/types/artist";
-import type { AlbumSummary } from "@/types/album";
-import type { Playlist } from "@/types/playlist";
-import type { TrackSummary } from "@/types/track";
+import type { AlbumArtistSummary, AlbumSummary, TrackSummary } from "@/library/model";
+import type { PlaylistSummary } from "@/playlist/model";
 import AlbumDetail from "@/library/ui/AlbumDetail.vue";
 import AlbumCard from "@/library/ui/AlbumCard.vue";
 import AlbumContextMenu from "@/library/ui/AlbumContextMenu.vue";
@@ -120,7 +118,7 @@ const props = defineProps<{
   albumsError: string;
   tracksLoading: boolean;
   tracksError: string;
-  playlists: readonly Playlist[];
+  playlists: readonly PlaylistSummary[];
   playlistsLoading: boolean;
   playlistsError: string;
   trackActionPending: boolean;

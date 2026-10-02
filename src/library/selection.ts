@@ -1,6 +1,5 @@
 import { ref } from "vue";
-import type { AlbumArtistSummary } from "@/types/artist.ts";
-import type { AlbumSummary } from "@/types/album.ts";
+import type { AlbumArtistSummary, AlbumSummary } from "@/library/model";
 
 export type LibraryAlbumSelection = {
   albumArtist: string | null;

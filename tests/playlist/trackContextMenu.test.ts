@@ -13,7 +13,7 @@ import { createItemFocusManager } from "@/interaction/itemFocus";
 import * as contextMenuModule from "@/interaction/contextMenu";
 import * as dragReorderModule from "@/playlist/dragReorder";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
-import type { PlaylistTrackData } from "@/types/playlist";
+import type { PlaylistTrackSummary } from "@/playlist/model";
 
 type HostNode = {
   type: string;
@@ -33,7 +33,7 @@ type HostNode = {
 
 type ItemFocusManager = ReturnType<typeof createItemFocusManager>;
 
-const tracks: PlaylistTrackData[] = [
+const tracks: PlaylistTrackSummary[] = [
   {
     playlistItemId: 101,
     trackId: 1,

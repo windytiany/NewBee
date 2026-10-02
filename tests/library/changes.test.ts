@@ -3,17 +3,17 @@ import * as Vue from "vue";
 import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import type * as LibraryChanges from "@/library/changes";
 import type * as LibraryScan from "@/library/scan";
-import type * as LibraryPage from "@/library/usePage";
-import type * as PlaylistPage from "@/playlist/usePage";
+import type * as LibraryPage from "@/library/useLibraryPage";
+import type * as PlaylistPage from "@/playlist/usePlaylistPage";
 import type { NotificationInput } from "@/notification/center";
 
 const outputs = new Map<string, string>();
 for (const path of [
   "library/changes",
   "library/scan",
-  "library/usePage",
+  "library/useLibraryPage",
   "playlist/usePlaylistState",
-  "playlist/usePage",
+  "playlist/usePlaylistPage",
 ]) {
   const source = await Bun.file(new URL(`../../src/${path}.ts`, import.meta.url)).text();
   outputs.set(path, transpileScript(source));
@@ -117,9 +117,9 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   }
   const changes = load<typeof LibraryChanges>("library/changes");
   const scan = load<typeof LibraryScan>("library/scan").useLibraryScan();
-  const { useLibraryPage } = load<typeof LibraryPage>("library/usePage");
+  const { useLibraryPage } = load<typeof LibraryPage>("library/useLibraryPage");
   load("playlist/usePlaylistState");
-  const { usePlaylistPage } = load<typeof PlaylistPage>("playlist/usePage");
+  const { usePlaylistPage } = load<typeof PlaylistPage>("playlist/usePlaylistPage");
   globalThis.window.addEventListener(changes.LIBRARY_CHANGED_EVENT, () => effects.push("refresh"));
   const activePage = Vue.ref(mode);
   let library!: ReturnType<typeof useLibraryPage>;

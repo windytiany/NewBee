@@ -1,6 +1,6 @@
 use super::{
-    AlbumArtistSummary, AlbumSummary, Database, MusicLibraryDirectory, ScannedTrack, TrackArtwork,
-    TrackDetails, TrackPlaybackInfo, TrackSummary, TrackWriteOutcome,
+    AlbumArtistSummary, AlbumSummary, Database, MusicLibraryDirectory, TrackArtwork, TrackDetails,
+    TrackPlaybackInfo, TrackSummary, TrackWriteInput, TrackWriteOutcome,
 };
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use rusqlite::{params, OptionalExtension};
@@ -48,7 +48,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn upsert_scanned_track(&self, track: &ScannedTrack) -> Result<TrackWriteOutcome, String> {
+    pub fn upsert_track(&self, track: &TrackWriteInput) -> Result<TrackWriteOutcome, String> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction()

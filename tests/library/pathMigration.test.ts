@@ -188,7 +188,7 @@ describe("brand menu path migration entry", () => {
       },
       "@/library/ui/PathMigrationDialog.vue": {},
       "@/settings/ui/SettingsDialog.vue": {},
-      "@/types/page": { pageNames: [] },
+      "@/navigation/types": { pageNames: [] },
       "@lucide/vue": {},
     };
     const component = evaluateModule<{

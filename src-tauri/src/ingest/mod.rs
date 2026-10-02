@@ -1,4 +1,4 @@
-use crate::database::{Database, EmbeddedArtwork, ScannedTrack, TrackWriteOutcome};
+use crate::database::{Database, EmbeddedArtwork, TrackWriteInput, TrackWriteOutcome};
 use lofty::file::FileType;
 use lofty::picture::PictureType;
 use lofty::prelude::*;
@@ -62,7 +62,7 @@ fn has_supported_extension(path: &Path) -> bool {
 
 fn import_track(database: &Database, path: &Path, result: &mut IngestResult) {
     match read_track(path) {
-        Ok(Some(track)) => match database.upsert_scanned_track(&track) {
+        Ok(Some(track)) => match database.upsert_track(&track) {
             Ok(TrackWriteOutcome::Added) => result.added += 1,
             Ok(TrackWriteOutcome::Updated) => result.updated += 1,
             Err(error) => record_failure(result, path, &error),
@@ -72,7 +72,7 @@ fn import_track(database: &Database, path: &Path, result: &mut IngestResult) {
     }
 }
 
-fn read_track(path: &Path) -> Result<Option<ScannedTrack>, String> {
+fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String> {
     let tagged_file = Probe::open(path)
         .map_err(|error| error.to_string())?
         .guess_file_type()
@@ -108,7 +108,7 @@ fn read_track(path: &Path) -> Result<Option<ScannedTrack>, String> {
         .ok()
         .filter(|duration| *duration > 0);
 
-    Ok(Some(ScannedTrack {
+    Ok(Some(TrackWriteInput {
         path: path.to_string_lossy().into_owned(),
         title,
         artist,

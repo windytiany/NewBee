@@ -51,7 +51,7 @@
 import { Disc3 } from "@lucide/vue";
 import { usePlaybackSession } from "@/playback/session";
 import TransitionNowPlaying from "@/playback/ui/TransitionNowPlaying.vue";
-import { formatAudioSummary } from "@/utils/formatTrack.ts";
+import { formatAudioSummary } from "@/library/formatTrack";
 
 const { currentTrack } = usePlaybackSession().state;
 </script>

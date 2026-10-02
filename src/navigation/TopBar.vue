@@ -127,7 +127,7 @@ import LibraryScanDialog from "@/library/ui/LibraryScanDialog.vue";
 import PathMigrationDialog from "@/library/ui/PathMigrationDialog.vue";
 import { useLibraryFileImport } from "@/library/fileImport";
 import SettingsDialog from "@/settings/ui/SettingsDialog.vue";
-import { pageNames, type PageName } from "@/types/page";
+import { pageNames, type PageName } from "@/navigation/types";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Maximize, Minus, X } from "@lucide/vue";
 

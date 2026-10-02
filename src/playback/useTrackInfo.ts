@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
-import type { TrackDetails } from "@/types/track";
+import type { TrackDetails } from "@/library/model";
 import { useNotification } from "@/notification/useNotification";
 
 export type TrackInfoInvoker = <Result>(

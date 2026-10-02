@@ -34,7 +34,7 @@ import { onScopeDispose, shallowRef, watch } from "vue";
 import { retainTrackArtwork, useTrackArtwork } from "@/artwork/trackArtwork";
 import { useTrackInfo } from "@/playback/useTrackInfo";
 import type { NowPlayingTrack } from "@/playback/state";
-import type { TrackDetails } from "@/types/track";
+import type { TrackDetails } from "@/library/model";
 
 type PresentationTrack = Pick<NowPlayingTrack, "trackId" | "title" | "artist">;
 type DisplayedTrack = {

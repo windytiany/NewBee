@@ -1,16 +1,16 @@
 import { nextTick, reactive, ref, markRaw } from "vue";
 import type { Ref } from "vue";
-import { useLibraryPage } from "@/library/usePage";
+import { useLibraryPage } from "@/library/useLibraryPage";
 import type { LibraryAlbumSelection } from "@/library/selection";
 import { useNotification } from "@/notification/useNotification";
-import type { Playlist } from "@/types/playlist";
-import type { TrackSummary } from "@/types/track";
+import type { PlaylistSummary } from "@/playlist/model";
+import type { TrackSummary } from "@/library/model";
 
 type DeletionDialog = { show: () => void; close: () => void };
 
 type LibraryWorkspaceOptions = {
   playlists: {
-    readonly playlists: readonly Playlist[];
+    readonly playlists: readonly PlaylistSummary[];
     readonly isLoadingPlaylists: boolean;
     readonly playlistsError: string;
   };

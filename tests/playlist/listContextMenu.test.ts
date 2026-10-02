@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateModule } from "../support/moduleLoader";
 import { createHostRenderer, findNode, insertNode, removeNode } from "../support/hostRenderer";
-import type { Playlist } from "@/types/playlist";
+import type { PlaylistSummary } from "@/playlist/model";
 
 type HostNode = {
   type: string;
@@ -17,7 +17,7 @@ type HostNode = {
   getBoundingClientRect: () => DOMRect;
 };
 
-const playlists: Playlist[] = [
+const playlists: PlaylistSummary[] = [
   { id: 1, name: "Selected", trackCount: 0, coverTrackId: null },
   { id: 2, name: "Target", trackCount: 0, coverTrackId: null },
 ];
@@ -25,7 +25,7 @@ const mountedApps: Array<{ unmount: () => void }> = [];
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const pendingPlaylistIds = Vue.ref<number[]>([]);
 const selectedPlaylistId = Vue.ref<number | null>(1);
-const selectedEvents: Playlist[] = [];
+const selectedEvents: PlaylistSummary[] = [];
 const renameEvents: number[] = [];
 const deleteEvents: number[] = [];
 let focusedNode: HostNode | null;
@@ -154,7 +154,7 @@ function mountPlaylistList() {
         isLoading: false,
         error: "",
         pendingPlaylistIds: pendingPlaylistIds.value,
-        onSelect: (playlist: Playlist) => {
+        onSelect: (playlist: PlaylistSummary) => {
           selectedEvents.push(playlist);
           selectedPlaylistId.value = playlist.id;
         },

@@ -2,7 +2,7 @@ import { computed, markRaw, nextTick, reactive, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
-import { usePlaylistPage } from "@/playlist/usePage";
+import { usePlaylistPage } from "@/playlist/usePlaylistPage";
 import { usePlaybackSession } from "@/playback/session";
 
 type PlaylistManagementDialog = "rename" | "delete";

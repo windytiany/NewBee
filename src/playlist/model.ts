@@ -1,4 +1,4 @@
-export type PlaylistTrackData = {
+export type PlaylistTrackSummary = {
   playlistItemId: number;
   trackId: number;
   title: string | null;
@@ -7,7 +7,7 @@ export type PlaylistTrackData = {
   durationMs: number | null;
 };
 
-export type Playlist = {
+export type PlaylistSummary = {
   id: number;
   name: string;
   trackCount: number;

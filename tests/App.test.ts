@@ -3,13 +3,13 @@ import * as Vue from "vue";
 import { compileSfc, evaluateModule } from "./support/moduleLoader";
 import { createHostNode, createHostRenderer } from "./support/hostRenderer";
 import type { HostNode } from "./support/hostRenderer";
-import type { Playlist } from "@/types/playlist";
+import type { PlaylistSummary } from "@/playlist/model";
 import { notifications, notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
 import { loadLibraryWorkspaceModules } from "./library/workspaceModules";
 import { loadPlaylistWorkspaceModules } from "./playlist/workspaceModules";
 
-const playlist: Playlist = {
+const playlist: PlaylistSummary = {
   id: 7,
   name: "Favorites",
   trackCount: 1,
@@ -177,8 +177,8 @@ async function createComponent(source: string) {
     "@/navigation/activePage": {
       usePersistentActivePage: () => ({ activePage }),
     },
-    "@/library/usePage": { useLibraryPage },
-    "@/playlist/usePage": { usePlaylistPage },
+    "@/library/useLibraryPage": { useLibraryPage },
+    "@/playlist/usePlaylistPage": { usePlaylistPage },
     "@/playback/session": {
       usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
     },
@@ -187,7 +187,7 @@ async function createComponent(source: string) {
     "@/layout/WorkspaceLayout.vue": defaultModule(WorkspaceLayout),
   };
   for (const name of [
-    "@/playing/PlayingPage.vue",
+    "@/playing/ui/PlayingPage.vue",
     "@/playback/ui/PlaybackBar.vue",
     "@/library/ui/ArtistList.vue",
     "@/library/ui/DeleteAlbumDialog.vue",

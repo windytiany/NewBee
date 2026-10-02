@@ -67,8 +67,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import { useItemFocusList } from "@/interaction/itemFocus";
 import { useNotification } from "@/notification/useNotification";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
-import { formatTrackDuration } from "@/utils/formatTrack";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
+import { formatTrackDuration } from "@/library/formatTrack";
 import QueueRow from "@/playback/ui/QueueRow.vue";
 
 type Track = PlaybackDisplayTrack;

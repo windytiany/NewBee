@@ -77,11 +77,11 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useContextMenu } from "@/interaction/contextMenu";
 import { useItemFocusList } from "@/interaction/itemFocus";
-import type { Playlist } from "@/types/playlist";
+import type { PlaylistSummary } from "@/playlist/model";
 import PlaylistListItem from "@/playlist/ui/PlaylistListItem.vue";
 
 const props = defineProps<{
-  playlists: readonly Playlist[];
+  playlists: readonly PlaylistSummary[];
   selectedPlaylistId: number | null;
   isLoading: boolean;
   error: string;
@@ -89,7 +89,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  select: [playlist: Playlist];
+  select: [playlist: PlaylistSummary];
   create: [];
   rename: [playlistId: number];
   delete: [playlistId: number];
@@ -136,7 +136,7 @@ watch(contextMenuTargetExists, (targetExists) => {
   if (!targetExists) closeContextMenu();
 });
 
-function selectPlaylist(playlist: Playlist) {
+function selectPlaylist(playlist: PlaylistSummary) {
   playlistFocus.focusItem(String(playlist.id));
   emit("select", playlist);
 }

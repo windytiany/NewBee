@@ -175,9 +175,8 @@ import { ChevronRight, Play, X } from "@lucide/vue";
 import { useContextMenu } from "@/interaction/contextMenu";
 import { useItemFocusList } from "@/interaction/itemFocus";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
-import type { AlbumSummary } from "@/types/album";
-import type { Playlist } from "@/types/playlist";
-import type { TrackSummary } from "@/types/track";
+import type { AlbumSummary, TrackSummary } from "@/library/model";
+import type { PlaylistSummary } from "@/playlist/model";
 import AlbumTrack from "@/library/ui/AlbumTrack.vue";
 import { useAlbumTrackColumns } from "@/library/useAlbumTrackColumns";
 
@@ -200,7 +199,7 @@ const props = defineProps<{
   currentTrackId: number | null;
   tracksLoading: boolean;
   tracksError: string;
-  playlists: readonly Playlist[];
+  playlists: readonly PlaylistSummary[];
   playlistsLoading: boolean;
   playlistsError: string;
   trackActionPending: boolean;

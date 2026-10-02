@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { createPlaybackSession } from "@/playback/session";
 import type { PlaybackCommandInvoker, PlaybackTransition } from "@/playback/state";
 import type { InternalPlaybackStatus } from "@/playback/status";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {

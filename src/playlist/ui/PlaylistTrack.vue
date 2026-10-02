@@ -62,12 +62,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
-import { formatTrackDuration } from "@/utils/formatTrack.ts";
-import type { PlaylistTrackData } from "@/types/playlist.ts";
+import { formatTrackDuration } from "@/library/formatTrack";
+import type { PlaylistTrackSummary } from "@/playlist/model";
 
 const props = withDefaults(
   defineProps<{
-    track: PlaylistTrackData;
+    track: PlaylistTrackSummary;
     trackNumber: number;
     isFocused: boolean;
     isSelected: boolean;

@@ -1,3 +1,13 @@
+export type AlbumArtistSummary = {
+  albumArtist: string | null;
+  albumCount: number;
+};
+
+export type AlbumSummary = {
+  album: string | null;
+  year: number | null;
+};
+
 export type TrackSummary = {
   id: number;
   title: string | null;
@@ -23,5 +33,9 @@ export type TrackDetails = {
   channels: number | null;
 };
 
-export type TrackArtwork =
-  { status: "available"; mimeType: string; data: number[] } | { status: "noArtwork" };
+export type IngestResult = {
+  added: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+};

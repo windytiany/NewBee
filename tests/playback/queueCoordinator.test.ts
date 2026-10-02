@@ -4,7 +4,7 @@ import {
   type PlaybackQueueSnapshot,
   type QueuePlaybackAttempt,
 } from "@/playback/queue/coordinator";
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 type AttemptPlayback = (trackId: number, canStart: () => boolean) => Promise<QueuePlaybackAttempt>;
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateModule } from "../support/moduleLoader";
 import { createHostRenderer, findNode, getTextContent } from "../support/hostRenderer";
-import type { Playlist } from "@/types/playlist";
+import type { PlaylistSummary } from "@/playlist/model";
 import { notifications, notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
 import { loadLibraryWorkspaceModules } from "../library/workspaceModules";
@@ -34,10 +34,10 @@ type HostNode = {
   getRootNode: () => TestDocument;
 };
 
-const firstPlaylist: Playlist = { id: 1, name: "First", trackCount: 2, coverTrackId: 41 };
-const secondPlaylist: Playlist = { id: 2, name: "Second", trackCount: 1, coverTrackId: 51 };
-const thirdPlaylist: Playlist = { id: 3, name: "Third", trackCount: 0, coverTrackId: null };
-const playlists = Vue.ref<Playlist[]>([]);
+const firstPlaylist: PlaylistSummary = { id: 1, name: "First", trackCount: 2, coverTrackId: 41 };
+const secondPlaylist: PlaylistSummary = { id: 2, name: "Second", trackCount: 1, coverTrackId: 51 };
+const thirdPlaylist: PlaylistSummary = { id: 3, name: "Third", trackCount: 0, coverTrackId: null };
+const playlists = Vue.ref<PlaylistSummary[]>([]);
 const selectedPlaylistId = Vue.ref<number | null>(null);
 const selectedPlaylist = Vue.computed(
   () => playlists.value.find(({ id }) => id === selectedPlaylistId.value) ?? null,
@@ -92,7 +92,7 @@ const PlaylistList = Vue.defineComponent({
     async function focusAfterDeletion(originalIndex: number) {
       await Vue.nextTick();
       const index = Math.min(Math.max(originalIndex, 0), props.playlists.length - 1);
-      const playlist = props.playlists[index] as Playlist | undefined;
+      const playlist = props.playlists[index] as PlaylistSummary | undefined;
       if (playlist) playlistButtons.get(playlist.id)?.focus();
       else fallbackButton.value?.focus();
     }
@@ -100,7 +100,7 @@ const PlaylistList = Vue.defineComponent({
 
     return () =>
       Vue.h("section", { "data-test": "playlist-list" }, [
-        ...(props.playlists as Playlist[]).map((playlist) =>
+        ...(props.playlists as PlaylistSummary[]).map((playlist) =>
           Vue.h("div", { key: playlist.id }, [
             Vue.h(
               "button",
@@ -157,9 +157,11 @@ const PlaylistBrowser = Vue.defineComponent({
         "div",
         {
           "data-test": "right-playlist",
-          "data-playlist-id": props.playlist ? String((props.playlist as Playlist).id) : "none",
+          "data-playlist-id": props.playlist
+            ? String((props.playlist as PlaylistSummary).id)
+            : "none",
         },
-        (props.playlist as Playlist | null)?.name ?? "未选择歌单",
+        (props.playlist as PlaylistSummary | null)?.name ?? "未选择歌单",
       );
   },
 });
@@ -201,11 +203,11 @@ const appModules: Record<string, unknown> = {
   "@/notification/useNotification": { useNotification },
   "@/notification/ui/NotificationHost.vue": { __esModule: true, default: passiveComponent },
   "@/navigation/activePage": { usePersistentActivePage: () => ({ activePage }) },
-  "@/library/usePage": { useLibraryPage: emptyLibraryPage },
+  "@/library/useLibraryPage": { useLibraryPage: emptyLibraryPage },
   "@/playback/session": {
     usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
   },
-  "@/playlist/usePage": {
+  "@/playlist/usePlaylistPage": {
     usePlaylistPage: () => ({
       playlists,
       selectedPlaylistId,
@@ -220,7 +222,7 @@ const appModules: Record<string, unknown> = {
       playlistActionError: Vue.ref(""),
       coverTrackId: Vue.computed(() => selectedPlaylist.value?.coverTrackId ?? null),
       isCoverPending: Vue.ref(false),
-      selectPlaylist: (playlist: Playlist) => {
+      selectPlaylist: (playlist: PlaylistSummary) => {
         selectedPlaylistId.value = playlist.id;
       },
       renamePlaylist: (playlistId: number, name: string) => renameAction(playlistId, name),
@@ -234,7 +236,7 @@ const appModules: Record<string, unknown> = {
       refreshPlaylists: async () => {},
     }),
   },
-  "@/playing/PlayingPage.vue": { __esModule: true, default: passiveComponent },
+  "@/playing/ui/PlayingPage.vue": { __esModule: true, default: passiveComponent },
   "@/playback/ui/PlaybackBar.vue": { __esModule: true, default: passiveComponent },
   "@/library/ui/AlbumBrowser.vue": { __esModule: true, default: passiveComponent },
   "@/library/ui/DeleteTrackDialog.vue": { __esModule: true, default: passiveComponent },

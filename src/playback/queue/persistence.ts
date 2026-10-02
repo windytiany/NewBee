@@ -1,4 +1,4 @@
-import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
+import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 
 const PLAYBACK_QUEUE_STORAGE_KEY = "newbee.playback-queue";
 const PLAYBACK_QUEUE_SNAPSHOT_VERSION = 2;

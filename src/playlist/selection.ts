@@ -1,9 +1,9 @@
 import { computed, ref, watch } from "vue";
-import type { Playlist } from "@/types/playlist.ts";
+import type { PlaylistSummary } from "@/playlist/model";
 
 const STORAGE_KEY = "newbee.playlist-selection";
 
-function loadSelectedPlaylistId(availablePlaylists: Playlist[]): number | null {
+function loadSelectedPlaylistId(availablePlaylists: PlaylistSummary[]): number | null {
   try {
     const storedPlaylistId = globalThis.localStorage.getItem(STORAGE_KEY);
     if (storedPlaylistId === null || !/^\d+$/.test(storedPlaylistId)) return null;
@@ -32,7 +32,7 @@ function saveSelectedPlaylistId(playlistId: number | null) {
 }
 
 export function usePersistentPlaylistSelection() {
-  const availablePlaylists = ref<Playlist[]>([]);
+  const availablePlaylists = ref<PlaylistSummary[]>([]);
   const selectedPlaylistId = ref<number | null>(null);
   let hasLoadedPlaylists = false;
 
@@ -48,7 +48,7 @@ export function usePersistentPlaylistSelection() {
     { flush: "sync" },
   );
 
-  function setAvailablePlaylists(playlists: Playlist[]) {
+  function setAvailablePlaylists(playlists: PlaylistSummary[]) {
     availablePlaylists.value = playlists;
 
     if (!hasLoadedPlaylists) {
@@ -66,7 +66,7 @@ export function usePersistentPlaylistSelection() {
     }
   }
 
-  function selectPlaylist(playlist: Playlist) {
+  function selectPlaylist(playlist: PlaylistSummary) {
     if (!availablePlaylists.value.some(({ id }) => id === playlist.id)) return;
     selectedPlaylistId.value = playlist.id;
   }

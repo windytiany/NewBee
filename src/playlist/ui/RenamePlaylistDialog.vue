@@ -60,10 +60,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { notify } from "@/notification/center";
-import type { Playlist } from "@/types/playlist";
+import type { PlaylistSummary } from "@/playlist/model";
 
 const props = defineProps<{
-  playlist: Playlist;
+  playlist: PlaylistSummary;
   isPending: boolean;
 }>();
 
