@@ -1,3 +1,4 @@
+use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use std::collections::HashSet;
@@ -343,22 +344,47 @@ impl Database {
             .map_err(|error| format!("Failed to read album artists: {error}"))
     }
 
-    pub fn list_albums(&self, album_artist: Option<String>) -> Result<Vec<AlbumSummary>, String> {
+    pub fn list_albums(
+        &self,
+        album_artist: Option<String>,
+        sort_by: AlbumSortBy,
+        sort_order: AlbumSortOrder,
+    ) -> Result<Vec<AlbumSummary>, String> {
+        let direction = match sort_order {
+            AlbumSortOrder::Ascending => "ASC",
+            AlbumSortOrder::Descending => "DESC",
+        };
+        let order_by = match sort_by {
+            AlbumSortBy::Name => {
+                format!("album IS NULL, album COLLATE NOCASE {direction}, album {direction}")
+            }
+            AlbumSortBy::Year => {
+                format!(
+                    "sort_release_date IS NULL, sort_release_date {direction}, album IS NULL, album COLLATE NOCASE, album"
+                )
+            }
+        };
         let connection = self.connection()?;
         let mut statement = connection
-            .prepare(
+            .prepare(&format!(
                 "SELECT album,
                         MIN(
                             CASE
                                 WHEN substr(release_date, 1, 4) GLOB '[0-9][0-9][0-9][0-9]'
                                 THEN CAST(substr(release_date, 1, 4) AS INTEGER)
                             END
-                        )
+                        ) AS year,
+                        MIN(
+                            CASE
+                                WHEN substr(release_date, 1, 4) GLOB '[0-9][0-9][0-9][0-9]'
+                                THEN release_date
+                            END
+                        ) AS sort_release_date
                  FROM tracks
                  WHERE album_artist IS ?1
                  GROUP BY album
-                 ORDER BY album IS NULL, album COLLATE NOCASE, album",
-            )
+                 ORDER BY {order_by}",
+            ))
             .map_err(|error| format!("Failed to prepare album query: {error}"))?;
         let rows = statement
             .query_map(params![album_artist], |row| {
@@ -857,8 +883,192 @@ fn display_directory_path(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Database, TrackArtwork};
+    use super::{AlbumSortBy, AlbumSortOrder, Database, TrackArtwork};
     use rusqlite::params;
+
+    #[test]
+    fn album_date_sorting_uses_full_dates_but_exposes_only_the_year() {
+        let database = Database::open(":memory:").unwrap();
+        for (id, album, release_date) in [
+            (1, "STUDY WITH MIKU part1", Some("2023-08-09")),
+            (2, "STUDY WITH MIKU part2", Some("2023-08-25")),
+            (3, "STUDY WITH MIKU part6", Some("2026-01-01")),
+            (4, "Later month", Some("2023-12-01")),
+            (5, "Year only", Some("2023")),
+            (6, "Month only", Some("2023-08")),
+            (7, "No date", None),
+            (8, "Invalid date", Some("unknown")),
+            (9, "STUDY WITH MIKU part2", Some("2023-09-01")),
+        ] {
+            insert_track(&database, id, Some("Artist"), Some(album), 1, None);
+            database
+                .connection()
+                .unwrap()
+                .execute(
+                    "UPDATE tracks SET release_date = ?1 WHERE id = ?2",
+                    params![release_date, id],
+                )
+                .unwrap();
+        }
+        for (sort_order, expected) in [
+            (
+                AlbumSortOrder::Ascending,
+                vec![
+                    "Year only",
+                    "Month only",
+                    "STUDY WITH MIKU part1",
+                    "STUDY WITH MIKU part2",
+                    "Later month",
+                    "STUDY WITH MIKU part6",
+                    "Invalid date",
+                    "No date",
+                ],
+            ),
+            (
+                AlbumSortOrder::Descending,
+                vec![
+                    "STUDY WITH MIKU part6",
+                    "Later month",
+                    "STUDY WITH MIKU part2",
+                    "STUDY WITH MIKU part1",
+                    "Month only",
+                    "Year only",
+                    "Invalid date",
+                    "No date",
+                ],
+            ),
+        ] {
+            let albums = database
+                .list_albums(Some("Artist".to_owned()), AlbumSortBy::Year, sort_order)
+                .unwrap();
+            assert_eq!(
+                albums
+                    .iter()
+                    .map(|album| album.album.as_deref().unwrap())
+                    .collect::<Vec<_>>(),
+                expected,
+                "{sort_order:?}",
+            );
+            for album in &albums {
+                let expected_year = match album.album.as_deref().unwrap() {
+                    "STUDY WITH MIKU part6" => Some(2026),
+                    "No date" | "Invalid date" => None,
+                    _ => Some(2023),
+                };
+                assert_eq!(album.year, expected_year);
+                assert!(serde_json::to_value(album)
+                    .unwrap()
+                    .get("releaseDate")
+                    .is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn album_sorting_supports_names_years_and_both_directions() {
+        let database = Database::open(":memory:").unwrap();
+        for (id, album, release_date) in [
+            (1, Some("Zulu"), Some("1990-01-01")),
+            (2, Some("alpha"), Some("2024")),
+            (3, Some("Bravo"), Some("2024-06-01")),
+            (4, Some("No year"), None),
+            (5, Some("Invalid year"), Some("unknown")),
+            (6, None, Some("2010")),
+            (7, Some("Zulu"), Some("2000")),
+        ] {
+            insert_track(&database, id, Some("Artist"), album, 1, None);
+            database
+                .connection()
+                .unwrap()
+                .execute(
+                    "UPDATE tracks SET release_date = ?1 WHERE id = ?2",
+                    params![release_date, id],
+                )
+                .unwrap();
+        }
+        insert_track(
+            &database,
+            8,
+            Some("Other artist"),
+            Some("Excluded"),
+            1,
+            None,
+        );
+        for (sort_by, sort_order, expected) in [
+            (
+                AlbumSortBy::Name,
+                AlbumSortOrder::Ascending,
+                vec![
+                    Some("alpha"),
+                    Some("Bravo"),
+                    Some("Invalid year"),
+                    Some("No year"),
+                    Some("Zulu"),
+                    None,
+                ],
+            ),
+            (
+                AlbumSortBy::Name,
+                AlbumSortOrder::Descending,
+                vec![
+                    Some("Zulu"),
+                    Some("No year"),
+                    Some("Invalid year"),
+                    Some("Bravo"),
+                    Some("alpha"),
+                    None,
+                ],
+            ),
+            (
+                AlbumSortBy::Year,
+                AlbumSortOrder::Ascending,
+                vec![
+                    Some("Zulu"),
+                    None,
+                    Some("alpha"),
+                    Some("Bravo"),
+                    Some("Invalid year"),
+                    Some("No year"),
+                ],
+            ),
+            (
+                AlbumSortBy::Year,
+                AlbumSortOrder::Descending,
+                vec![
+                    Some("Bravo"),
+                    Some("alpha"),
+                    None,
+                    Some("Zulu"),
+                    Some("Invalid year"),
+                    Some("No year"),
+                ],
+            ),
+        ] {
+            let albums = database
+                .list_albums(Some("Artist".to_owned()), sort_by, sort_order)
+                .unwrap();
+            assert_eq!(
+                albums
+                    .iter()
+                    .map(|album| album.album.as_deref())
+                    .collect::<Vec<_>>(),
+                expected,
+                "{sort_by:?} {sort_order:?}",
+            );
+            assert_eq!(
+                albums
+                    .iter()
+                    .find(|album| album.album.as_deref() == Some("Zulu"))
+                    .unwrap()
+                    .year,
+                Some(1990)
+            );
+        }
+        let unknown_artist = database
+            .list_albums(None, AlbumSortBy::Year, AlbumSortOrder::Descending)
+            .unwrap();
+        assert!(unknown_artist.is_empty());
+    }
 
     fn insert_track(
         database: &Database,

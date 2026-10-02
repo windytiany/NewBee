@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { createRenderer, ref } from "vue";
 import type { useLibraryPage } from "@/library/usePage";
+import { SETTINGS_CHANGED_EVENT } from "@/settings/types";
 
 const artist = { albumArtist: "Artist", albumCount: 1 };
 const album = { album: "Album", year: 2024 };
@@ -26,6 +27,7 @@ const thirdTrack = {
   album: "Album",
   durationMs: 130,
 };
+let availableAlbums = [album];
 let availableTracks = [track];
 let playlistAddCalls: number[] = [];
 let playlistAddFailures = new Map<number, Error>();
@@ -58,7 +60,7 @@ mock.module("@tauri-apps/api/core", () => ({
       throw databaseDeleteError;
     }
     if (command === "list_album_artists") return [artist];
-    if (command === "list_albums") return [album];
+    if (command === "list_albums") return availableAlbums;
     if (command === "list_album_tracks") {
       albumTrackRequests.push(args ?? {});
       if (albumTracksError) throw albumTracksError;
@@ -141,7 +143,7 @@ mock.module("@/playback/session", () => ({
 
 const { useLibraryPage: createLibraryPage } = await import("@/library/usePage");
 
-function mountLibraryPage() {
+function mountLibraryPage(active = ref(true)) {
   let page!: ReturnType<typeof useLibraryPage>;
   const renderer = createRenderer<object>({
     patchProp: () => {},
@@ -157,7 +159,7 @@ function mountLibraryPage() {
   });
   const app = renderer.createApp({
     setup() {
-      page = createLibraryPage(ref(true));
+      page = createLibraryPage(active);
       return () => null;
     },
   });
@@ -181,6 +183,7 @@ async function loadTrack(page: ReturnType<typeof useLibraryPage>) {
 
 beforeEach(() => {
   invokeCalls = [];
+  availableAlbums = [album];
   availableTracks = [track];
   playlistAddCalls = [];
   playlistAddFailures = new Map();
@@ -201,7 +204,7 @@ beforeEach(() => {
   selectedAlbum.value = null;
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { addEventListener: () => {}, removeEventListener: () => {} },
+    value: new EventTarget(),
   });
 });
 
@@ -212,6 +215,41 @@ afterEach(() => {
   } else {
     Reflect.deleteProperty(globalThis, "window");
   }
+});
+
+describe("library album sorting updates", () => {
+  it("refreshes albums after settings save without changing the expanded album", async () => {
+    const page = mountLibraryPage();
+    await loadTrack(page);
+    const selection = { ...page.selectedAlbum.value };
+    availableAlbums = [{ album: "New album", year: 2025 }, album];
+    globalThis.window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
+    await settleRequests();
+    expect(page.albums.value).toEqual(availableAlbums);
+    expect(page.selectedAlbum.value).toEqual(selection);
+    expect(page.tracks.value).toEqual(availableTracks);
+    expect(invokeCalls.filter((command) => command === "list_albums")).toHaveLength(2);
+  });
+
+  it("uses the latest ordering when reactivated and stops listening when unmounted", async () => {
+    const active = ref(true);
+    const page = mountLibraryPage(active);
+    await loadTrack(page);
+    active.value = false;
+    availableAlbums = [{ album: "New album", year: 2025 }, album];
+    const beforeUpdate = invokeCalls.length;
+    globalThis.window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
+    await settleRequests();
+    expect(invokeCalls).toHaveLength(beforeUpdate);
+    active.value = true;
+    await settleRequests();
+    expect(page.albums.value).toEqual(availableAlbums);
+    for (const app of mountedApps.splice(0)) app.unmount();
+    const beforeUnmount = invokeCalls.length;
+    globalThis.window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
+    await settleRequests();
+    expect(invokeCalls).toHaveLength(beforeUnmount);
+  });
 });
 
 describe("library album actions", () => {

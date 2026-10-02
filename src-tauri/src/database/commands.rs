@@ -45,8 +45,14 @@ pub fn list_album_artists(
 pub fn list_albums(
     album_artist: Option<String>,
     state: tauri::State<'_, Database>,
+    settings: tauri::State<'_, crate::settings::SettingsState>,
 ) -> Result<Vec<AlbumSummary>, String> {
-    state.list_albums(album_artist)
+    let settings = settings.get()?;
+    state.list_albums(
+        album_artist,
+        settings.album_sort_by,
+        settings.album_sort_order,
+    )
 }
 
 #[tauri::command]

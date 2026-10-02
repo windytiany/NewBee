@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
-
-type Settings = { closeBehavior: "tray" | "exit" };
+import { SETTINGS_CHANGED_EVENT, type Settings } from "@/settings/types";
 
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
+const albumSortBy = ref<Settings["albumSortBy"]>("name");
+const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const isLoading = ref(false);
 const isLoaded = ref(false);
 const isSaving = ref(false);
@@ -29,6 +30,8 @@ async function show() {
     const settings = await invoke<Settings>("get_settings");
     if (requestId !== loadRequestSequence) return;
     closeBehavior.value = settings.closeBehavior;
+    albumSortBy.value = settings.albumSortBy;
+    albumSortOrder.value = settings.albumSortOrder;
     isLoaded.value = true;
   } catch (reason) {
     if (requestId === loadRequestSequence) {
@@ -49,7 +52,14 @@ async function save() {
   isSaving.value = true;
   error.value = "";
   try {
-    await invoke("save_settings", { settings: { closeBehavior: closeBehavior.value } });
+    await invoke("save_settings", {
+      settings: {
+        closeBehavior: closeBehavior.value,
+        albumSortBy: albumSortBy.value,
+        albumSortOrder: albumSortOrder.value,
+      },
+    });
+    globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
   } catch (reason) {
     error.value = `保存配置失败：${errorMessage(reason)}`;
@@ -65,7 +75,7 @@ defineExpose({ show });
   <dialog
     ref="dialogElement"
     aria-labelledby="settings-dialog-title"
-    class="bg-spotify-surface m-auto w-[min(28rem,calc(100vw-2rem))] max-w-none rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
+    class="bg-spotify-surface m-auto max-h-[85vh] w-[min(28rem,calc(100vw-2rem))] max-w-none overflow-y-auto rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
     @cancel="isSaving && $event.preventDefault()"
     @click.self="close"
     @mousedown.stop
@@ -118,11 +128,43 @@ defineExpose({ show });
         </label>
         <p class="text-spotify-muted mt-3 text-xs">托盘菜单中的“退出”始终会退出软件。</p>
       </fieldset>
+      <fieldset
+        :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+        class="border-t border-white/10 px-5 py-5"
+      >
+        <legend class="sr-only">Library 专辑排序</legend>
+        <h3 class="mb-3 text-sm font-semibold">Library 专辑排序</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="text-spotify-muted flex flex-col gap-2 text-sm">
+            排序依据
+            <select
+              v-model="albumSortBy"
+              class="bg-spotify-interactive focus-visible:outline-spotify-green rounded-lg border border-white/10 px-3 py-2 text-white focus-visible:outline-2"
+            >
+              <option value="name">专辑名称</option>
+              <option value="year">发布日期</option>
+            </select>
+          </label>
+          <label class="text-spotify-muted flex flex-col gap-2 text-sm">
+            排序方向
+            <select
+              v-model="albumSortOrder"
+              class="bg-spotify-interactive focus-visible:outline-spotify-green rounded-lg border border-white/10 px-3 py-2 text-white focus-visible:outline-2"
+            >
+              <option value="ascending">升序（A → Z / 从旧到新）</option>
+              <option value="descending">降序（Z → A / 从新到旧）</option>
+            </select>
+          </label>
+        </div>
+        <p class="text-spotify-muted mt-3 text-xs">
+          按完整发布日期排序，专辑仍只显示年份。缺少日期的专辑排在最后，相同日期按名称排序。
+        </p>
+      </fieldset>
       <p v-if="isLoading" class="text-spotify-muted px-5 pb-4 text-sm" role="status">
         正在读取配置…
       </p>
       <p v-if="!isTauriApp" class="text-spotify-muted px-5 pb-4 text-sm">
-        请在桌面应用中配置关闭行为。
+        请在桌面应用中修改配置。
       </p>
       <p v-if="error" class="px-5 pb-4 text-sm text-red-400" role="alert">{{ error }}</p>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">

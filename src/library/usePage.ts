@@ -5,6 +5,7 @@ import { usePersistentLibrarySelection } from "@/library/selection";
 import type { LibraryAlbumSelection } from "@/library/selection";
 import { usePlaybackSession } from "@/playback/session";
 import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/library/scan";
+import { SETTINGS_CHANGED_EVENT } from "@/settings/types";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
@@ -490,11 +491,17 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     void refreshLibrary();
   }
 
+  function onSettingsChanged() {
+    const group = selectedGroup.value;
+    if (group) void loadAlbums(group);
+  }
+
   function activate() {
     if (!isMounted || !active.value) return;
 
     if (!isSubscribedToLibraryScan) {
       globalThis.window.addEventListener(LIBRARY_SCAN_COMPLETED_EVENT, onLibraryScanCompleted);
+      globalThis.window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
       isSubscribedToLibraryScan = true;
     }
     void refreshLibrary();
@@ -503,6 +510,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   function deactivate() {
     if (isSubscribedToLibraryScan) {
       globalThis.window.removeEventListener(LIBRARY_SCAN_COMPLETED_EVENT, onLibraryScanCompleted);
+      globalThis.window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
       isSubscribedToLibraryScan = false;
     }
 
