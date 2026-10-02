@@ -53,7 +53,7 @@
           type="button"
           @click="openSettingsDialog"
         >
-          配置
+          设置
         </button>
       </div>
       <LibraryScanDialog ref="libraryScanDialog" />

@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateModule } from "../support/moduleLoader";
+import {
+  createHostNode,
+  createHostRenderer,
+  findNode,
+  getTextContent,
+} from "../support/hostRenderer";
+import type { HostNode } from "../support/hostRenderer";
 import { SETTINGS_CHANGED_EVENT, type Settings } from "@/settings/types";
 import { THEMES } from "@/settings/theme";
 
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
+  selectedCategory: Vue.Ref<"general" | "appearance" | "library">;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   theme: Vue.Ref<Settings["theme"]>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
@@ -25,11 +33,10 @@ const defaults: Settings = {
 };
 
 const filename = "src/settings/ui/SettingsDialog.vue";
-const output = compileSfc(
-  await Bun.file(new URL("../../src/settings/ui/SettingsDialog.vue", import.meta.url)).text(),
-  filename,
-  { id: "settings-dialog-test", inlineTemplate: false },
-);
+const source = await Bun.file(
+  new URL("../../src/settings/ui/SettingsDialog.vue", import.meta.url),
+).text();
+const output = compileSfc(source, filename, { id: "settings-dialog-test", inlineTemplate: false });
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 afterEach(() => {
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
@@ -78,6 +85,83 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("renders settings with category navigation and only cancel/save footer actions", async () => {
+    const modules: Record<string, unknown> = {
+      vue: Vue,
+      "@tauri-apps/api/core": { invoke: async () => defaults, isTauri: () => true },
+      "@/settings/types": { SETTINGS_CHANGED_EVENT },
+      "@/settings/theme": { THEMES, applyTheme: () => {} },
+    };
+    const component = evaluateModule<{ default: Vue.Component }>(
+      compileSfc(source, filename),
+      modules,
+    ).default;
+    const renderer = createHostRenderer<HostNode>(
+      (type, text = "") => {
+        const node = Object.assign(createHostNode(type, text), {
+          open: false,
+          value: "",
+          checked: false,
+          selected: false,
+          tagName: type.toUpperCase(),
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          showModal() {
+            this.open = true;
+          },
+          close() {
+            this.open = false;
+          },
+        });
+        Object.defineProperty(node, "options", {
+          get: () => node.children.filter((child) => child.type === "option"),
+        });
+        return node;
+      },
+      {
+        patchProp(node, key, _previous, next) {
+          node.props[key] = next;
+          if (key === "value") Object.assign(node, { value: next, _value: next });
+        },
+      },
+    );
+    const root = createHostNode("root");
+    const app = renderer.createApp(component);
+    const dialog = app.mount(root) as unknown as { show: () => Promise<void> };
+    try {
+      await dialog.show();
+      await Vue.nextTick();
+      const header = findNode(root, (node) => node.type === "header")!;
+      const footer = findNode(root, (node) => node.type === "footer")!;
+      expect(getTextContent(header).trim()).toBe("设置");
+      expect(findNode(header, (node) => node.type === "button")).toBeNull();
+      expect(getTextContent(footer)).toContain("取消");
+      expect(getTextContent(footer)).toContain("保存");
+
+      const panel = findNode(root, (node) => node.props.id === "settings-category-panel")!;
+      const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类")!;
+      for (const [category, included, excluded] of [
+        ["常规", "关闭窗口时", "主题"],
+        ["外观", "主题", "专辑排序"],
+        ["媒体库", "专辑排序", "关闭窗口时"],
+      ]) {
+        const button = findNode(
+          navigation,
+          (node) => node.type === "button" && getTextContent(node).trim() === category,
+        )!;
+        const click = button.props.onClick;
+        if (typeof click !== "function") throw new Error("Category button has no click handler.");
+        click();
+        await Vue.nextTick();
+        expect(button.props["aria-current"]).toBe("true");
+        expect(getTextContent(panel)).toContain(included!);
+        expect(getTextContent(panel)).not.toContain(excluded!);
+      }
+    } finally {
+      app.unmount();
+    }
+  });
+
   for (const option of THEMES) {
     it(`persists and applies ${option.value} only after saving`, async () => {
       const calls: unknown[] = [];
@@ -137,8 +221,12 @@ describe("settings dialog", () => {
     bindings.albumSortBy.value = "year";
     bindings.albumSortOrder.value = "descending";
     bindings.theme.value = "catppuccin";
+    bindings.selectedCategory.value = "appearance";
     bindings.close();
     await bindings.show();
+    expect<DialogBindings["selectedCategory"]["value"]>(bindings.selectedCategory.value).toBe(
+      "general",
+    );
     expect<Settings["theme"]>(bindings.theme.value).toBe("spotify");
     expect(appliedThemes).toEqual([]);
     expect<Settings["closeBehavior"]>(bindings.closeBehavior.value).toBe("tray");
@@ -146,6 +234,40 @@ describe("settings dialog", () => {
     expect<Settings["albumSortOrder"]>(bindings.albumSortOrder.value).toBe("ascending");
     expect(calls).toEqual(["get_settings", "get_settings"]);
     expect(events).toEqual([]);
+  });
+
+  it("preserves edits across categories and saves all categories together", async () => {
+    const saved: unknown[] = [];
+    const { bindings, appliedThemes } = createDialog(async (command, args) => {
+      if (command === "get_settings") return defaults;
+      saved.push(args);
+    });
+    await bindings.show();
+    expect(bindings.selectedCategory.value).toBe("general");
+    bindings.closeBehavior.value = "exit";
+    bindings.selectedCategory.value = "appearance";
+    bindings.theme.value = "tokyoNight";
+    bindings.selectedCategory.value = "library";
+    bindings.albumSortBy.value = "year";
+    bindings.albumSortOrder.value = "descending";
+    bindings.selectedCategory.value = "general";
+    expect(bindings.closeBehavior.value).toBe("exit");
+    expect(bindings.theme.value).toBe("tokyoNight");
+    expect(saved).toEqual([]);
+    expect(appliedThemes).toEqual([]);
+
+    await bindings.save();
+
+    expect(saved).toEqual([
+      {
+        settings: {
+          theme: "tokyoNight",
+          closeBehavior: "exit",
+          albumSortBy: "year",
+          albumSortOrder: "descending",
+        },
+      },
+    ]);
   });
 
   it("blocks saving when loading fails", async () => {
@@ -156,7 +278,7 @@ describe("settings dialog", () => {
     });
     await bindings.show();
     await bindings.save();
-    expect(bindings.error.value).toContain("读取配置失败");
+    expect(bindings.error.value).toContain("读取设置失败");
     expect(bindings.isLoaded.value).toBe(false);
     expect(element.open).toBe(true);
     expect(calls).toEqual(["get_settings"]);
