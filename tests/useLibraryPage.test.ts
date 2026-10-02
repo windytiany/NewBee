@@ -84,8 +84,11 @@ mock.module("@tauri-apps/api/core", () => ({
   },
 }));
 
-mock.module("@/library/scan", () => ({
-  LIBRARY_SCAN_COMPLETED_EVENT: "library-scan-completed",
+mock.module("@/library/changes", () => ({
+  LIBRARY_CHANGED_EVENT: "library-changed",
+  reportLibraryRemoval: () => {
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+  },
 }));
 
 mock.module("@/library/selection", () => ({

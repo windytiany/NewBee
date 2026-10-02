@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { notify } from "@/notification/center";
+import { reportLibraryImport } from "@/library/changes";
 
 export type LibraryScanResult = {
   added: number;
@@ -8,8 +9,6 @@ export type LibraryScanResult = {
   skipped: number;
   failed: number;
 };
-
-export const LIBRARY_SCAN_COMPLETED_EVENT = "newbee:library-scan-completed";
 
 const isScanning = ref(false);
 const scanResult = ref<LibraryScanResult | null>(null);
@@ -30,7 +29,7 @@ export function useLibraryScan() {
         message: `扫描完成：新增 ${result.added}，更新 ${result.updated}，跳过 ${result.skipped}，读取失败 ${result.failed}`,
         key: "library-scan",
       });
-      globalThis.window.dispatchEvent(new Event(LIBRARY_SCAN_COMPLETED_EVENT));
+      reportLibraryImport(result);
     } catch (error) {
       scanError.value = error instanceof Error ? error.message : String(error);
       notify({ type: "error", message: `扫描失败：${scanError.value}`, key: "library-scan" });

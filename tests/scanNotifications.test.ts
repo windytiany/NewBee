@@ -21,6 +21,11 @@ function createScan(invoke: () => Promise<ScanResult>) {
     vue: { ref },
     "@tauri-apps/api/core": { invoke },
     "@/notification/center": { notify },
+    "@/library/changes": {
+      reportLibraryImport: () => {
+        globalThis.window.dispatchEvent(new Event("newbee:library-changed"));
+      },
+    },
   };
   new Function("require", "module", "exports", output)(
     (name: string) => modules[name],
@@ -56,7 +61,7 @@ describe("scan notifications", () => {
       type: "success",
       message: "扫描完成：新增 2，更新 3，跳过 4，读取失败 0",
     });
-    expect(events).toEqual(["newbee:library-scan-completed"]);
+    expect(events).toEqual(["newbee:library-changed"]);
     expect(scan.isScanning.value).toBe(false);
   });
 
@@ -69,7 +74,7 @@ describe("scan notifications", () => {
     expect(scan.scanResult.value?.failed).toBe(1);
   });
 
-  it("injected backend errors produce one toast without a scan-completed event", async () => {
+  it("injected backend errors produce one toast without a library change", async () => {
     const scan = createScan(async () => {
       throw new Error("permission denied");
     });

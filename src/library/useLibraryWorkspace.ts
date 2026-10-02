@@ -68,7 +68,6 @@ export function useLibraryWorkspace(
   async function confirmAlbumDeletion(album: LibraryAlbumSelection) {
     if (deleteAlbumTarget.value !== album) return;
     const result = await page.removeAlbumFromLibrary(album);
-    if (result.deletedCount > 0) await options.refreshPlaylists();
     if (!result.completed) return;
     deleteAlbumDialog.value?.close();
     cancelAlbumDeletion();
@@ -91,7 +90,6 @@ export function useLibraryWorkspace(
     if (result.status === "not-deleted") return;
     deleteTrackDialog.value?.close();
     deleteTrackTarget.value = null;
-    await options.refreshPlaylists();
   }
 
   return reactive({

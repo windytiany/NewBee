@@ -117,7 +117,12 @@ mock.module("@/playback/session", () => ({
   }),
 }));
 
-mock.module("@/library/scan", () => ({ LIBRARY_SCAN_COMPLETED_EVENT: "library-scan-completed" }));
+mock.module("@/library/changes", () => ({
+  LIBRARY_CHANGED_EVENT: "library-changed",
+  reportLibraryRemoval: () => {
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+  },
+}));
 
 const { usePlaylistPage: createPlaylistPage } = await import("@/playlist/usePage");
 
@@ -189,7 +194,7 @@ beforeEach(() => {
   setDefaultInvokeHandler();
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { addEventListener() {}, removeEventListener() {} },
+    value: new EventTarget(),
   });
 });
 
@@ -200,6 +205,80 @@ afterEach(() => {
 });
 
 describe("歌单页面操作", () => {
+  it("后台收到媒体库变更时刷新摘要和已选歌单，卸载后停止监听", async () => {
+    const active = ref(false);
+    const page = mountPlaylistPage(active);
+    expect(invokeCalls).toEqual([]);
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    await settleRequests();
+    expect(page.playlists.value).toEqual([firstPlaylist, secondPlaylist]);
+    expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
+    expect(invokeCalls.map(({ command }) => command)).toEqual([
+      "list_playlists",
+      "list_playlist_tracks",
+    ]);
+    for (const app of mountedApps.splice(0)) app.unmount();
+    const before = invokeCalls.length;
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    await settleRequests();
+    expect(invokeCalls).toHaveLength(before);
+  });
+
+  it("活跃页切走后仍接收变更，并忽略迟到的旧查询", async () => {
+    const active = ref(true);
+    const page = mountPlaylistPage(active);
+    await settleRequests();
+    active.value = false;
+    const stale = deferred<unknown>();
+    let requests = 0;
+    const renamed = { ...firstPlaylist, name: "Updated" };
+    invokeHandler = async (command) => {
+      if (command === "list_playlists") return ++requests === 1 ? stale.promise : [renamed];
+      if (command === "list_playlist_tracks") return firstPlaylistTracks;
+      return undefined;
+    };
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    await settleRequests();
+    stale.resolve([firstPlaylist]);
+    await settleRequests();
+    expect(page.playlists.value).toEqual([renamed]);
+    expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
+  });
+
+  it("编辑期间的多次变更合并为一次后台刷新，等待回滚完成", async () => {
+    const active = ref(true);
+    const page = mountPlaylistPage(active);
+    await settleRequests();
+    active.value = false;
+    const reorderRequest = deferred<unknown>();
+    invokeHandler = async (command) => {
+      if (command === "reorder_playlist_items") return reorderRequest.promise;
+      if (command === "list_playlists") return [firstPlaylist, secondPlaylist];
+      if (command === "list_playlist_tracks") return firstPlaylistTracks;
+      return undefined;
+    };
+    const before = invokeCalls.length;
+    const reorder = page.reorderPlaylistItems([203, 202, 201]);
+    expect(page.playlistTracks.value.map(({ playlistItemId }) => playlistItemId)).toEqual([
+      203, 202, 201,
+    ]);
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    expect(invokeCalls.slice(before).map(({ command }) => command)).toEqual([
+      "reorder_playlist_items",
+    ]);
+    reorderRequest.reject(new Error("database busy"));
+    await reorder;
+    await settleRequests();
+    expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
+    expect(invokeCalls.slice(before).map(({ command }) => command)).toEqual([
+      "reorder_playlist_items",
+      "list_playlists",
+      "list_playlist_tracks",
+    ]);
+  });
+
   it("按歌单顺序入队并保留不同条目中的重复歌曲", async () => {
     const page = await mountLoadedPlaylistPage();
 

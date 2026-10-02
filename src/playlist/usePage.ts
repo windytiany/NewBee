@@ -1,8 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
-import { invalidateTrackArtworkCache } from "@/artwork/trackArtwork";
-import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/library/scan";
+import { LIBRARY_CHANGED_EVENT } from "@/library/changes";
 import { usePlaybackSession } from "@/playback/session";
 import { usePersistentPlaylistSelection } from "@/playlist/selection";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
@@ -66,7 +65,6 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   });
   const { playTracks, addTracksToNext, addTracksToQueueEnd } = usePlaybackSession();
   let isMounted = false;
-  let isSubscribedToLibraryScan = false;
   let playlistsRequestGeneration = 0;
   let playlistTracksRequestGeneration = 0;
   let playlistContextGeneration = 0;
@@ -601,27 +599,17 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
     }
   }
 
-  function onLibraryScanCompleted() {
-    invalidateTrackArtworkCache();
-    void refreshPlaylists();
+  function onLibraryChanged() {
+    void refreshPlaylists(undefined, true);
   }
 
   function activate() {
     if (!isMounted || !active.value) return;
 
-    if (!isSubscribedToLibraryScan) {
-      globalThis.window.addEventListener(LIBRARY_SCAN_COMPLETED_EVENT, onLibraryScanCompleted);
-      isSubscribedToLibraryScan = true;
-    }
     void refreshPlaylists();
   }
 
   function deactivate() {
-    if (isSubscribedToLibraryScan) {
-      globalThis.window.removeEventListener(LIBRARY_SCAN_COMPLETED_EVENT, onLibraryScanCompleted);
-      isSubscribedToLibraryScan = false;
-    }
-
     ++playlistsRequestGeneration;
     ++playlistTracksRequestGeneration;
     isLoadingPlaylists.value = false;
@@ -650,11 +638,13 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
 
   onMounted(() => {
     isMounted = true;
+    globalThis.window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
     if (active.value) activate();
   });
 
   onUnmounted(() => {
     isMounted = false;
+    globalThis.window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
     deactivate();
   });
 

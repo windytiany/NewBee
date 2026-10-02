@@ -4,7 +4,7 @@ import type { Ref } from "vue";
 import { usePersistentLibrarySelection } from "@/library/selection";
 import type { LibraryAlbumSelection } from "@/library/selection";
 import { usePlaybackSession } from "@/playback/session";
-import { LIBRARY_SCAN_COMPLETED_EVENT } from "@/library/scan";
+import { LIBRARY_CHANGED_EVENT, reportLibraryRemoval } from "@/library/changes";
 import { SETTINGS_CHANGED_EVENT } from "@/settings/types";
 import type { AlbumArtistSummary } from "@/types/artist";
 import type { AlbumSummary } from "@/types/album";
@@ -52,7 +52,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   } = usePersistentLibrarySelection();
 
   let isMounted = false;
-  let isSubscribedToLibraryScan = false;
+  let isSubscribedToLibraryChanges = false;
   let artistsRequestGeneration = 0;
   let albumsRequestGeneration = 0;
   let tracksRequestGeneration = 0;
@@ -375,7 +375,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     trackActionMessage.value = "";
     try {
       const result = await deleteLibraryTrack(trackId);
-      if (result.status !== "not-deleted") await refreshLibrary();
+      if (result.status !== "not-deleted") reportLibraryRemoval([trackId]);
       return result;
     } finally {
       isTrackActionPending.value = false;
@@ -463,31 +463,33 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   }
 
   async function removeAlbumFromLibrary(selection: LibraryAlbumSelection) {
-    let deletedCount = 0;
+    const deletedTrackIds: number[] = [];
     const failures: string[] = [];
     const completed = await runTrackAction("从曲库删除专辑", async () => {
       const sourceTracks = await loadAlbumActionTracks(selection);
       for (const track of sourceTracks) {
         const result = await deleteLibraryTrack(track.id);
-        if (result.status !== "not-deleted") deletedCount++;
+        if (result.status !== "not-deleted") deletedTrackIds.push(track.id);
         if (result.status !== "deleted") {
           failures.push(`${track.title ?? `曲目 ${track.id}`}（${result.message}）`);
         }
       }
-      if (deletedCount > 0) await refreshLibrary();
+      reportLibraryRemoval(deletedTrackIds);
       trackActionError.value = failures.length ? failures.join("、") : "";
       trackActionMessageType.value = "success";
-      trackActionMessage.value = failures.length ? `已从曲库删除 ${deletedCount} 首曲目。` : "";
+      trackActionMessage.value = failures.length
+        ? `已从曲库删除 ${deletedTrackIds.length} 首曲目。`
+        : "";
       return true;
     });
     return {
       completed: completed && failures.length === 0,
-      deletedCount,
+      deletedCount: deletedTrackIds.length,
       message: trackActionError.value,
     };
   }
 
-  function onLibraryScanCompleted() {
+  function onLibraryChanged() {
     void refreshLibrary();
   }
 
@@ -499,19 +501,19 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
   function activate() {
     if (!isMounted || !active.value) return;
 
-    if (!isSubscribedToLibraryScan) {
-      globalThis.window.addEventListener(LIBRARY_SCAN_COMPLETED_EVENT, onLibraryScanCompleted);
+    if (!isSubscribedToLibraryChanges) {
+      globalThis.window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
       globalThis.window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
-      isSubscribedToLibraryScan = true;
+      isSubscribedToLibraryChanges = true;
     }
     void refreshLibrary();
   }
 
   function deactivate() {
-    if (isSubscribedToLibraryScan) {
-      globalThis.window.removeEventListener(LIBRARY_SCAN_COMPLETED_EVENT, onLibraryScanCompleted);
+    if (isSubscribedToLibraryChanges) {
+      globalThis.window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
       globalThis.window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
-      isSubscribedToLibraryScan = false;
+      isSubscribedToLibraryChanges = false;
     }
 
     ++artistsRequestGeneration;

@@ -51,6 +51,11 @@ function createScan(invoke: () => Promise<LibraryScanResult>) {
     vue: Vue,
     "@tauri-apps/api/core": { invoke },
     "@/notification/center": { notify },
+    "@/library/changes": {
+      reportLibraryImport: () => {
+        globalThis.window.dispatchEvent(new Event("newbee:library-changed"));
+      },
+    },
   };
   new Function("require", "module", "exports", scanOutput)(
     (name: string) => modules[name],
@@ -254,7 +259,7 @@ describe("library scan dialog", () => {
       type: "success",
       message: "扫描完成：新增 2，更新 1，跳过 0，读取失败 0",
     });
-    expect(events).toEqual(["newbee:library-scan-completed"]);
+    expect(events).toEqual(["newbee:library-changed"]);
   });
 
   it("keeps scan failure notifications after closing and blocks another active scan", async () => {

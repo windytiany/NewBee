@@ -99,10 +99,13 @@ export function retainTrackArtwork(trackId: number): () => void {
   };
 }
 
-/** Reloads every currently subscribed artwork, for example after a library scan. */
-export function invalidateTrackArtworkCache() {
+/** Reloads subscribed artwork, optionally restricted to changed tracks. */
+export function invalidateTrackArtworkCache(trackIds?: readonly number[]) {
+  const changedIds = trackIds === undefined ? null : new Set(trackIds);
   for (const entry of [...sharedArtworkByTrackId.values()]) {
-    if (entry.subscribers.size > 0) startArtworkLoad(entry);
+    if (entry.subscribers.size > 0 && (changedIds === null || changedIds.has(entry.trackId))) {
+      startArtworkLoad(entry);
+    }
   }
 }
 

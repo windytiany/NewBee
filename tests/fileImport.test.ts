@@ -5,13 +5,20 @@ import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { NotificationInput } from "@/notification/center";
 import type { useLibraryFileImport } from "@/library/fileImport";
-import { LIBRARY_SCAN_COMPLETED_EVENT, type LibraryScanResult } from "@/library/scan";
+import type { LibraryScanResult } from "@/library/scan";
+import type * as LibraryChanges from "@/library/changes";
+
+const LIBRARY_CHANGED_EVENT = "newbee:library-changed";
 
 const bunRuntime = globalThis as typeof globalThis & {
   Bun: { file: (path: URL) => { text: () => Promise<string> } };
 };
 const output = transpileModule(
   await bunRuntime.Bun.file(new URL("../src/library/fileImport.ts", import.meta.url)).text(),
+  { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } },
+).outputText;
+const changesOutput = transpileModule(
+  await bunRuntime.Bun.file(new URL("../src/library/changes.ts", import.meta.url)).text(),
   { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } },
 ).outputText;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -32,12 +39,24 @@ function createImport({
   desktop?: boolean;
 } = {}) {
   const events: string[] = [];
+  const effects: string[] = [];
+  const changes = { exports: {} as typeof LibraryChanges };
+  new Function("require", "module", "exports", changesOutput)(
+    () => ({ invalidateTrackArtworkCache: () => effects.push("artwork") }),
+    changes,
+    changes.exports,
+  );
   const notices: NotificationInput[] = [];
   const calls: Array<[string, unknown]> = [];
   const pickerOptions: OpenDialogOptions[] = [];
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { dispatchEvent: (event: Event) => events.push(event.type) },
+    value: {
+      dispatchEvent: (event: Event) => {
+        effects.push("refresh");
+        events.push(event.type);
+      },
+    },
   });
   const modules: Record<string, unknown> = {
     vue: { ref },
@@ -54,7 +73,7 @@ function createImport({
         return pick(options);
       },
     },
-    "@/library/scan": { LIBRARY_SCAN_COMPLETED_EVENT },
+    "@/library/changes": changes.exports,
     "@/notification/center": { notify: (notice: NotificationInput) => notices.push(notice) },
   };
   const module = { exports: {} as { useLibraryFileImport: typeof useLibraryFileImport } };
@@ -67,6 +86,7 @@ function createImport({
     ...module.exports.useLibraryFileImport(),
     factory: module.exports.useLibraryFileImport,
     events,
+    effects,
     notices,
     calls,
     pickerOptions,
@@ -101,7 +121,8 @@ describe("audio file import", () => {
       type: "success",
       message: "导入完成：新增 2，更新 1，跳过 0，读取失败 0",
     });
-    expect(importer.events).toEqual([LIBRARY_SCAN_COMPLETED_EVENT]);
+    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
+    expect(importer.effects).toEqual(["artwork", "refresh"]);
     expect(importer.isImporting.value).toBe(false);
   });
 
@@ -130,7 +151,20 @@ describe("audio file import", () => {
     await importer.importMusicFiles();
     expect(importer.notices[0]?.type).toBe("warning");
     expect(importer.notices[0]?.message).toContain("读取失败 1");
-    expect(importer.events).toEqual([LIBRARY_SCAN_COMPLETED_EVENT]);
+    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
+  });
+
+  it("keeps the completion notice but skips invalidation when nothing was written", async () => {
+    const importer = createImport({
+      invoke: async (command) =>
+        command === "supported_audio_extensions"
+          ? extensions
+          : { added: 0, updated: 0, skipped: 2, failed: 1 },
+    });
+    await importer.importMusicFiles();
+    expect(importer.notices[0]?.type).toBe("warning");
+    expect(importer.events).toEqual([]);
+    expect(importer.effects).toEqual([]);
   });
 
   it("blocks concurrent pickers and imports across composable instances", async () => {

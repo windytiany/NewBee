@@ -396,7 +396,7 @@ describe("App track deletion confirmation", () => {
     click(findByTestId(root, "confirm-delete"));
     await settleApp();
     expect(removalCalls).toBe(1);
-    expect(playlistRefreshCalls).toBe(1);
+    expect(playlistRefreshCalls).toBe(0);
     expect(findByTestId(root, "delete-dialog")).toBeNull();
   });
 
@@ -437,6 +437,6 @@ describe("App track deletion confirmation", () => {
     expect(findByTestId(root, "library-error")).toBeNull();
     expect(notifications.items.value.map(({ message }) => message)).toEqual([warning]);
     expect(removalCalls).toBe(1);
-    expect(playlistRefreshCalls).toBe(1);
+    expect(playlistRefreshCalls).toBe(0);
   });
 });

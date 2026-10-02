@@ -1,7 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
-import { LIBRARY_SCAN_COMPLETED_EVENT, type LibraryScanResult } from "@/library/scan";
+import type { LibraryScanResult } from "@/library/scan";
+import { reportLibraryImport } from "@/library/changes";
 import { notify } from "@/notification/center";
 
 const isImporting = ref(false);
@@ -27,7 +28,7 @@ export function useLibraryFileImport() {
         message: `导入完成：新增 ${result.added}，更新 ${result.updated}，跳过 ${result.skipped}，读取失败 ${result.failed}`,
         key: "library-file-import",
       });
-      globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_SCAN_COMPLETED_EVENT));
+      reportLibraryImport(result);
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason);
       notify({ type: "error", message: `导入失败：${message}`, key: "library-file-import" });

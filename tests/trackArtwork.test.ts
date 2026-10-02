@@ -473,6 +473,18 @@ describe("播放封面与元数据同步过渡", () => {
 });
 
 describe("曲目封面加载", () => {
+  it("指定曲目失效不会重新加载其他已订阅封面", async () => {
+    const first = mountArtwork(701);
+    const second = mountArtwork(702);
+    await settleArtwork();
+    const secondUrl = second.artwork.url.value;
+    invalidateTrackArtworkCache([701]);
+    await settleArtwork();
+    expect(invokedTrackIds).toEqual([701, 702, 701]);
+    expect(first.artwork.url.value).not.toBe("blob:artwork-1");
+    expect(second.artwork.url.value).toBe(secondUrl);
+  });
+
   it("缓存刷新时仍保留正在退出的 URL，最后一次释放才回收", async () => {
     const { artwork } = mountArtwork(109);
     await settleArtwork();

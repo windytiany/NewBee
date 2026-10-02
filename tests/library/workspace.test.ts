@@ -128,7 +128,7 @@ describe("媒体库 workspace", () => {
     expect(refreshCalls).toBe(0);
   });
 
-  it("closes and refreshes after deletion even when queue synchronization failed", async () => {
+  it("closes after deletion even when queue synchronization failed without duplicating refresh", async () => {
     trackRemoval = {
       status: "deleted-queue-sync-failed",
       issue: "stop-failed",
@@ -140,10 +140,10 @@ describe("媒体库 workspace", () => {
     await workspace.confirmTrackDeletion(track.id);
     expect(workspace.deleteTrackTarget).toBeNull();
     expect(closeCalls).toBe(1);
-    expect(refreshCalls).toBe(1);
+    expect(refreshCalls).toBe(0);
   });
 
-  it("refreshes a partially deleted album but retains its confirmation for remaining failures", async () => {
+  it("retains a partially deleted album confirmation without duplicating refresh", async () => {
     albumRemoval = { completed: false, deletedCount: 1, message: "One track failed" };
     const { workspace } = createWorkspace();
     workspace.requestAlbumDeletion(album);
@@ -151,12 +151,12 @@ describe("媒体库 workspace", () => {
     await workspace.confirmAlbumDeletion(workspace.deleteAlbumTarget!);
     expect(workspace.deleteAlbumTarget).not.toBeNull();
     expect(closeCalls).toBe(0);
-    expect(refreshCalls).toBe(1);
+    expect(refreshCalls).toBe(0);
     albumRemoval = { completed: true, deletedCount: 1, message: "" };
     await workspace.confirmAlbumDeletion(workspace.deleteAlbumTarget!);
     expect(workspace.deleteAlbumTarget).toBeNull();
     expect(closeCalls).toBe(1);
-    expect(refreshCalls).toBe(2);
+    expect(refreshCalls).toBe(0);
   });
 
   it("keeps library confirmations when the page becomes inactive", async () => {
