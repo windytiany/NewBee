@@ -16,6 +16,7 @@ type DialogBindings = {
   selectedCategory: Vue.Ref<"general" | "appearance" | "library">;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   theme: Vue.Ref<Settings["theme"]>;
+  albumCoverBackground: Vue.Ref<boolean>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
   error: Vue.Ref<string>;
@@ -27,6 +28,7 @@ type DialogBindings = {
 };
 const defaults: Settings = {
   theme: "spotify",
+  albumCoverBackground: false,
   closeBehavior: "tray",
   albumSortBy: "name",
   albumSortOrder: "ascending",
@@ -131,31 +133,40 @@ describe("settings dialog", () => {
     try {
       await dialog.show();
       await Vue.nextTick();
-      const header = findNode(root, (node) => node.type === "header")!;
-      const footer = findNode(root, (node) => node.type === "footer")!;
+      const header = findNode(root, (node) => node.type === "header");
+      const footer = findNode(root, (node) => node.type === "footer");
+      if (!header || !footer) throw new Error("Missing dialog header or footer");
       expect(getTextContent(header).trim()).toBe("设置");
       expect(findNode(header, (node) => node.type === "button")).toBeNull();
       expect(getTextContent(footer)).toContain("取消");
       expect(getTextContent(footer)).toContain("保存");
 
-      const panel = findNode(root, (node) => node.props.id === "settings-category-panel")!;
-      const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类")!;
+      const panel = findNode(root, (node) => node.props.id === "settings-category-panel");
+      const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类");
+      if (!panel || !navigation) throw new Error("Missing settings panel or navigation");
       for (const [category, included, excluded] of [
         ["常规", "关闭窗口时", "主题"],
         ["外观", "主题", "专辑排序"],
         ["媒体库", "专辑排序", "关闭窗口时"],
-      ]) {
+      ] as const) {
         const button = findNode(
           navigation,
           (node) => node.type === "button" && getTextContent(node).trim() === category,
-        )!;
+        );
+        if (!button) throw new Error("Missing category button");
         const click = button.props.onClick;
         if (typeof click !== "function") throw new Error("Category button has no click handler.");
         click();
         await Vue.nextTick();
         expect(button.props["aria-current"]).toBe("true");
-        expect(getTextContent(panel)).toContain(included!);
-        expect(getTextContent(panel)).not.toContain(excluded!);
+        expect(getTextContent(panel)).toContain(included);
+        expect(getTextContent(panel)).not.toContain(excluded);
+        if (category === "外观") {
+          expect(getTextContent(panel)).toContain("专辑封面背景");
+          expect(
+            findNode(panel, (node) => node.props.name === "album-cover-background")?.props.type,
+          ).toBe("checkbox");
+        }
       }
     } finally {
       app.unmount();
@@ -182,6 +193,7 @@ describe("settings dialog", () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
       theme: "tokyoNight",
+      albumCoverBackground: true,
       closeBehavior: "exit",
       albumSortBy: "year",
       albumSortOrder: "descending",
@@ -193,11 +205,13 @@ describe("settings dialog", () => {
     await bindings.show();
     expect(bindings.closeBehavior.value).toBe("exit");
     expect(bindings.theme.value).toBe("tokyoNight");
+    expect(bindings.albumCoverBackground.value).toBe(true);
     expect(bindings.albumSortBy.value).toBe("year");
     expect(bindings.albumSortOrder.value).toBe("descending");
     expect(element.open).toBe(true);
     expect(events).toEqual([]);
     bindings.theme.value = "spotify";
+    bindings.albumCoverBackground.value = false;
     bindings.closeBehavior.value = "tray";
     bindings.albumSortBy.value = "name";
     bindings.albumSortOrder.value = "ascending";
@@ -221,6 +235,7 @@ describe("settings dialog", () => {
     bindings.albumSortBy.value = "year";
     bindings.albumSortOrder.value = "descending";
     bindings.theme.value = "catppuccin";
+    bindings.albumCoverBackground.value = true;
     bindings.selectedCategory.value = "appearance";
     bindings.close();
     await bindings.show();
@@ -228,6 +243,7 @@ describe("settings dialog", () => {
       "general",
     );
     expect<Settings["theme"]>(bindings.theme.value).toBe("spotify");
+    expect(bindings.albumCoverBackground.value).toBe(false);
     expect(appliedThemes).toEqual([]);
     expect<Settings["closeBehavior"]>(bindings.closeBehavior.value).toBe("tray");
     expect<Settings["albumSortBy"]>(bindings.albumSortBy.value).toBe("name");
@@ -247,6 +263,7 @@ describe("settings dialog", () => {
     bindings.closeBehavior.value = "exit";
     bindings.selectedCategory.value = "appearance";
     bindings.theme.value = "tokyoNight";
+    bindings.albumCoverBackground.value = true;
     bindings.selectedCategory.value = "library";
     bindings.albumSortBy.value = "year";
     bindings.albumSortOrder.value = "descending";
@@ -262,6 +279,7 @@ describe("settings dialog", () => {
       {
         settings: {
           theme: "tokyoNight",
+          albumCoverBackground: true,
           closeBehavior: "exit",
           albumSortBy: "year",
           albumSortOrder: "descending",
@@ -308,6 +326,7 @@ describe("settings dialog", () => {
     const secondShow = bindings.show();
     first.resolve({
       theme: "tokyoNight",
+      albumCoverBackground: true,
       closeBehavior: "exit",
       albumSortBy: "year",
       albumSortOrder: "descending",

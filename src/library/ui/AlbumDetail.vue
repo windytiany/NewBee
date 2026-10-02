@@ -1,8 +1,15 @@
 <template>
   <article
-    class="bg-spotify-interactive rounded-lg px-5 py-5 text-white shadow-xl ring-1 ring-white/10 sm:px-7"
+    class="bg-spotify-interactive relative rounded-lg px-5 py-5 text-white shadow-xl ring-1 ring-white/10 sm:px-7"
+    :class="props.background ? '[--app-muted:#e5e7eb] [--app-text:#fff]' : ''"
   >
-    <header class="mb-5 flex items-start justify-between gap-4">
+    <div
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 rounded-[inherit] bg-cover transition-opacity duration-200 motion-reduce:transition-none"
+      :class="props.background ? 'opacity-100' : 'opacity-0'"
+      :style="backgroundStyle"
+    ></div>
+    <header class="relative mb-5 flex items-start justify-between gap-4">
       <div class="min-w-0">
         <div class="flex min-w-0 items-center gap-3">
           <h2
@@ -46,7 +53,7 @@
     <ol
       v-if="!props.tracksLoading && !props.tracksError && props.tracks.length > 0"
       ref="trackListElement"
-      class="grid gap-x-8"
+      class="relative grid gap-x-8"
       :class="trackColumnCount === 2 ? 'grid-flow-col grid-cols-2' : 'grid-cols-1'"
       :style="{
         gridTemplateRows: `repeat(${Math.ceil(props.tracks.length / trackColumnCount)}, auto)`,
@@ -69,7 +76,7 @@
     </ol>
     <p
       v-else-if="!props.tracksLoading && !props.tracksError"
-      class="text-spotify-muted py-3 text-sm"
+      class="text-spotify-muted relative py-3 text-sm"
     >
       此专辑暂无曲目。
     </p>
@@ -181,6 +188,7 @@ import { useContextMenu } from "@/interaction/contextMenu";
 import { useItemFocusList } from "@/interaction/itemFocus";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { AlbumSummary, TrackSummary } from "@/library/model";
+import type { AlbumBackground } from "@/artwork/albumBackground";
 import type { PlaylistSummary } from "@/playlist/model";
 import AlbumTrack from "@/library/ui/AlbumTrack.vue";
 import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
@@ -200,6 +208,7 @@ type AlbumTrackContextMenuPayload = {
 
 const props = defineProps<{
   album: AlbumSummary;
+  background?: AlbumBackground | null;
   albumArtist: string | null;
   tracks: TrackSummary[];
   currentTrackId: number | null;
@@ -221,6 +230,13 @@ const emit = defineEmits<{
   addTracksToPlaylist: [trackIds: number[], playlistId: number];
   deleteTrack: [trackId: number];
 }>();
+
+const backgroundStyle = computed(() => ({
+  backgroundImage: props.background
+    ? `linear-gradient(to bottom, ${props.background.color}, transparent 48px), url("${props.background.imageUrl}")`
+    : undefined,
+  backgroundSize: "100% 100%",
+}));
 
 const trackListElement = ref<InstanceType<typeof globalThis.HTMLOListElement> | null>(null);
 const trackColumnCount = useAlbumTrackColumns(trackListElement);

@@ -39,6 +39,7 @@ pub enum Theme {
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
     pub theme: Theme,
+    pub album_cover_background: bool,
     pub close_behavior: CloseBehavior,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
@@ -166,6 +167,23 @@ mod tests {
             assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
         }
         assert!(serde_json::from_str::<Settings>(r#"{"theme":"invalid"}"#).is_err());
+    }
+
+    #[test]
+    fn album_cover_background_defaults_off_and_round_trips() {
+        assert!(!Settings::default().album_cover_background);
+        let settings: Settings = serde_json::from_str(r#"{"theme":"spotify"}"#).unwrap();
+        assert!(!settings.album_cover_background);
+        for enabled in [false, true] {
+            let settings = Settings {
+                album_cover_background: enabled,
+                ..Settings::default()
+            };
+            let data = serde_json::to_value(&settings).unwrap();
+            assert_eq!(data["albumCoverBackground"], enabled);
+            assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+        }
+        assert!(serde_json::from_str::<Settings>(r#"{"albumCoverBackground":"true"}"#).is_err());
     }
 
     #[test]

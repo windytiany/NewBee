@@ -9,6 +9,7 @@ const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
 const theme = ref<Settings["theme"]>("spotify");
+const albumCoverBackground = ref(false);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const isLoading = ref(false);
@@ -36,6 +37,7 @@ async function show() {
     if (requestId !== loadRequestSequence) return;
     closeBehavior.value = settings.closeBehavior;
     theme.value = settings.theme;
+    albumCoverBackground.value = settings.albumCoverBackground;
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
     isLoaded.value = true;
@@ -62,6 +64,7 @@ async function save() {
       settings: {
         closeBehavior: closeBehavior.value,
         theme: theme.value,
+        albumCoverBackground: albumCoverBackground.value,
         albumSortBy: albumSortBy.value,
         albumSortOrder: albumSortOrder.value,
       },
@@ -139,6 +142,26 @@ defineExpose({ show });
                   {{ option.label }}
                 </option>
               </select>
+            </label>
+            <label
+              class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
+            >
+              <input
+                v-model="albumCoverBackground"
+                aria-describedby="album-cover-background-description"
+                class="accent-spotify-green mt-1"
+                name="album-cover-background"
+                type="checkbox"
+              />
+              <span>
+                <span class="block text-sm font-semibold">专辑封面背景</span>
+                <span
+                  id="album-cover-background-description"
+                  class="text-spotify-muted mt-1 block text-xs"
+                >
+                  展开专辑时使用封面生成的模糊背景，关闭后使用默认深色背景。
+                </span>
+              </span>
             </label>
             <p class="text-spotify-muted mt-3 text-xs">保存后立即生效，下次启动时自动恢复。</p>
           </fieldset>

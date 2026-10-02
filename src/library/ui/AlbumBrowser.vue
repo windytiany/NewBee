@@ -36,18 +36,27 @@
               @context-menu="openAlbumContextMenu(album, $event)"
             />
           </div>
-          <div v-if="row.selectedAlbum" class="relative">
+          <div
+            v-if="row.selectedAlbum"
+            class="relative"
+            :title="selectedArtwork.error.value || undefined"
+            :style="{ '--album-background-color': selectedArtwork.background.value?.color }"
+          >
             <div
               aria-hidden="true"
               class="pointer-events-none absolute inset-x-0 top-px z-10 grid grid-cols-2 gap-x-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4"
             >
               <span
                 class="border-b-spotify-interactive -translate-y-full justify-self-center border-x-12 border-b-12 border-x-transparent"
-                :style="{ gridColumn: row.albums.findIndex(isSelectedAlbum) + 1 }"
+                :style="{
+                  gridColumn: row.albums.findIndex(isSelectedAlbum) + 1,
+                  borderBottomColor: 'var(--album-background-color, var(--app-interactive))',
+                }"
               ></span>
             </div>
             <AlbumDetail
               :album="row.selectedAlbum"
+              :background="selectedArtwork.background.value"
               :album-artist="props.artist.albumArtist"
               :tracks="props.tracks"
               :current-track-id="props.currentTrackId"
@@ -91,6 +100,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useItemFocusList } from "@/interaction/itemFocus";
+import { useAlbumArtwork } from "@/artwork/albumArtwork";
+import { useAlbumCoverBackground } from "@/settings/useAlbumCoverBackground";
 import type { LibraryAlbumSelection } from "@/library/selection";
 import type { AlbumArtistSummary, AlbumSummary, TrackSummary } from "@/library/model";
 import type { PlaylistSummary } from "@/playlist/model";
@@ -139,6 +150,11 @@ const emit = defineEmits<{
   deleteAlbum: [album: LibraryAlbumSelection];
 }>();
 
+const albumCoverBackground = useAlbumCoverBackground();
+const selectedArtwork = useAlbumArtwork(
+  () => (albumCoverBackground.value ? props.selectedAlbum : null),
+  "background",
+);
 const albumMenu = ref<InstanceType<typeof AlbumContextMenu> | null>(null);
 
 function openAlbumContextMenu(
