@@ -152,6 +152,11 @@
           {{ playlist.name }}
         </button>
       </div>
+      <TrackSkipMenuItem
+        :track-ids="contextMenu.payload.targetTrackIds"
+        :disabled="props.trackActionPending"
+        @close="closeTrackContextMenu(true)"
+      />
       <div class="my-1 border-t border-white/10" role="separator"></div>
       <button
         class="focus-visible:outline-spotify-green w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
@@ -178,6 +183,7 @@ import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { AlbumSummary, TrackSummary } from "@/library/model";
 import type { PlaylistSummary } from "@/playlist/model";
 import AlbumTrack from "@/library/ui/AlbumTrack.vue";
+import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
 import { useAlbumTrackColumns } from "@/library/useAlbumTrackColumns";
 
 type TrackContextMenuTrigger = {

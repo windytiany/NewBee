@@ -136,6 +136,11 @@ function createComponent(source: string) {
     "@/interaction/itemFocus": { useItemFocusList: useTestItemFocusList },
     "@/library/ui/AlbumTrack.vue": { __esModule: true, default: AlbumTrack },
     "@/library/useAlbumTrackColumns": { useAlbumTrackColumns: () => Vue.ref(2) },
+    "@/library/ui/TrackSkipMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h("button", { "data-skip-targets": JSON.stringify(props.trackIds) }, "跳过"),
+    }),
   };
   return evaluateModule<{ default: Vue.Component }>(output, modules).default;
 }
@@ -302,6 +307,11 @@ describe("专辑曲目上下文菜单目标", () => {
 
     expect(itemFocusManager.focusedItem.value?.itemKey).toBe("3");
     expect(itemFocusManager.selection.value?.selectedItemKeys).toEqual(["1", "3"]);
+    expect(
+      findNode(root, (node) => node.props["data-skip-targets"] !== undefined)?.props[
+        "data-skip-targets"
+      ],
+    ).toBe("[1,3]");
     const deleteButton = findMenuItem(root, "从库中删除");
     expect(deleteButton?.props.disabled).toBe(true);
     if (!deleteButton) throw new Error("Delete menu item was not rendered.");

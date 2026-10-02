@@ -65,6 +65,8 @@ pub fn run() {
             database::commands::list_playlist_tracks,
             database::commands::remove_playlist_items,
             database::commands::reorder_playlist_items,
+            database::commands::list_skipped_track_ids,
+            database::commands::set_tracks_skipped,
             database::commands::get_track,
             database::commands::get_track_artwork,
             playback::play_track,

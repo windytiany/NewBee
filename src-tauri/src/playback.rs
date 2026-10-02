@@ -367,8 +367,10 @@ fn start_playback(
     if let Some(old) = active.take() {
         old.player.stop();
     }
-    let (source, continuous, transitions) =
-        ContinuousSource::new(normalize_track(prepared, channels, sample_rate));
+    let (source, continuous, transitions) = ContinuousSource::new(
+        normalize_track(prepared, channels, sample_rate),
+        app.state::<Database>().skipped_tracks(),
+    );
     let app = app.clone();
     std::thread::spawn(move || {
         while let Ok(track) = transitions.recv() {

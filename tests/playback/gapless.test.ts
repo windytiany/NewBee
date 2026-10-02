@@ -35,6 +35,7 @@ function harness(failedTrackIds: number[] = []) {
   let prepared: PlaybackTransition | null = null;
   const starts: number[] = [];
   const preparations: { trackId: number | null; revision: number }[] = [];
+  const skipped = new Set<number>();
   let status: InternalPlaybackStatus = {
     hasAudio: false,
     isPlaying: false,
@@ -47,6 +48,14 @@ function harness(failedTrackIds: number[] = []) {
     command: string,
     args?: Record<string, unknown>,
   ) => {
+    if (command === "list_skipped_track_ids") return [...skipped] as T;
+    if (command === "set_tracks_skipped") {
+      for (const id of args?.trackIds as number[]) {
+        if (args?.skipped) skipped.add(id);
+        else skipped.delete(id);
+      }
+      return undefined as T;
+    }
     if (command === "playback_status") return { ...status } as T;
     if (command === "play_track") {
       const trackId = args?.trackId as number;
@@ -220,6 +229,64 @@ describe("gapless queue playback", () => {
     h.session.setRepeatOneEnabled(false);
     await settle();
     expect(h.prepared?.trackId).toBe(2);
+  });
+
+  for (const shuffle of [false, true]) {
+    it(`updates a prepared successor when skip changes in ${shuffle ? "shuffle" : "sequential"} mode`, async () => {
+      const h = harness();
+      h.session.setShuffleEnabled(shuffle);
+      await h.session.playTracks(tracks(1, 2), "1");
+      await settle();
+      expect(h.prepared?.trackId).toBe(2);
+      await h.session.setTracksSkipped([2], true);
+      await settle();
+      expect(h.prepared).toBeNull();
+      expect(h.session.state.skippedTrackIds.value).toEqual([2]);
+      expect(h.session.state.displayedTracks.value).toHaveLength(2);
+      await h.session.setTracksSkipped([2], false);
+      await settle();
+      expect(h.prepared?.trackId).toBe(2);
+      expect(h.crossBoundary()).toBe(true);
+      expect(h.session.state.currentTrack.value?.trackId).toBe(2);
+      expect(h.starts).toEqual([1]);
+    });
+  }
+
+  it("does not restart or repeat a current track when it is marked skipped", async () => {
+    const h = harness();
+    await h.session.playTracks(tracks(1, 2), "1");
+    h.session.setRepeatOneEnabled(true);
+    await settle();
+    expect(h.prepared?.trackId).toBe(1);
+    await h.session.setTracksSkipped([1], true);
+    await settle();
+    expect(h.session.state.currentTrack.value?.trackId).toBe(1);
+    expect(h.prepared?.trackId).toBe(2);
+    expect(h.starts).toEqual([1]);
+  });
+
+  it("adopts a boundary that already occurred before the track was marked skipped", async () => {
+    const h = harness();
+    await h.session.playTracks(tracks(1, 2, 3), "1");
+    await settle();
+    h.crossBoundary(false);
+    await h.session.setTracksSkipped([2], true);
+    await settle();
+    await h.session.refreshPlaybackStatus();
+    await settle();
+    expect(h.session.state.currentTrack.value?.trackId).toBe(2);
+    expect(h.prepared?.trackId).toBe(3);
+    expect(h.starts).toEqual([1]);
+  });
+
+  it("album playback skips its first flagged track while an explicit track request still plays it", async () => {
+    const h = harness();
+    await h.session.setTracksSkipped([1], true);
+    await h.session.playTracks(tracks(1, 2), "1", false);
+    expect(h.starts).toEqual([2]);
+    await h.session.playTracks(tracks(1, 2), "1");
+    expect(h.starts).toEqual([2, 1]);
+    expect(h.session.state.skippedTrackIds.value).toEqual([1]);
   });
 
   it("does not truncate a track just because the displayed position reaches duration", async () => {

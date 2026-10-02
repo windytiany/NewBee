@@ -45,6 +45,15 @@
         </span>
         <span class="text-spotify-muted truncate text-xs">{{ album }}</span>
       </span>
+      <span
+        v-if="props.isSkipped"
+        role="img"
+        class="text-spotify-muted shrink-0"
+        title="自动播放时跳过，双击仍可播放"
+        aria-label="自动播放时跳过，双击仍可播放"
+      >
+        <SkipForward aria-hidden="true" class="size-3.5" />
+      </span>
       <span class="text-spotify-muted shrink-0 pl-1 text-xs tabular-nums">{{ duration }}</span>
     </button>
   </li>
@@ -52,7 +61,7 @@
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
-import { AudioLines, Disc3 } from "@lucide/vue";
+import { AudioLines, Disc3, SkipForward } from "@lucide/vue";
 import { onBeforeUnmount, ref, watch } from "vue";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { TrackArtwork } from "@/artwork/types";
@@ -65,6 +74,7 @@ const props = withDefaults(
     album: string;
     duration: string;
     isCurrentTrack?: boolean;
+    isSkipped?: boolean;
     isSelected?: boolean;
     isFocused: boolean;
     canRemoveFromQueue?: boolean;
@@ -72,6 +82,7 @@ const props = withDefaults(
   }>(),
   {
     isCurrentTrack: false,
+    isSkipped: false,
     isSelected: false,
     canRemoveFromQueue: false,
     isContextMenuOpen: false,

@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS tracks (
     channels INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS skipped_tracks (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS track_artwork (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
     mime_type TEXT NOT NULL,

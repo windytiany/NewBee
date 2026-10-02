@@ -166,7 +166,7 @@ function setupPlayback() {
   const invokeCommand: PlaybackCommandInvoker = async <Result>(
     command: string,
     args?: Record<string, unknown>,
-  ) => (await handler(command, args)) as Result;
+  ) => (command === "list_skipped_track_ids" ? [] : await handler(command, args)) as Result;
   const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
   return {
     session,

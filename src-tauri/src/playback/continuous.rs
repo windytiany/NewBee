@@ -1,6 +1,7 @@
 use rodio::{ChannelCount, SampleRate, Source};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use super::NowPlayingTrack;
@@ -75,11 +76,13 @@ pub struct ContinuousSource {
     transitions: mpsc::Sender<NowPlayingTrack>,
     exhausted: bool,
     position_samples: u64,
+    skipped_tracks: Arc<RwLock<HashSet<i64>>>,
 }
 
 impl ContinuousSource {
     pub fn new(
         current: PreparedTrack,
+        skipped_tracks: Arc<RwLock<HashSet<i64>>>,
     ) -> (Self, ContinuousPlayback, mpsc::Receiver<NowPlayingTrack>) {
         let (transitions, receiver) = mpsc::channel();
         let playback = ContinuousPlayback {
@@ -104,6 +107,7 @@ impl ContinuousSource {
                 transitions,
                 exhausted: false,
                 position_samples: 0,
+                skipped_tracks,
             },
             playback,
             receiver,
@@ -128,7 +132,15 @@ impl Iterator for ContinuousSource {
             }
 
             let mut control = self.playback.control.lock().unwrap();
-            let Some(mut next) = control.next.take() else {
+            // Only automatic transitions consult the flag; the initial track
+            // may have been explicitly requested. Hold through the transition
+            // so preference changes and audio boundaries have a defined order.
+            let skipped_tracks = self.skipped_tracks.read().unwrap();
+            let next = control
+                .next
+                .take()
+                .filter(|next| !skipped_tracks.contains(&next.track.track_id));
+            let Some(mut next) = next else {
                 control.snapshot.ended = true;
                 control.snapshot.position = control.snapshot.duration;
                 // Keep the Player alive so pause/resume and seeking still work.
@@ -146,6 +158,7 @@ impl Iterator for ContinuousSource {
             self.position_samples = 0;
             self.playback.samples.store(0, Ordering::Relaxed);
             drop(control);
+            drop(skipped_tracks);
             let _ = self.transitions.send(next.track.clone());
             self.current = next;
             self.exhausted = false;
@@ -222,7 +235,7 @@ mod tests {
     #[test]
     fn prepared_tracks_join_without_silence_dropped_or_repeated_samples() {
         let (mut source, playback, transitions) =
-            ContinuousSource::new(track(1, vec![0.1, 0.2, 0.3, 0.4]));
+            ContinuousSource::new(track(1, vec![0.1, 0.2, 0.3, 0.4]), Default::default());
         assert!(playback.reserve(1, 1));
         assert!(playback.prepare(1, 1, track(2, vec![0.5, 0.6, 0.7, 0.8])));
         assert_eq!(
@@ -275,7 +288,8 @@ mod tests {
     #[test]
     fn decoded_wavs_join_sample_exactly_through_the_player_and_mixer() {
         let samples = [1024, -1024, 2048, -2048, 4096, -4096, 8192, -8192];
-        let (source, playback, _) = ContinuousSource::new(wav_track(1, &samples[..4]));
+        let (source, playback, _) =
+            ContinuousSource::new(wav_track(1, &samples[..4]), Default::default());
         assert!(playback.reserve(1, 1));
         assert!(playback.prepare(1, 1, wav_track(2, &samples[4..])));
         let (mixer, output) =
@@ -290,8 +304,10 @@ mod tests {
 
     #[test]
     fn seeking_back_from_the_end_rearms_the_source() {
-        let (mut source, playback, _) =
-            ContinuousSource::new(wav_track(1, &[1024, -1024, 2048, -2048]));
+        let (mut source, playback, _) = ContinuousSource::new(
+            wav_track(1, &[1024, -1024, 2048, -2048]),
+            Default::default(),
+        );
         source.by_ref().take(5).for_each(drop);
         assert!(playback.snapshot().ended);
         source.try_seek(Duration::ZERO).unwrap();
@@ -304,7 +320,8 @@ mod tests {
 
     #[test]
     fn cancelling_the_reservation_keeps_the_next_track_out_of_the_output() {
-        let (mut source, playback, transitions) = ContinuousSource::new(track(1, vec![0.1, 0.2]));
+        let (mut source, playback, transitions) =
+            ContinuousSource::new(track(1, vec![0.1, 0.2]), Default::default());
         assert!(playback.reserve(1, 1));
         assert!(playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
         assert!(playback.reserve(1, 2));
@@ -317,8 +334,52 @@ mod tests {
     }
 
     #[test]
+    fn a_track_flagged_after_preparation_is_never_emitted_at_the_audio_boundary() {
+        let skipped = std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashSet::new()));
+        let (mut source, playback, transitions) =
+            ContinuousSource::new(track(1, vec![0.1, 0.2]), skipped.clone());
+        assert!(playback.reserve(1, 1));
+        assert!(playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
+        skipped.write().unwrap().insert(2);
+        assert_eq!(
+            source.by_ref().take(4).collect::<Vec<_>>(),
+            vec![0.1, 0.2, 0.0, 0.0]
+        );
+        assert!(transitions.try_recv().is_err());
+        assert!(playback.snapshot().ended);
+    }
+
+    #[test]
+    fn cancelling_skip_before_the_boundary_allows_the_prepared_track() {
+        let skipped =
+            std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashSet::from([2])));
+        let (source, playback, transitions) =
+            ContinuousSource::new(track(1, vec![0.1, 0.2]), skipped.clone());
+        assert!(playback.reserve(1, 1));
+        assert!(playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
+        skipped.write().unwrap().remove(&2);
+        assert_eq!(source.take(4).collect::<Vec<_>>(), vec![0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(transitions.try_recv().unwrap().track_id, 2);
+    }
+
+    #[test]
+    fn explicit_initial_playback_ignores_skip_but_repeat_transitions_do_not() {
+        let skipped =
+            std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashSet::from([1])));
+        let (source, playback, transitions) =
+            ContinuousSource::new(track(1, vec![0.1, 0.2]), skipped);
+        assert!(playback.reserve(1, 1));
+        let mut repeated = track(2, vec![0.3, 0.4]);
+        repeated.track.track_id = 1;
+        assert!(playback.prepare(1, 1, repeated));
+        assert_eq!(source.take(4).collect::<Vec<_>>(), vec![0.1, 0.2, 0.0, 0.0]);
+        assert!(transitions.try_recv().is_err());
+    }
+
+    #[test]
     fn replacing_a_reservation_never_plays_the_stale_next_track() {
-        let (source, playback, _) = ContinuousSource::new(track(1, vec![0.1, 0.2]));
+        let (source, playback, _) =
+            ContinuousSource::new(track(1, vec![0.1, 0.2]), Default::default());
         assert!(playback.reserve(1, 1));
         assert!(playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
         assert!(playback.reserve(1, 2));

@@ -1,7 +1,8 @@
 use rusqlite::Connection;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 pub(crate) mod commands;
 mod library;
@@ -9,6 +10,7 @@ mod path_migration;
 mod playlist;
 #[cfg(test)]
 mod tests;
+mod track_skip;
 
 pub use playlist::PlaylistReorderError;
 
@@ -16,6 +18,7 @@ const SCHEMA: &str = include_str!("schema.sql");
 
 pub struct Database {
     connection: Mutex<Connection>,
+    skipped_tracks: Arc<RwLock<HashSet<i64>>>,
 }
 
 #[derive(Serialize)]
@@ -141,8 +144,14 @@ impl Database {
         connection.execute_batch("PRAGMA foreign_keys = ON;")?;
         connection.execute_batch(SCHEMA)?;
 
+        let skipped_tracks = {
+            let mut statement = connection.prepare("SELECT track_id FROM skipped_tracks")?;
+            let rows = statement.query_map([], |row| row.get::<_, i64>(0))?;
+            rows.collect::<rusqlite::Result<HashSet<_>>>()?
+        };
         Ok(Self {
             connection: Mutex::new(connection),
+            skipped_tracks: Arc::new(RwLock::new(skipped_tracks)),
         })
     }
 

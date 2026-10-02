@@ -34,6 +34,7 @@ function asPlaybackInvoker(
   handler: (command: string, args?: Record<string, unknown>) => Promise<unknown> | unknown,
 ): PlaybackCommandInvoker {
   return async <T>(command: string, args?: Record<string, unknown>) => {
+    if (command === "list_skipped_track_ids") return [] as T;
     if (command === "prepare_next_track") return true as T;
     return (await handler(command, args)) as T;
   };

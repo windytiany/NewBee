@@ -265,7 +265,7 @@ export function useLibraryPage(active: Readonly<Ref<boolean>>) {
     if (!firstTrack) return;
 
     const displayedTracks = toPlaybackDisplayTracks(tracks.value);
-    await playTracks(displayedTracks, `album-track:${firstTrack.id}`);
+    await playTracks(displayedTracks, `album-track:${firstTrack.id}`, false);
   }
 
   function findLibraryTracks(trackIds: readonly number[]) {

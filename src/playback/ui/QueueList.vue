@@ -23,6 +23,7 @@
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
           :track-id="track.trackId"
+          :is-skipped="props.skippedTrackIds.includes(track.trackId)"
           :row-key="getTrackRowKey(track)"
           :can-remove-from-queue="props.canRemoveFromQueue"
           :is-context-menu-open="contextMenu?.rowKey === getTrackRowKey(track)"
@@ -58,6 +59,7 @@
       >
         从播放队列移除
       </button>
+      <TrackSkipMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
     </div>
   </section>
 </template>
@@ -70,6 +72,7 @@ import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 import { formatTrackDuration } from "@/library/formatTrack";
 import QueueRow from "@/playback/ui/QueueRow.vue";
+import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
 
 type Track = PlaybackDisplayTrack;
 
@@ -102,6 +105,7 @@ const props = withDefaults(
     error?: string;
     emptyMessage?: string;
     canRemoveFromQueue?: boolean;
+    skippedTrackIds?: readonly number[];
   }>(),
   {
     tracks: () => [],
@@ -111,6 +115,7 @@ const props = withDefaults(
     error: "",
     emptyMessage: "暂无曲目。",
     canRemoveFromQueue: false,
+    skippedTrackIds: () => [],
   },
 );
 
@@ -119,6 +124,10 @@ useNotification(() =>
 );
 
 const visibleRowKeys = computed(() => props.tracks.map(getTrackRowKey));
+const contextTargetTrackIds = computed(() => {
+  const rowKeys = new Set(contextMenu.value?.targetRowKeys ?? []);
+  return props.tracks.filter((track) => rowKeys.has(track.rowKey)).map((track) => track.trackId);
+});
 
 watch(visibleRowKeys, (rowKeys) => queueFocus.syncVisibleItems(rowKeys), { immediate: true });
 
@@ -131,7 +140,7 @@ function openQueueContextMenu(request: QueueContextMenuTrigger) {
   if (!props.canRemoveFromQueue) return;
 
   const menuWidth = 216;
-  const menuHeight = 52;
+  const menuHeight = 92;
   menuPosition.value = {
     x: Math.max(0, Math.min(request.x, globalThis.innerWidth - menuWidth)),
     y: Math.max(0, Math.min(request.y, globalThis.innerHeight - menuHeight)),

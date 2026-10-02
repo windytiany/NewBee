@@ -55,6 +55,7 @@
         <div class="h-full min-h-0 min-w-0 overflow-hidden">
           <QueueList
             :tracks="displayedTracks"
+            :skipped-track-ids="skippedTrackIds"
             :current-row-key="activeCurrentRowKey"
             :can-remove-from-queue="true"
             title="当前曲目列表"
@@ -93,7 +94,11 @@ const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
 });
 
 const playbackSession = usePlaybackSession();
-const { displayedTracks, activeQueueRowKey: activeCurrentRowKey } = playbackSession.state;
+const {
+  displayedTracks,
+  skippedTrackIds,
+  activeQueueRowKey: activeCurrentRowKey,
+} = playbackSession.state;
 const { playQueueItem, removeQueueItems } = playbackSession;
 
 const MIN_LEFT_PANE_WIDTH = 208;

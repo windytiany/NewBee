@@ -18,6 +18,8 @@ type PlaybackSessionCommandOptions = {
   currentRowKey: Readonly<Ref<string | null>>;
   canStartRestoredQueue: Readonly<ComputedRef<boolean>>;
   restoredStartRowKey: string | null;
+  isTrackSkipped: (trackId: number) => boolean;
+  loadTrackPreferences: () => Promise<boolean>;
   playbackError: Ref<string>;
   isCommandPending: Readonly<ComputedRef<boolean>>;
   isSessionCommandPending: Ref<boolean>;
@@ -62,22 +64,28 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
     const rowKey = options.currentRowKey.value;
     const queueItem = options.displayedTracks.value.find((item) => item.rowKey === rowKey);
     if (rowKey !== null && queueItem?.trackId === track.trackId) {
-      return options.coordinator.playQueueItem(rowKey);
+      return options.coordinator.playQueueItem(rowKey, false);
     }
 
+    if (options.isTrackSkipped(trackId)) return Promise.resolve(false);
     return options.playbackState.startTrack(trackId, () => {
       const current = options.currentTrack.value;
       return (
         isCurrentUserIntent(generation) &&
+        !options.isTrackSkipped(trackId) &&
         current?.trackId === track.trackId &&
         current.playbackId === track.playbackId
       );
     });
   }
 
-  function playTracks(items: readonly PlaybackDisplayTrack[], startRowKey: string) {
+  function playTracks(
+    items: readonly PlaybackDisplayTrack[],
+    startRowKey: string,
+    allowSkipped = true,
+  ) {
     beginUserIntent();
-    return options.coordinator.replaceAndPlay(items, startRowKey);
+    return options.coordinator.replaceAndPlay(items, startRowKey, allowSkipped);
   }
 
   function playQueueItem(rowKey: string) {
@@ -110,6 +118,8 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
         !status.hasAudio ||
         (!status.isPlaying && status.durationMs > 0 && status.positionMs >= status.durationMs)
       ) {
+        if (!(await options.loadTrackPreferences()) || !isCurrentUserIntent(generation))
+          return false;
         const track = options.currentTrack.value;
         const shouldStartRestoredQueue =
           options.canStartRestoredQueue.value && (track === null || track.playbackId === null);
@@ -121,7 +131,7 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
         setSessionCommandPending(generation, false);
         let started = false;
         if (shouldStartRestoredQueue && options.restoredStartRowKey !== null) {
-          started = await options.coordinator.playQueueItem(options.restoredStartRowKey);
+          started = await options.coordinator.playQueueItem(options.restoredStartRowKey, false);
         } else if (track !== null) {
           started = await startCurrentTrack(track.trackId, generation);
         }

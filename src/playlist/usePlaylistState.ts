@@ -380,7 +380,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     if (!firstTrack) return;
 
     const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
-    await playTracks(displayedTracks, `playlist-item:${firstTrack.playlistItemId}`);
+    await playTracks(displayedTracks, `playlist-item:${firstTrack.playlistItemId}`, false);
   }
 
   async function enqueuePlaylistItems(

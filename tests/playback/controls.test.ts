@@ -64,7 +64,8 @@ describe("playback controls progress input", () => {
     try {
       const controls = scope.run(() => {
         session = createPlaybackSession({
-          invokeCommand: async <Result>(command: string) => (await invoke(command)) as Result,
+          invokeCommand: async <Result>(command: string) =>
+            (command === "list_skipped_track_ids" ? [] : await invoke(command)) as Result,
           restoredQueueSnapshot: null,
         });
         return usePlaybackControls(async () => true);

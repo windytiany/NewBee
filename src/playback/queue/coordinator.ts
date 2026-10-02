@@ -33,13 +33,16 @@ type PlaybackQueueCoordinatorOptions = {
   stopPlayback?: StopPlayback;
   stopStalePlayback?: StopStalePlayback;
   finishPlayback?: (playbackId: number, canFinish: () => boolean) => Promise<void>;
+  isTrackSkipped?: (trackId: number) => boolean;
+  loadTrackPreferences?: () => Promise<boolean>;
 };
-type ItemPlaybackResult = "started" | "failed" | "cancelled";
+type ItemPlaybackResult = "started" | "failed" | "cancelled" | "skipped";
 type PlaybackHistoryAction =
   { kind: "append" } | { kind: "move"; index: number } | { kind: "none" };
 type PlayItemOptions = {
   replaceQueue: boolean;
   repeatRestart?: boolean;
+  allowSkipped?: boolean;
   historyAction?: PlaybackHistoryAction;
 };
 type NextCandidateOptions = { stopWhenExhausted?: boolean };
@@ -75,6 +78,8 @@ export class PlaybackQueueCoordinator {
   private readonly stopPlayback: StopPlayback;
   private readonly stopStalePlayback: StopStalePlayback;
   private readonly finishPlayback: NonNullable<PlaybackQueueCoordinatorOptions["finishPlayback"]>;
+  private readonly isTrackSkipped: (trackId: number) => boolean;
+  private readonly loadTrackPreferences: () => Promise<boolean>;
 
   constructor(
     private readonly attemptPlayback: AttemptPlayback,
@@ -88,6 +93,8 @@ export class PlaybackQueueCoordinator {
     this.stopPlayback = options.stopPlayback ?? (async () => true);
     this.stopStalePlayback = options.stopStalePlayback ?? (async () => {});
     this.finishPlayback = options.finishPlayback ?? (async () => {});
+    this.isTrackSkipped = options.isTrackSkipped ?? (() => false);
+    this.loadTrackPreferences = options.loadTrackPreferences ?? (async () => true);
   }
 
   get snapshot(): PlaybackQueueSnapshot {
@@ -97,7 +104,14 @@ export class PlaybackQueueCoordinator {
       queuePlaybackError: this.failures.join("\n"),
       repeatOneEnabled: this.repeatOneEnabled,
       shuffleEnabled: this.shuffleEnabled,
-      canPlayPrevious: this.shuffleEnabled ? this.historyIndex > 0 : this.currentQueueIndex() > 0,
+      canPlayPrevious: this.shuffleEnabled
+        ? this.playbackHistory.slice(0, Math.max(0, this.historyIndex)).some((key) => {
+            const item = this.findRoundTrack(key);
+            return item !== undefined && !this.isTrackSkipped(item.trackId);
+          })
+        : this.roundTracks
+            .slice(0, Math.max(0, this.currentQueueIndex()))
+            .some((item) => !this.isTrackSkipped(item.trackId)),
       canPlayNext: this.hasNextTarget(),
     };
   }
@@ -128,7 +142,15 @@ export class PlaybackQueueCoordinator {
     this.publish();
   }
 
-  replaceAndPlay(items: readonly PlaybackDisplayTrack[], startRowKey: string): Promise<boolean> {
+  refreshTrackPreferences() {
+    this.publish();
+  }
+
+  replaceAndPlay(
+    items: readonly PlaybackDisplayTrack[],
+    startRowKey: string,
+    allowSkipped = true,
+  ): Promise<boolean> {
     const queue = items.map((item) => ({ ...item, isNext: false }));
     const startIndex = queue.findIndex((item) => item.rowKey === startRowKey);
     if (startIndex < 0) return Promise.resolve(false);
@@ -137,11 +159,11 @@ export class PlaybackQueueCoordinator {
     return this.enqueue(() => {
       if (!this.isCurrentOperation(generation)) return Promise.resolve(false);
       this.supersedeCurrentPlayback();
-      return this.playRound(queue, startIndex, generation, true);
+      return this.playRound(queue, startIndex, generation, { replaceQueue: true, allowSkipped });
     });
   }
 
-  playQueueItem(rowKey: string): Promise<boolean> {
+  playQueueItem(rowKey: string, allowSkipped = true): Promise<boolean> {
     const generation = this.beginUserOperation();
     return this.enqueue(() => {
       if (!this.isCurrentOperation(generation)) return Promise.resolve(false);
@@ -149,7 +171,10 @@ export class PlaybackQueueCoordinator {
       const startIndex = this.displayedTracks.findIndex((item) => item.rowKey === rowKey);
       if (startIndex < 0) return Promise.resolve(false);
       this.supersedeCurrentPlayback();
-      return this.playRound(this.displayedTracks, startIndex, generation, false);
+      return this.playRound(this.displayedTracks, startIndex, generation, {
+        replaceQueue: false,
+        allowSkipped,
+      });
     });
   }
 
@@ -399,7 +424,10 @@ export class PlaybackQueueCoordinator {
     return this.scheduleAdvance(playbackId);
   }
 
-  get gaplessPlan(): { playbackId: number; candidates: PlaybackDisplayTrack[] } | null {
+  private get unfilteredGaplessPlan(): {
+    playbackId: number;
+    candidates: PlaybackDisplayTrack[];
+  } | null {
     const playbackId = this.activePlaybackId;
     if (playbackId === null) return null;
     if (this.ignoredEndPlaybackId === playbackId || this.handledEndPlaybackId === playbackId) {
@@ -424,13 +452,24 @@ export class PlaybackQueueCoordinator {
     };
   }
 
+  get gaplessPlan(): { playbackId: number; candidates: PlaybackDisplayTrack[] } | null {
+    const plan = this.unfilteredGaplessPlan;
+    if (plan === null) return null;
+    return {
+      ...plan,
+      candidates: plan.candidates.filter((item) => !this.isTrackSkipped(item.trackId)),
+    };
+  }
+
   confirmGaplessTransition(
     previousPlaybackId: number,
     playbackId: number,
     rowKey: string,
     trackId: number,
   ): boolean {
-    const plan = this.gaplessPlan;
+    // The backend checks skip preferences at the audio boundary. A preference
+    // changed after that boundary must not prevent adopting the current track.
+    const plan = this.unfilteredGaplessPlan;
     if (plan?.playbackId !== previousPlaybackId) return false;
     const item = plan.candidates.find(
       (candidate) => candidate.rowKey === rowKey && candidate.trackId === trackId,
@@ -515,10 +554,16 @@ export class PlaybackQueueCoordinator {
   private hasNextTarget() {
     if (!this.shuffleEnabled && this.currentRowKey !== null) {
       const index = this.currentQueueIndex();
-      return index >= 0 && index + 1 < this.roundTracks.length;
+      return (
+        index >= 0 &&
+        this.roundTracks.slice(index + 1).some((item) => !this.isTrackSkipped(item.trackId))
+      );
     }
     return (
-      this.historyIndex + 1 < this.playbackHistory.length || this.remainingCandidates.length > 0
+      this.playbackHistory.slice(this.historyIndex + 1).some((key) => {
+        const item = this.findRoundTrack(key);
+        return item !== undefined && !this.isTrackSkipped(item.trackId);
+      }) || this.remainingCandidates.some((item) => !this.isTrackSkipped(item.trackId))
     );
   }
 
@@ -708,8 +753,9 @@ export class PlaybackQueueCoordinator {
     queue: readonly QueueTrack[],
     startIndex: number,
     generation: number,
-    replaceQueue: boolean,
+    options: { replaceQueue: boolean; allowSkipped: boolean },
   ) {
+    const { replaceQueue, allowSkipped } = options;
     this.roundTracks = queue.map((track) => ({ ...track }));
     this.remainingCandidates = this.orderCandidates(this.roundTracks.slice(startIndex + 1));
     this.playbackHistory = [];
@@ -719,10 +765,21 @@ export class PlaybackQueueCoordinator {
     const firstItem = this.roundTracks[startIndex];
     if (!firstItem) return false;
 
-    const firstResult = await this.playItem(firstItem, generation, { replaceQueue });
+    const firstResult = await this.playItem(firstItem, generation, { replaceQueue, allowSkipped });
     if (firstResult === "started") return true;
     if (firstResult === "cancelled") return false;
-    return this.playNextCandidate(generation, replaceQueue);
+    const started = await this.playNextCandidate(generation, replaceQueue);
+    if (
+      !started &&
+      replaceQueue &&
+      this.isCurrentOperation(generation) &&
+      this.roundTracks.slice(startIndex).every((item) => this.isTrackSkipped(item.trackId))
+    ) {
+      this.displayedTracks = this.roundTracks.map((track) => ({ ...track }));
+      await this.stopCurrentPlayback(generation);
+      this.publish();
+    }
+    return started;
   }
 
   private async repeatCurrentOrAdvance(
@@ -735,7 +792,7 @@ export class PlaybackQueueCoordinator {
       historyAction: { kind: "none" },
     });
     if (result === "started") return true;
-    if (result === "failed") {
+    if (result === "failed" || result === "skipped") {
       return this.playNextFromHistory(generation, { stopWhenExhausted: false });
     }
     if (!this.isCurrentOperation(generation)) return false;
@@ -811,15 +868,29 @@ export class PlaybackQueueCoordinator {
     generation: number,
     options: PlayItemOptions,
   ): Promise<ItemPlaybackResult> {
-    const { replaceQueue, repeatRestart = false, historyAction = { kind: "append" } } = options;
+    const {
+      replaceQueue,
+      repeatRestart = false,
+      allowSkipped = false,
+      historyAction = { kind: "append" },
+    } = options;
     if (!this.isCurrentOperation(generation)) return "cancelled";
+    if (!(await this.loadTrackPreferences()) || !this.isCurrentOperation(generation))
+      return "cancelled";
+    const shouldSkip = () => !allowSkipped && this.isTrackSkipped(item.trackId);
+    if (shouldSkip()) return "skipped";
 
     const result = await this.attemptPlayback(
       item.trackId,
-      () => this.isCurrentOperation(generation) && (!repeatRestart || this.repeatOneEnabled),
+      () =>
+        this.isCurrentOperation(generation) &&
+        (!repeatRestart || this.repeatOneEnabled) &&
+        !shouldSkip(),
       item.rowKey,
     );
-    if (result.status === "cancelled") return "cancelled";
+    if (result.status === "cancelled") {
+      return this.isCurrentOperation(generation) && shouldSkip() ? "skipped" : "cancelled";
+    }
 
     if (result.status === "failed") {
       if (!this.isCurrentOperation(generation)) return "cancelled";

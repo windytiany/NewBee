@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { createTrackSkipState } from "@/library/trackSkip";
+import { notify } from "@/notification/center";
 import { computed, readonly, ref, watch } from "vue";
 import { PlaybackQueueCoordinator } from "@/playback/queue/coordinator";
 import type { PlaybackQueueSnapshot, QueuePlaybackAttempt } from "@/playback/queue/coordinator";
@@ -36,6 +38,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   const initialQueueSnapshot = restoredQueueSnapshot ?? EMPTY_PLAYBACK_QUEUE_SNAPSHOT;
   const restoredStartRowKey = restoredQueueSnapshot?.currentRowKey ?? null;
   const writeQueueSnapshot = createPlaybackQueueSnapshotWriter(restoredQueueSnapshot);
+  const trackSkip = createTrackSkipState(invokeCommand);
   const playbackState = createPlaybackState(invokeCommand);
   const currentTrack = playbackState.currentTrack;
   const playbackError = ref("");
@@ -207,6 +210,18 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     return playbackState.adoptTransition(track);
   }
 
+  async function loadTrackPreferences(): Promise<boolean> {
+    try {
+      await trackSkip.load();
+      return true;
+    } catch (error) {
+      const message = `读取跳过标记失败：${error instanceof Error ? error.message : String(error)}`;
+      playbackError.value = message;
+      notify({ type: "error", message, key: "track-skip" });
+      return false;
+    }
+  }
+
   const coordinator = new PlaybackQueueCoordinator(
     attemptPlayback,
     (snapshot, persistenceSnapshot) => {
@@ -215,6 +230,8 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       void Promise.resolve().then(synchronizeNextTrack);
     },
     {
+      isTrackSkipped: trackSkip.isSkipped,
+      loadTrackPreferences,
       stopPlayback: playbackState.stopPlayback,
       stopStalePlayback: playbackState.stopStalePlayback,
       finishPlayback: async (playbackId, canFinish) => {
@@ -224,6 +241,8 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     },
   );
   coordinator.restoreQueue(initialQueueSnapshot);
+  watch(trackSkip.skippedTrackIds, () => coordinator.refreshTrackPreferences(), { flush: "sync" });
+  void loadTrackPreferences();
 
   const statusObserver = createPlaybackStatusObserver({
     invokeCommand,
@@ -246,6 +265,8 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     currentRowKey: readonlyCurrentRowKey,
     canStartRestoredQueue,
     restoredStartRowKey,
+    isTrackSkipped: trackSkip.isSkipped,
+    loadTrackPreferences,
     playbackError,
     isCommandPending: isPlaybackCommandPending,
     isSessionCommandPending,
@@ -278,11 +299,15 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     canPlayPrevious: readonlyCanPlayPrevious,
     canPlayNext: readonlyCanPlayNext,
     playbackStartError: playbackState.playbackStartError,
+    skippedTrackIds: trackSkip.skippedTrackIds,
+    isTrackSkipPending: trackSkip.isPending,
   });
 
   return Object.freeze({
     state,
     refreshPlaybackStatus: statusObserver.refresh,
+    setTracksSkipped: trackSkip.setTracksSkipped,
+    loadTrackSkipPreferences: trackSkip.load,
     observePlaybackTransition,
     ...commands,
     removeQueueItems: coordinator.removeQueueItems.bind(coordinator),

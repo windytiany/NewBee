@@ -150,6 +150,20 @@ pub fn remove_track_from_library(
 }
 
 #[tauri::command]
+pub fn list_skipped_track_ids(state: tauri::State<'_, Database>) -> Result<Vec<i64>, String> {
+    state.list_skipped_track_ids()
+}
+
+#[tauri::command]
+pub fn set_tracks_skipped(
+    track_ids: Vec<i64>,
+    skipped: bool,
+    state: tauri::State<'_, Database>,
+) -> Result<(), String> {
+    state.set_tracks_skipped(&track_ids, skipped)
+}
+
+#[tauri::command]
 pub fn get_track(
     track_id: i64,
     state: tauri::State<'_, Database>,

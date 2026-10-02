@@ -128,6 +128,11 @@
         >
           添加到队尾
         </button>
+        <TrackSkipMenuItem
+          :track-ids="contextTargetTrackIds"
+          :disabled="props.isPlaylistActionPending"
+          @close="closeContextMenu(true)"
+        />
         <div class="my-1 border-t border-white/10" role="separator"></div>
         <button
           class="focus-visible:outline-spotify-green w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
@@ -182,6 +187,7 @@ import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
 import type { PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
 import PlaylistTrack from "@/playlist/ui/PlaylistTrack.vue";
 import TrackArtwork from "@/artwork/ui/TrackArtwork.vue";
+import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -357,6 +363,13 @@ function openTrackContextMenu(request: PlaylistTrackContextMenuRequest) {
     payload: { itemKey, targetPlaylistItemIds },
   });
 }
+
+const contextTargetTrackIds = computed(() => {
+  const itemIds = new Set(contextMenu.value?.payload.targetPlaylistItemIds ?? []);
+  return props.tracks
+    .filter((track) => itemIds.has(track.playlistItemId))
+    .map((track) => track.trackId);
+});
 
 function getActionTargetPlaylistItemIds() {
   if (props.isPlaylistActionPending) return null;
