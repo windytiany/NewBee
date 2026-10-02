@@ -188,7 +188,7 @@ const props = withDefaults(
     playlist: Playlist | null;
     coverTrackId?: number | null;
     isCoverPending?: boolean;
-    tracks: PlaylistTrackData[];
+    tracks: readonly PlaylistTrackData[];
     currentRowKey: string | null;
     isLoadingPlaylists: boolean;
     playlistsError: string;

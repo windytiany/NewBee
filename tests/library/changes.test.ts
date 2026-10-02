@@ -12,7 +12,13 @@ const bunRuntime = globalThis as typeof globalThis & {
   Bun: { file: (path: URL) => { text: () => Promise<string> } };
 };
 const outputs = new Map<string, string>();
-for (const path of ["library/changes", "library/scan", "library/usePage", "playlist/usePage"]) {
+for (const path of [
+  "library/changes",
+  "library/scan",
+  "library/usePage",
+  "playlist/usePlaylistState",
+  "playlist/usePage",
+]) {
   const source = await bunRuntime.Bun.file(new URL(`../../src/${path}.ts`, import.meta.url)).text();
   outputs.set(
     path,
@@ -129,6 +135,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   const changes = load<typeof LibraryChanges>("library/changes");
   const scan = load<typeof LibraryScan>("library/scan").useLibraryScan();
   const { useLibraryPage } = load<typeof LibraryPage>("library/usePage");
+  load("playlist/usePlaylistState");
   const { usePlaylistPage } = load<typeof PlaylistPage>("playlist/usePage");
   globalThis.window.addEventListener(changes.LIBRARY_CHANGED_EVENT, () => effects.push("refresh"));
   const activePage = Vue.ref(mode);

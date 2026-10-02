@@ -120,7 +120,7 @@ const props = defineProps<{
   albumsError: string;
   tracksLoading: boolean;
   tracksError: string;
-  playlists: Playlist[];
+  playlists: readonly Playlist[];
   playlistsLoading: boolean;
   playlistsError: string;
   trackActionPending: boolean;

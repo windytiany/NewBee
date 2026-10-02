@@ -200,7 +200,7 @@ const props = defineProps<{
   currentTrackId: number | null;
   tracksLoading: boolean;
   tracksError: string;
-  playlists: Playlist[];
+  playlists: readonly Playlist[];
   playlistsLoading: boolean;
   playlistsError: string;
   trackActionPending: boolean;

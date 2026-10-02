@@ -81,7 +81,7 @@ import type { Playlist } from "@/types/playlist";
 import PlaylistListItem from "@/playlist/ui/PlaylistListItem.vue";
 
 const props = defineProps<{
-  playlists: Playlist[];
+  playlists: readonly Playlist[];
   selectedPlaylistId: number | null;
   isLoading: boolean;
   error: string;

@@ -98,7 +98,7 @@ const props = defineProps<{
   scope: string;
   albumKeys: string[];
   pending: boolean;
-  playlists: Playlist[];
+  playlists: readonly Playlist[];
   playlistsLoading: boolean;
   playlistsError: string;
 }>();

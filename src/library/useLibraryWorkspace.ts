@@ -10,7 +10,7 @@ type DeletionDialog = { show: () => void; close: () => void };
 
 type LibraryWorkspaceOptions = {
   playlists: {
-    readonly playlists: Playlist[];
+    readonly playlists: readonly Playlist[];
     readonly isLoadingPlaylists: boolean;
     readonly playlistsError: string;
   };

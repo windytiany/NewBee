@@ -1,7 +1,6 @@
 // @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { computed, createRenderer, nextTick, ref } from "vue";
-import type { usePlaylistPage } from "@/playlist/usePage";
+import { computed, effectScope, isReadonly, nextTick, ref } from "vue";
 import type { Playlist, PlaylistTrackData } from "@/types/playlist";
 
 type Deferred<Value> = {
@@ -69,8 +68,8 @@ let invokeHandler: (command: string, args?: Record<string, unknown>) => Promise<
 let invokeCalls: Array<{ command: string; args?: Record<string, unknown> }>;
 let addToNextBatches: number[][];
 let addToQueueEndBatches: number[][];
+let enqueueResult: () => Promise<boolean>;
 const mountedApps: Array<{ unmount: () => void }> = [];
-const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 
 mock.module("@tauri-apps/api/core", () => ({
   invoke: (command: string, args?: Record<string, unknown>) => {
@@ -108,7 +107,7 @@ mock.module("@/playback/session", () => ({
     playTracks: async () => true,
     addTracksToNext: async (tracks: readonly { trackId: number }[]) => {
       addToNextBatches.push(tracks.map(({ trackId }) => trackId));
-      return true;
+      return enqueueResult();
     },
     addTracksToQueueEnd: async (tracks: readonly { trackId: number }[]) => {
       addToQueueEndBatches.push(tracks.map(({ trackId }) => trackId));
@@ -117,37 +116,23 @@ mock.module("@/playback/session", () => ({
   }),
 }));
 
-mock.module("@/library/changes", () => ({
-  LIBRARY_CHANGED_EVENT: "library-changed",
-  reportLibraryRemoval: () => {
-    globalThis.window.dispatchEvent(new Event("library-changed"));
-  },
-}));
+const { usePlaylistState: createState } = await import("@/playlist/usePlaylistState");
 
-const { usePlaylistPage: createPlaylistPage } = await import("@/playlist/usePage");
-
-function mountPlaylistPage(active = ref(true)) {
-  let page!: ReturnType<typeof usePlaylistPage>;
-  const renderer = createRenderer<object>({
-    patchProp: () => {},
-    insert: () => {},
-    remove: () => {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText: () => {},
-    setElementText: () => {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
-  const app = renderer.createApp({
-    setup() {
-      page = createPlaylistPage(active);
-      return () => null;
+function createPlaylistState(active = ref(true)) {
+  const available = ref(true);
+  const scope = effectScope();
+  const page = scope.run(() =>
+    createState(
+      computed(() => (!available.value ? "unavailable" : active.value ? "active" : "background")),
+    ),
+  );
+  if (!page) throw new Error("Playlist state was not created.");
+  mountedApps.push({
+    unmount: () => {
+      available.value = false;
+      scope.stop();
     },
   });
-  app.mount({});
-  mountedApps.push(app);
   return page;
 }
 
@@ -175,8 +160,8 @@ function setDefaultInvokeHandler() {
   };
 }
 
-async function mountLoadedPlaylistPage() {
-  const page = mountPlaylistPage();
+async function createLoadedPlaylistState() {
+  const page = createPlaylistState();
   await settleRequests();
   expect(page.selectedPlaylistId.value).toBe(firstPlaylist.id);
   expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
@@ -191,25 +176,83 @@ beforeEach(() => {
   invokeCalls = [];
   addToNextBatches = [];
   addToQueueEndBatches = [];
+  enqueueResult = async () => true;
   setDefaultInvokeHandler();
-  Object.defineProperty(globalThis, "window", {
-    configurable: true,
-    value: new EventTarget(),
-  });
 });
 
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
-  if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
-  else Reflect.deleteProperty(globalThis, "window");
 });
 
-describe("歌单页面操作", () => {
-  it("后台收到媒体库变更时刷新摘要和已选歌单，卸载后停止监听", async () => {
+describe("歌单状态与动作", () => {
+  it("不可用后清除加载状态，强制刷新及迟到查询都不能写回", async () => {
+    const page = createPlaylistState(ref(false));
+    const pending = deferred<unknown>();
+    invokeHandler = async () => pending.promise;
+    const refresh = page.refreshPlaylists(undefined, true);
+    expect(page.isLoadingPlaylists.value).toBe(true);
+    for (const app of mountedApps.splice(0)) app.unmount();
+    expect(page.isLoadingPlaylists.value).toBe(false);
+    pending.resolve([firstPlaylist, secondPlaylist]);
+    await refresh;
+    await page.refreshPlaylists(undefined, true);
+    expect(page.playlists.value).toEqual([]);
+    expect(invokeCalls.map(({ command }) => command)).toEqual(["list_playlists"]);
+  });
+
+  it("不同歌单可并发编辑，所有数据变更结束后才执行合并刷新", async () => {
+    const page = await createLoadedPlaylistState();
+    const firstRename = deferred<unknown>();
+    const secondRename = deferred<unknown>();
+    const renamedFirst = { ...firstPlaylist, name: "Updated first" };
+    const renamedSecond = { ...secondPlaylist, name: "Updated second" };
+    invokeCalls = [];
+    invokeHandler = async (command, args) => {
+      if (command === "rename_playlist") {
+        return args?.playlistId === 1 ? firstRename.promise : secondRename.promise;
+      }
+      if (command === "list_playlists") return [renamedFirst, renamedSecond];
+      if (command === "list_playlist_tracks") return firstPlaylistTracks;
+      return undefined;
+    };
+    const first = page.renamePlaylist(1, renamedFirst.name);
+    const second = page.renamePlaylist(2, renamedSecond.name);
+    expect(page.pendingPlaylistIds.value).toEqual([1, 2]);
+    await page.refreshPlaylists(undefined, true);
+    firstRename.resolve(undefined);
+    await first;
+    expect(page.pendingPlaylistIds.value).toEqual([2]);
+    expect(invokeCalls.map(({ command }) => command)).toEqual([
+      "rename_playlist",
+      "rename_playlist",
+    ]);
+    secondRename.resolve(undefined);
+    await second;
+    await settleRequests();
+    expect(page.pendingPlaylistIds.value).toEqual([]);
+    expect(page.playlists.value).toEqual([renamedFirst, renamedSecond]);
+    expect(invokeCalls.map(({ command }) => command)).toEqual([
+      "rename_playlist",
+      "rename_playlist",
+      "list_playlists",
+      "list_playlist_tracks",
+    ]);
+  });
+
+  it("查询状态只读，调用方不能绕过完整操作修改摘要或条目", async () => {
+    const page = await createLoadedPlaylistState();
+    expect(isReadonly(page.playlists)).toBe(true);
+    expect(isReadonly(page.playlists.value)).toBe(true);
+    expect(isReadonly(page.playlists.value[0])).toBe(true);
+    expect(isReadonly(page.playlistTracks.value)).toBe(true);
+    expect(isReadonly(page.selectedPlaylistId)).toBe(true);
+  });
+
+  it("后台强制刷新摘要和已选歌单，不可用后停止查询", async () => {
     const active = ref(false);
-    const page = mountPlaylistPage(active);
+    const page = createPlaylistState(active);
     expect(invokeCalls).toEqual([]);
-    globalThis.window.dispatchEvent(new Event("library-changed"));
+    await page.refreshPlaylists(undefined, true);
     await settleRequests();
     expect(page.playlists.value).toEqual([firstPlaylist, secondPlaylist]);
     expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
@@ -219,14 +262,14 @@ describe("歌单页面操作", () => {
     ]);
     for (const app of mountedApps.splice(0)) app.unmount();
     const before = invokeCalls.length;
-    globalThis.window.dispatchEvent(new Event("library-changed"));
+    await page.refreshPlaylists(undefined, true);
     await settleRequests();
     expect(invokeCalls).toHaveLength(before);
   });
 
-  it("活跃页切走后仍接收变更，并忽略迟到的旧查询", async () => {
+  it("切换到后台后仍允许强制刷新，并忽略迟到的旧查询", async () => {
     const active = ref(true);
-    const page = mountPlaylistPage(active);
+    const page = createPlaylistState(active);
     await settleRequests();
     active.value = false;
     const stale = deferred<unknown>();
@@ -237,10 +280,11 @@ describe("歌单页面操作", () => {
       if (command === "list_playlist_tracks") return firstPlaylistTracks;
       return undefined;
     };
-    globalThis.window.dispatchEvent(new Event("library-changed"));
-    globalThis.window.dispatchEvent(new Event("library-changed"));
+    const staleRefresh = page.refreshPlaylists(undefined, true);
+    await page.refreshPlaylists(undefined, true);
     await settleRequests();
     stale.resolve([firstPlaylist]);
+    await staleRefresh;
     await settleRequests();
     expect(page.playlists.value).toEqual([renamed]);
     expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
@@ -248,7 +292,7 @@ describe("歌单页面操作", () => {
 
   it("编辑期间的多次变更合并为一次后台刷新，等待回滚完成", async () => {
     const active = ref(true);
-    const page = mountPlaylistPage(active);
+    const page = createPlaylistState(active);
     await settleRequests();
     active.value = false;
     const reorderRequest = deferred<unknown>();
@@ -263,8 +307,8 @@ describe("歌单页面操作", () => {
     expect(page.playlistTracks.value.map(({ playlistItemId }) => playlistItemId)).toEqual([
       203, 202, 201,
     ]);
-    globalThis.window.dispatchEvent(new Event("library-changed"));
-    globalThis.window.dispatchEvent(new Event("library-changed"));
+    await page.refreshPlaylists(undefined, true);
+    await page.refreshPlaylists(undefined, true);
     expect(invokeCalls.slice(before).map(({ command }) => command)).toEqual([
       "reorder_playlist_items",
     ]);
@@ -280,7 +324,7 @@ describe("歌单页面操作", () => {
   });
 
   it("按歌单顺序入队并保留不同条目中的重复歌曲", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
 
     await page.addPlaylistItemsToNext([203, 201, 202]);
     await page.addPlaylistItemsToQueueEnd([203, 201, 202]);
@@ -290,7 +334,7 @@ describe("歌单页面操作", () => {
   });
 
   it("移除失败时保留当前列表和封面来源", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     invokeHandler = async (command) => {
       if (command === "list_playlists") return [firstPlaylist, secondPlaylist];
       if (command === "list_playlist_tracks") return firstPlaylistTracks;
@@ -306,8 +350,58 @@ describe("歌单页面操作", () => {
     expect(page.playlistActionError.value).toContain("database unavailable");
   });
 
+  for (const asError of [false, true]) {
+    it(`条目集合不匹配时回滚并查询真实条目（${asError ? "Error" : "字符串"}）`, async () => {
+      const page = await createLoadedPlaylistState();
+      const remainingTracks = firstPlaylistTracks.filter(
+        ({ playlistItemId }) => playlistItemId !== 202,
+      );
+      const updatedSummary = { ...firstPlaylist, trackCount: 2 };
+      invokeCalls = [];
+      invokeHandler = async (command) => {
+        if (command === "reorder_playlist_items") {
+          const message = "Ordered playlist item IDs must exactly match playlist 1";
+          throw asError ? new Error(message) : message;
+        }
+        if (command === "list_playlists") return [updatedSummary, secondPlaylist];
+        if (command === "list_playlist_tracks") return remainingTracks;
+        return undefined;
+      };
+      await page.reorderPlaylistItems([202, 201, 203]);
+      await settleRequests();
+      expect(invokeCalls.map(({ command }) => command)).toEqual([
+        "reorder_playlist_items",
+        "list_playlists",
+        "list_playlist_tracks",
+      ]);
+      expect(page.playlistTracks.value).toEqual(remainingTracks);
+      expect(page.selectedPlaylist.value?.trackCount).toBe(2);
+      expect(page.coverTrackId.value).toBe(501);
+      expect(page.playlistActionError.value).toContain("must exactly match");
+    });
+  }
+
+  it("入队和数据编辑共用歌单动作锁，完成后才允许编辑", async () => {
+    const page = await createLoadedPlaylistState();
+    const pending = deferred<boolean>();
+    enqueueResult = () => pending.promise;
+    const enqueue = page.addPlaylistItemsToNext([201]);
+    expect(page.pendingPlaylistIds.value).toEqual([1]);
+    expect(page.isPlaylistActionPending.value).toBe(true);
+    const before = invokeCalls.length;
+    expect((await page.renamePlaylist(1, "Blocked")).status).toBe("error");
+    await page.reorderPlaylistItems([202, 201, 203]);
+    await page.removePlaylistItems([201]);
+    expect(invokeCalls).toHaveLength(before);
+    pending.resolve(true);
+    await enqueue;
+    expect(page.pendingPlaylistIds.value).toEqual([]);
+    expect(page.isPlaylistActionPending.value).toBe(false);
+    expect((await page.renamePlaylist(1, "Allowed")).status).toBe("success");
+  });
+
   it("排序失败时回滚列表顺序和 coverTrackId", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     const reorderRequest = deferred<unknown>();
     invokeHandler = async (command) => {
       if (command === "list_playlists") return [firstPlaylist, secondPlaylist];
@@ -330,6 +424,7 @@ describe("歌单页面操作", () => {
     expect(page.coverTrackId.value).toBe(501);
     expect(page.selectedPlaylist.value?.coverTrackId).toBe(501);
     expect(page.playlistActionError.value).toContain("database unavailable");
+    expect(invokeCalls.filter(({ command }) => command === "list_playlists")).toHaveLength(1);
     page.selectPlaylist(secondPlaylist);
     expect(page.playlistActionError.value).toBe("");
   });
@@ -345,7 +440,7 @@ describe("歌单页面操作", () => {
       }
       return undefined;
     };
-    const page = mountPlaylistPage();
+    const page = createPlaylistState();
     await settleRequests();
     expect(
       invokeCalls.some(
@@ -376,7 +471,7 @@ describe("歌单页面操作", () => {
       if (command === "reorder_playlist_items") return reorderRequest.promise;
       return undefined;
     };
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     const reorderPromise = page.reorderPlaylistItems([202, 201, 203]);
     expect(page.coverTrackId.value).toBe(502);
 
@@ -392,7 +487,7 @@ describe("歌单页面操作", () => {
   });
 
   it("重命名会清理名称、保持当前选择且不修改播放队列", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     const renamedPlaylist = { ...firstPlaylist, name: "Renamed" };
     let renameArguments: Record<string, unknown> | undefined;
     invokeHandler = async (command, args) => {
@@ -414,7 +509,7 @@ describe("歌单页面操作", () => {
   });
 
   it("删除非当前歌单保留右侧选择和曲目", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     page.selectPlaylist(secondPlaylist);
     await settleRequests();
     invokeHandler = async () => undefined;
@@ -431,7 +526,7 @@ describe("歌单页面操作", () => {
   });
 
   it("删除当前歌单清空选择而不自动选择相邻歌单", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     invokeHandler = async () => undefined;
 
     const result = await page.deletePlaylist(firstPlaylist.id);
@@ -452,7 +547,7 @@ describe("歌单页面操作", () => {
   });
 
   it("重命名使迟到的旧列表读取失效并保持新上下文", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     const staleRead = deferred<unknown>();
     const renameRequest = deferred<unknown>();
     let listCalls = 0;
@@ -485,7 +580,7 @@ describe("歌单页面操作", () => {
   });
 
   it("迟到的删除结果不会覆盖新选择", async () => {
-    const page = await mountLoadedPlaylistPage();
+    const page = await createLoadedPlaylistState();
     const deleteRequest = deferred<unknown>();
     let serverPlaylists = [firstPlaylist, secondPlaylist];
     invokeHandler = async (command, args) => {
