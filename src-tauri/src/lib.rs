@@ -1,7 +1,7 @@
 mod database;
+mod ingest;
 pub mod lyrics;
 mod playback;
-mod scan;
 mod settings;
 #[cfg(windows)]
 mod system_media;
@@ -12,7 +12,7 @@ mod window_lifecycle;
 pub fn run() {
     tauri::Builder::default()
         .manage(playback::PlaybackState::default())
-        .manage(scan::ScanState::default())
+        .manage(ingest::IngestState::default())
         .setup(|app| {
             use tauri::Manager;
 
@@ -48,9 +48,9 @@ pub fn run() {
             database::commands::add_music_library_directory,
             database::commands::remove_music_library_directory,
             database::commands::migrate_track_paths,
-            scan::scan_music_library,
-            scan::supported_audio_extensions,
-            scan::import::import_music_files,
+            ingest::directory::scan_music_library,
+            ingest::supported_audio_extensions,
+            ingest::files::import_music_files,
             lyrics::get_track_lyrics,
             database::commands::list_album_artists,
             database::commands::list_albums,
