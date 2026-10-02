@@ -6,6 +6,7 @@ mod settings;
 #[cfg(windows)]
 mod system_media;
 mod tray;
+mod window_lifecycle;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -22,6 +23,7 @@ pub fn run() {
             app.manage(settings::SettingsState::load(
                 app_data_dir.join("settings.json"),
             )?);
+            window_lifecycle::initialize(app.handle());
             tray::initialize(app.handle())?;
             #[cfg(windows)]
             if let Err(error) = system_media::initialize(app.handle()) {
@@ -29,19 +31,17 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(tray::on_window_event)
+        .on_window_event(window_lifecycle::on_window_event)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_state_flags(
-                    tauri_plugin_window_state::StateFlags::SIZE
-                        | tauri_plugin_window_state::StateFlags::POSITION
-                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
-                )
+                .with_state_flags(window_lifecycle::STATE_FLAGS)
+                .skip_initial_state("main")
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            window_lifecycle::show_main_window,
             settings::get_settings,
             settings::save_settings,
             database::commands::list_music_library_directories,

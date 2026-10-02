@@ -1,11 +1,14 @@
-use crate::settings::{CloseBehavior, SettingsState};
+use crate::window_lifecycle;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WindowEvent,
+    AppHandle, Emitter, Manager,
 };
 
 fn show_main_window(app: &AppHandle) {
+    if !window_lifecycle::is_ready(app) {
+        return;
+    }
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
@@ -57,23 +60,4 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
     }
     tray.build(app)?;
     Ok(())
-}
-
-pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
-    if window.label() != "main" {
-        return;
-    }
-    let WindowEvent::CloseRequested { api, .. } = event else {
-        return;
-    };
-    api.prevent_close();
-    match window.state::<SettingsState>().close_behavior() {
-        CloseBehavior::Tray => {
-            // Keep the webview alive so queue controls and track transitions keep running.
-            if let Err(error) = window.hide() {
-                eprintln!("Could not hide main window: {error}");
-            }
-        }
-        CloseBehavior::Exit => window.app_handle().exit(0),
-    }
 }
