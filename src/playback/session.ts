@@ -14,6 +14,7 @@ import {
   createPlaybackState,
   type PlaybackCommandInvoker,
   type PlaybackStartFailure,
+  type PlaybackTransition,
 } from "@/playback/state";
 import type { PlaybackDisplayTrack } from "@/types/playbackDisplay";
 
@@ -104,6 +105,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   async function attemptPlayback(
     trackId: number,
     canStart: () => boolean,
+    rowKey: string,
   ): Promise<QueuePlaybackAttempt> {
     while (isPlaybackCommandPending.value) {
       if (!canStart()) return { status: "cancelled" };
@@ -111,7 +113,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     }
     if (!canStart()) return { status: "cancelled" };
 
-    if (!(await playbackState.startTrack(trackId, canStart))) {
+    if (!(await playbackState.startTrack(trackId, canStart, rowKey))) {
       if (!canStart()) return { status: "cancelled" };
       const failure: PlaybackStartFailure = playbackState.consumePlaybackStartFailure() ?? {
         kind: "playback-failed",
@@ -131,11 +133,86 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     return { status: "started", playbackId };
   }
 
+  let preparationRevision = 0;
+  let preparationGeneration = 0;
+  let preparationSignature = "";
+  let preparedSuccessor: { playbackId: number; rowKey: string } | null = null;
+
+  async function synchronizeNextTrack() {
+    const plan = coordinator.gaplessPlan;
+    const signature = JSON.stringify(
+      plan === null ? null : [plan.playbackId, plan.candidates.map((item) => item.rowKey)],
+    );
+    if (signature === preparationSignature) return;
+    preparationSignature = signature;
+    if (
+      plan !== null &&
+      preparedSuccessor?.playbackId === plan.playbackId &&
+      preparedSuccessor.rowKey === plan.candidates[0]?.rowKey
+    )
+      return;
+    preparedSuccessor = null;
+    const generation = ++preparationGeneration;
+    if (plan === null) return;
+    const candidates = plan.candidates.length > 0 ? plan.candidates : [null];
+    for (const item of candidates) {
+      if (generation !== preparationGeneration) return;
+      try {
+        const accepted = await invokeCommand<boolean>("prepare_next_track", {
+          playbackId: plan.playbackId,
+          revision: ++preparationRevision,
+          trackId: item?.trackId ?? null,
+          rowKey: item?.rowKey ?? null,
+        });
+        if (generation !== preparationGeneration) return;
+        if (accepted) {
+          if (item !== null) {
+            preparedSuccessor = { playbackId: plan.playbackId, rowKey: item.rowKey };
+          }
+          return;
+        }
+        // The backend may already have crossed the boundary. Reconcile via status.
+        await statusObserver.refreshAfterCommand();
+        return;
+      } catch (error) {
+        if (generation !== preparationGeneration) return;
+        const message = error instanceof Error ? error.message : String(error);
+        if (item === null) {
+          playbackError.value = `Could not cancel next track: ${message}`;
+          return;
+        }
+        const missingPrefix = "AUDIO_FILE_NOT_FOUND:";
+        coordinator.reportPreparationFailure(item, {
+          kind: message.startsWith(missingPrefix) ? "audio-file-not-found" : "playback-failed",
+          message: message.startsWith(missingPrefix)
+            ? message.slice(missingPrefix.length)
+            : message,
+        });
+      }
+    }
+  }
+
+  function observePlaybackTransition(track: PlaybackTransition): boolean {
+    if (currentTrack.value?.playbackId === track.playbackId) return false;
+    if (currentTrack.value?.playbackId !== track.previousPlaybackId) return false;
+    if (
+      !coordinator.confirmGaplessTransition(
+        track.previousPlaybackId,
+        track.playbackId,
+        track.rowKey,
+        track.trackId,
+      )
+    )
+      return false;
+    return playbackState.adoptTransition(track);
+  }
+
   const coordinator = new PlaybackQueueCoordinator(
     attemptPlayback,
     (snapshot, persistenceSnapshot) => {
       syncQueueState(snapshot);
       writeQueueSnapshot(persistenceSnapshot);
+      void Promise.resolve().then(synchronizeNextTrack);
     },
     {
       stopPlayback: playbackState.stopPlayback,
@@ -155,6 +232,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     isSeeking,
     activeQueueRowKey,
     playbackError,
+    observePlaybackTransition,
     observePlaybackState: (playbackId, isPlaying, hasReachedEnd) =>
       coordinator.observePlaybackState(playbackId, isPlaying, hasReachedEnd),
   });
@@ -205,6 +283,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   return Object.freeze({
     state,
     refreshPlaybackStatus: statusObserver.refresh,
+    observePlaybackTransition,
     ...commands,
     removeQueueItems: coordinator.removeQueueItems.bind(coordinator),
     removeTrackFromQueue: coordinator.removeTrackFromQueue.bind(coordinator),

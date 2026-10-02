@@ -1,6 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { createSystemMediaCommandHandler, type SystemMediaCommand } from "@/playback/systemMedia";
+import type { PlaybackTransition } from "@/playback/state";
 import { PLAYBACK_STATUS_POLL_INTERVAL_MS, usePlaybackSession } from "@/playback/session";
 
 export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Promise<boolean>) {
@@ -10,6 +11,7 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   const selectedPositionMs = ref(0);
   let playbackStatusPoll: ReturnType<typeof globalThis.setInterval> | null = null;
   let unlistenSystemMedia: UnlistenFn | null = null;
+  let unlistenTrackTransition: UnlistenFn | null = null;
   let isUnmounted = false;
   const handleSystemMediaCommand = createSystemMediaCommandHandler({
     isCommandPending: () => session.state.isPlaybackCommandPending.value || isSeeking.value,
@@ -50,6 +52,16 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   }
 
   onMounted(() => {
+    void listen<PlaybackTransition>("playback-track-started", ({ payload }) => {
+      session.observePlaybackTransition(payload);
+    })
+      .then((unlisten) => {
+        if (isUnmounted) unlisten();
+        else unlistenTrackTransition = unlisten;
+      })
+      .catch((error: unknown) => {
+        globalThis.console.error("Could not listen for track transitions.", error);
+      });
     void listen<SystemMediaCommand>("system-media-command", ({ payload }) => {
       void handleSystemMediaCommand(payload).catch((error: unknown) => {
         globalThis.console.error("Could not handle Windows media command.", error);
@@ -72,6 +84,7 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   onUnmounted(() => {
     isUnmounted = true;
     unlistenSystemMedia?.();
+    unlistenTrackTransition?.();
     if (playbackStatusPoll !== null) globalThis.clearInterval(playbackStatusPoll);
   });
 

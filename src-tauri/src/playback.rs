@@ -1,16 +1,23 @@
+mod continuous;
+
 use crate::database::Database;
-use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
+use continuous::{ContinuousPlayback, ContinuousSource, PreparedTrack};
+use rodio::source::UniformSourceIterator;
+use rodio::{
+    ChannelCount, Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, SampleRate, Source,
+};
 use serde::Serialize;
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::State;
+use tauri::{Emitter, Manager, State};
 
 pub struct PlaybackState {
     active: Mutex<Option<ActivePlayback>>,
+    output: Mutex<Option<MixerDeviceSink>>,
     volume: Mutex<u8>,
     next_playback_id: AtomicU64,
 }
@@ -19,6 +26,7 @@ impl Default for PlaybackState {
     fn default() -> Self {
         Self {
             active: Mutex::new(None),
+            output: Mutex::new(None),
             volume: Mutex::new(100),
             next_playback_id: AtomicU64::new(0),
         }
@@ -26,11 +34,10 @@ impl Default for PlaybackState {
 }
 
 struct ActivePlayback {
-    playback_id: u64,
     player: Player,
-    _output: MixerDeviceSink,
-    path: PathBuf,
-    duration: Duration,
+    continuous: ContinuousPlayback,
+    channels: ChannelCount,
+    sample_rate: SampleRate,
 }
 
 #[derive(Serialize)]
@@ -42,15 +49,18 @@ pub struct PlaybackStatus {
     playback_id: Option<u64>,
     position_ms: u64,
     duration_ms: u64,
+    now_playing: Option<NowPlayingTrack>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NowPlayingTrack {
     track_id: i64,
     playback_id: u64,
     title: Option<String>,
     artist: Option<String>,
+    row_key: Option<String>,
+    previous_playback_id: Option<u64>,
 }
 
 const AUDIO_FILE_NOT_FOUND_PREFIX: &str = "AUDIO_FILE_NOT_FOUND:";
@@ -81,14 +91,24 @@ impl PlaybackError {
 pub fn play_track(
     _app: tauri::AppHandle,
     track_id: i64,
+    row_key: Option<String>,
     database: State<'_, Database>,
     state: State<'_, PlaybackState>,
 ) -> Result<NowPlayingTrack, String> {
     let track = database
         .get_track_for_playback(track_id)?
         .ok_or_else(|| format!("Track {track_id} was not found"))?;
-    let playback_id = start_playback(Path::new(&track.path), &state)
+    let now_playing = NowPlayingTrack {
+        track_id,
+        playback_id: state.next_playback_id.fetch_add(1, Ordering::Relaxed) + 1,
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        row_key,
+        previous_playback_id: None,
+    };
+    let prepared = prepare_track(Path::new(&track.path), now_playing.clone())
         .map_err(PlaybackError::into_play_command_message)?;
+    start_playback(prepared, &state, &_app).map_err(PlaybackError::into_message)?;
 
     #[cfg(windows)]
     {
@@ -96,10 +116,9 @@ pub fn play_track(
             .active
             .lock()
             .map_err(|_| "Playback state is unavailable".to_owned())?;
-        if active
-            .as_ref()
-            .is_some_and(|playback| playback.playback_id == playback_id)
-        {
+        if active.as_ref().is_some_and(|playback| {
+            playback.continuous.snapshot().track.playback_id == now_playing.playback_id
+        }) {
             let fallback_title = Path::new(&track.path)
                 .file_stem()
                 .and_then(|name| name.to_str())
@@ -114,12 +133,57 @@ pub fn play_track(
         }
     }
 
-    Ok(NowPlayingTrack {
+    Ok(now_playing)
+}
+
+#[tauri::command]
+pub async fn prepare_next_track(
+    playback_id: u64,
+    revision: u64,
+    track_id: Option<i64>,
+    row_key: Option<String>,
+    database: State<'_, Database>,
+    state: State<'_, PlaybackState>,
+) -> Result<bool, String> {
+    let (continuous, channels, sample_rate) = {
+        let active = state
+            .active
+            .lock()
+            .map_err(|_| "Playback state is unavailable")?;
+        let Some(active) = active.as_ref() else {
+            return Ok(false);
+        };
+        if !active.continuous.reserve(playback_id, revision) {
+            return Ok(false);
+        }
+        (
+            active.continuous.clone(),
+            active.channels,
+            active.sample_rate,
+        )
+    };
+    let Some(track_id) = track_id else {
+        return Ok(true);
+    };
+    let track = database
+        .get_track_for_playback(track_id)?
+        .ok_or_else(|| format!("Track {track_id} was not found"))?;
+    let now_playing = NowPlayingTrack {
         track_id,
-        playback_id,
+        playback_id: state.next_playback_id.fetch_add(1, Ordering::Relaxed) + 1,
         title: track.title,
         artist: track.artist,
+        row_key,
+        previous_playback_id: Some(playback_id),
+    };
+    let next = tauri::async_runtime::spawn_blocking(move || {
+        prepare_track(Path::new(&track.path), now_playing)
+            .map(|track| normalize_track(track, channels, sample_rate))
+            .map_err(PlaybackError::into_play_command_message)
     })
+    .await
+    .map_err(|error| format!("Could not prepare next track: {error}"))??;
+    Ok(continuous.prepare(playback_id, revision, next))
 }
 
 #[tauri::command]
@@ -171,7 +235,7 @@ pub fn resume(_app: tauri::AppHandle, state: State<'_, PlaybackState>) -> Result
         .ok_or_else(|| "No audio is loaded".to_owned())?;
     playback.player.play();
     #[cfg(windows)]
-    crate::system_media::set_playback(&_app, true, !playback.player.empty());
+    crate::system_media::set_playback(&_app, true, !playback.continuous.snapshot().ended);
     Ok(())
 }
 
@@ -185,7 +249,9 @@ pub fn stop_playback(
         .active
         .lock()
         .map_err(|_| "Playback state is unavailable".to_owned())?;
-    let active_playback_id = active.as_ref().map(|playback| playback.playback_id);
+    let active_playback_id = active
+        .as_ref()
+        .map(|playback| playback.continuous.snapshot().track.playback_id);
     if !is_expected_playback_id(active_playback_id, playback_id) {
         return Ok(false);
     }
@@ -208,19 +274,12 @@ pub fn seek_to(position_ms: u64, state: State<'_, PlaybackState>) -> Result<(), 
     let playback = active
         .as_mut()
         .ok_or_else(|| "No audio is loaded".to_owned())?;
-    let position = Duration::from_millis(position_ms.min(duration_ms(playback.duration)));
-
-    if playback.player.empty() {
-        reload_source_at_position(playback, position)?;
-    } else {
-        playback
-            .player
-            .try_seek(position)
-            .map_err(|error| format!("Could not seek in audio: {error}"))?;
-        if playback.player.empty() && position < playback.duration {
-            reload_source_at_position(playback, position)?;
-        }
-    }
+    let snapshot = playback.continuous.snapshot();
+    let position = Duration::from_millis(position_ms.min(duration_ms(snapshot.duration)));
+    playback
+        .player
+        .try_seek(position)
+        .map_err(|error| format!("Could not seek in audio: {error}"))?;
 
     Ok(())
 }
@@ -243,16 +302,12 @@ pub fn playback_status(
             playback_id: None,
             position_ms: 0,
             duration_ms: 0,
+            now_playing: None,
         });
     };
 
-    let has_finished = playback.player.empty();
-    let position = if has_finished {
-        playback.duration
-    } else {
-        playback.player.get_pos().min(playback.duration)
-    };
-    let has_ended = playback_has_ended(has_finished, position, playback.duration);
+    let snapshot = playback.continuous.snapshot();
+    let has_ended = snapshot.ended;
     #[cfg(windows)]
     crate::system_media::set_playback(&_app, true, !playback.player.is_paused() && !has_ended);
 
@@ -260,58 +315,102 @@ pub fn playback_status(
         has_audio: true,
         is_playing: !playback.player.is_paused() && !has_ended,
         has_ended,
-        playback_id: Some(playback.playback_id),
-        position_ms: duration_ms(position),
-        duration_ms: duration_ms(playback.duration),
+        playback_id: Some(snapshot.track.playback_id),
+        position_ms: duration_ms(snapshot.position),
+        duration_ms: duration_ms(snapshot.duration),
+        now_playing: Some(snapshot.track),
     })
 }
 
-fn start_playback(path: &Path, state: &PlaybackState) -> Result<u64, PlaybackError> {
-    let path = path.to_path_buf();
-    let source = open_decoder(&path)?;
+fn prepare_track(path: &Path, track: NowPlayingTrack) -> Result<PreparedTrack, PlaybackError> {
+    let source = open_decoder(path)?;
     let duration = source
         .total_duration()
         .ok_or_else(|| PlaybackError::Other("Could not determine audio duration".to_owned()))?;
-
-    let output = DeviceSinkBuilder::open_default_sink()
-        .map_err(|error| PlaybackError::Other(format!("Could not open audio output: {error}")))?;
-    let volume = state
-        .volume
-        .lock()
-        .map_err(|_| PlaybackError::Other("Playback state is unavailable".to_owned()))?;
-    let mut active = state
-        .active
-        .lock()
-        .map_err(|_| PlaybackError::Other("Playback state is unavailable".to_owned()))?;
-    active.take();
-
-    let playback_id = state.next_playback_id.fetch_add(1, Ordering::Relaxed) + 1;
-    let player = Player::connect_new(output.mixer());
-    player.set_volume(*volume as f32 / 100.0);
-    player.append(source);
-    *active = Some(ActivePlayback {
-        playback_id,
-        player,
-        _output: output,
-        path,
+    Ok(PreparedTrack {
+        track,
         duration,
-    });
-
-    Ok(playback_id)
+        source: Box::new(source),
+    })
 }
 
-fn reload_source_at_position(
-    playback: &mut ActivePlayback,
-    position: Duration,
-) -> Result<(), String> {
-    let source = open_decoder(&playback.path).map_err(PlaybackError::into_message)?;
-    playback.player.clear();
-    playback.player.append(source);
-    playback
-        .player
-        .try_seek(position)
-        .map_err(|error| format!("Could not seek in audio: {error}"))?;
+fn normalize_track(
+    mut track: PreparedTrack,
+    channels: ChannelCount,
+    sample_rate: SampleRate,
+) -> PreparedTrack {
+    track.source = Box::new(UniformSourceIterator::new(
+        track.source,
+        channels,
+        sample_rate,
+    ));
+    track
+}
+
+fn start_playback(
+    prepared: PreparedTrack,
+    state: &PlaybackState,
+    app: &tauri::AppHandle,
+) -> Result<(), PlaybackError> {
+    let unavailable = || PlaybackError::Other("Playback state is unavailable".to_owned());
+    let mut output = state.output.lock().map_err(|_| unavailable())?;
+    if output.is_none() {
+        *output = Some(DeviceSinkBuilder::open_default_sink().map_err(|error| {
+            PlaybackError::Other(format!("Could not open audio output: {error}"))
+        })?);
+    }
+    let output = output.as_ref().unwrap();
+    let channels = output.config().channel_count();
+    let sample_rate = output.config().sample_rate();
+    let volume = state.volume.lock().map_err(|_| unavailable())?;
+    let mut active = state.active.lock().map_err(|_| unavailable())?;
+    if let Some(old) = active.take() {
+        old.player.stop();
+    }
+    let (source, continuous, transitions) =
+        ContinuousSource::new(normalize_track(prepared, channels, sample_rate));
+    let app = app.clone();
+    std::thread::spawn(move || {
+        while let Ok(track) = transitions.recv() {
+            let state = app.state::<PlaybackState>();
+            let Ok(active) = state.active.lock() else {
+                break;
+            };
+            if !active.as_ref().is_some_and(|active| {
+                active.continuous.snapshot().track.playback_id == track.playback_id
+            }) {
+                continue;
+            }
+            #[cfg(windows)]
+            crate::system_media::set_track(
+                &app,
+                &app.state::<Database>(),
+                track.track_id,
+                track.title.as_deref().unwrap_or(""),
+                track.artist.as_deref().unwrap_or(""),
+            );
+            if let Err(error) = app.emit("playback-track-started", &track) {
+                eprintln!("Could not notify track transition: {error}");
+            }
+        }
+    });
+    let player = connect_source(output.mixer(), source, *volume as f32 / 100.0);
+    *active = Some(ActivePlayback {
+        player,
+        continuous,
+        channels,
+        sample_rate,
+    });
     Ok(())
+}
+
+fn connect_source(mixer: &rodio::mixer::Mixer, source: ContinuousSource, volume: f32) -> Player {
+    let (player, queue) = Player::new();
+    player.set_volume(volume);
+    // The mixer must see the real channel count/rate, not an initially empty Player.
+    player.append(source);
+    mixer.add(queue);
+    player
 }
 
 fn open_decoder(path: &Path) -> Result<Decoder<BufReader<File>>, PlaybackError> {
@@ -335,10 +434,6 @@ fn is_expected_playback_id(active_playback_id: Option<u64>, expected_playback_id
     active_playback_id == Some(expected_playback_id)
 }
 
-fn playback_has_ended(is_empty: bool, position: Duration, duration: Duration) -> bool {
-    is_empty || duration_ms(position) >= duration_ms(duration)
-}
-
 fn duration_ms(duration: Duration) -> u64 {
     duration.as_millis().min(u64::MAX as u128) as u64
 }
@@ -346,31 +441,15 @@ fn duration_ms(duration: Duration) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_expected_playback_id, open_decoder, playback_has_ended, PlaybackError,
-        AUDIO_FILE_NOT_FOUND_PREFIX,
+        is_expected_playback_id, open_decoder, PlaybackError, AUDIO_FILE_NOT_FOUND_PREFIX,
     };
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn a_stop_request_only_matches_its_playback_instance() {
         assert!(is_expected_playback_id(Some(12), 12));
         assert!(!is_expected_playback_id(Some(13), 12));
         assert!(!is_expected_playback_id(None, 12));
-    }
-
-    #[test]
-    fn reaching_track_duration_counts_as_ended_before_player_queue_drains() {
-        let duration = Duration::from_secs(30) + Duration::from_micros(500);
-        let seek_position = Duration::from_millis(super::duration_ms(duration));
-
-        assert!(seek_position < duration);
-        assert!(playback_has_ended(false, seek_position, duration));
-        assert!(!playback_has_ended(
-            false,
-            seek_position - Duration::from_millis(1),
-            duration
-        ));
-        assert!(playback_has_ended(true, Duration::ZERO, duration));
     }
 
     #[test]

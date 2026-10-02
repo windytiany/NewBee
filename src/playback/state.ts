@@ -8,6 +8,12 @@ export type NowPlayingTrack = {
   playbackId: number | null;
 };
 
+export type PlaybackTransition = NowPlayingTrack & {
+  playbackId: number;
+  rowKey: string;
+  previousPlaybackId: number;
+};
+
 export type PlaybackStartFailure = {
   kind: "audio-file-not-found" | "playback-failed";
   message: string;
@@ -143,7 +149,18 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     }
   }
 
-  async function startTrack(trackId: number, canStart: () => boolean): Promise<boolean> {
+  function adoptTransition(track: PlaybackTransition) {
+    if (currentTrack.value?.playbackId !== track.previousPlaybackId) return false;
+    currentTrack.value = track;
+    saveCurrentTrack(track);
+    return true;
+  }
+
+  async function startTrack(
+    trackId: number,
+    canStart: () => boolean,
+    rowKey?: string,
+  ): Promise<boolean> {
     if (isPlaybackCommandPending.value || !canStart()) return false;
 
     const commandGeneration = playbackCommandGeneration;
@@ -152,7 +169,9 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     playbackStartError.value = "";
     playbackStartFailure.value = null;
     try {
-      const track = await invokeCommand<NowPlayingTrack>("play_track", { trackId });
+      const args: { trackId: number; rowKey?: string } = { trackId };
+      if (rowKey !== undefined) args.rowKey = rowKey;
+      const track = await invokeCommand<NowPlayingTrack>("play_track", args);
       if (
         track.trackId !== trackId ||
         track.playbackId === null ||
@@ -206,6 +225,7 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     isCommandPending: readonly(isPlaybackCommandPending),
     playbackStartError: readonly(playbackStartError),
     startTrack,
+    adoptTransition,
     stopPlayback,
     stopStalePlayback,
     finishPlayback,

@@ -1,6 +1,6 @@
 import { computed, readonly, ref, watch } from "vue";
 import type { ComputedRef, Ref } from "vue";
-import type { NowPlayingTrack, PlaybackCommandInvoker } from "@/playback/state";
+import type { NowPlayingTrack, PlaybackCommandInvoker, PlaybackTransition } from "@/playback/state";
 
 export type PlaybackStatus = {
   hasAudio: boolean;
@@ -10,7 +10,10 @@ export type PlaybackStatus = {
   durationMs: number;
 };
 
-export type InternalPlaybackStatus = PlaybackStatus & { playbackId: number | null };
+export type InternalPlaybackStatus = PlaybackStatus & {
+  playbackId: number | null;
+  nowPlaying?: PlaybackTransition | null;
+};
 
 type PlaybackStatusObserverOptions = {
   invokeCommand: PlaybackCommandInvoker;
@@ -19,6 +22,7 @@ type PlaybackStatusObserverOptions = {
   isSeeking: Readonly<Ref<boolean>>;
   activeQueueRowKey: Readonly<ComputedRef<string | null>>;
   playbackError: Ref<string>;
+  observePlaybackTransition: (track: PlaybackTransition) => boolean;
   observePlaybackState: (
     playbackId: number,
     isPlaying: boolean,
@@ -72,9 +76,7 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
       return;
     }
 
-    const hasReachedEnd =
-      status.hasEnded || (status.durationMs > 0 && status.positionMs >= status.durationMs);
-    await options.observePlaybackState(status.playbackId, status.isPlaying, hasReachedEnd);
+    await options.observePlaybackState(status.playbackId, status.isPlaying, status.hasEnded);
   }
 
   async function queryPlaybackStatus(force: boolean): Promise<boolean> {
@@ -85,7 +87,9 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
     isStatusUpdatePending.value = true;
     try {
       const status = await options.invokeCommand<InternalPlaybackStatus>("playback_status");
-      if (requestVersion !== statusRequestVersion || !isStatusForCurrentTrack(status)) return false;
+      if (requestVersion !== statusRequestVersion) return false;
+      if (status.nowPlaying) options.observePlaybackTransition(status.nowPlaying);
+      if (!isStatusForCurrentTrack(status)) return false;
 
       internalStatus.value = status;
       await observePlaybackStatus(status);

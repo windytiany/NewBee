@@ -34,8 +34,10 @@ function deferred<T>() {
 function asPlaybackInvoker(
   handler: (command: string, args?: Record<string, unknown>) => Promise<unknown> | unknown,
 ): PlaybackCommandInvoker {
-  return async <T>(command: string, args?: Record<string, unknown>) =>
-    (await handler(command, args)) as T;
+  return async <T>(command: string, args?: Record<string, unknown>) => {
+    if (command === "prepare_next_track") return true as T;
+    return (await handler(command, args)) as T;
+  };
 }
 
 function tracks(...entries: [rowKey: string, trackId: number][]): PlaybackDisplayTrack[] {

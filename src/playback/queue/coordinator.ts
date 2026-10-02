@@ -21,7 +21,11 @@ export type PlaybackQueueSnapshot = {
   canPlayNext: boolean;
 };
 
-type AttemptPlayback = (trackId: number, canStart: () => boolean) => Promise<QueuePlaybackAttempt>;
+type AttemptPlayback = (
+  trackId: number,
+  canStart: () => boolean,
+  rowKey: string,
+) => Promise<QueuePlaybackAttempt>;
 type StopPlayback = (playbackId: number) => Promise<boolean>;
 type StopStalePlayback = (playbackId: number) => Promise<void>;
 type PlaybackQueueCoordinatorOptions = {
@@ -395,6 +399,72 @@ export class PlaybackQueueCoordinator {
     return this.scheduleAdvance(playbackId);
   }
 
+  get gaplessPlan(): { playbackId: number; candidates: PlaybackDisplayTrack[] } | null {
+    const playbackId = this.activePlaybackId;
+    if (playbackId === null) return null;
+    if (this.ignoredEndPlaybackId === playbackId || this.handledEndPlaybackId === playbackId) {
+      return { playbackId, candidates: [] };
+    }
+    const current = this.displayedTracks.find((item) => item.rowKey === this.currentRowKey);
+    if (!current) return { playbackId, candidates: [] };
+    const following = !this.shuffleEnabled
+      ? this.roundTracks.slice(this.currentQueueIndex() + 1)
+      : [
+          ...this.playbackHistory
+            .slice(this.historyIndex + 1)
+            .map((key) => this.findRoundTrack(key))
+            .filter((item): item is QueueTrack => item !== undefined),
+          ...this.remainingCandidates,
+        ];
+    return {
+      playbackId,
+      candidates: (this.repeatOneEnabled ? [current, ...following] : following).map(
+        toPlaybackDisplayTrack,
+      ),
+    };
+  }
+
+  confirmGaplessTransition(
+    previousPlaybackId: number,
+    playbackId: number,
+    rowKey: string,
+    trackId: number,
+  ): boolean {
+    const plan = this.gaplessPlan;
+    if (plan?.playbackId !== previousPlaybackId) return false;
+    const item = plan.candidates.find(
+      (candidate) => candidate.rowKey === rowKey && candidate.trackId === trackId,
+    );
+    if (!item) return false;
+    if (rowKey !== this.currentRowKey) {
+      if (!this.shuffleEnabled) {
+        const index = this.roundTracks.findIndex((track) => track.rowKey === rowKey);
+        this.remainingCandidates = this.roundTracks.slice(index + 1);
+        this.applyPlaybackHistory(item, { kind: "append" });
+      } else {
+        const historyIndex = this.playbackHistory.indexOf(rowKey, this.historyIndex + 1);
+        if (historyIndex >= 0) {
+          this.applyPlaybackHistory(item, { kind: "move", index: historyIndex });
+        } else {
+          const index = this.remainingCandidates.findIndex((track) => track.rowKey === rowKey);
+          this.remainingCandidates = this.remainingCandidates.slice(index + 1);
+          this.applyPlaybackHistory(item, { kind: "append" });
+        }
+      }
+    }
+    this.currentRowKey = rowKey;
+    this.activePlaybackId = playbackId;
+    this.handledEndPlaybackId = null;
+    this.ignoredEndPlaybackId = null;
+    this.publish();
+    return true;
+  }
+
+  reportPreparationFailure(item: PlaybackDisplayTrack, failure: PlaybackStartFailure) {
+    this.failures = [...this.failures, formatFailure(item, failure)];
+    this.publish();
+  }
+
   invalidatePendingAdvance() {
     this.operationGeneration += 1;
   }
@@ -747,6 +817,7 @@ export class PlaybackQueueCoordinator {
     const result = await this.attemptPlayback(
       item.trackId,
       () => this.isCurrentOperation(generation) && (!repeatRestart || this.repeatOneEnabled),
+      item.rowKey,
     );
     if (result.status === "cancelled") return "cancelled";
 

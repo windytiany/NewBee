@@ -1,0 +1,330 @@
+use rodio::{ChannelCount, SampleRate, Source};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
+
+use super::NowPlayingTrack;
+
+pub struct PreparedTrack {
+    pub track: NowPlayingTrack,
+    pub duration: Duration,
+    pub source: Box<dyn Source<Item = f32> + Send>,
+}
+
+#[derive(Clone)]
+pub struct TrackSnapshot {
+    pub track: NowPlayingTrack,
+    pub duration: Duration,
+    pub position: Duration,
+    pub ended: bool,
+}
+
+struct Control {
+    snapshot: TrackSnapshot,
+    revision: u64,
+    next: Option<PreparedTrack>,
+    sample_rate: SampleRate,
+    channels: ChannelCount,
+}
+
+#[derive(Clone)]
+pub struct ContinuousPlayback {
+    control: Arc<Mutex<Control>>,
+    samples: Arc<AtomicU64>,
+}
+
+impl ContinuousPlayback {
+    pub fn snapshot(&self) -> TrackSnapshot {
+        let control = self.control.lock().unwrap();
+        let mut snapshot = control.snapshot.clone();
+        if !snapshot.ended {
+            snapshot.position = Duration::from_secs_f64(
+                self.samples.load(Ordering::Relaxed) as f64
+                    / f64::from(control.channels.get())
+                    / f64::from(control.sample_rate.get()),
+            )
+            .min(snapshot.duration);
+        }
+        snapshot
+    }
+
+    // Reserving first invalidates any old decoder before loading a replacement.
+    pub fn reserve(&self, playback_id: u64, revision: u64) -> bool {
+        let mut control = self.control.lock().unwrap();
+        if control.snapshot.track.playback_id != playback_id || revision <= control.revision {
+            return false;
+        }
+        control.revision = revision;
+        control.next = None;
+        true
+    }
+
+    pub fn prepare(&self, playback_id: u64, revision: u64, next: PreparedTrack) -> bool {
+        let mut control = self.control.lock().unwrap();
+        if control.snapshot.track.playback_id != playback_id || revision != control.revision {
+            return false;
+        }
+        control.next = Some(next);
+        true
+    }
+}
+
+pub struct ContinuousSource {
+    current: PreparedTrack,
+    playback: ContinuousPlayback,
+    transitions: mpsc::Sender<NowPlayingTrack>,
+    exhausted: bool,
+    position_samples: u64,
+}
+
+impl ContinuousSource {
+    pub fn new(
+        current: PreparedTrack,
+    ) -> (Self, ContinuousPlayback, mpsc::Receiver<NowPlayingTrack>) {
+        let (transitions, receiver) = mpsc::channel();
+        let playback = ContinuousPlayback {
+            control: Arc::new(Mutex::new(Control {
+                snapshot: TrackSnapshot {
+                    track: current.track.clone(),
+                    duration: current.duration,
+                    position: Duration::ZERO,
+                    ended: false,
+                },
+                revision: 0,
+                next: None,
+                sample_rate: current.source.sample_rate(),
+                channels: current.source.channels(),
+            })),
+            samples: Arc::new(AtomicU64::new(0)),
+        };
+        (
+            Self {
+                current,
+                playback: playback.clone(),
+                transitions,
+                exhausted: false,
+                position_samples: 0,
+            },
+            playback,
+            receiver,
+        )
+    }
+}
+
+impl Iterator for ContinuousSource {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        loop {
+            if !self.exhausted {
+                if let Some(sample) = self.current.source.next() {
+                    self.position_samples += 1;
+                    self.playback
+                        .samples
+                        .store(self.position_samples, Ordering::Relaxed);
+                    return Some(sample);
+                }
+                self.exhausted = true;
+            }
+
+            let mut control = self.playback.control.lock().unwrap();
+            let Some(mut next) = control.next.take() else {
+                control.snapshot.ended = true;
+                control.snapshot.position = control.snapshot.duration;
+                // Keep the Player alive so pause/resume and seeking still work.
+                return Some(0.0);
+            };
+            next.track.previous_playback_id = Some(self.current.track.playback_id);
+            control.snapshot = TrackSnapshot {
+                track: next.track.clone(),
+                duration: next.duration,
+                position: Duration::ZERO,
+                ended: false,
+            };
+            control.sample_rate = next.source.sample_rate();
+            control.channels = next.source.channels();
+            self.position_samples = 0;
+            self.playback.samples.store(0, Ordering::Relaxed);
+            drop(control);
+            let _ = self.transitions.send(next.track.clone());
+            self.current = next;
+            self.exhausted = false;
+            // Consume the next track in this same call, with no silence between tracks.
+        }
+    }
+}
+
+impl Source for ContinuousSource {
+    fn current_span_len(&self) -> Option<usize> {
+        if self.exhausted {
+            Some(self.channels().get() as usize)
+        } else {
+            self.current.source.current_span_len()
+        }
+    }
+
+    fn channels(&self) -> ChannelCount {
+        self.current.source.channels()
+    }
+
+    fn sample_rate(&self) -> SampleRate {
+        self.current.source.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        None
+    }
+
+    fn try_seek(&mut self, position: Duration) -> Result<(), rodio::source::SeekError> {
+        self.current.source.try_seek(position)?;
+        self.exhausted = false;
+        let mut control = self.playback.control.lock().unwrap();
+        control.snapshot.ended = false;
+        let samples = position.as_secs_f64()
+            * f64::from(self.sample_rate().get())
+            * f64::from(self.channels().get());
+        self.position_samples = samples as u64;
+        self.playback
+            .samples
+            .store(self.position_samples, Ordering::Relaxed);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ContinuousSource, PreparedTrack};
+    use crate::playback::NowPlayingTrack;
+    use rodio::buffer::SamplesBuffer;
+    use rodio::Source;
+    use std::num::{NonZeroU16, NonZeroU32};
+    use std::time::Duration;
+
+    fn track(id: u64, samples: Vec<f32>) -> PreparedTrack {
+        PreparedTrack {
+            track: NowPlayingTrack {
+                track_id: id as i64,
+                playback_id: id,
+                row_key: Some(id.to_string()),
+                previous_playback_id: None,
+                title: None,
+                artist: None,
+            },
+            duration: Duration::from_secs_f64(samples.len() as f64 / 48000.0 / 2.0),
+            source: Box::new(SamplesBuffer::new(
+                NonZeroU16::new(2).unwrap(),
+                NonZeroU32::new(48000).unwrap(),
+                samples,
+            )),
+        }
+    }
+
+    #[test]
+    fn prepared_tracks_join_without_silence_dropped_or_repeated_samples() {
+        let (mut source, playback, transitions) =
+            ContinuousSource::new(track(1, vec![0.1, 0.2, 0.3, 0.4]));
+        assert!(playback.reserve(1, 1));
+        assert!(playback.prepare(1, 1, track(2, vec![0.5, 0.6, 0.7, 0.8])));
+        assert_eq!(
+            source.by_ref().take(8).collect::<Vec<_>>(),
+            vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+        );
+        let transition = transitions.try_recv().unwrap();
+        assert_eq!(transition.playback_id, 2);
+        assert_eq!(transition.previous_playback_id, Some(1));
+        assert_eq!(playback.snapshot().track.playback_id, 2);
+        assert!(!playback.snapshot().ended);
+        assert_eq!(source.next(), Some(0.0));
+        assert!(playback.snapshot().ended);
+    }
+
+    fn wav_track(id: u64, samples: &[i16]) -> PreparedTrack {
+        let data_len = (samples.len() * 2) as u32;
+        let mut wav = Vec::new();
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&48000u32.to_le_bytes());
+        wav.extend_from_slice(&192000u32.to_le_bytes());
+        wav.extend_from_slice(&4u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_len.to_le_bytes());
+        for sample in samples {
+            wav.extend_from_slice(&sample.to_le_bytes());
+        }
+        let byte_len = wav.len() as u64;
+        let decoder = rodio::Decoder::builder()
+            .with_data(std::io::Cursor::new(wav))
+            .with_byte_len(byte_len)
+            .build()
+            .unwrap();
+        let mut prepared = track(id, Vec::new());
+        prepared.duration = decoder.total_duration().unwrap();
+        prepared.source = Box::new(decoder);
+        super::super::normalize_track(
+            prepared,
+            NonZeroU16::new(2).unwrap(),
+            NonZeroU32::new(48000).unwrap(),
+        )
+    }
+
+    #[test]
+    fn decoded_wavs_join_sample_exactly_through_the_player_and_mixer() {
+        let samples = [1024, -1024, 2048, -2048, 4096, -4096, 8192, -8192];
+        let (source, playback, _) = ContinuousSource::new(wav_track(1, &samples[..4]));
+        assert!(playback.reserve(1, 1));
+        assert!(playback.prepare(1, 1, wav_track(2, &samples[4..])));
+        let (mixer, output) =
+            rodio::mixer::mixer(NonZeroU16::new(2).unwrap(), NonZeroU32::new(48000).unwrap());
+        let _player = super::super::connect_source(&mixer, source, 1.0);
+        assert_eq!(
+            output.take(8).collect::<Vec<_>>(),
+            vec![0.03125, -0.03125, 0.0625, -0.0625, 0.125, -0.125, 0.25, -0.25]
+        );
+        assert_eq!(playback.snapshot().track.playback_id, 2);
+    }
+
+    #[test]
+    fn seeking_back_from_the_end_rearms_the_source() {
+        let (mut source, playback, _) =
+            ContinuousSource::new(wav_track(1, &[1024, -1024, 2048, -2048]));
+        source.by_ref().take(5).for_each(drop);
+        assert!(playback.snapshot().ended);
+        source.try_seek(Duration::ZERO).unwrap();
+        assert!(!playback.snapshot().ended);
+        assert_eq!(
+            source.by_ref().take(4).collect::<Vec<_>>(),
+            vec![0.03125, -0.03125, 0.0625, -0.0625]
+        );
+    }
+
+    #[test]
+    fn cancelling_the_reservation_keeps_the_next_track_out_of_the_output() {
+        let (mut source, playback, transitions) = ContinuousSource::new(track(1, vec![0.1, 0.2]));
+        assert!(playback.reserve(1, 1));
+        assert!(playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
+        assert!(playback.reserve(1, 2));
+        assert_eq!(
+            source.by_ref().take(4).collect::<Vec<_>>(),
+            vec![0.1, 0.2, 0.0, 0.0]
+        );
+        assert!(playback.snapshot().ended);
+        assert!(transitions.try_recv().is_err());
+    }
+
+    #[test]
+    fn replacing_a_reservation_never_plays_the_stale_next_track() {
+        let (source, playback, _) = ContinuousSource::new(track(1, vec![0.1, 0.2]));
+        assert!(playback.reserve(1, 1));
+        assert!(playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
+        assert!(playback.reserve(1, 2));
+        assert!(!playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
+        assert!(playback.prepare(1, 2, track(3, vec![0.5, 0.6])));
+        assert_eq!(source.take(4).collect::<Vec<_>>(), vec![0.1, 0.2, 0.5, 0.6]);
+        assert!(!playback.reserve(1, 3));
+    }
+}

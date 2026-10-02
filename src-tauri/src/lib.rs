@@ -56,6 +56,7 @@ pub fn run() {
             database::commands::get_track,
             database::commands::get_track_artwork,
             playback::play_track,
+            playback::prepare_next_track,
             playback::set_volume,
             playback::pause,
             playback::resume,
