@@ -3,59 +3,8 @@
     class="bg-spotify-base fixed inset-x-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-3 text-white sm:px-6"
     @mousedown.left="startDragging"
   >
-    <div ref="brandMenuContainer" class="relative justify-self-start">
-      <button
-        ref="brandButton"
-        aria-controls="brand-menu"
-        aria-haspopup="menu"
-        class="focus-visible:outline-spotify-green rounded text-base font-bold whitespace-nowrap focus-visible:outline-2 sm:text-lg"
-        :aria-expanded="isBrandMenuOpen"
-        type="button"
-        @click.stop="isBrandMenuOpen = !isBrandMenuOpen"
-      >
-        NewBee
-      </button>
-      <div
-        v-if="isBrandMenuOpen"
-        id="brand-menu"
-        class="bg-spotify-interactive absolute top-full left-0 z-50 mt-2 w-48 rounded-lg p-1 shadow-xl ring-1 ring-white/10"
-        role="menu"
-        aria-label="NewBee 菜单"
-      >
-        <button
-          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
-          role="menuitem"
-          type="button"
-          :disabled="!isTauriApp || isImporting"
-          @click="openFileImport"
-        >
-          {{ isImporting ? "正在导入…" : "导入音频文件" }}
-        </button>
-        <button
-          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
-          role="menuitem"
-          type="button"
-          @click="openScanDialog"
-        >
-          扫描文件夹
-        </button>
-        <button
-          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
-          role="menuitem"
-          type="button"
-          @click="openPathMigrationDialog"
-        >
-          路径迁移
-        </button>
-        <button
-          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
-          role="menuitem"
-          type="button"
-          @click="openSettingsDialog"
-        >
-          设置
-        </button>
-      </div>
+    <div class="justify-self-start">
+      <BrandMenu :can-import="isTauriApp" :is-importing="isImporting" @select="onBrandMenuSelect" />
       <LibraryScanDialog ref="libraryScanDialog" />
       <PathMigrationDialog ref="pathMigrationDialog" />
       <SettingsDialog ref="settingsDialog" />
@@ -122,12 +71,13 @@
 
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
+import BrandMenu from "@/navigation/BrandMenu.vue";
 import LibraryScanDialog from "@/library/ui/LibraryScanDialog.vue";
 import PathMigrationDialog from "@/library/ui/PathMigrationDialog.vue";
 import { useLibraryFileImport } from "@/library/fileImport";
 import SettingsDialog from "@/settings/ui/SettingsDialog.vue";
-import { pageNames, type PageName } from "@/navigation/types";
+import { pageNames, type BrandMenuAction, type PageName } from "@/navigation/types";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Maximize, Minus, X } from "@lucide/vue";
 
@@ -139,9 +89,6 @@ const isTauriApp = isTauri();
 const appWindow = isTauriApp ? getCurrentWindow() : null;
 const isMaximized = ref(false);
 const { isImporting, importMusicFiles } = useLibraryFileImport();
-const brandMenuContainer = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
-const brandButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
-const isBrandMenuOpen = ref(false);
 const libraryScanDialog = ref<InstanceType<typeof LibraryScanDialog> | null>(null);
 const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
 const pathMigrationDialog = ref<InstanceType<typeof PathMigrationDialog> | null>(null);
@@ -165,46 +112,21 @@ async function syncMaximizedState() {
   }
 }
 
-async function openFileImport() {
-  isBrandMenuOpen.value = false;
-  await nextTick();
-  brandButton.value?.focus();
-  await importMusicFiles();
-}
-
-async function openScanDialog() {
-  isBrandMenuOpen.value = false;
-  await nextTick();
-  brandButton.value?.focus();
-  libraryScanDialog.value?.show();
-}
-
-async function openPathMigrationDialog() {
-  isBrandMenuOpen.value = false;
-  await nextTick();
-  brandButton.value?.focus();
-  pathMigrationDialog.value?.show();
-}
-
-async function openSettingsDialog() {
-  isBrandMenuOpen.value = false;
-  await nextTick();
-  brandButton.value?.focus();
-  await settingsDialog.value?.show();
-}
-
-function closeBrandMenuOnOutsidePointer(event: InstanceType<typeof globalThis.PointerEvent>) {
-  if (event.target instanceof globalThis.Node && brandMenuContainer.value?.contains(event.target)) {
-    return;
+async function onBrandMenuSelect(action: BrandMenuAction) {
+  switch (action) {
+    case "import":
+      await importMusicFiles();
+      break;
+    case "scan":
+      libraryScanDialog.value?.show();
+      break;
+    case "migrate":
+      pathMigrationDialog.value?.show();
+      break;
+    case "settings":
+      await settingsDialog.value?.show();
+      break;
   }
-  isBrandMenuOpen.value = false;
-}
-
-function closeBrandMenuOnEscape(event: InstanceType<typeof globalThis.KeyboardEvent>) {
-  if (event.key !== "Escape" || !isBrandMenuOpen.value) return;
-
-  isBrandMenuOpen.value = false;
-  brandButton.value?.focus();
 }
 
 function startDragging(event: InstanceType<typeof globalThis.MouseEvent>) {
@@ -236,8 +158,6 @@ async function closeWindow() {
 }
 
 onMounted(async () => {
-  globalThis.document.addEventListener("pointerdown", closeBrandMenuOnOutsidePointer);
-  globalThis.document.addEventListener("keydown", closeBrandMenuOnEscape);
   if (!appWindow) return;
 
   await syncMaximizedState();
@@ -252,8 +172,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  globalThis.document.removeEventListener("pointerdown", closeBrandMenuOnOutsidePointer);
-  globalThis.document.removeEventListener("keydown", closeBrandMenuOnEscape);
   unlistenResize?.();
 });
 </script>

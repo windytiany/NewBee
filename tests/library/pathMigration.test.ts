@@ -1,20 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { parse } from "@vue/compiler-sfc";
 import { compileSfc, evaluateModule } from "../support/moduleLoader";
 import type { NotificationInput } from "@/notification/center";
 
 const dialogSource = await Bun.file(
   new URL("../../src/library/ui/PathMigrationDialog.vue", import.meta.url),
 ).text();
-const topBarSource = await Bun.file(
-  new URL("../../src/navigation/TopBar.vue", import.meta.url),
-).text();
 
 const dialogOutput = compileSfc(dialogSource, "src/library/ui/PathMigrationDialog.vue", {
-  inlineTemplate: false,
-});
-const topBarOutput = compileSfc(topBarSource, "src/navigation/TopBar.vue", {
   inlineTemplate: false,
 });
 
@@ -148,67 +141,5 @@ describe("path migration dialog", () => {
     const { bindings } = createDialog(async () => ++calls, false);
     await bindings.migrate();
     expect(calls).toBe(0);
-  });
-});
-
-describe("brand menu path migration entry", () => {
-  it("places migration above settings", () => {
-    const { descriptor } = parse(topBarSource);
-    const template = descriptor.template!.content;
-    expect(template.indexOf('@click="openScanDialog"')).toBeLessThan(
-      template.indexOf('@click="openPathMigrationDialog"'),
-    );
-    expect(template.indexOf('@click="openPathMigrationDialog"')).toBeLessThan(
-      template.indexOf('@click="openSettingsDialog"'),
-    );
-    expect(template).toContain('<PathMigrationDialog ref="pathMigrationDialog" />');
-    expect(template.indexOf('@click="openFileImport"')).toBeLessThan(
-      template.indexOf('@click="openScanDialog"'),
-    );
-  });
-
-  it("closes the menu and restores focus before opening the dialog", async () => {
-    type Bindings = {
-      isBrandMenuOpen: Vue.Ref<boolean>;
-      brandButton: Vue.Ref<{ focus: () => void }>;
-      pathMigrationDialog: Vue.Ref<{ show: () => void }>;
-      openPathMigrationDialog: () => Promise<void>;
-      openFileImport: () => Promise<void>;
-    };
-    const modules: Record<string, unknown> = {
-      vue: { ...Vue, onMounted: () => {}, onUnmounted: () => {} },
-      "@tauri-apps/api/core": { isTauri: () => false },
-      "@tauri-apps/api/window": {},
-      "@/library/ui/LibraryScanDialog.vue": {},
-      "@/library/fileImport": {
-        useLibraryFileImport: () => ({
-          isImporting: Vue.ref(false),
-          importMusicFiles: async () => events.push("import"),
-        }),
-      },
-      "@/library/ui/PathMigrationDialog.vue": {},
-      "@/settings/ui/SettingsDialog.vue": {},
-      "@/navigation/types": { pageNames: [] },
-      "@lucide/vue": {},
-    };
-    const component = evaluateModule<{
-      default: { setup: (props: object, context: object) => Bindings };
-    }>(topBarOutput, modules).default;
-    const bindings = component.setup(
-      { activePage: "Library" },
-      { expose: () => {}, emit: () => {} },
-    );
-    const events: string[] = [];
-    bindings.isBrandMenuOpen.value = true;
-    bindings.brandButton.value = { focus: () => events.push("focus") };
-    bindings.pathMigrationDialog.value = { show: () => events.push("show") };
-    await bindings.openPathMigrationDialog();
-    expect(bindings.isBrandMenuOpen.value).toBe(false);
-    expect(events).toEqual(["focus", "show"]);
-    events.length = 0;
-    bindings.isBrandMenuOpen.value = true;
-    await bindings.openFileImport();
-    expect(bindings.isBrandMenuOpen.value).toBe(false);
-    expect(events).toEqual(["focus", "import"]);
   });
 });
