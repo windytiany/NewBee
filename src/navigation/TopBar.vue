@@ -34,12 +34,21 @@
           class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
           role="menuitem"
           type="button"
+          @click="openPathMigrationDialog"
+        >
+          路径迁移
+        </button>
+        <button
+          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
+          role="menuitem"
+          type="button"
           @click="openSettingsDialog"
         >
           配置
         </button>
       </div>
       <LibraryScanDialog ref="libraryScanDialog" />
+      <PathMigrationDialog ref="pathMigrationDialog" />
       <SettingsDialog ref="settingsDialog" />
     </div>
 
@@ -106,6 +115,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import LibraryScanDialog from "@/library/ui/LibraryScanDialog.vue";
+import PathMigrationDialog from "@/library/ui/PathMigrationDialog.vue";
 import SettingsDialog from "@/settings/ui/SettingsDialog.vue";
 import { pageNames, type PageName } from "@/types/page";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -123,6 +133,7 @@ const brandButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null
 const isBrandMenuOpen = ref(false);
 const libraryScanDialog = ref<InstanceType<typeof LibraryScanDialog> | null>(null);
 const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
+const pathMigrationDialog = ref<InstanceType<typeof PathMigrationDialog> | null>(null);
 let unlistenResize: (() => void) | undefined;
 
 async function performWindowAction(action: () => Promise<void>, description: string) {
@@ -148,6 +159,13 @@ async function openScanDialog() {
   await nextTick();
   brandButton.value?.focus();
   libraryScanDialog.value?.show();
+}
+
+async function openPathMigrationDialog() {
+  isBrandMenuOpen.value = false;
+  await nextTick();
+  brandButton.value?.focus();
+  pathMigrationDialog.value?.show();
 }
 
 async function openSettingsDialog() {

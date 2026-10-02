@@ -35,6 +35,15 @@ pub fn remove_music_library_directory(
 }
 
 #[tauri::command]
+pub fn migrate_track_paths(
+    old_path: String,
+    new_path: String,
+    state: tauri::State<'_, Database>,
+) -> Result<usize, String> {
+    state.migrate_track_paths(&old_path, &new_path)
+}
+
+#[tauri::command]
 pub fn list_album_artists(
     state: tauri::State<'_, Database>,
 ) -> Result<Vec<AlbumArtistSummary>, String> {

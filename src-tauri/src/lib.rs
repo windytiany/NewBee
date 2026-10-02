@@ -47,6 +47,7 @@ pub fn run() {
             database::commands::list_music_library_directories,
             database::commands::add_music_library_directory,
             database::commands::remove_music_library_directory,
+            database::commands::migrate_track_paths,
             scan::scan_music_library,
             lyrics::get_track_lyrics,
             database::commands::list_album_artists,

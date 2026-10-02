@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 pub(crate) mod commands;
+mod path_migration;
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS tracks (
