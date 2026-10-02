@@ -174,6 +174,9 @@ describe("brand menu path migration entry", () => {
       template.indexOf('@click="openSettingsDialog"'),
     );
     expect(template).toContain('<PathMigrationDialog ref="pathMigrationDialog" />');
+    expect(template.indexOf('@click="openFileImport"')).toBeLessThan(
+      template.indexOf('@click="openScanDialog"'),
+    );
   });
 
   it("closes the menu and restores focus before opening the dialog", async () => {
@@ -182,12 +185,19 @@ describe("brand menu path migration entry", () => {
       brandButton: Vue.Ref<{ focus: () => void }>;
       pathMigrationDialog: Vue.Ref<{ show: () => void }>;
       openPathMigrationDialog: () => Promise<void>;
+      openFileImport: () => Promise<void>;
     };
     const modules: Record<string, unknown> = {
       vue: { ...Vue, onMounted: () => {}, onUnmounted: () => {} },
       "@tauri-apps/api/core": { isTauri: () => false },
       "@tauri-apps/api/window": {},
       "@/library/ui/LibraryScanDialog.vue": {},
+      "@/library/fileImport": {
+        useLibraryFileImport: () => ({
+          isImporting: Vue.ref(false),
+          importMusicFiles: async () => events.push("import"),
+        }),
+      },
       "@/library/ui/PathMigrationDialog.vue": {},
       "@/settings/ui/SettingsDialog.vue": {},
       "@/types/page": { pageNames: [] },
@@ -212,5 +222,10 @@ describe("brand menu path migration entry", () => {
     await bindings.openPathMigrationDialog();
     expect(bindings.isBrandMenuOpen.value).toBe(false);
     expect(events).toEqual(["focus", "show"]);
+    events.length = 0;
+    bindings.isBrandMenuOpen.value = true;
+    await bindings.openFileImport();
+    expect(bindings.isBrandMenuOpen.value).toBe(false);
+    expect(events).toEqual(["focus", "import"]);
   });
 });

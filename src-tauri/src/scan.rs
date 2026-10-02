@@ -14,10 +14,28 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::State;
 
+pub(crate) mod import;
+
+const SUPPORTED_AUDIO_EXTENSIONS: &[&str] = &["mp3", "aac", "m4a", "ogg", "oga", "flac", "wav"];
+
+#[tauri::command]
+pub fn supported_audio_extensions() -> Vec<&'static str> {
+    SUPPORTED_AUDIO_EXTENSIONS.to_vec()
+}
+
 #[derive(Default)]
 pub struct ScanState(Arc<AtomicBool>);
 
-#[derive(Serialize)]
+impl ScanState {
+    fn acquire(&self) -> Result<ScanGuard, String> {
+        self.0
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| "A music library scan or import is already running".to_owned())?;
+        Ok(ScanGuard(Arc::clone(&self.0)))
+    }
+}
+
+#[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanResult {
     added: u64,
@@ -39,14 +57,9 @@ pub async fn scan_music_library(
     app: tauri::AppHandle,
     scan_state: State<'_, ScanState>,
 ) -> Result<ScanResult, String> {
-    scan_state
-        .0
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .map_err(|_| "A music library scan is already running".to_owned())?;
-
-    let scan_flag = Arc::clone(&scan_state.0);
+    let guard = scan_state.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = ScanGuard(scan_flag);
+        let _scan_guard = guard;
         use tauri::Manager;
         let database = app.state::<Database>();
         run_scan(&database)
@@ -57,12 +70,7 @@ pub async fn scan_music_library(
 
 fn run_scan(database: &Database) -> Result<ScanResult, String> {
     let directories = database.list_music_library_directories()?;
-    let mut result = ScanResult {
-        added: 0,
-        updated: 0,
-        skipped: 0,
-        failed: 0,
-    };
+    let mut result = ScanResult::default();
     let mut visited_directories = HashSet::new();
     let mut visited_files = HashSet::new();
 
@@ -181,15 +189,7 @@ fn scan_directory(
                     continue;
                 }
 
-                match read_track(&canonical_file) {
-                    Ok(Some(track)) => match database.upsert_scanned_track(&track) {
-                        Ok(TrackWriteOutcome::Added) => result.added += 1,
-                        Ok(TrackWriteOutcome::Updated) => result.updated += 1,
-                        Err(error) => record_failure(result, &canonical_file, &error),
-                    },
-                    Ok(None) => result.skipped += 1,
-                    Err(error) => record_failure(result, &canonical_file, &error),
-                }
+                import_track(database, &canonical_file, result);
             } else {
                 result.skipped += 1;
             }
@@ -198,13 +198,25 @@ fn scan_directory(
 }
 
 fn has_supported_extension(path: &Path) -> bool {
-    matches!(
-        path.extension()
-            .and_then(|extension| extension.to_str())
-            .map(str::to_ascii_lowercase)
-            .as_deref(),
-        Some("mp3" | "aac" | "m4a" | "ogg" | "oga" | "flac" | "wav")
-    )
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            SUPPORTED_AUDIO_EXTENSIONS
+                .iter()
+                .any(|supported| extension.eq_ignore_ascii_case(supported))
+        })
+}
+
+fn import_track(database: &Database, path: &Path, result: &mut ScanResult) {
+    match read_track(path) {
+        Ok(Some(track)) => match database.upsert_scanned_track(&track) {
+            Ok(TrackWriteOutcome::Added) => result.added += 1,
+            Ok(TrackWriteOutcome::Updated) => result.updated += 1,
+            Err(error) => record_failure(result, path, &error),
+        },
+        Ok(None) => result.skipped += 1,
+        Err(error) => record_failure(result, path, &error),
+    }
 }
 
 fn read_track(path: &Path) -> Result<Option<ScannedTrack>, String> {

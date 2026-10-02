@@ -23,6 +23,15 @@
         aria-label="NewBee 菜单"
       >
         <button
+          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
+          role="menuitem"
+          type="button"
+          :disabled="!isTauriApp || isImporting"
+          @click="openFileImport"
+        >
+          {{ isImporting ? "正在导入…" : "导入音频文件" }}
+        </button>
+        <button
           class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
           role="menuitem"
           type="button"
@@ -116,6 +125,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import LibraryScanDialog from "@/library/ui/LibraryScanDialog.vue";
 import PathMigrationDialog from "@/library/ui/PathMigrationDialog.vue";
+import { useLibraryFileImport } from "@/library/fileImport";
 import SettingsDialog from "@/settings/ui/SettingsDialog.vue";
 import { pageNames, type PageName } from "@/types/page";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -128,6 +138,7 @@ const emit = defineEmits<{
 const isTauriApp = isTauri();
 const appWindow = isTauriApp ? getCurrentWindow() : null;
 const isMaximized = ref(false);
+const { isImporting, importMusicFiles } = useLibraryFileImport();
 const brandMenuContainer = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const brandButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const isBrandMenuOpen = ref(false);
@@ -152,6 +163,13 @@ async function syncMaximizedState() {
   } catch (error) {
     globalThis.console.error("Failed to read the window maximized state.", error);
   }
+}
+
+async function openFileImport() {
+  isBrandMenuOpen.value = false;
+  await nextTick();
+  brandButton.value?.focus();
+  await importMusicFiles();
 }
 
 async function openScanDialog() {
