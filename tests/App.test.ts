@@ -1,12 +1,13 @@
-// @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { compileScript, parse } from "@vue/compiler-sfc";
-import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
+import { compileSfc, evaluateModule } from "./support/moduleLoader";
+import { createHostNode, createHostRenderer } from "./support/hostRenderer";
+import type { HostNode } from "./support/hostRenderer";
 import type { Playlist } from "@/types/playlist";
 import { notifications, notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
-import { loadWorkspaceModules } from "./support/workspaceModules";
+import { loadLibraryWorkspaceModules } from "./library/workspaceModules";
+import { loadPlaylistWorkspaceModules } from "./playlist/workspaceModules";
 
 const playlist: Playlist = {
   id: 7,
@@ -25,13 +26,6 @@ type RemovalResult =
   | { status: "not-deleted"; message: string }
   | { status: "deleted" }
   | { status: "deleted-queue-sync-failed"; message: string };
-type HostNode = {
-  type: string;
-  props: Record<string, unknown>;
-  children: HostNode[];
-  parent: HostNode | null;
-  text: string;
-};
 
 let removalResult: RemovalResult = { status: "deleted" };
 let removalCalls = 0;
@@ -52,15 +46,7 @@ const artistsError = Vue.ref("");
 const activePage = Vue.ref("Library");
 
 async function createComponent(source: string) {
-  const { descriptor } = parse(source, { filename: "src/App.vue" });
-  const compiled = compileScript(descriptor, { id: "app-test", inlineTemplate: true });
-  const output = transpileModule(compiled.content, {
-    compilerOptions: {
-      module: ModuleKind.CommonJS,
-      target: ScriptTarget.ES2022,
-    },
-  }).outputText;
-  const module = { exports: {} as Record<string, unknown> };
+  const output = compileSfc(source, "src/App.vue", { id: "app-test" });
   const useLibraryPage = () => {
     libraryPageCreations += 1;
     return {
@@ -214,60 +200,17 @@ async function createComponent(source: string) {
   ]) {
     modules[name] = defaultModule(passiveComponent);
   }
-  await loadWorkspaceModules(modules);
-  const requireModule = (name: string) => modules[name];
-  new Function("require", "module", "exports", output)(requireModule, module, module.exports);
-  return module.exports.default as Vue.Component;
+  await loadLibraryWorkspaceModules(modules);
+  await loadPlaylistWorkspaceModules(modules);
+  return evaluateModule<{ default: Vue.Component }>(output, modules).default;
 }
 
-const bunRuntime = globalThis as typeof globalThis & {
-  Bun: { file: (path: URL) => { text: () => Promise<string> } };
-};
 const appComponent = await createComponent(
-  await bunRuntime.Bun.file(new URL("../src/App.vue", import.meta.url)).text(),
+  await Bun.file(new URL("../src/App.vue", import.meta.url)).text(),
 );
 
-function createHostNode(type: string, text = ""): HostNode {
-  return { type, props: {}, children: [], parent: null, text };
-}
-
 function mountApp() {
-  const renderer = Vue.createRenderer<HostNode, HostNode>({
-    patchProp: (node, key, _previous, next) => {
-      node.props[key] = next;
-    },
-    insert: (node, parent, anchor) => {
-      if (node.parent) {
-        const oldIndex = node.parent.children.indexOf(node);
-        if (oldIndex >= 0) node.parent.children.splice(oldIndex, 1);
-      }
-      node.parent = parent;
-      const index = anchor ? parent.children.indexOf(anchor) : -1;
-      if (index < 0) parent.children.push(node);
-      else parent.children.splice(index, 0, node);
-    },
-    remove: (node) => {
-      if (!node.parent) return;
-      const index = node.parent.children.indexOf(node);
-      if (index >= 0) node.parent.children.splice(index, 1);
-      node.parent = null;
-    },
-    createElement: (type) => createHostNode(type),
-    createText: (text) => createHostNode("#text", text),
-    createComment: (text) => createHostNode("#comment", text),
-    setText: (node, text) => {
-      node.text = text;
-    },
-    setElementText: (node, text) => {
-      node.text = text;
-      node.children = [];
-    },
-    parentNode: (node) => node.parent,
-    nextSibling: (node) => {
-      if (!node.parent) return null;
-      return node.parent.children[node.parent.children.indexOf(node) + 1] ?? null;
-    },
-  });
+  const renderer = createHostRenderer(createHostNode);
   const root = createHostNode("root");
   const app = renderer.createApp(appComponent);
   app.mount(root);

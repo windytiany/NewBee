@@ -1,12 +1,12 @@
-// @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { compileScript, parse } from "@vue/compiler-sfc";
-import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
+import { compileSfc, evaluateModule } from "../support/moduleLoader";
+import { createHostRenderer, findNode, getTextContent } from "../support/hostRenderer";
 import type { Playlist } from "@/types/playlist";
 import { notifications, notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
-import { loadWorkspaceModules } from "../support/workspaceModules";
+import { loadLibraryWorkspaceModules } from "../library/workspaceModules";
+import { loadPlaylistWorkspaceModules } from "./workspaceModules";
 
 type ManagementResult = { status: "success" } | { status: "error"; message: string };
 class TestDocument {
@@ -62,39 +62,19 @@ function compileComponent(
   id: string,
   modules: Record<string, unknown>,
 ) {
-  const { descriptor } = parse(source, { filename });
-  const compiled = compileScript(descriptor, { id, inlineTemplate: true });
-  const output = transpileModule(compiled.content, {
-    compilerOptions: {
-      module: ModuleKind.CommonJS,
-      target: ScriptTarget.ES2022,
-    },
-  }).outputText;
-  const module = { exports: {} as Record<string, unknown> };
-  new Function("require", "module", "exports", output)(
-    (name: string) => modules[name],
-    module,
-    module.exports,
-  );
-  return module.exports.default as Vue.Component;
+  const output = compileSfc(source, filename, { id });
+  return evaluateModule<{ default: Vue.Component }>(output, modules).default;
 }
 
-const bunRuntime = globalThis as typeof globalThis & {
-  Bun: { file: (path: URL) => { text: () => Promise<string> } };
-};
 const vueModules = { vue: Vue, "@/notification/center": { notify } };
 const renameDialogComponent = compileComponent(
-  await bunRuntime.Bun.file(
-    new URL("../../src/playlist/ui/RenamePlaylistDialog.vue", import.meta.url),
-  ).text(),
+  await Bun.file(new URL("../../src/playlist/ui/RenamePlaylistDialog.vue", import.meta.url)).text(),
   "src/playlist/ui/RenamePlaylistDialog.vue",
   "playlist-rename-dialog-test",
   vueModules,
 );
 const deleteDialogComponent = compileComponent(
-  await bunRuntime.Bun.file(
-    new URL("../../src/playlist/ui/DeletePlaylistDialog.vue", import.meta.url),
-  ).text(),
+  await Bun.file(new URL("../../src/playlist/ui/DeletePlaylistDialog.vue", import.meta.url)).text(),
   "src/playlist/ui/DeletePlaylistDialog.vue",
   "playlist-delete-dialog-test",
   vueModules,
@@ -268,9 +248,10 @@ const appModules: Record<string, unknown> = {
   "@/layout/WorkspaceLayout.vue": { __esModule: true, default: WorkspaceLayout },
   "@/navigation/TopBar.vue": { __esModule: true, default: passiveComponent },
 };
-await loadWorkspaceModules(appModules);
+await loadLibraryWorkspaceModules(appModules);
+await loadPlaylistWorkspaceModules(appModules);
 const appComponent = compileComponent(
-  await bunRuntime.Bun.file(new URL("../../src/App.vue", import.meta.url)).text(),
+  await Bun.file(new URL("../../src/App.vue", import.meta.url)).text(),
   "src/App.vue",
   "playlist-management-app-test",
   appModules,
@@ -321,41 +302,10 @@ function createHostNode(type: string, text = ""): HostNode {
 }
 
 function mountApp() {
-  const renderer = Vue.createRenderer<HostNode, HostNode>({
+  const renderer = createHostRenderer(createHostNode, {
     patchProp: (node, key, _previous, next) => {
       node.props[key] = next;
       if (key === "value") node.value = String(next ?? "");
-    },
-    insert: (node, parent, anchor) => {
-      if (node.parent) {
-        const oldIndex = node.parent.children.indexOf(node);
-        if (oldIndex >= 0) node.parent.children.splice(oldIndex, 1);
-      }
-      node.parent = parent;
-      const index = anchor ? parent.children.indexOf(anchor) : -1;
-      if (index < 0) parent.children.push(node);
-      else parent.children.splice(index, 0, node);
-    },
-    remove: (node) => {
-      if (!node.parent) return;
-      const index = node.parent.children.indexOf(node);
-      if (index >= 0) node.parent.children.splice(index, 1);
-      node.parent = null;
-    },
-    createElement: (type) => createHostNode(type),
-    createText: (text) => createHostNode("#text", text),
-    createComment: (text) => createHostNode("#comment", text),
-    setText: (node, text) => {
-      node.text = text;
-    },
-    setElementText: (node, text) => {
-      node.text = text;
-      node.children = [];
-    },
-    parentNode: (node) => node.parent,
-    nextSibling: (node) => {
-      if (!node.parent) return null;
-      return node.parent.children[node.parent.children.indexOf(node) + 1] ?? null;
     },
   });
   const root = createHostNode("root");
@@ -365,21 +315,8 @@ function mountApp() {
   return root;
 }
 
-function findNode(root: HostNode, predicate: (node: HostNode) => boolean): HostNode | null {
-  if (predicate(root)) return root;
-  for (const child of root.children) {
-    const found = findNode(child, predicate);
-    if (found) return found;
-  }
-  return null;
-}
-
 function findByTestId(root: HostNode, id: string) {
   return findNode(root, (node) => node.props["data-test"] === id);
-}
-
-function getTextContent(node: HostNode): string {
-  return node.text + node.children.map(getTextContent).join("");
 }
 
 function findButtonByText(root: HostNode, text: string) {

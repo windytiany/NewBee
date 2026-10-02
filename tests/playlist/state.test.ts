@@ -1,5 +1,6 @@
-// @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import * as Vue from "vue";
+import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import { computed, effectScope, isReadonly, nextTick, ref } from "vue";
 import type { Playlist, PlaylistTrackData } from "@/types/playlist";
 
@@ -71,14 +72,15 @@ let addToQueueEndBatches: number[][];
 let enqueueResult: () => Promise<boolean>;
 const mountedApps: Array<{ unmount: () => void }> = [];
 
-mock.module("@tauri-apps/api/core", () => ({
+const dependencies: Record<string, unknown> = { vue: Vue };
+dependencies["@tauri-apps/api/core"] = {
   invoke: (command: string, args?: Record<string, unknown>) => {
     invokeCalls.push({ command, args });
     return invokeHandler(command, args);
   },
-}));
+};
 
-mock.module("@/playlist/selection", () => ({
+dependencies["@/playlist/selection"] = {
   usePersistentPlaylistSelection: () => ({
     availablePlaylists,
     selectedPlaylistId,
@@ -100,9 +102,9 @@ mock.module("@/playlist/selection", () => ({
       }
     },
   }),
-}));
+};
 
-mock.module("@/playback/session", () => ({
+dependencies["@/playback/session"] = {
   usePlaybackSession: () => ({
     playTracks: async () => true,
     addTracksToNext: async (tracks: readonly { trackId: number }[]) => {
@@ -114,9 +116,16 @@ mock.module("@/playback/session", () => ({
       return true;
     },
   }),
-}));
+};
 
-const { usePlaylistState: createState } = await import("@/playlist/usePlaylistState");
+const { usePlaylistState: createState } = evaluateModule<
+  typeof import("@/playlist/usePlaylistState")
+>(
+  transpileScript(
+    await Bun.file(new URL("../../src/playlist/usePlaylistState.ts", import.meta.url)).text(),
+  ),
+  dependencies,
+);
 
 function createPlaylistState(active = ref(true)) {
   const available = ref(true);

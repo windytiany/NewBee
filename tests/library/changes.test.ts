@@ -1,16 +1,12 @@
-// @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
+import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import type * as LibraryChanges from "@/library/changes";
 import type * as LibraryScan from "@/library/scan";
 import type * as LibraryPage from "@/library/usePage";
 import type * as PlaylistPage from "@/playlist/usePage";
 import type { NotificationInput } from "@/notification/center";
 
-const bunRuntime = globalThis as typeof globalThis & {
-  Bun: { file: (path: URL) => { text: () => Promise<string> } };
-};
 const outputs = new Map<string, string>();
 for (const path of [
   "library/changes",
@@ -19,13 +15,8 @@ for (const path of [
   "playlist/usePlaylistState",
   "playlist/usePage",
 ]) {
-  const source = await bunRuntime.Bun.file(new URL(`../../src/${path}.ts`, import.meta.url)).text();
-  outputs.set(
-    path,
-    transpileModule(source, {
-      compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    }).outputText,
-  );
+  const source = await Bun.file(new URL(`../../src/${path}.ts`, import.meta.url)).text();
+  outputs.set(path, transpileScript(source));
 }
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
@@ -120,17 +111,9 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     },
   };
   function load<T>(path: string): T {
-    const module = { exports: {} };
-    new Function("require", "module", "exports", outputs.get(path)!)(
-      (name: string) => {
-        if (!(name in modules)) throw new Error(`Missing dependency: ${name}`);
-        return modules[name];
-      },
-      module,
-      module.exports,
-    );
-    modules[`@/${path}`] = module.exports;
-    return module.exports as T;
+    const exports = evaluateModule<T>(outputs.get(path)!, modules);
+    modules[`@/${path}`] = exports;
+    return exports;
   }
   const changes = load<typeof LibraryChanges>("library/changes");
   const scan = load<typeof LibraryScan>("library/scan").useLibraryScan();

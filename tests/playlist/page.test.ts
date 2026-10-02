@@ -1,17 +1,12 @@
-// @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
+import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import type { PlaylistAvailability } from "@/playlist/usePlaylistState";
 import type { usePlaylistPage } from "@/playlist/usePage";
 
-const bunRuntime = globalThis as typeof globalThis & {
-  Bun: { file: (path: URL) => { text: () => Promise<string> } };
-};
-const output = transpileModule(
-  await bunRuntime.Bun.file(new URL("../../src/playlist/usePage.ts", import.meta.url)).text(),
-  { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } },
-).outputText;
+const output = transpileScript(
+  await Bun.file(new URL("../../src/playlist/usePage.ts", import.meta.url)).text(),
+);
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
@@ -42,15 +37,9 @@ function createPage(initialActive: boolean) {
       },
     },
   };
-  const module = { exports: {} as { usePlaylistPage: typeof usePlaylistPage } };
-  new Function("require", "module", "exports", output)(
-    (name: string) => {
-      if (!(name in modules)) throw new Error(`Missing dependency: ${name}`);
-      return modules[name];
-    },
-    module,
-    module.exports,
-  );
+  const { usePlaylistPage: createPlaylistPage } = evaluateModule<{
+    usePlaylistPage: typeof usePlaylistPage;
+  }>(output, modules);
   const renderer = Vue.createRenderer<object>({
     patchProp: () => {},
     insert: () => {},
@@ -66,7 +55,7 @@ function createPage(initialActive: boolean) {
   let page!: ReturnType<typeof usePlaylistPage>;
   const app = renderer.createApp({
     setup() {
-      page = module.exports.usePlaylistPage(active);
+      page = createPlaylistPage(active);
       expect(availability.value).toBe("unavailable");
       return () => null;
     },
@@ -91,7 +80,7 @@ describe("歌单页面 lifecycle adapter", () => {
     const harness = createPage(true);
     harness.active.value = false;
     harness.active.value = true;
-    expect(harness.page).toBe(harness.state);
+    expect<object>(harness.page).toBe(harness.state);
     expect(harness.modes).toEqual(["unavailable", "active", "background", "active"]);
     expect(harness.refreshes).toEqual([]);
   });

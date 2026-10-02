@@ -1,10 +1,9 @@
-// @ts-expect-error Bun provides this built-in test module at runtime; Bun types are not installed here.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import type { LibraryWorkspace } from "@/library/useLibraryWorkspace";
 import { notifications, notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
-import { loadWorkspaceModules } from "../support/workspaceModules";
+import { loadLibraryWorkspaceModules } from "./workspaceModules";
 
 type TrackRemovalResult = Awaited<ReturnType<LibraryWorkspace["page"]["removeTrackFromLibrary"]>>;
 const track = { id: 41, title: "Song", artist: "Artist", album: "Album", durationMs: 100 };
@@ -34,8 +33,6 @@ const page = {
 const modules: Record<string, unknown> = {
   vue: Vue,
   "@/library/usePage": { useLibraryPage: () => page },
-  "@/playlist/usePage": { usePlaylistPage: () => {} },
-  "@/playback/session": { usePlaybackSession: () => {} },
   "@/notification/center": { notify },
   "@/notification/useNotification": { useNotification },
 };
@@ -44,14 +41,10 @@ for (const path of [
   "library/ui/AlbumBrowser.vue",
   "library/ui/DeleteAlbumDialog.vue",
   "library/ui/DeleteTrackDialog.vue",
-  "playlist/ui/PlaylistBrowser.vue",
-  "playlist/ui/CreatePlaylistDialog.vue",
-  "playlist/ui/DeletePlaylistDialog.vue",
-  "playlist/ui/RenamePlaylistDialog.vue",
 ]) {
   modules[`@/${path}`] = passiveComponent;
 }
-await loadWorkspaceModules(modules);
+await loadLibraryWorkspaceModules(modules);
 const { useLibraryWorkspace } = modules[
   "@/library/useLibraryWorkspace"
 ] as typeof import("@/library/useLibraryWorkspace");
