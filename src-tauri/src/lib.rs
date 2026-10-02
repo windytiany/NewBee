@@ -2,8 +2,10 @@ mod database;
 pub mod lyrics;
 mod playback;
 mod scan;
+mod settings;
 #[cfg(windows)]
 mod system_media;
+mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,12 +19,17 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir)?;
             let database_path = app_data_dir.join("music-library.sqlite3");
             app.manage(database::Database::open(database_path)?);
+            app.manage(settings::SettingsState::load(
+                app_data_dir.join("settings.json"),
+            )?);
+            tray::initialize(app.handle())?;
             #[cfg(windows)]
             if let Err(error) = system_media::initialize(app.handle()) {
                 eprintln!("Could not initialize Windows media controls: {error}");
             }
             Ok(())
         })
+        .on_window_event(tray::on_window_event)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -35,6 +42,8 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            settings::get_settings,
+            settings::save_settings,
             database::commands::list_music_library_directories,
             database::commands::add_music_library_directory,
             database::commands::remove_music_library_directory,

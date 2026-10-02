@@ -58,6 +58,22 @@ describe("Windows system media commands", () => {
     expect(calls).toEqual(["toggle", "toggle"]);
   });
 
+  it("toggles playback for tray requests", async () => {
+    const { handle, calls } = createHarness();
+    await handle("toggle");
+    await handle("pause");
+    await handle("toggle");
+    await handle("play");
+    expect(calls).toEqual(["toggle", "toggle", "toggle"]);
+  });
+
+  it("does not toggle from the tray when a status refresh fails", async () => {
+    const harness = createHarness();
+    harness.setRefresh(async () => false);
+    await harness.handle("toggle");
+    expect(harness.calls).toEqual([]);
+  });
+
   it("routes previous and next through the queue and respects its boundaries", async () => {
     const harness = createHarness();
     await harness.handle("previous");
@@ -73,6 +89,7 @@ describe("Windows system media commands", () => {
     const harness = createHarness();
     harness.setPending(true);
     await harness.handle("play");
+    await harness.handle("toggle");
     await harness.handle("next");
     expect(harness.calls).toEqual([]);
   });

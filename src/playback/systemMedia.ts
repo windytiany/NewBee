@@ -1,4 +1,4 @@
-export type SystemMediaCommand = "play" | "pause" | "previous" | "next";
+export type SystemMediaCommand = "play" | "pause" | "toggle" | "previous" | "next";
 
 type SystemMediaActions = {
   isCommandPending: () => boolean;
@@ -24,6 +24,10 @@ export function createSystemMediaCommandHandler(actions: SystemMediaActions) {
           break;
         case "next":
           if (actions.canPlayNext()) await actions.playNext();
+          break;
+        case "toggle":
+          if (!(await actions.refreshStatus()) || actions.isCommandPending()) return;
+          await actions.togglePlayback();
           break;
         case "play":
         case "pause":

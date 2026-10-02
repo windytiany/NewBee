@@ -64,7 +64,7 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
       });
     void listen<SystemMediaCommand>("system-media-command", ({ payload }) => {
       void handleSystemMediaCommand(payload).catch((error: unknown) => {
-        globalThis.console.error("Could not handle Windows media command.", error);
+        globalThis.console.error("Could not handle media command.", error);
       });
     })
       .then((unlisten) => {
@@ -72,7 +72,7 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
         else unlistenSystemMedia = unlisten;
       })
       .catch((error: unknown) => {
-        globalThis.console.error("Could not listen for Windows media commands.", error);
+        globalThis.console.error("Could not listen for media commands.", error);
       });
     void session.refreshPlaybackStatus();
     playbackStatusPoll = globalThis.setInterval(

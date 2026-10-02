@@ -30,8 +30,17 @@
         >
           扫描文件夹
         </button>
+        <button
+          class="focus-visible:outline-spotify-green w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
+          role="menuitem"
+          type="button"
+          @click="openSettingsDialog"
+        >
+          配置
+        </button>
       </div>
       <LibraryScanDialog ref="libraryScanDialog" />
+      <SettingsDialog ref="settingsDialog" />
     </div>
 
     <nav
@@ -97,6 +106,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import LibraryScanDialog from "@/library/ui/LibraryScanDialog.vue";
+import SettingsDialog from "@/settings/ui/SettingsDialog.vue";
 import { pageNames, type PageName } from "@/types/page";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Maximize, Minus, X } from "@lucide/vue";
@@ -112,6 +122,7 @@ const brandMenuContainer = ref<InstanceType<typeof globalThis.HTMLDivElement> | 
 const brandButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const isBrandMenuOpen = ref(false);
 const libraryScanDialog = ref<InstanceType<typeof LibraryScanDialog> | null>(null);
+const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
 let unlistenResize: (() => void) | undefined;
 
 async function performWindowAction(action: () => Promise<void>, description: string) {
@@ -137,6 +148,13 @@ async function openScanDialog() {
   await nextTick();
   brandButton.value?.focus();
   libraryScanDialog.value?.show();
+}
+
+async function openSettingsDialog() {
+  isBrandMenuOpen.value = false;
+  await nextTick();
+  brandButton.value?.focus();
+  await settingsDialog.value?.show();
 }
 
 function closeBrandMenuOnOutsidePointer(event: InstanceType<typeof globalThis.PointerEvent>) {
