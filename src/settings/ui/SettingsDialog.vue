@@ -2,9 +2,11 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { SETTINGS_CHANGED_EVENT, type Settings } from "@/settings/types";
+import { applyTheme, THEMES } from "@/settings/theme";
 
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
+const theme = ref<Settings["theme"]>("spotify");
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const isLoading = ref(false);
@@ -30,6 +32,7 @@ async function show() {
     const settings = await invoke<Settings>("get_settings");
     if (requestId !== loadRequestSequence) return;
     closeBehavior.value = settings.closeBehavior;
+    theme.value = settings.theme;
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
     isLoaded.value = true;
@@ -55,10 +58,12 @@ async function save() {
     await invoke("save_settings", {
       settings: {
         closeBehavior: closeBehavior.value,
+        theme: theme.value,
         albumSortBy: albumSortBy.value,
         albumSortOrder: albumSortOrder.value,
       },
     });
+    applyTheme(theme.value);
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
   } catch (reason) {
@@ -94,6 +99,24 @@ defineExpose({ show });
         </button>
       </header>
       <fieldset :disabled="!isTauriApp || !isLoaded || isLoading || isSaving" class="px-5 py-5">
+        <legend class="sr-only">外观</legend>
+        <label class="flex flex-col gap-2 text-sm font-semibold">
+          主题
+          <select
+            v-model="theme"
+            class="bg-spotify-interactive focus-visible:outline-spotify-green rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
+          >
+            <option v-for="option in THEMES" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+        <p class="text-spotify-muted mt-3 text-xs">保存后立即生效，下次启动时自动恢复。</p>
+      </fieldset>
+      <fieldset
+        :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+        class="border-t border-white/10 px-5 py-5"
+      >
         <legend class="sr-only">关闭窗口时的行为</legend>
         <p id="close-behavior-description" class="mb-3 text-sm font-semibold">关闭窗口时</p>
         <label class="flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3">

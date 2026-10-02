@@ -10,7 +10,7 @@
     >
       <span
         aria-hidden="true"
-        class="from-spotify-interactive text-spotify-muted grid size-12 shrink-0 place-items-center rounded-sm bg-linear-to-br to-[#242424]"
+        class="from-spotify-interactive text-spotify-muted to-app-highlight grid size-12 shrink-0 place-items-center rounded-sm bg-linear-to-br"
       >
         <UserRound class="size-6" />
       </span>

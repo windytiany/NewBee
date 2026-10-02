@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createApp, nextTick } from "vue";
 import App from "@/App.vue";
 import "@/style.css";
+import { restoreTheme } from "@/settings/theme";
 
 globalThis.document.addEventListener(
   "contextmenu",
@@ -17,6 +18,7 @@ async function showMainWindow() {
   if (!isTauri()) return;
 
   try {
+    await restoreTheme();
     await nextTick();
     // nextTick flushes DOM updates; the second frame runs after the first paint.
     await new Promise<void>((resolve) => {

@@ -1,4 +1,7 @@
+import type { Theme } from "@/settings/theme";
+
 export type Settings = {
+  theme: Theme;
   closeBehavior: "tray" | "exit";
   albumSortBy: "name" | "year";
   albumSortOrder: "ascending" | "descending";

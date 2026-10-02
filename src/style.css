@@ -1,8 +1,77 @@
 @import "tailwindcss";
+@import "@fontsource-variable/noto-sans-sc";
+@import "@fontsource-variable/noto-sans-jp";
+
+:root {
+  color-scheme: dark;
+  font-synthesis: none;
+  --app-base: #121212;
+  --app-surface: #181818;
+  --app-interactive: #1f1f1f;
+  --app-accent: #1ed760;
+  --app-text: #ffffff;
+  --app-muted: #b3b3b3;
+  --app-track: #4d4d4d;
+  --app-highlight: #282828;
+  --app-header: #1e1b4b;
+  --app-header-middle: #211a30;
+}
+
+:root[data-theme="tokyoNight"] {
+  --app-base: #1a1b26;
+  --app-surface: #16161e;
+  --app-interactive: #24283b;
+  --app-accent: #7aa2f7;
+  --app-text: #c0caf5;
+  --app-muted: #a9b1d6;
+  --app-track: #414868;
+  --app-highlight: #292e42;
+  --app-header: #283457;
+  --app-header-middle: #24283b;
+}
+
+:root[data-theme="catppuccin"] {
+  --app-base: #1e1e2e;
+  --app-surface: #181825;
+  --app-interactive: #313244;
+  --app-accent: #cba6f7;
+  --app-text: #cdd6f4;
+  --app-muted: #bac2de;
+  --app-track: #585b70;
+  --app-highlight: #45475a;
+  --app-header: #45475a;
+  --app-header-middle: #313244;
+}
+
+@theme inline {
+  --font-sans: "Noto Sans SC Variable", "Noto Sans JP Variable", sans-serif;
+  --color-spotify-base: var(--app-base);
+  --color-spotify-surface: var(--app-surface);
+  --color-spotify-interactive: var(--app-interactive);
+  --color-spotify-green: var(--app-accent);
+  --color-spotify-muted: var(--app-muted);
+  --color-spotify-track: var(--app-track);
+  --color-app-highlight: var(--app-highlight);
+  --color-app-header: var(--app-header);
+  --color-app-header-middle: var(--app-header-middle);
+  /* Existing foreground/overlay utilities share the theme's text color. */
+  --color-white: var(--app-text);
+}
+
+@layer base {
+  body {
+    background-color: var(--app-base);
+    color: var(--app-text);
+  }
+
+  :lang(ja) {
+    font-family: "Noto Sans JP Variable", "Noto Sans SC Variable", sans-serif;
+  }
+}
 
 .sidebar-scrollbars,
 .sidebar-scrollbars * {
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: color-mix(in srgb, var(--app-text) 16%, transparent) transparent;
   scrollbar-width: thin;
 }
 
@@ -20,23 +89,10 @@
 .sidebar-scrollbars::-webkit-scrollbar-thumb,
 .sidebar-scrollbars *::-webkit-scrollbar-thumb {
   border-radius: 9999px;
-  background-color: rgba(255, 255, 255, 0.16);
+  background-color: color-mix(in srgb, var(--app-text) 16%, transparent);
 }
 
 .sidebar-scrollbars::-webkit-scrollbar-thumb:hover,
 .sidebar-scrollbars *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.26);
-}
-
-@theme {
-  --font-sans:
-    "SpotifyMixUI", "CircularSp-Arab", "CircularSp-Hebr", "CircularSp-Cyrl", "CircularSp-Grek",
-    "CircularSp-Deva", "Helvetica Neue", helvetica, arial, "Hiragino Sans",
-    "Hiragino Kaku Gothic ProN", Meiryo, "MS Gothic", sans-serif;
-  --color-spotify-base: #121212;
-  --color-spotify-surface: #181818;
-  --color-spotify-interactive: #1f1f1f;
-  --color-spotify-green: #1ed760;
-  --color-spotify-muted: #b3b3b3;
-  --color-spotify-track: #4d4d4d;
+  background-color: color-mix(in srgb, var(--app-text) 26%, transparent);
 }

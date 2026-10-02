@@ -33,7 +33,7 @@
         "
       >
         <div
-          class="from-spotify-interactive to-spotify-surface grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-linear-to-br via-[#303030] shadow-2xl"
+          class="from-spotify-interactive to-spotify-surface via-app-highlight grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-linear-to-br shadow-2xl"
           :class="{ 'md:w-[min(100cqw,100cqh)]': props.compact && !props.horizontal }"
           :aria-label="artworkUrl ? undefined : '专辑封面占位图'"
           :role="artworkUrl ? undefined : 'img'"

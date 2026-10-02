@@ -94,7 +94,7 @@
       type="button"
       aria-label="恢复歌词跟随"
       title="恢复歌词跟随"
-      class="bg-spotify-interactive text-spotify-muted focus-visible:outline-spotify-green absolute right-4 bottom-4 z-10 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:bg-[#282828] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+      class="bg-spotify-interactive text-spotify-muted focus-visible:outline-spotify-green hover:bg-app-highlight absolute right-4 bottom-4 z-10 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
       @click="returnToCurrentLyric"
     >
       <RefreshCw aria-hidden="true" class="size-5" />

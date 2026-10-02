@@ -4,10 +4,12 @@ import * as Vue from "vue";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import { SETTINGS_CHANGED_EVENT, type Settings } from "@/settings/types";
+import { THEMES } from "@/settings/theme";
 
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
+  theme: Vue.Ref<Settings["theme"]>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
   error: Vue.Ref<string>;
@@ -18,6 +20,7 @@ type DialogBindings = {
   save: () => Promise<void>;
 };
 const defaults: Settings = {
+  theme: "spotify",
   closeBehavior: "tray",
   albumSortBy: "name",
   albumSortOrder: "ascending",
@@ -44,6 +47,7 @@ afterEach(() => {
 
 function createDialog(invoke: (command: string, args?: unknown) => Promise<unknown>) {
   const events: string[] = [];
+  const appliedThemes: Settings["theme"][] = [];
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: { dispatchEvent: (event: Event) => events.push(event.type) },
@@ -55,6 +59,10 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     vue: Vue,
     "@tauri-apps/api/core": { invoke, isTauri: () => true },
     "@/settings/types": { SETTINGS_CHANGED_EVENT },
+    "@/settings/theme": {
+      THEMES,
+      applyTheme: (theme: Settings["theme"]) => appliedThemes.push(theme),
+    },
   };
   new Function("require", "module", "exports", output)(
     (name: string) => modules[name],
@@ -72,7 +80,7 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     },
   };
   bindings.dialogElement.value = element;
-  return { bindings, element, events };
+  return { bindings, element, events, appliedThemes };
 }
 
 function deferred<Value>() {
@@ -84,9 +92,26 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  for (const option of THEMES) {
+    it(`persists and applies ${option.value} only after saving`, async () => {
+      const calls: unknown[] = [];
+      const { bindings, appliedThemes } = createDialog(async (command, args) => {
+        if (command === "get_settings") return defaults;
+        calls.push(args);
+      });
+      await bindings.show();
+      bindings.theme.value = option.value;
+      expect(appliedThemes).toEqual([]);
+      await bindings.save();
+      expect(calls).toEqual([{ settings: { ...defaults, theme: option.value } }]);
+      expect(appliedThemes).toEqual([option.value]);
+    });
+  }
+
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      theme: "tokyoNight",
       closeBehavior: "exit",
       albumSortBy: "year",
       albumSortOrder: "descending",
@@ -97,10 +122,12 @@ describe("settings dialog", () => {
     });
     await bindings.show();
     expect(bindings.closeBehavior.value).toBe("exit");
+    expect(bindings.theme.value).toBe("tokyoNight");
     expect(bindings.albumSortBy.value).toBe("year");
     expect(bindings.albumSortOrder.value).toBe("descending");
     expect(element.open).toBe(true);
     expect(events).toEqual([]);
+    bindings.theme.value = "spotify";
     bindings.closeBehavior.value = "tray";
     bindings.albumSortBy.value = "name";
     bindings.albumSortOrder.value = "ascending";
@@ -115,7 +142,7 @@ describe("settings dialog", () => {
 
   it("cancel does not save or notify and reopening discards unsaved changes", async () => {
     const calls: string[] = [];
-    const { bindings, events } = createDialog(async (command) => {
+    const { bindings, events, appliedThemes } = createDialog(async (command) => {
       calls.push(command);
       return defaults;
     });
@@ -123,8 +150,11 @@ describe("settings dialog", () => {
     bindings.closeBehavior.value = "exit";
     bindings.albumSortBy.value = "year";
     bindings.albumSortOrder.value = "descending";
+    bindings.theme.value = "catppuccin";
     bindings.close();
     await bindings.show();
+    expect(bindings.theme.value).toBe("spotify");
+    expect(appliedThemes).toEqual([]);
     expect(bindings.closeBehavior.value).toBe("tray");
     expect(bindings.albumSortBy.value).toBe("name");
     expect(bindings.albumSortOrder.value).toBe("ascending");
@@ -148,7 +178,7 @@ describe("settings dialog", () => {
   });
 
   it("keeps the dialog open and does not notify after save failures", async () => {
-    const { bindings, element, events } = createDialog(async (command) => {
+    const { bindings, element, events, appliedThemes } = createDialog(async (command) => {
       if (command === "get_settings") return defaults;
       throw new Error("Disk unavailable");
     });
@@ -156,6 +186,7 @@ describe("settings dialog", () => {
     await bindings.save();
     expect(element.open).toBe(true);
     expect(bindings.error.value).toContain("Disk unavailable");
+    expect(appliedThemes).toEqual([]);
     expect(events).toEqual([]);
   });
 
@@ -167,7 +198,12 @@ describe("settings dialog", () => {
     const firstShow = bindings.show();
     bindings.close();
     const secondShow = bindings.show();
-    first.resolve({ closeBehavior: "exit", albumSortBy: "year", albumSortOrder: "descending" });
+    first.resolve({
+      theme: "tokyoNight",
+      closeBehavior: "exit",
+      albumSortBy: "year",
+      albumSortOrder: "descending",
+    });
     await firstShow;
     expect(bindings.isLoading.value).toBe(true);
     expect(bindings.isLoaded.value).toBe(false);

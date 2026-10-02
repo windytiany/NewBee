@@ -26,9 +26,19 @@ pub enum AlbumSortOrder {
     Descending,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Theme {
+    #[default]
+    Spotify,
+    TokyoNight,
+    Catppuccin,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
+    pub theme: Theme,
     pub close_behavior: CloseBehavior,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
@@ -136,6 +146,26 @@ mod tests {
     fn rejects_unknown_album_sorting_values() {
         assert!(serde_json::from_str::<Settings>(r#"{"albumSortBy":"invalid"}"#).is_err());
         assert!(serde_json::from_str::<Settings>(r#"{"albumSortOrder":"invalid"}"#).is_err());
+    }
+
+    #[test]
+    fn theme_defaults_and_round_trips() {
+        let settings: Settings = serde_json::from_str(r#"{"closeBehavior":"exit"}"#).unwrap();
+        assert_eq!(settings.theme, Theme::Spotify);
+        for (theme, name) in [
+            (Theme::Spotify, "spotify"),
+            (Theme::TokyoNight, "tokyoNight"),
+            (Theme::Catppuccin, "catppuccin"),
+        ] {
+            let settings = Settings {
+                theme,
+                ..Settings::default()
+            };
+            let data = serde_json::to_value(&settings).unwrap();
+            assert_eq!(data["theme"], name);
+            assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+        }
+        assert!(serde_json::from_str::<Settings>(r#"{"theme":"invalid"}"#).is_err());
     }
 
     #[test]

@@ -33,7 +33,7 @@
         v-if="track"
         :aria-label="artworkUrl ? undefined : '专辑封面占位图'"
         :role="artworkUrl ? undefined : 'img'"
-        class="mt-3 grid aspect-square w-full place-items-center overflow-hidden bg-linear-to-br from-[#182c68] via-[#10142e] to-[#090a12] text-blue-300/70"
+        class="from-app-header via-app-header-middle to-spotify-surface text-spotify-green/70 mt-3 grid aspect-square w-full place-items-center overflow-hidden bg-linear-to-br"
       >
         <img
           v-if="artworkUrl"

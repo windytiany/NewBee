@@ -12,7 +12,7 @@
   >
     <button
       :aria-label="nextModeLabel[presentation]"
-      class="bg-spotify-interactive text-spotify-muted focus-visible:outline-spotify-green fixed top-16 right-4 z-40 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:bg-[#282828] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-6"
+      class="bg-spotify-interactive text-spotify-muted focus-visible:outline-spotify-green hover:bg-app-highlight fixed top-16 right-4 z-40 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-6"
       :title="nextModeLabel[presentation]"
       type="button"
       @click="cyclePresentation"

@@ -5,7 +5,7 @@
   >
     <template v-if="props.playlist">
       <header
-        class="to-spotify-base shrink-0 bg-linear-to-b from-indigo-950 via-[#211a30] px-5 py-6 sm:px-8 sm:py-8"
+        class="to-spotify-base from-app-header via-app-header-middle shrink-0 bg-linear-to-b px-5 py-6 sm:px-8 sm:py-8"
       >
         <div class="flex items-end gap-5">
           <TrackArtwork
@@ -16,7 +16,7 @@
           >
             <div
               aria-hidden="true"
-              class="grid h-full w-full place-items-center rounded-md bg-linear-to-br from-violet-800 via-indigo-950 to-slate-950"
+              class="from-spotify-green/30 via-app-header-middle to-spotify-surface grid h-full w-full place-items-center rounded-md bg-linear-to-br"
             >
               <DiscAlbum class="size-12 text-white/75 sm:size-16" stroke-width="1.25" />
             </div>

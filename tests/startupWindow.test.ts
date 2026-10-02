@@ -48,6 +48,7 @@ function start(isTauriApp = true) {
     },
     "@/App.vue": { default: {} },
     "@/style.css": {},
+    "@/settings/theme": { restoreTheme: async () => events.push("restore-theme") },
     "@tauri-apps/api/core": {
       isTauri: () => isTauriApp,
       invoke: async (command: string) => {
@@ -79,19 +80,19 @@ describe("startup window visibility", () => {
 
   it("restores and shows only after DOM updates and the first painted frame", async () => {
     const startup = start();
-    expect(startup.events).toEqual(["mount"]);
+    expect(startup.events).toEqual(["mount", "restore-theme"]);
     expect(startup.frames).toHaveLength(0);
     startup.finishRendering();
     await settle();
-    expect(startup.events).toEqual(["mount"]);
+    expect(startup.events).toEqual(["mount", "restore-theme"]);
     expect(startup.frames).toHaveLength(1);
     startup.frames.shift()?.();
     await settle();
-    expect(startup.events).toEqual(["mount"]);
+    expect(startup.events).toEqual(["mount", "restore-theme"]);
     expect(startup.frames).toHaveLength(1);
     startup.frames.shift()?.();
     await settle();
-    expect(startup.events).toEqual(["mount", "show_main_window"]);
+    expect(startup.events).toEqual(["mount", "restore-theme", "show_main_window"]);
   });
 
   it("does not request another restore on subsequent paint frames", async () => {
@@ -102,7 +103,7 @@ describe("startup window visibility", () => {
     startup.frames.shift()?.();
     await settle();
     expect(startup.frames).toHaveLength(0);
-    expect(startup.events).toEqual(["mount", "show_main_window"]);
+    expect(startup.events).toEqual(["mount", "restore-theme", "show_main_window"]);
   });
 
   it("keeps browser preview independent of desktop window APIs", async () => {
