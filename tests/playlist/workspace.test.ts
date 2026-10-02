@@ -6,6 +6,7 @@ import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import type { Playlist } from "@/types/playlist";
 import { notifications, notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
+import { loadWorkspaceModules } from "../support/workspaceModules";
 
 type ManagementResult = { status: "success" } | { status: "error"; message: string };
 class TestDocument {
@@ -84,7 +85,7 @@ const bunRuntime = globalThis as typeof globalThis & {
 const vueModules = { vue: Vue, "@/notification/center": { notify } };
 const renameDialogComponent = compileComponent(
   await bunRuntime.Bun.file(
-    new URL("../src/playlist/ui/RenamePlaylistDialog.vue", import.meta.url),
+    new URL("../../src/playlist/ui/RenamePlaylistDialog.vue", import.meta.url),
   ).text(),
   "src/playlist/ui/RenamePlaylistDialog.vue",
   "playlist-rename-dialog-test",
@@ -92,7 +93,7 @@ const renameDialogComponent = compileComponent(
 );
 const deleteDialogComponent = compileComponent(
   await bunRuntime.Bun.file(
-    new URL("../src/playlist/ui/DeletePlaylistDialog.vue", import.meta.url),
+    new URL("../../src/playlist/ui/DeletePlaylistDialog.vue", import.meta.url),
   ).text(),
   "src/playlist/ui/DeletePlaylistDialog.vue",
   "playlist-delete-dialog-test",
@@ -221,6 +222,9 @@ const appModules: Record<string, unknown> = {
   "@/notification/ui/NotificationHost.vue": { __esModule: true, default: passiveComponent },
   "@/navigation/activePage": { usePersistentActivePage: () => ({ activePage }) },
   "@/library/usePage": { useLibraryPage: emptyLibraryPage },
+  "@/playback/session": {
+    usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
+  },
   "@/playlist/usePage": {
     usePlaylistPage: () => ({
       playlists,
@@ -254,6 +258,7 @@ const appModules: Record<string, unknown> = {
   "@/playback/ui/PlaybackBar.vue": { __esModule: true, default: passiveComponent },
   "@/library/ui/AlbumBrowser.vue": { __esModule: true, default: passiveComponent },
   "@/library/ui/DeleteTrackDialog.vue": { __esModule: true, default: passiveComponent },
+  "@/library/ui/DeleteAlbumDialog.vue": { __esModule: true, default: passiveComponent },
   "@/library/ui/ArtistList.vue": { __esModule: true, default: passiveComponent },
   "@/playlist/ui/CreatePlaylistDialog.vue": { __esModule: true, default: passiveComponent },
   "@/playlist/ui/DeletePlaylistDialog.vue": { __esModule: true, default: deleteDialogComponent },
@@ -263,8 +268,9 @@ const appModules: Record<string, unknown> = {
   "@/layout/WorkspaceLayout.vue": { __esModule: true, default: WorkspaceLayout },
   "@/navigation/TopBar.vue": { __esModule: true, default: passiveComponent },
 };
+await loadWorkspaceModules(appModules);
 const appComponent = compileComponent(
-  await bunRuntime.Bun.file(new URL("../src/App.vue", import.meta.url)).text(),
+  await bunRuntime.Bun.file(new URL("../../src/App.vue", import.meta.url)).text(),
   "src/App.vue",
   "playlist-management-app-test",
   appModules,
@@ -461,7 +467,7 @@ afterEach(() => {
   }
 });
 
-describe("App 歌单管理", () => {
+describe("歌单 workspace 管理", () => {
   it("空名称通过 toast 校验，保留输入焦点和 aria-invalid", async () => {
     let renameCalls = 0;
     renameAction = async () => {
@@ -580,6 +586,51 @@ describe("App 歌单管理", () => {
     expect(findByTestId(root, "right-playlist")?.props["data-playlist-id"]).toBe("none");
     expect(focusedNode?.props["data-test"]).toBe("playlist-item-2");
     expect(queueMutationCalls).toEqual([]);
+  });
+
+  it("切页关闭管理对话框且忽略迟到的操作结果", async () => {
+    let resolveRename!: (result: ManagementResult) => void;
+    renameAction = () =>
+      new Promise((resolve) => {
+        resolveRename = resolve;
+      });
+    const root = mountApp();
+    requestRename(root, secondPlaylist.id);
+    await settleApp();
+    const input = findNode(root, (node) => node.props.id === "rename-playlist-name");
+    if (!input) throw new Error("Rename dialog was not rendered.");
+    setInputValue(input, "Pending rename");
+    submitRename(root);
+    await Vue.nextTick();
+    activePage.value = "Playing";
+    await settleApp();
+    expect(findNode(root, (node) => node.type === "dialog" && node.open)).toBeNull();
+    resolveRename({ status: "error", message: "late failure" });
+    await settleApp();
+    expect(notifications.items.value).toEqual([]);
+    activePage.value = "Playlist";
+    await settleApp();
+    expect(findNode(root, (node) => node.type === "dialog" && node.open)).toBeNull();
+    expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
+  });
+
+  it("管理目标从歌单目录消失时关闭对话框并恢复相邻行焦点", async () => {
+    const root = mountApp();
+    requestRename(root, secondPlaylist.id);
+    await settleApp();
+    playlists.value = playlists.value.filter(({ id }) => id !== secondPlaylist.id);
+    await settleApp();
+    expect(findNode(root, (node) => node.type === "dialog" && node.open)).toBeNull();
+    expect(focusedNode?.props["data-test"]).toBe("playlist-item-3");
+    expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
+  });
+
+  it("待处理歌单不能打开管理对话框", async () => {
+    const root = mountApp();
+    pendingPlaylistIds.value = [secondPlaylist.id];
+    requestRename(root, secondPlaylist.id);
+    await settleApp();
+    expect(findNode(root, (node) => node.type === "dialog" && node.open)).toBeNull();
   });
 
   it("迟到的旧操作错误不会污染新的对话框上下文", async () => {

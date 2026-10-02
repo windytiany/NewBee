@@ -6,6 +6,7 @@ import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 import type { Playlist } from "@/types/playlist";
 import { notifications, notify } from "@/notification/center";
 import { useNotification } from "@/notification/useNotification";
+import { loadWorkspaceModules } from "./support/workspaceModules";
 
 const playlist: Playlist = {
   id: 7,
@@ -37,6 +38,10 @@ let removalCalls = 0;
 let playlistRefreshCalls = 0;
 let dialogShowCalls = 0;
 let dialogCloseCalls = 0;
+let libraryPageCreations = 0;
+let playlistPageCreations = 0;
+let layoutMounts = 0;
+let layoutUnmounts = 0;
 const mountedApps: Array<{ unmount: () => void }> = [];
 const libraryTrackActionError = Vue.ref("");
 const libraryTrackActionMessage = Vue.ref("");
@@ -46,7 +51,7 @@ const playlistActionError = Vue.ref("");
 const artistsError = Vue.ref("");
 const activePage = Vue.ref("Library");
 
-function createComponent(source: string) {
+async function createComponent(source: string) {
   const { descriptor } = parse(source, { filename: "src/App.vue" });
   const compiled = compileScript(descriptor, { id: "app-test", inlineTemplate: true });
   const output = transpileModule(compiled.content, {
@@ -56,68 +61,74 @@ function createComponent(source: string) {
     },
   }).outputText;
   const module = { exports: {} as Record<string, unknown> };
-  const useLibraryPage = () => ({
-    artists: Vue.ref([]),
-    albums: Vue.ref([]),
-    tracks: Vue.ref([track]),
-    isLoadingArtists: Vue.ref(false),
-    isLoadingAlbums: Vue.ref(false),
-    isLoadingTracks: Vue.ref(false),
-    artistsError,
-    albumsError: Vue.ref(""),
-    tracksError: Vue.ref(""),
-    isTrackActionPending: libraryTrackActionPending,
-    trackActionError: libraryTrackActionError,
-    trackActionMessage: libraryTrackActionMessage,
-    trackActionMessageType: libraryTrackActionMessageType,
-    currentTrack: Vue.ref(null),
-    activeQueueRowKey: Vue.ref(null),
-    selectedGroup: Vue.ref({ albumArtist: "Artist", albumCount: 1 }),
-    selectedAlbum: Vue.ref({ albumArtist: "Artist", album: "Album" }),
-    selectArtist: () => {},
-    selectAlbum: () => {},
-    playTrackFromLibrary: () => {},
-    playAlbumFromLibrary: () => {},
-    addTracksToNext: () => {},
-    addTracksToQueueEnd: () => {},
-    addTracksToPlaylist: async () => ({ successfulTrackIds: [], failures: [] }),
-    removeTrackFromLibrary: async () => {
-      removalCalls += 1;
-      if (removalResult.status === "not-deleted") {
-        libraryTrackActionError.value = removalResult.message;
-      } else if (removalResult.status === "deleted-queue-sync-failed") {
-        libraryTrackActionError.value = removalResult.message;
-      }
-      return removalResult;
-    },
-  });
-  const usePlaylistPage = () => ({
-    playlists: Vue.ref([playlist]),
-    selectedPlaylistId: Vue.ref(playlist.id),
-    selectedPlaylist: Vue.ref(playlist),
-    playlistTracks: Vue.ref([]),
-    isLoadingPlaylists: Vue.ref(false),
-    isLoadingPlaylistTracks: Vue.ref(false),
-    pendingPlaylistIds: Vue.ref([]),
-    playlistsError: Vue.ref(""),
-    playlistTracksError: Vue.ref(""),
-    isPlaylistActionPending: Vue.ref(false),
-    playlistActionError,
-    coverTrackId: Vue.ref(playlist.coverTrackId),
-    isCoverPending: Vue.ref(false),
-    selectPlaylist: () => {},
-    renamePlaylist: async () => ({ status: "success" }),
-    deletePlaylist: async () => ({ status: "success" }),
-    playTrackFromPlaylist: () => {},
-    playPlaylistFromPage: () => {},
-    addPlaylistItemsToNext: () => {},
-    addPlaylistItemsToQueueEnd: () => {},
-    removePlaylistItems: () => {},
-    reorderPlaylistItems: () => {},
-    refreshPlaylists: async () => {
-      playlistRefreshCalls += 1;
-    },
-  });
+  const useLibraryPage = () => {
+    libraryPageCreations += 1;
+    return {
+      artists: Vue.ref([]),
+      albums: Vue.ref([]),
+      tracks: Vue.ref([track]),
+      isLoadingArtists: Vue.ref(false),
+      isLoadingAlbums: Vue.ref(false),
+      isLoadingTracks: Vue.ref(false),
+      artistsError,
+      albumsError: Vue.ref(""),
+      tracksError: Vue.ref(""),
+      isTrackActionPending: libraryTrackActionPending,
+      trackActionError: libraryTrackActionError,
+      trackActionMessage: libraryTrackActionMessage,
+      trackActionMessageType: libraryTrackActionMessageType,
+      currentTrack: Vue.ref(null),
+      activeQueueRowKey: Vue.ref(null),
+      selectedGroup: Vue.ref({ albumArtist: "Artist", albumCount: 1 }),
+      selectedAlbum: Vue.ref({ albumArtist: "Artist", album: "Album" }),
+      selectArtist: () => {},
+      selectAlbum: () => {},
+      playTrackFromLibrary: () => {},
+      playAlbumFromLibrary: () => {},
+      addTracksToNext: () => {},
+      addTracksToQueueEnd: () => {},
+      addTracksToPlaylist: async () => ({ successfulTrackIds: [], failures: [] }),
+      removeTrackFromLibrary: async () => {
+        removalCalls += 1;
+        if (removalResult.status === "not-deleted") {
+          libraryTrackActionError.value = removalResult.message;
+        } else if (removalResult.status === "deleted-queue-sync-failed") {
+          libraryTrackActionError.value = removalResult.message;
+        }
+        return removalResult;
+      },
+    };
+  };
+  const usePlaylistPage = () => {
+    playlistPageCreations += 1;
+    return {
+      playlists: Vue.ref([playlist]),
+      selectedPlaylistId: Vue.ref(playlist.id),
+      selectedPlaylist: Vue.ref(playlist),
+      playlistTracks: Vue.ref([]),
+      isLoadingPlaylists: Vue.ref(false),
+      isLoadingPlaylistTracks: Vue.ref(false),
+      pendingPlaylistIds: Vue.ref([]),
+      playlistsError: Vue.ref(""),
+      playlistTracksError: Vue.ref(""),
+      isPlaylistActionPending: Vue.ref(false),
+      playlistActionError,
+      coverTrackId: Vue.ref(playlist.coverTrackId),
+      isCoverPending: Vue.ref(false),
+      selectPlaylist: () => {},
+      renamePlaylist: async () => ({ status: "success" }),
+      deletePlaylist: async () => ({ status: "success" }),
+      playTrackFromPlaylist: () => {},
+      playPlaylistFromPage: () => {},
+      addPlaylistItemsToNext: () => {},
+      addPlaylistItemsToQueueEnd: () => {},
+      removePlaylistItems: () => {},
+      reorderPlaylistItems: () => {},
+      refreshPlaylists: async () => {
+        playlistRefreshCalls += 1;
+      },
+    };
+  };
   const passiveComponent = Vue.defineComponent({ setup: () => () => null });
   const AlbumBrowser = Vue.defineComponent({
     props: ["trackActionError"],
@@ -162,6 +173,12 @@ function createComponent(source: string) {
   });
   const WorkspaceLayout = Vue.defineComponent({
     setup(_, { slots }) {
+      Vue.onMounted(() => {
+        layoutMounts += 1;
+      });
+      Vue.onUnmounted(() => {
+        layoutUnmounts += 1;
+      });
       return () => Vue.h("main", slots.center?.());
     },
   });
@@ -176,6 +193,9 @@ function createComponent(source: string) {
     },
     "@/library/usePage": { useLibraryPage },
     "@/playlist/usePage": { usePlaylistPage },
+    "@/playback/session": {
+      usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
+    },
     "@/library/ui/AlbumBrowser.vue": defaultModule(AlbumBrowser),
     "@/library/ui/DeleteTrackDialog.vue": defaultModule(DeleteTrackDialog),
     "@/layout/WorkspaceLayout.vue": defaultModule(WorkspaceLayout),
@@ -184,6 +204,7 @@ function createComponent(source: string) {
     "@/playing/PlayingPage.vue",
     "@/playback/ui/PlaybackBar.vue",
     "@/library/ui/ArtistList.vue",
+    "@/library/ui/DeleteAlbumDialog.vue",
     "@/playlist/ui/CreatePlaylistDialog.vue",
     "@/playlist/ui/PlaylistBrowser.vue",
     "@/playlist/ui/PlaylistList.vue",
@@ -193,6 +214,7 @@ function createComponent(source: string) {
   ]) {
     modules[name] = defaultModule(passiveComponent);
   }
+  await loadWorkspaceModules(modules);
   const requireModule = (name: string) => modules[name];
   new Function("require", "module", "exports", output)(requireModule, module, module.exports);
   return module.exports.default as Vue.Component;
@@ -201,7 +223,7 @@ function createComponent(source: string) {
 const bunRuntime = globalThis as typeof globalThis & {
   Bun: { file: (path: URL) => { text: () => Promise<string> } };
 };
-const appComponent = createComponent(
+const appComponent = await createComponent(
   await bunRuntime.Bun.file(new URL("../src/App.vue", import.meta.url)).text(),
 );
 
@@ -278,6 +300,10 @@ beforeEach(() => {
   playlistRefreshCalls = 0;
   dialogShowCalls = 0;
   dialogCloseCalls = 0;
+  libraryPageCreations = 0;
+  playlistPageCreations = 0;
+  layoutMounts = 0;
+  layoutUnmounts = 0;
   libraryTrackActionError.value = "";
   libraryTrackActionMessage.value = "";
   libraryTrackActionMessageType.value = "success";
@@ -291,6 +317,20 @@ beforeEach(() => {
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
   notifications.clear();
+});
+
+describe("App workspace lifecycle", () => {
+  it("keeps both feature instances and the shared layout mounted across page changes", async () => {
+    mountApp();
+    for (const page of ["Playlist", "Playing", "Library"]) {
+      activePage.value = page;
+      await Vue.nextTick();
+    }
+    expect(libraryPageCreations).toBe(1);
+    expect(playlistPageCreations).toBe(1);
+    expect(layoutMounts).toBe(1);
+    expect(layoutUnmounts).toBe(0);
+  });
 });
 
 describe("App notification integration", () => {
@@ -345,6 +385,21 @@ describe("App notification integration", () => {
 });
 
 describe("App track deletion confirmation", () => {
+  it("preserves a library confirmation dialog across page changes", async () => {
+    const root = mountApp();
+    click(findByTestId(root, "request-delete"));
+    await settleApp();
+    activePage.value = "Playing";
+    await settleApp();
+    expect(findByTestId(root, "delete-dialog")).not.toBeNull();
+    expect(dialogCloseCalls).toBe(0);
+    click(findByTestId(root, "confirm-delete"));
+    await settleApp();
+    expect(removalCalls).toBe(1);
+    expect(playlistRefreshCalls).toBe(1);
+    expect(findByTestId(root, "delete-dialog")).toBeNull();
+  });
+
   it("keeps the dialog open and displays the database error when deletion did not happen", async () => {
     removalResult = { status: "not-deleted", message: "数据库不可用" };
     const root = mountApp();
