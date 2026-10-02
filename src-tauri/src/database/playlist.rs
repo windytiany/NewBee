@@ -1,6 +1,20 @@
 use super::{Database, PlaylistSummary, PlaylistTrackSummary};
 use rusqlite::{params, OptionalExtension};
+use serde::Serialize;
 use std::collections::HashSet;
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "code", rename_all = "snake_case")]
+pub enum PlaylistReorderError {
+    ItemSetMismatch { message: String },
+    Failed { message: String },
+}
+
+impl From<String> for PlaylistReorderError {
+    fn from(message: String) -> Self {
+        Self::Failed { message }
+    }
+}
 
 impl Database {
     pub fn create_playlist(&self, name: &str) -> Result<i64, String> {
@@ -206,7 +220,7 @@ impl Database {
         &self,
         playlist_id: i64,
         ordered_playlist_item_ids: Vec<i64>,
-    ) -> Result<(), String> {
+    ) -> Result<(), PlaylistReorderError> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction()
@@ -220,7 +234,7 @@ impl Database {
             .optional()
             .map_err(|error| format!("Failed to verify playlist {playlist_id}: {error}"))?;
         if playlist.is_none() {
-            return Err(format!("Playlist {playlist_id} was not found"));
+            return Err(format!("Playlist {playlist_id} was not found").into());
         }
 
         let current_item_ids = {
@@ -245,12 +259,16 @@ impl Database {
             .copied()
             .collect::<HashSet<_>>();
         if ordered_ids.len() != ordered_playlist_item_ids.len() {
-            return Err("Playlist item IDs must not contain duplicates".to_owned());
+            return Err("Playlist item IDs must not contain duplicates"
+                .to_owned()
+                .into());
         }
         if ordered_ids != current_ids {
-            return Err(format!(
-                "Ordered playlist item IDs must exactly match playlist {playlist_id}"
-            ));
+            return Err(PlaylistReorderError::ItemSetMismatch {
+                message: format!(
+                    "Ordered playlist item IDs must exactly match playlist {playlist_id}"
+                ),
+            });
         }
 
         for (position, item_id) in ordered_playlist_item_ids.into_iter().enumerate() {
@@ -269,7 +287,8 @@ impl Database {
             if updated != 1 {
                 return Err(format!(
                     "Playlist item {item_id} changed while reordering playlist {playlist_id}"
-                ));
+                )
+                .into());
             }
         }
 

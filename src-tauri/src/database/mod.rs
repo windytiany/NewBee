@@ -10,6 +10,8 @@ mod playlist;
 #[cfg(test)]
 mod tests;
 
+pub use playlist::PlaylistReorderError;
+
 const SCHEMA: &str = include_str!("schema.sql");
 
 pub struct Database {

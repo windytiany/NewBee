@@ -4,7 +4,7 @@ import type { Ref } from "vue";
 import { usePlaybackSession } from "@/playback/session";
 import { usePersistentPlaylistSelection } from "@/playlist/selection";
 import type { PlaybackDisplayTrack } from "@/playback/queue/model";
-import type { PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
+import type { PlaylistReorderError, PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
 
 type NewQueueTrack = Omit<PlaybackDisplayTrack, "rowKey">;
 type DeferredPlaylistRefresh = {
@@ -72,8 +72,19 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
   let deferredPlaylistRefresh: DeferredPlaylistRefresh | null = null;
   const activePlaylistDataMutations = new Set<number>();
 
+  function isPlaylistReorderError(error: unknown): error is PlaylistReorderError {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error.code === "item_set_mismatch" || error.code === "failed") &&
+      "message" in error &&
+      typeof error.message === "string"
+    );
+  }
+
   function errorMessage(error: unknown) {
-    if (error instanceof Error) return error.message;
+    if (error instanceof Error || isPlaylistReorderError(error)) return error.message;
     return typeof error === "string" ? error : "未知错误";
   }
 
@@ -514,10 +525,6 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     }
   }
 
-  function isPlaylistItemSetMismatch(error: unknown) {
-    return errorMessage(error).includes("Ordered playlist item IDs must exactly match");
-  }
-
   async function reorderPlaylistItems(orderedPlaylistItemIds: readonly number[]) {
     const playlistId = selectedPlaylistId.value;
     if (playlistId === null || pendingPlaylistActionIds.value.has(playlistId)) return;
@@ -596,7 +603,9 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
         playlistTracks.value = originalTracks;
       }
       replacePlaylistSummary(rollbackSummary);
-      if (isPlaylistItemSetMismatch(error)) deferPlaylistRefresh();
+      if (isPlaylistReorderError(error) && error.code === "item_set_mismatch") {
+        deferPlaylistRefresh(undefined, true);
+      }
       setPlaylistActionError(context, `保存歌单排序失败：${errorMessage(error)}`);
     } finally {
       finishPlaylistAction(context);

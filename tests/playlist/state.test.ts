@@ -7,12 +7,12 @@ import type { PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
 type Deferred<Value> = {
   promise: Promise<Value>;
   resolve: (value: Value) => void;
-  reject: (error: Error) => void;
+  reject: (error: unknown) => void;
 };
 
 function deferred<Value>(): Deferred<Value> {
   let resolve!: (value: Value) => void;
-  let reject!: (error: Error) => void;
+  let reject!: (error: unknown) => void;
   const promise = new Promise<Value>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
     reject = rejectPromise;
@@ -359,9 +359,11 @@ describe("歌单状态与动作", () => {
     expect(page.playlistActionError.value).toContain("database unavailable");
   });
 
-  for (const asError of [false, true]) {
-    it(`条目集合不匹配时回滚并查询真实条目（${asError ? "Error" : "字符串"}）`, async () => {
-      const page = await createLoadedPlaylistState();
+  for (const background of [false, true]) {
+    it(`条目集合冲突按错误码恢复真实条目（${background ? "后台" : "活跃"}）`, async () => {
+      const active = ref(true);
+      const page = createPlaylistState(active);
+      await settleRequests();
       const remainingTracks = firstPlaylistTracks.filter(
         ({ playlistItemId }) => playlistItemId !== 202,
       );
@@ -369,14 +371,15 @@ describe("歌单状态与动作", () => {
       invokeCalls = [];
       invokeHandler = async (command) => {
         if (command === "reorder_playlist_items") {
-          const message = "Ordered playlist item IDs must exactly match playlist 1";
-          throw asError ? new Error(message) : message;
+          throw { code: "item_set_mismatch", message: "歌单条目已变化，请重新加载。" };
         }
         if (command === "list_playlists") return [updatedSummary, secondPlaylist];
         if (command === "list_playlist_tracks") return remainingTracks;
         return undefined;
       };
-      await page.reorderPlaylistItems([202, 201, 203]);
+      const reorder = page.reorderPlaylistItems([202, 201, 203]);
+      if (background) active.value = false;
+      await reorder;
       await settleRequests();
       expect(invokeCalls.map(({ command }) => command)).toEqual([
         "reorder_playlist_items",
@@ -386,9 +389,103 @@ describe("歌单状态与动作", () => {
       expect(page.playlistTracks.value).toEqual(remainingTracks);
       expect(page.selectedPlaylist.value?.trackCount).toBe(2);
       expect(page.coverTrackId.value).toBe(501);
-      expect(page.playlistActionError.value).toContain("must exactly match");
+      expect(page.playlistActionError.value).toContain("歌单条目已变化");
     });
   }
+
+  it("普通排序错误即使包含旧冲突文案也只回滚，不触发刷新", async () => {
+    const page = await createLoadedPlaylistState();
+    const message = "Ordered playlist item IDs must exactly match playlist 1";
+    invokeCalls = [];
+    invokeHandler = async () => {
+      throw { code: "failed", message };
+    };
+
+    await page.reorderPlaylistItems([202, 201, 203]);
+    await settleRequests();
+
+    expect(invokeCalls.map(({ command }) => command)).toEqual(["reorder_playlist_items"]);
+    expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
+    expect(page.selectedPlaylist.value).toEqual(firstPlaylist);
+    expect(page.playlistActionError.value).toContain(message);
+  });
+
+  it("冲突刷新等待其他歌单编辑结束，保留后台强制刷新要求", async () => {
+    const active = ref(true);
+    const page = createPlaylistState(active);
+    await settleRequests();
+    const reorderRequest = deferred<unknown>();
+    const renameRequest = deferred<unknown>();
+    const remainingTracks = firstPlaylistTracks.filter(
+      ({ playlistItemId }) => playlistItemId !== 202,
+    );
+    invokeCalls = [];
+    invokeHandler = async (command) => {
+      if (command === "reorder_playlist_items") return reorderRequest.promise;
+      if (command === "rename_playlist") return renameRequest.promise;
+      if (command === "list_playlists") {
+        return [{ ...firstPlaylist, trackCount: 2 }, secondPlaylist];
+      }
+      if (command === "list_playlist_tracks") return remainingTracks;
+      return undefined;
+    };
+
+    const reorder = page.reorderPlaylistItems([202, 201, 203]);
+    const rename = page.renamePlaylist(2, "Updated second");
+    active.value = false;
+    reorderRequest.reject({ code: "item_set_mismatch", message: "条目集合已变化" });
+    await reorder;
+    await settleRequests();
+    expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
+    expect(page.selectedPlaylist.value).toEqual(firstPlaylist);
+    expect(invokeCalls.map(({ command }) => command)).toEqual([
+      "reorder_playlist_items",
+      "rename_playlist",
+    ]);
+
+    renameRequest.reject(new Error("database busy"));
+    await rename;
+    await settleRequests();
+    expect(invokeCalls.map(({ command }) => command)).toEqual([
+      "reorder_playlist_items",
+      "rename_playlist",
+      "list_playlists",
+      "list_playlist_tracks",
+    ]);
+    expect(page.playlistTracks.value).toEqual(remainingTracks);
+    expect(page.selectedPlaylist.value?.trackCount).toBe(2);
+  });
+
+  it("旧歌单排序冲突只刷新新选择，不回写旧条目或错误", async () => {
+    const page = await createLoadedPlaylistState();
+    const reorderRequest = deferred<unknown>();
+    invokeCalls = [];
+    invokeHandler = async (command, args) => {
+      if (command === "reorder_playlist_items") return reorderRequest.promise;
+      if (command === "list_playlists") return [firstPlaylist, secondPlaylist];
+      if (command === "list_playlist_tracks") {
+        expect(args?.playlistId).toBe(2);
+        return secondPlaylistTracks;
+      }
+      return undefined;
+    };
+
+    const reorder = page.reorderPlaylistItems([202, 201, 203]);
+    page.selectPlaylist(secondPlaylist);
+    reorderRequest.reject({ code: "item_set_mismatch", message: "旧歌单条目已变化" });
+    await reorder;
+    await settleRequests();
+
+    expect(invokeCalls.map(({ command }) => command)).toEqual([
+      "reorder_playlist_items",
+      "list_playlists",
+      "list_playlist_tracks",
+    ]);
+    expect(page.selectedPlaylistId.value).toBe(2);
+    expect(page.playlistTracks.value).toEqual(secondPlaylistTracks);
+    expect(page.coverTrackId.value).toBe(601);
+    expect(page.playlistActionError.value).toBe("");
+  });
 
   it("入队和数据编辑共用歌单动作锁，完成后才允许编辑", async () => {
     const page = await createLoadedPlaylistState();

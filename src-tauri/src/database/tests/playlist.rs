@@ -298,15 +298,27 @@ fn reorder_playlist_items_requires_exact_ids_and_rolls_back_failures() {
     let other_item_id =
         database.list_playlist_tracks(other_playlist_id).unwrap()[0].playlist_item_id;
 
-    assert!(database
+    let duplicate_error = database
         .reorder_playlist_items(playlist_id, vec![item_ids[0], item_ids[0], item_ids[2]])
-        .is_err());
+        .unwrap_err();
+    assert_eq!(
+        serde_json::to_value(duplicate_error).unwrap(),
+        serde_json::json!({
+            "code": "failed",
+            "message": "Playlist item IDs must not contain duplicates"
+        })
+    );
     assert!(database
         .reorder_playlist_items(playlist_id, vec![item_ids[0], item_ids[1], other_item_id])
         .is_err());
-    assert!(database
+    let mismatch_error = database
         .reorder_playlist_items(playlist_id, vec![item_ids[0], item_ids[1]])
-        .is_err());
+        .unwrap_err();
+    let serialized_error = serde_json::to_value(mismatch_error).unwrap();
+    assert_eq!(serialized_error["code"], "item_set_mismatch");
+    assert!(serialized_error["message"]
+        .as_str()
+        .is_some_and(|message| !message.is_empty()));
     assert!(database
         .reorder_playlist_items(
             playlist_id,

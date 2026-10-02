@@ -1,6 +1,6 @@
 use super::{
-    AlbumArtistSummary, AlbumSummary, Database, MusicLibraryDirectory, PlaylistSummary,
-    PlaylistTrackSummary, TrackArtwork, TrackDetails, TrackSummary,
+    AlbumArtistSummary, AlbumSummary, Database, MusicLibraryDirectory, PlaylistReorderError,
+    PlaylistSummary, PlaylistTrackSummary, TrackArtwork, TrackDetails, TrackSummary,
 };
 use std::path::Path;
 
@@ -137,7 +137,7 @@ pub fn reorder_playlist_items(
     playlist_id: i64,
     ordered_playlist_item_ids: Vec<i64>,
     state: tauri::State<'_, Database>,
-) -> Result<(), String> {
+) -> Result<(), PlaylistReorderError> {
     state.reorder_playlist_items(playlist_id, ordered_playlist_item_ids)
 }
 
