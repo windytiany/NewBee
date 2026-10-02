@@ -112,17 +112,20 @@ const {
   rightPaneWidth: sharedRightPaneWidth,
   rightTopHeight: sharedRightTopHeight,
 } = usePersistentSidebarLayout();
-const leftPaneWidth = computed(() =>
-  clamp(sharedLeftPaneWidth.value ?? MIN_LEFT_PANE_WIDTH, MIN_LEFT_PANE_WIDTH, MAX_PANE_WIDTH),
+const fittedPaneWidths = computed(() =>
+  fitPaneWidths(
+    sharedLeftPaneWidth.value ?? MIN_LEFT_PANE_WIDTH,
+    sharedRightPaneWidth.value ?? MIN_RIGHT_PANE_WIDTH,
+    containerWidth.value,
+  ),
 );
-const rightPaneWidth = computed(() =>
-  clamp(sharedRightPaneWidth.value ?? MIN_RIGHT_PANE_WIDTH, MIN_RIGHT_PANE_WIDTH, MAX_PANE_WIDTH),
-);
+const leftPaneWidth = computed(() => fittedPaneWidths.value[0]);
+const rightPaneWidth = computed(() => fittedPaneWidths.value[1]);
 const rightTopHeight = computed(() =>
   clamp(
     sharedRightTopHeight.value ?? MIN_RIGHT_TOP_HEIGHT,
     MIN_RIGHT_TOP_HEIGHT,
-    MAX_RIGHT_TOP_HEIGHT,
+    getRightTopMaxHeight(containerHeight.value),
   ),
 );
 const layoutElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
@@ -218,14 +221,6 @@ function updateContainerWidth(width: number) {
       MAX_PANE_WIDTH,
     );
   }
-
-  const [nextLeftPaneWidth, nextRightPaneWidth] = fitPaneWidths(
-    leftPaneWidth.value,
-    rightPaneWidth.value,
-    width,
-  );
-  sharedLeftPaneWidth.value = nextLeftPaneWidth;
-  sharedRightPaneWidth.value = nextRightPaneWidth;
 }
 
 function updateContainerHeight(height: number) {
@@ -240,12 +235,6 @@ function updateContainerHeight(height: number) {
       getRightTopMaxHeight(height),
     );
   }
-
-  sharedRightTopHeight.value = clamp(
-    rightTopHeight.value,
-    MIN_RIGHT_TOP_HEIGHT,
-    getRightTopMaxHeight(height),
-  );
 }
 
 watch(
