@@ -259,9 +259,8 @@ describe("metadata editor views", () => {
       preventDefault() {},
     });
     await settle();
-    expect(saved).toHaveLength(0);
-    expect(getTextContent(root)).toContain("确认写入");
-    expect(editor.pendingCount).toBe(2);
+    expect(saved).toHaveLength(1);
+    expect(getTextContent(root)).not.toContain("确认写入");
   });
 
   it("separates single-track properties and tags and groups each number with its total", async () => {

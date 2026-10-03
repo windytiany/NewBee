@@ -145,7 +145,7 @@
                   :aria-label="field.label"
                   :value="field.value"
                   :readonly="!field.writable"
-                  :disabled="state.saving || state.confirmSave || state.confirmDiscard"
+                  :disabled="state.saving || state.confirmDiscard"
                   :placeholder="field.mixed ? '多个值' : ''"
                   :inputmode="field.type === 'number' ? 'numeric' : 'text'"
                   class="focus-visible:outline-spotify-green w-full rounded border border-white/15 bg-black/20 px-3 py-2 text-sm read-only:text-white/50 focus-visible:outline-2 disabled:opacity-50"
@@ -172,7 +172,7 @@
           aria-label="内嵌歌词"
           :value="lyricsField.value"
           :readonly="!lyricsField.writable"
-          :disabled="state.saving || state.confirmSave || state.confirmDiscard"
+          :disabled="state.saving || state.confirmDiscard"
           placeholder="无歌词"
           class="focus-visible:outline-spotify-green min-h-80 w-full resize-y rounded border border-white/15 bg-black/20 px-3 py-2 font-mono text-sm read-only:text-white/50 focus-visible:outline-2 disabled:opacity-50"
           spellcheck="false"
@@ -191,31 +191,6 @@
       >
         {{ state.results.length - failedCount }} 首成功，{{ failedCount }} 首失败。
       </p>
-      <section
-        v-if="state.confirmSave"
-        aria-label="确认批量写入"
-        class="space-y-3 rounded border border-white/15 p-3 text-sm"
-      >
-        <p>
-          将向 {{ editor.pendingCount }} 首曲目写入：{{ editor.pendingFieldLabels.join("、") }}。
-        </p>
-        <div class="flex justify-end gap-2">
-          <button
-            type="button"
-            class="rounded px-3 py-2 hover:bg-white/10"
-            @click="state.confirmSave = false"
-          >
-            返回编辑
-          </button>
-          <button
-            type="button"
-            class="bg-spotify-green rounded px-3 py-2 font-semibold text-black"
-            @click="editor.save()"
-          >
-            确认写入
-          </button>
-        </div>
-      </section>
     </div>
 
     <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -343,7 +318,6 @@ const canSave = computed(
   () =>
     !state.loading &&
     !state.saving &&
-    !state.confirmSave &&
     !state.confirmDiscard &&
     state.draft.some((field) => field.writable && !field.mixed),
 );

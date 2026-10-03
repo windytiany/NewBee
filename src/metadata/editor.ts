@@ -41,7 +41,6 @@ export function createMetadataEditor(options: MetadataEditorOptions) {
     error: "",
     dirty: false,
     confirmDiscard: false,
-    confirmSave: false,
     results: [] as MetadataSaveResult[],
     completed: 0,
     total: 0,
@@ -64,7 +63,6 @@ export function createMetadataEditor(options: MetadataEditorOptions) {
       error: "",
       dirty: false,
       confirmDiscard: false,
-      confirmSave: false,
       results: [],
       completed: 0,
       total: 0,
@@ -114,7 +112,6 @@ export function createMetadataEditor(options: MetadataEditorOptions) {
     state.dirty = true;
     state.error = "";
     state.results = [];
-    state.confirmSave = false;
   }
 
   function prepareTargetSave(trackIds: number[]) {
@@ -124,8 +121,7 @@ export function createMetadataEditor(options: MetadataEditorOptions) {
       pendingChanges = buildMetadataChanges(state.draft, state.tracks);
       pendingTrackIds = trackIds;
       if (pendingTrackIds.length === 0) return;
-      if (state.tracks.length > 1) state.confirmSave = true;
-      else void save();
+      void save();
     } catch (error) {
       state.error = errorMessage(error);
     }
@@ -134,7 +130,6 @@ export function createMetadataEditor(options: MetadataEditorOptions) {
   async function save() {
     if (state.saving || pendingTrackIds.length === 0) return;
     const ids = [...pendingTrackIds];
-    state.confirmSave = false;
     state.saving = true;
     state.completed = 0;
     state.total = ids.length;
@@ -204,14 +199,6 @@ export function createMetadataEditor(options: MetadataEditorOptions) {
       prepareTargetSave(
         state.results.flatMap((result) => (result.databaseUpdated ? [] : [result.trackId])),
       ),
-    get pendingFieldLabels() {
-      return pendingChanges.map(
-        ({ field }) => state.draft.find((entry) => entry.key === field)?.label ?? field,
-      );
-    },
-    get pendingCount() {
-      return pendingTrackIds.length;
-    },
   };
 }
 

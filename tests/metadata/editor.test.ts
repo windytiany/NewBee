@@ -121,13 +121,10 @@ describe("metadata editing", () => {
     expect(buildMetadataChanges(editor.state.draft).some(({ field }) => field === "title")).toBe(
       false,
     );
-    editor.prepareSave();
-    expect(editor.state.error).toBe("");
     editor.changeField(title, "Unified");
     editor.prepareSave();
-    expect(editor.state.confirmSave).toBe(true);
-    expect(saves).toHaveLength(0);
-    await editor.save();
+    expect(saves).toHaveLength(1);
+    await settle();
     expect(saves[0]?.ids).toEqual([1, 2]);
     expect(saves[0]?.changes).toHaveLength(8);
     expect(saves[0]?.changes.find(({ field }) => field === "title")?.value).toBe("Unified");
@@ -141,7 +138,7 @@ describe("metadata editing", () => {
     if (!date) throw new Error("Missing date");
     editor.changeField(date, "");
     editor.prepareSave();
-    await editor.save();
+    await settle();
     expect(saves[0]?.changes.find(({ field }) => field === "artist")?.value).toBe("Artist");
     expect(saves[0]?.changes.find(({ field }) => field === "releaseDate")?.value).toBeNull();
   });
@@ -225,12 +222,12 @@ describe("metadata editing", () => {
     if (!album) throw new Error("Missing album");
     editor.changeField(album, "New Album");
     editor.prepareSave();
-    await editor.save();
+    await settle();
     expect(editor.state.open).toBe(true);
     expect(editor.state.results).toHaveLength(2);
     expect(synchronized).toEqual([[1]]);
     editor.retryFailed();
-    await editor.save();
+    await settle();
     expect(calls).toEqual([[1, 2], [2]]);
     expect(synchronized).toEqual([[1], [2]]);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
