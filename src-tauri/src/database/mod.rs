@@ -138,7 +138,11 @@ pub enum TrackWriteOutcome {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum TrackArtwork {
     Available { mime_type: String, data: Vec<u8> },
     NoArtwork,

@@ -237,6 +237,7 @@ const appModules: Record<string, unknown> = {
       refreshPlaylists: async () => {},
     }),
   },
+  "@/albumTags/ui/AlbumTagDialog.vue": { __esModule: true, default: passiveComponent },
   "@/playing/ui/PlayingPage.vue": { __esModule: true, default: passiveComponent },
   "@/playback/ui/PlaybackBar.vue": { __esModule: true, default: passiveComponent },
   "@/library/ui/AlbumBrowser.vue": { __esModule: true, default: passiveComponent },

@@ -13,6 +13,7 @@ import PlayingPage from "@/playing/ui/PlayingPage.vue";
 import PlaybackBar from "@/playback/ui/PlaybackBar.vue";
 import NotificationHost from "@/notification/ui/NotificationHost.vue";
 import MetadataEditorDialog from "@/metadata/ui/MetadataEditorDialog.vue";
+import AlbumTagDialog from "@/albumTags/ui/AlbumTagDialog.vue";
 import WorkspaceLayout from "@/layout/WorkspaceLayout.vue";
 import TopBar from "@/navigation/TopBar.vue";
 
@@ -67,6 +68,7 @@ const library = useLibraryWorkspace(libraryActive, {
     <PlaylistWorkspaceDialogs :workspace="playlist" :active="playlistActive" />
     <PlaybackBar />
     <MetadataEditorDialog />
+    <AlbumTagDialog />
     <NotificationHost />
   </div>
 </template>

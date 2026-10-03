@@ -56,7 +56,7 @@ const dependencies: Record<string, unknown> = {
   },
 };
 await loadSourceModules(["artwork/albumArtwork.ts"], dependencies);
-const { useAlbumArtwork } = dependencies[
+const { useAlbumArtwork, invalidateAlbumArtworkCache } = dependencies[
   "@/artwork/albumArtwork"
 ] as typeof import("@/artwork/albumArtwork");
 const available: TrackArtwork = { status: "available", mimeType: "image/png", data: [1, 2, 3] };
@@ -269,6 +269,25 @@ describe("共享专辑封面和背景", () => {
     expect(revokedUrls).toEqual(["blob:album-1"]);
     expect(canvasCount).toBe(0);
     expect(artwork.status.value).toBe("loading");
+  });
+
+  it("写入后刷新订阅封面及背景，过期请求不能覆盖刷新结果", async () => {
+    const { artwork } = subscribe(album, "background");
+    invalidateAlbumArtworkCache();
+    requestAt(1).resolve(available);
+    await settle();
+    expect(artwork.url.value).toBe("blob:album-1");
+    requestAt(0).resolve(available);
+    await settle();
+    expect(createdUrls).toBe(1);
+    invalidateAlbumArtworkCache();
+    expect(artwork.status.value).toBe("loading");
+    expect(artwork.background.value).toBeNull();
+    requestAt(2).resolve(available);
+    await settle();
+    expect(artwork.url.value).toBe("blob:album-2");
+    expect(canvasCount).toBe(2);
+    expect(revokedUrls).toContain("blob:album-1");
   });
 
   it("同名专辑使用演出者区分缓存，null 和字符串也不冲突", () => {

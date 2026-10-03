@@ -1,4 +1,4 @@
-mod files;
+pub(crate) mod files;
 pub(crate) mod model;
 #[cfg(test)]
 mod tests;
@@ -22,11 +22,11 @@ pub(crate) struct EditableTrack {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MetadataSaveResult {
-    track_id: i64,
-    path: String,
-    file_written: bool,
-    database_updated: bool,
-    error: Option<String>,
+    pub(crate) track_id: i64,
+    pub(crate) path: String,
+    pub(crate) file_written: bool,
+    pub(crate) database_updated: bool,
+    pub(crate) error: Option<String>,
 }
 
 #[tauri::command]

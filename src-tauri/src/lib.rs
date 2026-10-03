@@ -1,3 +1,4 @@
+mod album_tags;
 mod database;
 mod ingest;
 pub mod lyrics;
@@ -72,6 +73,11 @@ pub fn run() {
             database::commands::get_track_artwork,
             metadata::get_editable_tracks,
             metadata::save_track_metadata,
+            album_tags::search_album_releases,
+            album_tags::get_album_release,
+            album_tags::get_release_covers,
+            album_tags::get_release_cover,
+            album_tags::save::save_album_tags,
             playback::play_track,
             playback::prepare_next_track,
             playback::set_volume,

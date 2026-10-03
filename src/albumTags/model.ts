@@ -1,0 +1,149 @@
+import type { TrackDetails } from "@/library/model";
+import { buildMetadataChanges, METADATA_FIELDS } from "@/metadata/model";
+import type { EditableTrack, MetadataChange } from "@/metadata/model";
+
+export type ReleaseSummary = {
+  id: string;
+  title: string;
+  artist: string | null;
+  releaseDate: string | null;
+  country: string | null;
+  status: string | null;
+  disambiguation: string | null;
+  formats: string[];
+  discCount: number;
+  trackCount: number;
+};
+export type ReleaseTrack = {
+  title: string;
+  artist: string | null;
+  discNumber: number;
+  trackNumber: number;
+  trackTotal: number;
+  durationMs: number | null;
+};
+export type ReleaseDetails = { summary: ReleaseSummary; tracks: ReleaseTrack[] };
+export type SearchResults = { count: number; offset: number; releases: ReleaseSummary[] };
+export type CoverChoice = { id: string; comment: string };
+export type CoverData = { mimeType: string; data: number[] };
+export type AlbumField = (typeof METADATA_FIELDS)[number]["key"];
+export type MatchRow = {
+  source: ReleaseTrack;
+  trackId: number | null;
+  values: Partial<Record<AlbumField, string>>;
+};
+export type TrackPatch = { trackId: number; changes: MetadataChange[]; writeCover: boolean };
+
+export function releaseId(value: string): string | null {
+  const trimmed = value.trim();
+  const id = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+  if (id.test(trimmed)) return trimmed.toLowerCase();
+  try {
+    const url = new globalThis.URL(trimmed);
+    if (url.hostname !== "musicbrainz.org" || !["https:", "http:"].includes(url.protocol))
+      return null;
+    const match = /^\/release\/([^/]+)\/?$/.exec(url.pathname);
+    return match?.[1] && id.test(match[1]) ? match[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+const normalize = (value: string | null) =>
+  (value ?? "")
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\p{P}\p{Z}\s]/gu, "");
+function similarity(source: ReleaseTrack, local: TrackDetails) {
+  let score = 0;
+  const title = normalize(source.title);
+  const localTitle = normalize(local.title);
+  if (title && localTitle) {
+    if (title === localTitle) score += 100;
+    else if (title.includes(localTitle) || localTitle.includes(title)) score += 35;
+  }
+  if (source.trackNumber === local.trackNumber) score += 20;
+  if (source.discNumber === local.discNumber) score += 15;
+  if (source.durationMs !== null && local.durationMs !== null) {
+    const delta = Math.abs(source.durationMs - local.durationMs);
+    score += Math.max(0, 30 - delta / 1000);
+  }
+  if (normalize(source.artist) && normalize(source.artist) === normalize(local.artist)) score += 5;
+  return score;
+}
+
+export function createMatchRows(
+  release: ReleaseDetails,
+  locals: readonly EditableTrack[],
+): MatchRow[] {
+  const rows = release.tracks.map((source): MatchRow => ({
+    source,
+    trackId: null,
+    values: {
+      title: source.title || undefined,
+      artist: source.artist || undefined,
+      album: release.summary.title || undefined,
+      albumArtist: release.summary.artist || undefined,
+      releaseDate: release.summary.releaseDate || undefined,
+      trackNumber: String(source.trackNumber),
+      trackTotal: String(source.trackTotal),
+      discNumber: String(source.discNumber),
+      discTotal: String(release.summary.discCount),
+    },
+  }));
+  const pairs = release.tracks
+    .flatMap((source, row) =>
+      locals.map(({ track }, index) => ({
+        row,
+        index,
+        score: similarity(source, track),
+      })),
+    )
+    .sort((a, b) => b.score - a.score || a.row - b.row || a.index - b.index);
+  const assigned = new Set<number>();
+  for (const pair of pairs) {
+    const row = rows[pair.row];
+    const local = locals[pair.index];
+    if (!row || !local || row.trackId !== null || assigned.has(local.track.id)) continue;
+    row.trackId = local.track.id;
+    assigned.add(local.track.id);
+  }
+  return rows;
+}
+
+/** Move a local file to a source slot; occupied slots exchange their local files. */
+export function assignTrack(rows: MatchRow[], trackId: number, target: number | null) {
+  const previous = rows.find((row) => row.trackId === trackId);
+  const next = target === null ? undefined : rows[target];
+  if (target !== null && !next) return;
+  if (previous === next) return;
+  if (previous) previous.trackId = next?.trackId ?? null;
+  if (next) next.trackId = trackId;
+}
+
+export function buildAlbumPatches(
+  rows: readonly MatchRow[],
+  tracks: readonly EditableTrack[],
+  fields: readonly AlbumField[],
+  included: readonly number[],
+  writeCover: boolean,
+): TrackPatch[] {
+  const patches: TrackPatch[] = [];
+  const seen = new Set<number>();
+  for (const row of rows) {
+    if (row.trackId === null || !included.includes(row.trackId)) continue;
+    if (seen.has(row.trackId)) throw new Error("同一本地曲目不能重复对应。");
+    seen.add(row.trackId);
+    const local = tracks.find(({ track }) => track.id === row.trackId);
+    if (!local) throw new Error("对应的本地曲目不存在。");
+    const changed = METADATA_FIELDS.flatMap((field) => {
+      const value = row.values[field.key];
+      if (!fields.includes(field.key) || value === undefined) return [];
+      const original = String(local.track[field.key] ?? "");
+      if (value.trim() === original.trim()) return [];
+      return [{ ...field, value, mixed: false, writable: true }];
+    });
+    const changes = changed.length ? buildMetadataChanges(changed, [local]) : [];
+    if (changes.length || writeCover) patches.push({ trackId: row.trackId, changes, writeCover });
+  }
+  return patches;
+}

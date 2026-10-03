@@ -16,6 +16,9 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+#[path = "cover_tests.rs"]
+mod cover_tests;
+
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
 struct Fixture(PathBuf);

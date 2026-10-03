@@ -30,6 +30,11 @@ const modules: Record<string, unknown> = {
   vue: Vue,
   "@lucide/vue": { ChevronRight: Vue.defineComponent({ setup: () => () => null }) },
   "@/interaction/contextMenu": contextMenuModule,
+  "@/albumTags/ui/AlbumTagMenuItem.vue": Vue.defineComponent({
+    props: ["album"],
+    setup: (props) => () =>
+      Vue.h("button", { "data-update-album": JSON.stringify(props.album) }, "根据专辑更新标签"),
+  }),
   "@/metadata/ui/MetadataEditMenuItem.vue": Vue.defineComponent({
     props: ["album"],
     setup: (props) => () =>

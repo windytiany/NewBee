@@ -1,6 +1,7 @@
 use super::model::{MetadataChange, MetadataField};
 use lofty::config::WriteOptions;
 use lofty::file::{FileType, TaggedFile, TaggedFileExt};
+use lofty::picture::{Picture, PictureType};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::{ItemKey, Tag, TagType};
@@ -9,6 +10,7 @@ use std::io::{self, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+pub(crate) const MAX_COVER_BYTES: usize = 20 * 1024 * 1024;
 static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 
 fn read_file(path: &Path) -> Result<TaggedFile, String> {
@@ -162,6 +164,24 @@ pub(super) fn validate_file(path: &Path, changes: &[MetadataChange]) -> Result<(
 
 /// Only the selected tag is written. A failed write or round-trip check never touches the original.
 pub(super) fn write_file(path: &Path, changes: &[MetadataChange]) -> Result<(), String> {
+    write_file_with_cover(path, changes, None)
+}
+
+pub(crate) fn cover_picture(data: &[u8]) -> Result<Picture, String> {
+    if data.is_empty() || data.len() > MAX_COVER_BYTES {
+        return Err("封面为空或超过 20 MiB".to_owned());
+    }
+    let mut picture = Picture::from_reader(&mut std::io::Cursor::new(data))
+        .map_err(|error| format!("无效封面图片：{error}"))?;
+    picture.set_pic_type(PictureType::CoverFront);
+    Ok(picture)
+}
+
+pub(crate) fn write_file_with_cover(
+    path: &Path,
+    changes: &[MetadataChange],
+    cover: Option<&Picture>,
+) -> Result<(), String> {
     let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
     if metadata.permissions().readonly() {
         return Err("文件为只读".to_owned());
@@ -178,6 +198,31 @@ pub(super) fn write_file(path: &Path, changes: &[MetadataChange]) -> Result<(), 
     validate_totals(&tag, changes)?;
     let before = tag.clone();
     apply_changes(&mut tag, changes)?;
+    if let Some(cover) = cover {
+        if !matches!(
+            tag.tag_type(),
+            TagType::Id3v2 | TagType::Mp4Ilst | TagType::VorbisComments
+        ) {
+            return Err("此标签格式不支持内嵌封面".to_owned());
+        }
+        if tag.tag_type() == TagType::Mp4Ilst {
+            // MP4 covr stores no picture roles. Its first picture is the displayed cover;
+            // keep all remaining images in their original order.
+            let mut cover = cover.clone();
+            cover.set_pic_type(PictureType::Other);
+            tag.set_picture(0, cover);
+        } else {
+            tag.remove_picture_type(PictureType::CoverFront);
+            tag.push_picture(cover.clone());
+        }
+    }
+    let same_items = before.items().count() == tag.items().count()
+        && before
+            .items()
+            .all(|item| tag.items().any(|candidate| candidate == item));
+    if same_items && before.pictures() == tag.pictures() {
+        return Ok(());
+    }
 
     let (temporary, mut destination) = TemporaryFile::create(path)?;
     let mut source = File::open(path).map_err(|error| error.to_string())?;
@@ -195,8 +240,11 @@ pub(super) fn write_file(path: &Path, changes: &[MetadataChange]) -> Result<(), 
     // importing would read, so secondary old values cannot silently resurrect cleared fields.
     let after = editing_tag(&written);
     verify_changes(&after, changes)?;
-    if before.pictures() != after.pictures() {
+    if cover.is_none() && before.pictures() != after.pictures() {
         return Err("写入影响了内嵌封面，原文件未修改".to_owned());
+    }
+    if cover.is_some() && tag.pictures() != after.pictures() {
+        return Err("封面回读不一致或其他图片发生变化，原文件未修改".to_owned());
     }
     // Generic tag conversion retains format-specific companion data. Also verify all visible
     // untouched items, rather than silently dropping custom fields or totals.

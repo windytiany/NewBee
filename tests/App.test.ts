@@ -174,6 +174,7 @@ async function createComponent(source: string) {
     "@/notification/center": { notify },
     "@/notification/useNotification": { useNotification },
     "@/metadata/ui/MetadataEditorDialog.vue": defaultModule(passiveComponent),
+    "@/albumTags/ui/AlbumTagDialog.vue": defaultModule(passiveComponent),
     "@/notification/ui/NotificationHost.vue": defaultModule(passiveComponent),
     "@/navigation/activePage": {
       usePersistentActivePage: () => ({ activePage }),

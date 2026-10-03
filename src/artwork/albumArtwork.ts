@@ -21,6 +21,8 @@ type ArtworkSnapshot = {
 };
 
 type SharedArtwork = {
+  selection: AlbumArtworkSelection;
+  generation: number;
   snapshot: ArtworkSnapshot;
   subscribers: Set<(snapshot: ArtworkSnapshot) => void>;
   backgroundRequested: boolean;
@@ -60,6 +62,8 @@ export function useAlbumArtwork(
       const isNew = entry === undefined;
       if (!entry) {
         entry = {
+          selection: { ...album },
+          generation: 0,
           snapshot: { ...fallback, status: "loading" },
           subscribers: new Set(),
           backgroundRequested: false,
@@ -73,7 +77,7 @@ export function useAlbumArtwork(
       entry.subscribers.add(subscriber);
       entry.backgroundRequested ||= purpose === "background";
       snapshot.value = entry.snapshot;
-      if (isNew) void loadArtwork(key, album, entry);
+      if (isNew) void loadArtwork(key, album, entry, ++entry.generation);
       else if (purpose === "background") generateBackground(entry);
 
       const subscribedEntry = entry;
@@ -105,10 +109,29 @@ export function useAlbumArtwork(
   };
 }
 
-async function loadArtwork(key: string, selection: AlbumArtworkSelection, entry: SharedArtwork) {
+/** Reload subscribed covers and backgrounds after embedded artwork changes. */
+export function invalidateAlbumArtworkCache() {
+  for (const [key, entry] of sharedArtwork) {
+    const url = entry.objectUrl;
+    entry.objectUrl = null;
+    entry.decoder?.removeAttribute("src");
+    entry.decoder = null;
+    entry.backgroundAttempted = false;
+    publish(entry, { ...fallback, status: "loading" });
+    if (url) void nextTick().then(() => globalThis.URL.revokeObjectURL(url));
+    void loadArtwork(key, entry.selection, entry, ++entry.generation);
+  }
+}
+
+async function loadArtwork(
+  key: string,
+  selection: AlbumArtworkSelection,
+  entry: SharedArtwork,
+  generation: number,
+) {
   try {
     const artwork = await invoke<TrackArtwork | null>("get_album_artwork", selection);
-    if (sharedArtwork.get(key) !== entry) return;
+    if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
     if (!artwork || artwork.status !== "available") {
       publish(entry, fallback);
       return;
@@ -122,11 +145,11 @@ async function loadArtwork(key: string, selection: AlbumArtworkSelection, entry:
     entry.decoder = decoder;
     decoder.src = url;
     await decoder.decode();
-    if (sharedArtwork.get(key) !== entry) return;
+    if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
     publish(entry, { ...fallback, status: "ready", url });
     generateBackground(entry);
   } catch (error) {
-    if (sharedArtwork.get(key) !== entry) return;
+    if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
     const url = entry.objectUrl;
     entry.objectUrl = null;
     entry.decoder?.removeAttribute("src");
