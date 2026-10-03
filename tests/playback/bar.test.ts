@@ -53,6 +53,18 @@ const compiled = compileSfc(source, "src/playback/ui/PlaybackBar.vue", {
 const modules: Record<string, unknown> = {
   vue: Vue,
   "@lucide/vue": Icons,
+  "@/playback/ui/PlaybackSpectrum.vue": {
+    __esModule: true,
+    default: Vue.defineComponent({
+      props: ["playbackId", "active"],
+      setup: (props) => () =>
+        Vue.h("div", {
+          "data-playback-spectrum": true,
+          "data-playback-id": props.playbackId,
+          "data-active": props.active,
+        }),
+    }),
+  },
   "@/notification/useNotification": { useNotification },
   "@/playback/useControls": {
     usePlaybackControls: () => ({
@@ -225,6 +237,23 @@ afterEach(() => {
 });
 
 describe("playback bar button", () => {
+  it("places the live spectrum after repeat and shuffle, and stops it when paused", async () => {
+    const { session } = setupPlayback();
+    await startQueue(session);
+    const root = mountBar(session);
+    const options = findNode(root, (node) => node.props["aria-label"] === "Playback options");
+    const spectrum = findNode(root, (node) => node.props["data-playback-spectrum"] === true);
+    if (!options || !spectrum) throw new Error("Playback options were not rendered");
+    expect(options.children[0]?.props["aria-label"]).toBe("Repeat one");
+    expect(options.children[1]?.props["aria-label"]).toBe("Shuffle playback");
+    expect(options.children[2]).toBe(spectrum);
+    expect(spectrum.props["data-playback-id"]).toBe(1);
+    expect(spectrum.props["data-active"]).toBe(true);
+    await session.togglePlayback(async () => true);
+    await settle();
+    expect(spectrum.props["data-active"]).toBe(false);
+  });
+
   it("does not dim temporarily while switching tracks", async () => {
     const { session, nextStart } = setupPlayback();
     await startQueue(session);

@@ -1,4 +1,5 @@
 mod continuous;
+mod spectrum;
 
 use crate::database::Database;
 use continuous::{ContinuousPlayback, ContinuousSource, PreparedTrack};
@@ -7,11 +8,12 @@ use rodio::{
     ChannelCount, Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, SampleRate, Source,
 };
 use serde::Serialize;
+use spectrum::{SpectrumCapture, SpectrumSource, BAND_COUNT};
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 
@@ -35,6 +37,7 @@ impl Default for PlaybackState {
 
 struct ActivePlayback {
     player: Player,
+    spectrum: Arc<SpectrumCapture>,
     continuous: ContinuousPlayback,
     channels: ChannelCount,
     sample_rate: SampleRate,
@@ -281,7 +284,39 @@ pub fn seek_to(position_ms: u64, state: State<'_, PlaybackState>) -> Result<(), 
         .try_seek(position)
         .map_err(|error| format!("Could not seek in audio: {error}"))?;
 
+    playback.spectrum.reset();
     Ok(())
+}
+
+#[tauri::command]
+pub fn playback_spectrum(
+    playback_id: u64,
+    state: State<'_, PlaybackState>,
+) -> Result<[f32; BAND_COUNT], String> {
+    state.spectrum(playback_id)
+}
+
+impl PlaybackState {
+    fn spectrum(&self, playback_id: u64) -> Result<[f32; BAND_COUNT], String> {
+        let capture = {
+            let active = self
+                .active
+                .lock()
+                .map_err(|_| "Playback state is unavailable")?;
+            let Some(playback) = active.as_ref() else {
+                return Ok([0.0; BAND_COUNT]);
+            };
+            let snapshot = playback.continuous.snapshot();
+            if snapshot.track.playback_id != playback_id
+                || snapshot.ended
+                || playback.player.is_paused()
+            {
+                return Ok([0.0; BAND_COUNT]);
+            }
+            playback.spectrum.clone()
+        };
+        Ok(capture.bands())
+    }
 }
 
 #[tauri::command]
@@ -396,9 +431,10 @@ fn start_playback(
             }
         }
     });
-    let player = connect_source(output.mixer(), source, *volume as f32 / 100.0);
+    let (player, spectrum) = connect_source(output.mixer(), source, *volume as f32 / 100.0);
     *active = Some(ActivePlayback {
         player,
+        spectrum,
         continuous,
         channels,
         sample_rate,
@@ -406,13 +442,19 @@ fn start_playback(
     Ok(())
 }
 
-fn connect_source(mixer: &rodio::mixer::Mixer, source: ContinuousSource, volume: f32) -> Player {
+fn connect_source(
+    mixer: &rodio::mixer::Mixer,
+    source: ContinuousSource,
+    volume: f32,
+) -> (Player, Arc<SpectrumCapture>) {
     let (player, queue) = Player::new();
     player.set_volume(volume);
     // The mixer must see the real channel count/rate, not an initially empty Player.
     player.append(source);
-    mixer.add(queue);
-    player
+    // Tap the Player output so pause and volume are reflected in the captured PCM.
+    let (source, spectrum) = SpectrumSource::new(queue);
+    mixer.add(source);
+    (player, spectrum)
 }
 
 fn open_decoder(path: &Path) -> Result<Decoder<BufReader<File>>, PlaybackError> {
@@ -443,9 +485,82 @@ fn duration_ms(duration: Duration) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_expected_playback_id, open_decoder, PlaybackError, AUDIO_FILE_NOT_FOUND_PREFIX,
+        connect_source, is_expected_playback_id, open_decoder, ActivePlayback, ContinuousSource,
+        NowPlayingTrack, PlaybackError, PlaybackState, PreparedTrack, AUDIO_FILE_NOT_FOUND_PREFIX,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn spectrum_uses_player_output_and_rejects_inactive_playback_instances() {
+        use rodio::buffer::SamplesBuffer;
+        use std::f32::consts::PI;
+        use std::num::{NonZeroU16, NonZeroU32};
+        use std::time::Duration;
+
+        let state = PlaybackState::default();
+        assert_eq!(state.spectrum(1).unwrap(), [0.0; 8]);
+        let channels = NonZeroU16::new(2).unwrap();
+        let sample_rate = NonZeroU32::new(48000).unwrap();
+        let samples = (0..2048 * 8)
+            .flat_map(|frame| {
+                let sample = (2.0 * PI * 960.0 * frame as f32 / 48000.0).sin() * 0.5;
+                [sample, -sample]
+            })
+            .collect::<Vec<_>>();
+        let prepared = PreparedTrack {
+            track: NowPlayingTrack {
+                track_id: 1,
+                playback_id: 1,
+                title: None,
+                artist: None,
+                row_key: None,
+                previous_playback_id: None,
+            },
+            duration: Duration::from_secs_f64(2048.0 * 8.0 / 48000.0),
+            source: Box::new(SamplesBuffer::new(channels, sample_rate, samples)),
+        };
+        let (source, continuous, _) = ContinuousSource::new(prepared, Default::default());
+        let (mixer, mut output) = rodio::mixer::mixer(channels, sample_rate);
+        let (player, spectrum) = connect_source(&mixer, source, 1.0);
+        *state.active.lock().unwrap() = Some(ActivePlayback {
+            player,
+            spectrum,
+            continuous,
+            channels,
+            sample_rate,
+        });
+        output.by_ref().take(2048 * 2).for_each(drop);
+        assert!(state.spectrum(1).unwrap()[4] > 0.8);
+        assert_eq!(state.spectrum(2).unwrap(), [0.0; 8]);
+        {
+            let active = state.active.lock().unwrap();
+            active.as_ref().unwrap().player.pause();
+        }
+        assert_eq!(state.spectrum(1).unwrap(), [0.0; 8]);
+        {
+            let active = state.active.lock().unwrap();
+            let active = active.as_ref().unwrap();
+            active.player.play();
+            active.player.set_volume(0.0);
+        }
+        output.by_ref().take(2048 * 4).for_each(drop);
+        assert_eq!(state.spectrum(1).unwrap(), [0.0; 8]);
+        output.by_ref().take(2048 * 12).for_each(drop);
+        assert!(
+            state
+                .active
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .continuous
+                .snapshot()
+                .ended
+        );
+        assert_eq!(state.spectrum(1).unwrap(), [0.0; 8]);
+        state.active.lock().unwrap().take();
+        assert_eq!(state.spectrum(1).unwrap(), [0.0; 8]);
+    }
 
     #[test]
     fn a_stop_request_only_matches_its_playback_instance() {

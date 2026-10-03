@@ -287,6 +287,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     isPlaybackStatusSettled: statusObserver.isSettled,
     playbackError: readonly(playbackError),
     currentTrack: publicCurrentTrack,
+    currentPlaybackId: computed(() => currentTrack.value?.playbackId ?? null),
     isPlaybackCommandPending: readonly(isPlaybackCommandPending),
     isSeeking: readonly(isSeeking),
     canStartRestoredQueue: readonly(canStartRestoredQueue),

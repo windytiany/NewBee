@@ -1,7 +1,7 @@
 <template>
   <footer
     aria-label="Playback controls"
-    class="bg-spotify-surface text-spotify-muted fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 px-4 py-1 sm:h-10 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:gap-x-6 sm:px-6 sm:py-0 md:grid-cols-[minmax(14.5rem,20rem)_minmax(25.5rem,1fr)_minmax(4.5rem,14rem)] md:gap-x-[clamp(4px,calc(9.459459459vw-68.64864865px),32px)] md:pr-4 md:pl-8"
+    class="bg-spotify-surface text-spotify-muted fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 px-4 py-1 sm:h-10 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:gap-x-6 sm:px-6 sm:py-0 md:grid-cols-[minmax(10rem,20rem)_minmax(20rem,1fr)_minmax(9.5rem,14rem)] md:gap-x-[clamp(4px,calc(9.459459459vw-68.64864865px),32px)] md:pr-4 md:pl-8"
   >
     <div class="col-start-1 row-start-1 flex min-w-0 items-center gap-4 md:gap-5">
       <div class="flex items-center gap-1">
@@ -167,6 +167,10 @@
       >
         <Shuffle aria-hidden="true" class="size-4" />
       </button>
+      <PlaybackSpectrum
+        :playback-id="currentPlaybackId"
+        :active="playbackStatus.isPlaying && !isPlaybackCommandPending && !isSeeking"
+      />
     </div>
   </footer>
 </template>
@@ -174,6 +178,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { usePlaybackControls } from "@/playback/useControls";
+import PlaybackSpectrum from "@/playback/ui/PlaybackSpectrum.vue";
 import { useNotification } from "@/notification/useNotification";
 import { usePlaybackVolume } from "@/playback/useVolume";
 import {
@@ -243,6 +248,7 @@ const {
   isSeeking,
   selectedPositionMs,
   currentTrack,
+  currentPlaybackId,
   isPlaybackCommandPending,
   playbackStartError,
   queuePlaybackError,

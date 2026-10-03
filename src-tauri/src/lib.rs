@@ -77,6 +77,7 @@ pub fn run() {
             playback::stop_playback,
             playback::seek_to,
             playback::playback_status,
+            playback::playback_spectrum,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
