@@ -78,7 +78,7 @@
       v-else-if="!props.tracksLoading && !props.tracksError"
       class="text-spotify-muted relative py-3 text-sm"
     >
-      此专辑暂无曲目。
+      无曲目
     </p>
 
     <div
@@ -143,7 +143,7 @@
           v-if="!props.playlistsError && props.playlists.length === 0"
           class="text-spotify-muted px-2 py-2 text-sm"
         >
-          暂无可用歌单。
+          无歌单
         </p>
         <button
           v-for="playlist in props.playlists"

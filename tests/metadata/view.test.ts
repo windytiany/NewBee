@@ -293,6 +293,9 @@ describe("metadata editor views", () => {
     const lyricsTab = findNode(root, (node) => node.props.id === "metadata-tab-lyrics");
     const tagsTab = findNode(root, (node) => node.props.id === "metadata-tab-tags");
     expect(input(root, "lyrics").type).toBe("textarea");
+    expect(input(root, "lyrics").props.placeholder).toBe("无歌词");
+    expect(getTextContent(root)).not.toContain("可编辑纯文本");
+    expect(findNode(root, (node) => node.props["aria-label"] === "歌词说明")).toBeNull();
     expect(input(root, "lyrics").props.value).toBe(
       "[00:01.00]Original lyrics\n[00:02.00]Second line",
     );

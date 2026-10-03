@@ -1,6 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateModule } from "../support/moduleLoader";
+import { InfoHelp } from "../support/infoHelp";
+import {
+  createHostNode,
+  createHostRenderer,
+  findNode,
+  getTextContent,
+} from "../support/hostRenderer";
+import type { HostNode } from "../support/hostRenderer";
 import type { NotificationInput } from "@/notification/center";
 
 const dialogSource = await Bun.file(
@@ -28,6 +36,7 @@ function createDialog(
   const notices: NotificationInput[] = [];
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/ui/InfoHelp.vue": InfoHelp,
     "@tauri-apps/api/core": { invoke, isTauri: () => isTauriApp },
     "@/notification/center": { notify: (notice: NotificationInput) => notices.push(notice) },
   };
@@ -52,6 +61,62 @@ function createDialog(
 }
 
 describe("path migration dialog", () => {
+  it("keeps migration rules behind the info button without hiding the form", async () => {
+    const component = evaluateModule<{ default: Vue.Component }>(
+      compileSfc(dialogSource, "src/library/ui/PathMigrationDialog.vue"),
+      {
+        vue: Vue,
+        "@/ui/InfoHelp.vue": InfoHelp,
+        "@tauri-apps/api/core": { invoke: async () => 0, isTauri: () => true },
+        "@/notification/center": { notify: () => {} },
+      },
+    ).default;
+    const renderer = createHostRenderer<HostNode>((type, text = "") =>
+      Object.assign(createHostNode(type, text), {
+        open: false,
+        value: "",
+        tagName: type.toUpperCase(),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        showModal() {
+          this.open = true;
+        },
+        close() {
+          this.open = false;
+        },
+      }),
+    );
+    const root = createHostNode("root");
+    const app = renderer.createApp(component);
+    const exposed = app.mount(root) as unknown as { show: () => void };
+    try {
+      exposed.show();
+      await Vue.nextTick();
+      expect(getTextContent(root)).toContain("原路径");
+      expect(getTextContent(root)).toContain("取消");
+      expect(findNode(root, (node) => node.props["aria-label"] === "关闭路径迁移")).toBeNull();
+      expect(getTextContent(root)).not.toContain("按字面前缀匹配");
+      expect(getTextContent(root)).not.toContain("不移动或检查实际文件");
+      const help = findNode(root, (node) => node.props["aria-label"] === "路径迁移说明");
+      if (!help || typeof help.props.onClick !== "function")
+        throw new Error("Missing migration help");
+      help.props.onClick();
+      await Vue.nextTick();
+      expect(getTextContent(root)).toContain("按字面前缀匹配");
+      expect(getTextContent(root)).toContain("不移动或检查实际文件");
+      expect(getTextContent(root)).toContain("路径冲突时整批回滚");
+      const close = findNode(root, (node) => node.props["aria-label"] === "关闭说明");
+      if (!close || typeof close.props.onClick !== "function")
+        throw new Error("Missing help close button");
+      close.props.onClick();
+      await Vue.nextTick();
+      expect(getTextContent(root)).not.toContain("按字面前缀匹配");
+      expect(getTextContent(root)).toContain("新路径");
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("sends both prefixes, reports the count, and closes after success", async () => {
     const calls: unknown[] = [];
     const { bindings, element, notices } = createDialog(async (command, args) => {

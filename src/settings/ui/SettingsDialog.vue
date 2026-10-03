@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { SETTINGS_CHANGED_EVENT, type Settings } from "@/settings/types";
 import { applyTheme, THEMES } from "@/settings/theme";
+import InfoHelp from "@/ui/InfoHelp.vue";
 
 const categories = { general: "常规", appearance: "外观", library: "媒体库" } as const;
 const selectedCategory = ref<keyof typeof categories>("general");
@@ -124,9 +125,26 @@ defineExpose({ show });
           aria-labelledby="settings-category-title"
           class="min-w-0 overflow-y-auto p-5 sm:p-6"
         >
-          <h3 id="settings-category-title" class="mb-6 text-base font-semibold">
-            {{ categories[selectedCategory] }}
-          </h3>
+          <div class="mb-6 flex items-center gap-2">
+            <h3 id="settings-category-title" class="text-base font-semibold">
+              {{ categories[selectedCategory] }}
+            </h3>
+            <InfoHelp :key="selectedCategory" :label="`${categories[selectedCategory]}设置说明`">
+              <template v-if="selectedCategory === 'general'">
+                <p>缩小到托盘时继续播放，点击托盘图标恢复窗口；直接退出时停止播放并退出。</p>
+                <p>托盘菜单中的“退出”始终会退出软件。</p>
+              </template>
+              <template v-else-if="selectedCategory === 'appearance'">
+                <p>启用专辑封面背景后，展开专辑时使用封面生成的模糊背景；关闭后使用默认背景。</p>
+                <p>保存后立即生效，下次启动时自动恢复。</p>
+              </template>
+              <template v-else>
+                <p>按完整发布日期排序，专辑仍只显示年份。</p>
+                <p>缺少日期的专辑排在最后，相同日期按名称排序。</p>
+                <p>升序为 A → Z 或从旧到新；降序为 Z → A 或从新到旧。</p>
+              </template>
+            </InfoHelp>
+          </div>
           <fieldset
             v-if="selectedCategory === 'appearance'"
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
@@ -148,22 +166,12 @@ defineExpose({ show });
             >
               <input
                 v-model="albumCoverBackground"
-                aria-describedby="album-cover-background-description"
                 class="accent-spotify-green mt-1"
                 name="album-cover-background"
                 type="checkbox"
               />
-              <span>
-                <span class="block text-sm font-semibold">专辑封面背景</span>
-                <span
-                  id="album-cover-background-description"
-                  class="text-spotify-muted mt-1 block text-xs"
-                >
-                  展开专辑时使用封面生成的模糊背景，关闭后使用默认深色背景。
-                </span>
-              </span>
+              <span class="text-sm font-semibold">专辑封面背景</span>
             </label>
-            <p class="text-spotify-muted mt-3 text-xs">保存后立即生效，下次启动时自动恢复。</p>
           </fieldset>
           <fieldset
             v-else-if="selectedCategory === 'general'"
@@ -180,12 +188,7 @@ defineExpose({ show });
                 type="radio"
                 value="tray"
               />
-              <span>
-                <span class="block text-sm">缩小到托盘</span>
-                <span class="text-spotify-muted mt-1 block text-xs"
-                  >继续播放音乐，点击托盘图标恢复窗口。</span
-                >
-              </span>
+              <span class="text-sm">缩小到托盘</span>
             </label>
             <label
               class="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
@@ -198,12 +201,8 @@ defineExpose({ show });
                 type="radio"
                 value="exit"
               />
-              <span>
-                <span class="block text-sm">直接退出</span>
-                <span class="text-spotify-muted mt-1 block text-xs">停止播放并退出软件。</span>
-              </span>
+              <span class="text-sm">直接退出</span>
             </label>
-            <p class="text-spotify-muted mt-3 text-xs">托盘菜单中的“退出”始终会退出软件。</p>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
             <legend class="sr-only">专辑排序</legend>
@@ -225,14 +224,11 @@ defineExpose({ show });
                   v-model="albumSortOrder"
                   class="bg-spotify-interactive focus-visible:outline-spotify-green rounded-lg border border-white/10 px-3 py-2 text-white focus-visible:outline-2"
                 >
-                  <option value="ascending">升序（A → Z / 从旧到新）</option>
-                  <option value="descending">降序（Z → A / 从新到旧）</option>
+                  <option value="ascending">升序</option>
+                  <option value="descending">降序</option>
                 </select>
               </label>
             </div>
-            <p class="text-spotify-muted mt-3 text-xs">
-              按完整发布日期排序，专辑仍只显示年份。缺少日期的专辑排在最后，相同日期按名称排序。
-            </p>
           </fieldset>
         </section>
       </div>

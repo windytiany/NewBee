@@ -20,7 +20,7 @@
         v-if="!props.isLoading && !props.error && props.playlists.length === 0"
         class="text-spotify-muted px-2 py-3 text-sm"
       >
-        还没有歌单。
+        无歌单
       </p>
       <ul v-if="props.playlists.length > 0" ref="playlistListElement" class="space-y-0.5">
         <PlaylistListItem

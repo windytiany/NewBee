@@ -27,7 +27,7 @@
           {{ details ? formatAudioSummary(details) : "" }}
         </p>
       </div>
-      <p v-else class="text-spotify-muted py-3 text-sm">开始播放后显示当前曲目信息和封面。</p>
+      <p v-else class="text-spotify-muted py-3 text-sm">未播放</p>
 
       <div
         v-if="track"

@@ -2,7 +2,6 @@
   <dialog
     ref="dialogElement"
     aria-labelledby="rename-playlist-dialog-title"
-    aria-describedby="rename-playlist-dialog-description"
     class="bg-spotify-surface m-auto w-[min(28rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
     @click.self="cancelDialog"
     @cancel.prevent="cancelDialog"
@@ -28,12 +27,6 @@
           autocomplete="off"
           @input="validationError = ''"
         />
-        <p
-          id="rename-playlist-dialog-description"
-          class="text-spotify-muted mt-3 text-sm leading-6"
-        >
-          输入新的歌单名称。
-        </p>
       </div>
 
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">

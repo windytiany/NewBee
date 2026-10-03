@@ -46,7 +46,7 @@
         v-if="!props.isLoading && !props.error && props.artists.length === 0"
         class="text-spotify-muted px-2 py-3 text-sm"
       >
-        音乐库中暂无专辑演出者。
+        无演出者
       </p>
       <ul v-if="props.artists.length > 0" class="space-y-0.5">
         <ArtistListItem

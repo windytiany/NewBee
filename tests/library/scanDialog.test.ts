@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateModule, transpileScript } from "../support/moduleLoader";
 import { createHostRenderer } from "../support/hostRenderer";
+import { InfoHelp } from "../support/infoHelp";
 import { notifications, notify } from "@/notification/center";
 import type { useLibraryScan } from "@/library/scan";
 import type { IngestResult } from "@/library/model";
@@ -60,6 +61,7 @@ function mountDialog(
     "@tauri-apps/api/core": { invoke, isTauri: () => true },
     "@tauri-apps/plugin-dialog": { open: async () => directory.path },
     "@/library/scan": { useLibraryScan: () => scan },
+    "@/ui/InfoHelp.vue": InfoHelp,
     "@/notification/center": { notify },
   };
   const component = evaluateModule<{ default: Vue.Component }>(dialogOutput, modules).default;
@@ -131,6 +133,31 @@ afterEach(() => {
 });
 
 describe("library scan dialog", () => {
+  it("keeps the empty state short and shows scan instructions only on demand", async () => {
+    const dialog = mountDialog(idleScan(), async () => []);
+    await settle();
+    expect(textContent(dialog.root)).toContain("无目录");
+    expect(button(dialog.root, "取消")).not.toBeNull();
+    expect(
+      find(dialog.root, (node) => node.type === "button" && textContent(node).trim() === "关闭"),
+    ).toBeNull();
+    expect(textContent(dialog.root)).not.toContain("移除扫描配置");
+    const help = find(dialog.root, (node) => node.props["aria-label"] === "扫描说明");
+    if (!help) throw new Error("Missing scan help");
+    click(help);
+    await settle();
+    expect(textContent(dialog.root)).toContain("移除扫描配置");
+    expect(textContent(dialog.root)).toContain("不会删除已入库歌曲");
+    const close = find(dialog.root, (node) => node.props["aria-label"] === "关闭说明");
+    if (!close) throw new Error("Missing help close button");
+    click(close);
+    await settle();
+    expect(textContent(dialog.root)).not.toContain("移除扫描配置");
+    expect(
+      find(dialog.root, (node) => node.props["aria-labelledby"] === "scan-dialog-title")?.open,
+    ).toBe(true);
+  });
+
   it("directory additions/removals update the list without success toasts", async () => {
     let directories: Directory[] = [];
     const dialog = mountDialog(idleScan(), async (command) => {

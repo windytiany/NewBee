@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateModule } from "../support/moduleLoader";
+import { InfoHelp } from "../support/infoHelp";
 import {
   createHostNode,
   createHostRenderer,
@@ -54,6 +55,7 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/ui/InfoHelp.vue": InfoHelp,
     "@tauri-apps/api/core": { invoke, isTauri: () => true },
     "@/settings/types": { SETTINGS_CHANGED_EVENT },
     "@/settings/theme": {
@@ -90,6 +92,7 @@ describe("settings dialog", () => {
   it("renders settings with category navigation and only cancel/save footer actions", async () => {
     const modules: Record<string, unknown> = {
       vue: Vue,
+      "@/ui/InfoHelp.vue": InfoHelp,
       "@tauri-apps/api/core": { invoke: async () => defaults, isTauri: () => true },
       "@/settings/types": { SETTINGS_CHANGED_EVENT },
       "@/settings/theme": { THEMES, applyTheme: () => {} },
@@ -161,6 +164,24 @@ describe("settings dialog", () => {
         expect(button.props["aria-current"]).toBe("true");
         expect(getTextContent(panel)).toContain(included);
         expect(getTextContent(panel)).not.toContain(excluded);
+        const explanation = {
+          常规: "托盘菜单中的",
+          外观: "保存后立即生效",
+          媒体库: "缺少日期的专辑",
+        }[category];
+        expect(getTextContent(panel)).not.toContain(explanation);
+        const help = findNode(panel, (node) => node.props["aria-label"] === `${category}设置说明`);
+        if (!help || typeof help.props.onClick !== "function")
+          throw new Error("Missing settings help");
+        help.props.onClick();
+        await Vue.nextTick();
+        expect(getTextContent(panel)).toContain(explanation);
+        const closeHelp = findNode(panel, (node) => node.props["aria-label"] === "关闭说明");
+        if (!closeHelp || typeof closeHelp.props.onClick !== "function")
+          throw new Error("Missing help close button");
+        closeHelp.props.onClick();
+        await Vue.nextTick();
+        expect(getTextContent(panel)).not.toContain(explanation);
         if (category === "外观") {
           expect(getTextContent(panel)).toContain("专辑封面背景");
           expect(

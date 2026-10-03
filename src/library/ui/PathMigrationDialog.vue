@@ -2,6 +2,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { notify } from "@/notification/center";
+import InfoHelp from "@/ui/InfoHelp.vue";
 
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const oldPath = ref("");
@@ -67,16 +68,20 @@ defineExpose({ show });
   >
     <form @submit.prevent="migrate">
       <header class="flex items-center justify-between border-b border-white/10 px-5 py-4">
-        <h2 id="path-migration-title" class="text-lg font-semibold">路径迁移</h2>
-        <button
-          aria-label="关闭路径迁移"
-          class="focus-visible:outline-spotify-green text-spotify-muted rounded px-2 py-1 text-sm hover:bg-white/10 hover:text-white focus-visible:outline-2 disabled:opacity-50"
-          :disabled="isMigrating"
-          type="button"
-          @click="close"
-        >
-          关闭
-        </button>
+        <div class="flex items-center gap-2">
+          <h2 id="path-migration-title" class="text-lg font-semibold">路径迁移</h2>
+          <InfoHelp label="路径迁移说明">
+            <p>
+              仅更新数据库中的曲目路径，不移动或检查实际文件，不修改扫描目录配置。
+              曲目信息、封面和歌单关系保持不变。
+            </p>
+            <p>
+              按字面前缀匹配，区分大小写，只替换开头，后续路径保持不变。
+              末尾的路径分隔符也参与替换，请在两处保持一致。 Windows 路径支持普通写法和 \\?\
+              写法。路径冲突时整批回滚。
+            </p>
+          </InfoHelp>
+        </div>
       </header>
       <fieldset :disabled="!isTauriApp || isMigrating" class="space-y-4 px-5 py-5">
         <legend class="sr-only">替换曲目路径前缀</legend>
@@ -84,10 +89,8 @@ defineExpose({ show });
           原路径
           <input
             v-model="oldPath"
-            aria-describedby="path-migration-description"
             autocomplete="off"
-            class="bg-spotify-interactive focus-visible:outline-spotify-green placeholder:text-spotify-muted rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
-            placeholder="C:\Music\"
+            class="bg-spotify-interactive focus-visible:outline-spotify-green rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
             spellcheck="false"
             type="text"
             required
@@ -97,22 +100,13 @@ defineExpose({ show });
           新路径
           <input
             v-model="newPath"
-            aria-describedby="path-migration-description"
             autocomplete="off"
-            class="bg-spotify-interactive focus-visible:outline-spotify-green placeholder:text-spotify-muted rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
-            placeholder="D:\Music\"
+            class="bg-spotify-interactive focus-visible:outline-spotify-green rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
             spellcheck="false"
             type="text"
             required
           />
         </label>
-        <p id="path-migration-description" class="text-spotify-muted text-xs leading-relaxed">
-          按字面前缀匹配，区分大小写，只替换开头，后续路径保持不变。末尾的路径分隔符也参与替换，请在两处保持一致。
-          Windows 路径支持普通写法和 \\?\ 写法。路径冲突时整批回滚。
-        </p>
-        <p class="text-spotify-muted text-xs leading-relaxed">
-          仅更新数据库中的曲目路径，不移动或检查实际文件，不修改扫描目录配置。曲目信息、封面和歌单关系保持不变。
-        </p>
       </fieldset>
       <p v-if="!isTauriApp" class="text-spotify-muted px-5 pb-4 text-sm">
         请在桌面应用中迁移路径。

@@ -15,7 +15,7 @@
         v-if="!props.albumsLoading && !props.albumsError && props.albums.length === 0"
         class="text-spotify-muted px-5 text-sm sm:px-8"
       >
-        此专辑演出者暂无专辑。
+        无专辑
       </p>
       <div
         v-else-if="!props.albumsLoading && !props.albumsError"
@@ -79,7 +79,7 @@
         </template>
       </div>
     </template>
-    <p v-else class="text-spotify-muted px-5 py-6 text-sm sm:px-8">请选择专辑演出者。</p>
+    <p v-else class="text-spotify-muted px-5 py-6 text-sm sm:px-8">请选择演出者</p>
     <AlbumContextMenu
       ref="albumMenu"
       :scope="albumListScope"

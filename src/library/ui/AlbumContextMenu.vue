@@ -58,7 +58,7 @@
         v-if="!playlistsLoading && !playlistsError && playlists.length === 0"
         class="text-spotify-muted px-2 py-2 text-sm"
       >
-        暂无可用歌单。
+        无歌单
       </p>
       <button
         v-for="playlist in playlists"

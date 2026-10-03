@@ -59,7 +59,7 @@
             :current-row-key="activeCurrentRowKey"
             :can-remove-from-queue="true"
             title="当前曲目列表"
-            empty-message="当前没有展示的曲目列表。"
+            empty-message="无曲目"
             @play-queue-item="playQueueItem"
             @remove-queue-items="removeQueueItems"
           />

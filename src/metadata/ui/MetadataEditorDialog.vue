@@ -173,7 +173,7 @@
           :value="lyricsField.value"
           :readonly="!lyricsField.writable"
           :disabled="state.saving || state.confirmSave || state.confirmDiscard"
-          placeholder="暂无内嵌歌词，可输入纯文本或 LRC 歌词"
+          placeholder="无歌词"
           class="focus-visible:outline-spotify-green min-h-80 w-full resize-y rounded border border-white/15 bg-black/20 px-3 py-2 font-mono text-sm read-only:text-white/50 focus-visible:outline-2 disabled:opacity-50"
           spellcheck="false"
           @input="editField(lyricsField, $event)"

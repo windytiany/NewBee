@@ -72,7 +72,7 @@
           "
           class="text-spotify-muted py-4 text-sm"
         >
-          此歌单暂无歌曲。
+          无曲目
         </p>
         <ol
           v-else-if="!props.isLoadingTracks && !props.playlistsError && !props.tracksError"
@@ -170,13 +170,13 @@
         v-if="!props.isLoadingPlaylists && !props.playlistsError && !props.hasPlaylists"
         class="text-spotify-muted text-sm"
       >
-        还没有歌单。
+        无歌单
       </p>
       <p
         v-else-if="!props.isLoadingPlaylists && !props.playlistsError"
         class="text-spotify-muted text-sm"
       >
-        请选择一个歌单。
+        请选择歌单
       </p>
     </div>
   </section>

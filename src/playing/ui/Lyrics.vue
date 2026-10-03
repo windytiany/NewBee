@@ -38,7 +38,7 @@
             { 'px-6': !props.compact },
           ]"
         >
-          暂无内嵌歌词
+          无歌词
         </div>
         <p
           v-else-if="props.lyrics.kind === 'plain'"

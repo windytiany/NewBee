@@ -8,18 +8,13 @@
   >
     <section class="flex max-h-[85vh] flex-col">
       <header class="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
-        <div>
+        <div class="flex items-center gap-2">
           <h2 id="scan-dialog-title" class="text-lg font-semibold">扫描文件夹</h2>
-          <p class="text-spotify-muted mt-1 text-sm">管理音乐目录，然后扫描其中支持的音频文件。</p>
+          <InfoHelp label="扫描说明">
+            <p>添加音乐目录后，扫描其中支持的音频文件。</p>
+            <p>移除目录只会移除扫描配置，不会删除已入库歌曲。</p>
+          </InfoHelp>
         </div>
-        <button
-          aria-label="关闭"
-          class="focus-visible:outline-spotify-green text-spotify-muted rounded px-2 py-1 text-sm hover:bg-white/10 hover:text-white focus-visible:outline-2"
-          type="button"
-          @click="closeDialog"
-        >
-          关闭
-        </button>
       </header>
 
       <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -62,12 +57,9 @@
           v-else-if="!isLoadingDirectories && !directoryLoadFailed"
           class="text-spotify-muted mt-3 rounded-lg bg-white/5 px-3 py-4 text-sm"
         >
-          尚未添加目录。点击“添加目录”选择文件夹。
+          无目录
         </p>
 
-        <p class="text-spotify-muted mt-3 text-xs">
-          移除目录只会移除扫描配置，不会删除已入库歌曲。
-        </p>
         <p v-if="!isTauriApp" class="text-spotify-muted mt-3 text-sm">
           请在桌面应用中选择和扫描目录。
         </p>
@@ -80,7 +72,7 @@
             type="button"
             @click="closeDialog"
           >
-            关闭
+            取消
           </button>
           <button
             class="bg-spotify-green focus-visible:outline-spotify-green rounded-full px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -104,6 +96,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
 import { useLibraryScan } from "@/library/scan";
 import { notify } from "@/notification/center";
+import InfoHelp from "@/ui/InfoHelp.vue";
 
 type LibraryDirectory = {
   id: number;

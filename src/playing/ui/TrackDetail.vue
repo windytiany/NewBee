@@ -89,7 +89,6 @@
         >
           {{ details?.artist ?? track.artist ?? "未知艺术家" }}
         </p>
-        <p v-else class="text-spotify-muted text-sm" role="status">当前没有播放曲目。</p>
         <p
           v-if="track"
           :class="
