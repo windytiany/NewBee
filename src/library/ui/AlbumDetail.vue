@@ -50,30 +50,36 @@
     </header>
 
     <h3 class="sr-only">曲目</h3>
-    <ol
+    <div
       v-if="!props.tracksLoading && !props.tracksError && props.tracks.length > 0"
       ref="trackListElement"
-      class="relative grid gap-x-8"
-      :class="trackColumnCount === 2 ? 'grid-flow-col grid-cols-2' : 'grid-cols-1'"
-      :style="{
-        gridTemplateRows: `repeat(${Math.ceil(props.tracks.length / trackColumnCount)}, auto)`,
-      }"
+      class="relative grid gap-x-8 gap-y-6"
     >
-      <AlbumTrack
-        v-for="(track, index) in props.tracks"
-        :key="track.id"
-        :track="track"
-        :album-artist="props.albumArtist"
-        :index="index"
-        :is-focused="trackFocus.isFocused(String(track.id))"
-        :is-selected="trackFocus.isSelected(String(track.id))"
-        :is-current-track="track.id === props.currentTrackId"
-        :is-context-menu-open="contextMenu?.payload.itemKey === String(track.id)"
-        @select="selectTrack(track.id, $event)"
-        @play="emit('playTrack', track.id)"
-        @context-menu="openTrackContextMenu"
-      />
-    </ol>
+      <ol
+        v-for="disc in trackDiscs"
+        :key="disc.number"
+        :aria-label="`第 ${disc.number} 碟`"
+        class="grid gap-x-8"
+        :class="trackColumnCount === 2 ? 'grid-flow-col grid-cols-2' : 'grid-cols-1'"
+        :style="{
+          gridTemplateRows: `repeat(${Math.ceil(disc.tracks.length / trackColumnCount)}, auto)`,
+        }"
+      >
+        <AlbumTrack
+          v-for="track in disc.tracks"
+          :key="track.id"
+          :track="track"
+          :album-artist="props.albumArtist"
+          :is-focused="trackFocus.isFocused(String(track.id))"
+          :is-selected="trackFocus.isSelected(String(track.id))"
+          :is-current-track="track.id === props.currentTrackId"
+          :is-context-menu-open="contextMenu?.payload.itemKey === String(track.id)"
+          @select="selectTrack(track.id, $event)"
+          @play="emit('playTrack', track.id)"
+          @context-menu="openTrackContextMenu"
+        />
+      </ol>
+    </div>
     <p
       v-else-if="!props.tracksLoading && !props.tracksError"
       class="text-spotify-muted relative py-3 text-sm"
@@ -244,14 +250,29 @@ const backgroundStyle = computed(() => ({
   backgroundSize: "100% 100%",
 }));
 
-const trackListElement = ref<InstanceType<typeof globalThis.HTMLOListElement> | null>(null);
+const trackDiscs = computed(() => {
+  const discs = new Map<number, TrackSummary[]>();
+  for (const track of props.tracks) {
+    const number = track.discNumber ?? 1;
+    const tracks = discs.get(number);
+    if (tracks) tracks.push(track);
+    else discs.set(number, [track]);
+  }
+  return [...discs]
+    .sort(([left], [right]) => left - right)
+    .map(([number, tracks]) => ({ number, tracks }));
+});
+
+const trackListElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const trackColumnCount = useAlbumTrackColumns(trackListElement);
 
 const trackListScope = computed(() =>
   JSON.stringify(["library", "album-tracks", props.albumArtist, props.album.album]),
 );
 const trackFocus = useItemFocusList(trackListScope);
-const visibleTrackKeys = computed(() => props.tracks.map((track) => String(track.id)));
+const visibleTrackKeys = computed(() =>
+  trackDiscs.value.flatMap((disc) => disc.tracks.map((track) => String(track.id))),
+);
 
 watch(visibleTrackKeys, (itemKeys) => trackFocus.syncVisibleItems(itemKeys), {
   immediate: true,

@@ -9,6 +9,8 @@ export type AlbumSummary = {
 };
 
 export type TrackSummary = {
+  discNumber: number | null;
+  trackNumber: number | null;
   id: number;
   title: string | null;
   artist: string | null;

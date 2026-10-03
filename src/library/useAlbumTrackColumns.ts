@@ -11,7 +11,7 @@ export function calculateAlbumTrackColumns(
   return requiredRowWidths.every((width) => width <= columnWidth) ? 2 : 1;
 }
 
-export function useAlbumTrackColumns(listElement: Ref<HTMLOListElement | null>) {
+export function useAlbumTrackColumns(listElement: Ref<HTMLElement | null>) {
   const columnCount = ref<1 | 2>(1);
   let resizeObserver: ResizeObserver | null = null;
   let scheduledHandle: number | null = null;

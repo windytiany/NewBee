@@ -40,6 +40,8 @@ pub struct AlbumSummary {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackSummary {
+    disc_number: Option<i64>,
+    track_number: Option<i64>,
     id: i64,
     title: Option<String>,
     artist: Option<String>,

@@ -251,7 +251,7 @@ impl Database {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
-                "SELECT id, title, artist, album, duration_ms
+                "SELECT id, title, artist, album, duration_ms, disc_number, track_number
                  FROM tracks
                  WHERE album_artist IS ?1 AND album IS ?2
                  ORDER BY disc_number IS NULL, disc_number,
@@ -261,6 +261,8 @@ impl Database {
         let rows = statement
             .query_map(params![album_artist, album], |row| {
                 Ok(TrackSummary {
+                    disc_number: row.get(5)?,
+                    track_number: row.get(6)?,
                     id: row.get(0)?,
                     title: row.get(1)?,
                     artist: row.get(2)?,

@@ -196,7 +196,9 @@ describe("专辑背景展示", () => {
       borderBottomColor: "var(--album-background-color, var(--app-interactive))",
     });
     expect(findNode(detail, (node) => node.type === "header")?.props.class).toContain("relative");
-    expect(findNode(detail, (node) => node.type === "ol")?.props.class).toContain("relative");
+    expect(findNode(detail, (node) => node.type === "ol")?.parent?.props.class).toContain(
+      "relative",
+    );
   });
 
   it("背景存在时右键菜单仍为 fixed，所有祖先均不使用模糊、变换或裁剪", async () => {

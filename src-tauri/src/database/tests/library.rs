@@ -4,6 +4,45 @@ use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use rusqlite::params;
 
 #[test]
+fn album_tracks_expose_disc_and_track_numbers_in_disc_order() {
+    let database = Database::open(":memory:").unwrap();
+    for (id, disc, track) in [
+        (1, Some(2), Some(1)),
+        (2, Some(1), Some(4)),
+        (3, Some(1), Some(1)),
+        (4, None, None),
+    ] {
+        insert_track(&database, id, Some("Artist"), Some("Album"), 1, None);
+        database
+            .connection()
+            .unwrap()
+            .execute(
+                "UPDATE tracks SET disc_number = ?1, track_number = ?2 WHERE id = ?3",
+                params![disc, track, id],
+            )
+            .unwrap();
+    }
+    let tracks = database
+        .list_album_tracks(Some("Artist".to_owned()), Some("Album".to_owned()))
+        .unwrap();
+    assert_eq!(
+        tracks
+            .iter()
+            .map(|track| (track.id, track.disc_number, track.track_number))
+            .collect::<Vec<_>>(),
+        vec![
+            (3, Some(1), Some(1)),
+            (2, Some(1), Some(4)),
+            (1, Some(2), Some(1)),
+            (4, None, None),
+        ]
+    );
+    let serialized = serde_json::to_value(&tracks[2]).unwrap();
+    assert_eq!(serialized["discNumber"], 2);
+    assert_eq!(serialized["trackNumber"], 1);
+}
+
+#[test]
 fn album_date_sorting_uses_full_dates_but_exposes_only_the_year() {
     let database = Database::open(":memory:").unwrap();
     for (id, album, release_date) in [

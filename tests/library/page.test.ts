@@ -8,6 +8,8 @@ import { SETTINGS_CHANGED_EVENT } from "@/settings/types";
 const artist = { albumArtist: "Artist", albumCount: 1 };
 const album = { album: "Album", year: 2024 };
 const track = {
+  discNumber: 1,
+  trackNumber: 1,
   id: 41,
   title: "Song",
   artist: "Artist",
@@ -15,6 +17,8 @@ const track = {
   durationMs: 100,
 };
 const secondTrack = {
+  discNumber: 1,
+  trackNumber: 2,
   id: 42,
   title: "Second song",
   artist: "Artist",
@@ -22,6 +26,8 @@ const secondTrack = {
   durationMs: 120,
 };
 const thirdTrack = {
+  discNumber: 1,
+  trackNumber: 3,
   id: 43,
   title: "Third song",
   artist: "Artist",

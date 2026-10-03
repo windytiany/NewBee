@@ -5,6 +5,7 @@ import { createHostRenderer, findNode, getTextContent, removeNode } from "../sup
 import { createItemFocusManager } from "@/interaction/itemFocus";
 import * as contextMenuModule from "@/interaction/contextMenu";
 import type { ItemSelectionModifiers } from "@/interaction/itemFocus";
+import type { TrackSummary } from "@/library/model";
 
 type HostNode = {
   type: string;
@@ -20,10 +21,34 @@ type HostNode = {
 
 type ItemFocusManager = ReturnType<typeof createItemFocusManager>;
 
-const tracks = [
-  { id: 1, title: "First", album: "Album", durationMs: 100 },
-  { id: 2, title: "Second", album: "Album", durationMs: 110 },
-  { id: 3, title: "Third", album: "Album", durationMs: 120 },
+const tracks: TrackSummary[] = [
+  {
+    id: 1,
+    title: "First",
+    artist: "Artist",
+    album: "Album",
+    durationMs: 100,
+    discNumber: null,
+    trackNumber: 1,
+  },
+  {
+    id: 2,
+    title: "Second",
+    artist: "Artist",
+    album: "Album",
+    durationMs: 110,
+    discNumber: null,
+    trackNumber: 2,
+  },
+  {
+    id: 3,
+    title: "Third",
+    artist: "Artist",
+    album: "Album",
+    durationMs: 120,
+    discNumber: null,
+    trackNumber: 3,
+  },
 ];
 const mountedApps: Array<{ unmount: () => void }> = [];
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
@@ -91,7 +116,7 @@ function createComponent(source: string) {
   });
   const icon = Vue.defineComponent({ setup: () => () => null });
   const AlbumTrack = Vue.defineComponent({
-    props: ["track", "index", "isFocused", "isSelected", "isCurrentTrack", "isContextMenuOpen"],
+    props: ["track", "isFocused", "isSelected", "isCurrentTrack", "isContextMenuOpen"],
     emits: ["select", "play", "context-menu"],
     setup(props, { emit }) {
       return () =>
@@ -182,7 +207,7 @@ function createHostNode(type: string, text = ""): HostNode {
   return node;
 }
 
-function mountAlbumDetail() {
+function mountAlbumDetail(sourceTracks = tracks) {
   const renderer = createHostRenderer(createHostNode, {
     remove: (node) => {
       if (!node.parent) return;
@@ -196,7 +221,7 @@ function mountAlbumDetail() {
       Vue.h(albumDetail, {
         album: { albumArtist: "Artist", album: "Album", year: 2024 },
         albumArtist: "Artist",
-        tracks,
+        tracks: sourceTracks,
         currentTrackId: null,
         tracksLoading: false,
         tracksError: "",
@@ -289,6 +314,31 @@ afterEach(() => {
 });
 
 describe("专辑曲目上下文菜单目标", () => {
+  it("按碟分组，每碟独立计算双列行数，跨碟仍可连续多选", async () => {
+    const root = mountAlbumDetail([
+      { ...tracks[0]!, discNumber: 1, trackNumber: 1 },
+      { ...tracks[1]!, discNumber: 1, trackNumber: 4 },
+      { ...tracks[2]!, discNumber: 2, trackNumber: 1 },
+    ]);
+    const firstDisc = findNode(root, (node) => node.props["aria-label"] === "第 1 碟");
+    const secondDisc = findNode(root, (node) => node.props["aria-label"] === "第 2 碟");
+    expect(firstDisc?.type).toBe("ol");
+    expect(secondDisc?.type).toBe("ol");
+    expect(firstDisc && getTextContent(firstDisc)).toBe("FirstSecond");
+    expect(secondDisc && getTextContent(secondDisc)).toBe("Third");
+    expect(firstDisc?.props.style).toEqual({ gridTemplateRows: "repeat(1, auto)" });
+    expect(secondDisc?.props.style).toEqual({ gridTemplateRows: "repeat(1, auto)" });
+    clickNode(findTrackButton(root, 1)!);
+    clickNode(findTrackButton(root, 3)!, { ctrlKey: false, shiftKey: true });
+    await settle();
+    expect(itemFocusManager.selection.value?.selectedItemKeys).toEqual(["1", "2", "3"]);
+  });
+
+  it("缺少碟号的曲目归入第一碟", () => {
+    const root = mountAlbumDetail();
+    const disc = findNode(root, (node) => node.props["aria-label"] === "第 1 碟");
+    expect(disc && getTextContent(disc)).toBe("FirstSecondThird");
+  });
   it("标题区显示专辑标题和专辑艺术家（年份）", () => {
     const root = mountAlbumDetail();
     const heading = findNode(root, (node) => node.type === "h2");

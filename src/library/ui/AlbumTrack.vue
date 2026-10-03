@@ -18,7 +18,7 @@
       @keydown="handleContextMenuKeydown"
     >
       <span class="text-spotify-muted w-5 shrink-0 text-right tabular-nums">
-        {{ props.index + 1 }}
+        {{ props.track.trackNumber ?? "-" }}
       </span>
       <AudioLines
         v-if="props.isCurrentTrack"
@@ -55,7 +55,6 @@ import { formatTrackDuration } from "@/library/formatTrack";
 const props = defineProps<{
   track: TrackSummary;
   albumArtist: string | null;
-  index: number;
   isFocused: boolean;
   isSelected: boolean;
   isCurrentTrack: boolean;
