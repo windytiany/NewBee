@@ -30,6 +30,11 @@ const modules: Record<string, unknown> = {
   vue: Vue,
   "@lucide/vue": { ChevronRight: Vue.defineComponent({ setup: () => () => null }) },
   "@/interaction/contextMenu": contextMenuModule,
+  "@/metadata/ui/MetadataEditMenuItem.vue": Vue.defineComponent({
+    props: ["album"],
+    setup: (props) => () =>
+      Vue.h("button", { "data-edit-album": JSON.stringify(props.album) }, "编辑"),
+  }),
 };
 const AlbumContextMenu = evaluateModule<{ default: Vue.Component }>(output, modules).default;
 
@@ -128,6 +133,16 @@ afterEach(() => {
 });
 
 describe("album context menu", () => {
+  it("passes the exact right-clicked group to the metadata editor", async () => {
+    const menu = mountMenu();
+    await menu.open();
+    expect(
+      findNodes(menu.root, (node) => node.props["data-edit-album"] !== undefined)[0]?.props[
+        "data-edit-album"
+      ],
+    ).toBe(JSON.stringify(album));
+  });
+
   it("emits the right-clicked album for queue and deletion actions", async () => {
     const menu = mountMenu();
     for (const label of ["添加为下一首", "添加到队尾", "从库中删除"]) {

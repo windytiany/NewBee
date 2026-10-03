@@ -34,6 +34,40 @@ fn imports_multiple_files_and_preserves_original_locations() {
 }
 
 #[test]
+fn imports_and_rescans_numbers_and_totals_from_combined_tags() {
+    use lofty::{
+        config::WriteOptions,
+        prelude::*,
+        tag::{Tag, TagType},
+    };
+    let files = TestFiles::new();
+    let path = files.wav("numbers.wav");
+    let mut tag = Tag::new(TagType::Id3v2);
+    tag.set_track(1);
+    tag.set_track_total(7);
+    tag.set_disk(1);
+    tag.set_disk_total(2);
+    tag.save_to_path(&path, WriteOptions::default()).unwrap();
+    let database = Database::open(":memory:").unwrap();
+    assert_eq!(run_import(&database, std::slice::from_ref(&path)).added, 1);
+    let track = serde_json::to_value(database.get_track(1).unwrap().unwrap()).unwrap();
+    assert_eq!(track["trackNumber"], 1);
+    assert_eq!(track["trackTotal"], 7);
+    assert_eq!(track["discNumber"], 1);
+    assert_eq!(track["discTotal"], 2);
+    tag.set_track_total(12);
+    tag.save_to_path(&path, WriteOptions::default()).unwrap();
+    assert_eq!(
+        run_import(&database, std::slice::from_ref(&path)).updated,
+        1
+    );
+    assert_eq!(
+        serde_json::to_value(database.get_track(1).unwrap().unwrap()).unwrap()["trackTotal"],
+        12
+    );
+}
+
+#[test]
 fn skips_duplicate_selections_and_updates_existing_tracks_without_changing_ids() {
     let files = TestFiles::new();
     let path = files.wav("song.wav");

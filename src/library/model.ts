@@ -26,6 +26,8 @@ export type TrackDetails = {
   releaseDate: string | null;
   discNumber: number | null;
   trackNumber: number | null;
+  discTotal: number | null;
+  trackTotal: number | null;
   durationMs: number | null;
   codec: string | null;
   sampleRateHz: number | null;

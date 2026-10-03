@@ -74,6 +74,7 @@
         {{ playlist.name }}
       </button>
     </div>
+    <MetadataEditMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
     <div class="my-1 border-t border-white/10" role="separator"></div>
     <button
       class="focus-visible:outline-spotify-green w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
@@ -91,6 +92,7 @@
 import { nextTick, ref, watch } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import { useContextMenu } from "@/interaction/contextMenu";
+import MetadataEditMenuItem from "@/metadata/ui/MetadataEditMenuItem.vue";
 import type { LibraryAlbumSelection } from "@/library/selection";
 import type { PlaylistSummary } from "@/playlist/model";
 

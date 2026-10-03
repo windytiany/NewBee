@@ -201,6 +201,7 @@ const emptyLibraryPage = () => ({
 const appModules: Record<string, unknown> = {
   ...vueModules,
   "@/notification/useNotification": { useNotification },
+  "@/metadata/ui/MetadataEditorDialog.vue": { __esModule: true, default: passiveComponent },
   "@/notification/ui/NotificationHost.vue": { __esModule: true, default: passiveComponent },
   "@/navigation/activePage": { usePersistentActivePage: () => ({ activePage }) },
   "@/library/useLibraryPage": { useLibraryPage: emptyLibraryPage },

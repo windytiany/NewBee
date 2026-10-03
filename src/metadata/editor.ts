@@ -1,0 +1,248 @@
+import { Channel, invoke } from "@tauri-apps/api/core";
+import { reactive } from "vue";
+import type { LibraryAlbumSelection } from "@/library/selection";
+import type { TrackDetails, TrackSummary } from "@/library/model";
+import { LIBRARY_CHANGED_EVENT } from "@/library/changes";
+import { notify } from "@/notification/center";
+import { usePlaybackSession } from "@/playback/session";
+import { buildMetadataChanges, createMetadataDraft } from "@/metadata/model";
+import type {
+  DraftField,
+  EditableTrack,
+  EditMode,
+  MetadataChange,
+  MetadataSaveResult,
+} from "@/metadata/model";
+
+export type MetadataEditorOptions = {
+  loadTracks: (trackIds: number[]) => Promise<EditableTrack[]>;
+  loadAlbum: (album: LibraryAlbumSelection) => Promise<number[]>;
+  save: (
+    trackIds: number[],
+    changes: MetadataChange[],
+    progress: (result: MetadataSaveResult) => void,
+  ) => Promise<MetadataSaveResult[]>;
+  synchronize: (trackIds: number[]) => Promise<void>;
+  notify: typeof notify;
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function createMetadataEditor(options: MetadataEditorOptions) {
+  const state = reactive({
+    open: false,
+    mode: "tracks" as EditMode,
+    loading: false,
+    saving: false,
+    tracks: [] as EditableTrack[],
+    draft: [] as DraftField[],
+    error: "",
+    dirty: false,
+    confirmDiscard: false,
+    confirmSave: false,
+    results: [] as MetadataSaveResult[],
+    completed: 0,
+    total: 0,
+  });
+  let loadGeneration = 0;
+  let saveGeneration = 0;
+  let pendingChanges: MetadataChange[] = [];
+  let pendingTrackIds: number[] = [];
+
+  async function open(loadIds: () => Promise<number[]>, mode: EditMode) {
+    if (state.open) return;
+    const generation = ++loadGeneration;
+    Object.assign(state, {
+      open: true,
+      mode,
+      loading: true,
+      saving: false,
+      tracks: [],
+      draft: [],
+      error: "",
+      dirty: false,
+      confirmDiscard: false,
+      confirmSave: false,
+      results: [],
+      completed: 0,
+      total: 0,
+    });
+    try {
+      const ids = [...new Set(await loadIds())];
+      if (ids.length === 0) throw new Error("没有可编辑的曲目。");
+      const tracks = await options.loadTracks(ids);
+      if (!state.open || generation !== loadGeneration) return;
+      if (
+        tracks.length !== ids.length ||
+        new Set(tracks.map(({ track }) => track.id)).size !== ids.length ||
+        tracks.some(({ track }) => !ids.includes(track.id))
+      ) {
+        throw new Error("返回的曲目与编辑目标不匹配。");
+      }
+      state.tracks = tracks;
+      state.draft = createMetadataDraft(tracks, mode);
+    } catch (error) {
+      if (state.open && generation === loadGeneration) state.error = errorMessage(error);
+    } finally {
+      if (generation === loadGeneration) state.loading = false;
+    }
+  }
+
+  function close() {
+    if (state.saving) return;
+    ++loadGeneration;
+    state.open = false;
+    state.confirmDiscard = false;
+  }
+
+  function requestClose() {
+    if (state.saving) return;
+    if (state.dirty) state.confirmDiscard = true;
+    else close();
+  }
+
+  function changeField(field: DraftField, value: string) {
+    if (state.saving || !field.writable) return;
+    field.value = value;
+    field.mixed = false;
+    edited();
+  }
+
+  function edited() {
+    state.dirty = true;
+    state.error = "";
+    state.results = [];
+    state.confirmSave = false;
+  }
+
+  function prepareTargetSave(trackIds: number[]) {
+    if (state.loading || state.saving) return;
+    state.error = "";
+    try {
+      pendingChanges = buildMetadataChanges(state.draft, state.tracks);
+      pendingTrackIds = trackIds;
+      if (pendingTrackIds.length === 0) return;
+      if (state.tracks.length > 1) state.confirmSave = true;
+      else void save();
+    } catch (error) {
+      state.error = errorMessage(error);
+    }
+  }
+
+  async function save() {
+    if (state.saving || pendingTrackIds.length === 0) return;
+    const ids = [...pendingTrackIds];
+    state.confirmSave = false;
+    state.saving = true;
+    state.completed = 0;
+    state.total = ids.length;
+    const generation = ++saveGeneration;
+    let acceptingProgress = true;
+    const completedIds = new Set<number>();
+    const previous = new Map(state.results.map((result) => [result.trackId, result]));
+    const progress = (result: MetadataSaveResult) => {
+      if (!acceptingProgress || generation !== saveGeneration || !ids.includes(result.trackId))
+        return;
+      previous.set(result.trackId, result);
+      completedIds.add(result.trackId);
+      state.results = [...previous.values()];
+      state.completed = completedIds.size;
+    };
+    try {
+      const results = await options.save(ids, pendingChanges, progress);
+      acceptingProgress = false;
+      for (const result of results) previous.set(result.trackId, result);
+      state.results = [...previous.values()];
+      state.completed = ids.length;
+      const updated = results.flatMap((result) => (result.databaseUpdated ? [result.trackId] : []));
+      if (updated.length > 0) {
+        try {
+          await options.synchronize(updated);
+        } catch (error) {
+          state.error = `元数据已保存，但界面刷新失败：${errorMessage(error)}`;
+        }
+      }
+      const failed = state.results.filter((result) => !result.databaseUpdated).length;
+      options.notify({
+        type: failed > 0 || state.error ? "warning" : "success",
+        message: saveMessage(
+          state.tracks.length,
+          state.results.length - failed,
+          failed,
+          state.error,
+        ),
+        key: failed > 0 ? "metadata-save" : undefined,
+      });
+      state.dirty = failed > 0;
+      if (failed === 0 && !state.error) state.open = false;
+    } catch (error) {
+      state.error = errorMessage(error);
+      options.notify({
+        type: "error",
+        message: `保存元数据失败：${state.error}`,
+        key: "metadata-save",
+      });
+    } finally {
+      acceptingProgress = false;
+      state.saving = false;
+    }
+  }
+
+  return {
+    state,
+    openTracks: (ids: readonly number[]) => open(() => Promise.resolve([...ids]), "tracks"),
+    openAlbum: (album: LibraryAlbumSelection) => open(() => options.loadAlbum(album), "album"),
+    requestClose,
+    close,
+    changeField,
+    edited,
+    save,
+    prepareSave: () => prepareTargetSave(state.tracks.map(({ track }) => track.id)),
+    retryFailed: () =>
+      prepareTargetSave(
+        state.results.flatMap((result) => (result.databaseUpdated ? [] : [result.trackId])),
+      ),
+    get pendingFieldLabels() {
+      return pendingChanges.map(
+        ({ field }) => state.draft.find((entry) => entry.key === field)?.label ?? field,
+      );
+    },
+    get pendingCount() {
+      return pendingTrackIds.length;
+    },
+  };
+}
+
+function saveMessage(targetCount: number, succeeded: number, failed: number, error: string) {
+  let message = failed > 0 ? "元数据保存失败。" : "元数据已保存。";
+  if (targetCount > 1) message = `元数据保存：${succeeded} 首成功，${failed} 首失败。`;
+  return error ? `${message}\n${error}` : message;
+}
+
+let sharedEditor: ReturnType<typeof createMetadataEditor> | null = null;
+export function useMetadataEditor() {
+  if (sharedEditor) return sharedEditor;
+  const session = usePlaybackSession();
+  sharedEditor = createMetadataEditor({
+    loadTracks: (trackIds) => invoke("get_editable_tracks", { trackIds }),
+    loadAlbum: async (album) =>
+      (await invoke<TrackSummary[]>("list_album_tracks", album)).map((track) => track.id),
+    save: (trackIds, changes, progress) =>
+      session.withMetadataEditing(trackIds, () => {
+        const onProgress = new Channel<MetadataSaveResult>();
+        onProgress.onmessage = progress;
+        return invoke("save_track_metadata", { trackIds, changes, onProgress });
+      }),
+    synchronize: async (trackIds) => {
+      globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
+      const tracks = await Promise.all(
+        trackIds.map((trackId) => invoke<TrackDetails | null>("get_track", { trackId })),
+      );
+      session.updateTrackMetadata(tracks.filter((track): track is TrackDetails => track !== null));
+    },
+    notify,
+  });
+  return sharedEditor;
+}

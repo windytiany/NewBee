@@ -208,7 +208,26 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
     }
   }
 
+  async function withMetadataEditing<T>(
+    trackIds: readonly number[],
+    save: () => Promise<T>,
+  ): Promise<T> {
+    if (options.isCommandPending.value) throw new Error("播放操作尚未完成，请稍后重试。");
+    const generation = beginUserIntent();
+    setSessionCommandPending(generation, true);
+    options.coordinator.invalidatePendingAdvance();
+    try {
+      await options.playbackState.releasePlaybackForEditing(trackIds);
+      if (options.currentTrack.value?.playbackId === null) options.coordinator.detachPlayback();
+      return await save();
+    } finally {
+      setSessionCommandPending(generation, false);
+      await options.refreshStatus();
+    }
+  }
+
   return Object.freeze({
+    withMetadataEditing,
     playTracks,
     playQueueItem,
     playPreviousTrack,

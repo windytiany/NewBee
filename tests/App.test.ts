@@ -173,6 +173,7 @@ async function createComponent(source: string) {
     vue: Vue,
     "@/notification/center": { notify },
     "@/notification/useNotification": { useNotification },
+    "@/metadata/ui/MetadataEditorDialog.vue": defaultModule(passiveComponent),
     "@/notification/ui/NotificationHost.vue": defaultModule(passiveComponent),
     "@/navigation/activePage": {
       usePersistentActivePage: () => ({ activePage }),

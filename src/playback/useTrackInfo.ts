@@ -3,6 +3,7 @@ import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import type { TrackDetails } from "@/library/model";
 import { useNotification } from "@/notification/useNotification";
+import { LIBRARY_CHANGED_EVENT } from "@/library/changes";
 
 export type TrackInfoInvoker = <Result>(
   command: "get_track",
@@ -78,7 +79,13 @@ export function useTrackInfo(
     flush: "sync",
   });
 
+  function reloadCurrentTrack() {
+    if (currentTrackId !== null) void loadCurrentTrackDetails(currentTrackId);
+  }
+  globalThis.window?.addEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentTrack);
+
   onScopeDispose(() => {
+    globalThis.window?.removeEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentTrack);
     currentTrackId = null;
     ++detailsRequestGeneration;
     stopWatching();

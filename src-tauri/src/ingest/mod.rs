@@ -25,10 +25,12 @@ pub fn supported_audio_extensions() -> Vec<&'static str> {
 pub struct IngestState(Arc<AtomicBool>);
 
 impl IngestState {
-    fn acquire(&self) -> Result<IngestGuard, String> {
+    pub(crate) fn acquire(&self) -> Result<IngestGuard, String> {
         self.0
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .map_err(|_| "A music library scan or import is already running".to_owned())?;
+            .map_err(|_| {
+                "A music library scan, import or metadata save is already running".to_owned()
+            })?;
         Ok(IngestGuard(Arc::clone(&self.0)))
     }
 }
@@ -42,7 +44,7 @@ pub struct IngestResult {
     failed: u64,
 }
 
-struct IngestGuard(Arc<AtomicBool>);
+pub(crate) struct IngestGuard(Arc<AtomicBool>);
 
 impl Drop for IngestGuard {
     fn drop(&mut self) {
@@ -117,6 +119,8 @@ fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String> {
         release_date,
         disc_number,
         track_number,
+        disc_total: tag.and_then(|tag| tag.disk_total()).map(i64::from),
+        track_total: tag.and_then(|tag| tag.track_total()).map(i64::from),
         duration_ms,
         codec: codec_for_file_type(file_type).map(str::to_owned),
         sample_rate_hz: properties.sample_rate().map(i64::from),

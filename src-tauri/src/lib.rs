@@ -1,6 +1,7 @@
 mod database;
 mod ingest;
 pub mod lyrics;
+mod metadata;
 mod playback;
 mod settings;
 #[cfg(windows)]
@@ -69,6 +70,8 @@ pub fn run() {
             database::commands::set_tracks_skipped,
             database::commands::get_track,
             database::commands::get_track_artwork,
+            metadata::get_editable_tracks,
+            metadata::save_track_metadata,
             playback::play_track,
             playback::prepare_next_track,
             playback::set_volume,

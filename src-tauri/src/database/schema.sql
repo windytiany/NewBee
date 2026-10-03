@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS tracks (
     release_date TEXT,
     disc_number INTEGER,
     track_number INTEGER,
+    disc_total INTEGER,
+    track_total INTEGER,
     duration_ms INTEGER,
     codec TEXT,
     sample_rate_hz INTEGER,

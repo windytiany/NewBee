@@ -159,6 +159,11 @@
           {{ playlist.name }}
         </button>
       </div>
+      <MetadataEditMenuItem
+        :track-ids="contextMenu.payload.targetTrackIds"
+        :disabled="props.trackActionPending"
+        @close="closeTrackContextMenu(true)"
+      />
       <TrackSkipMenuItem
         :track-ids="contextMenu.payload.targetTrackIds"
         :disabled="props.trackActionPending"
@@ -192,6 +197,7 @@ import type { AlbumBackground } from "@/artwork/albumBackground";
 import type { PlaylistSummary } from "@/playlist/model";
 import AlbumTrack from "@/library/ui/AlbumTrack.vue";
 import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
+import MetadataEditMenuItem from "@/metadata/ui/MetadataEditMenuItem.vue";
 import { useAlbumTrackColumns } from "@/library/useAlbumTrackColumns";
 
 type TrackContextMenuTrigger = {

@@ -176,6 +176,11 @@ function createComponent(source: string) {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@lucide/vue": { DiscAlbum: icon, Play: icon, X: icon },
+    "@/metadata/ui/MetadataEditMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h("button", { "data-edit-targets": JSON.stringify(props.trackIds) }, "编辑"),
+    }),
     "@/library/ui/TrackSkipMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
@@ -409,6 +414,11 @@ describe("歌单曲目上下文菜单", () => {
     expect(
       findNode(root, (node) => node.props["data-skip-targets"] !== undefined)?.props[
         "data-skip-targets"
+      ],
+    ).toBe("[1,3]");
+    expect(
+      findNode(root, (node) => node.props["data-edit-targets"] !== undefined)?.props[
+        "data-edit-targets"
       ],
     ).toBe("[1,3]");
     const addButton = findMenuItem(root, "添加为下一首");

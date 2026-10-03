@@ -51,6 +51,7 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
       "@/notification/useNotification": { useNotification: () => {} },
       "@/library/formatTrack": { formatTrackDuration: () => "1:00" },
       "@/playback/ui/QueueRow.vue": row,
+      "@/metadata/ui/MetadataEditMenuItem.vue": menu,
       "@/library/ui/TrackSkipMenuItem.vue": menu,
     },
   ).default;

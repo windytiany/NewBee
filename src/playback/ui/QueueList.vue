@@ -59,6 +59,10 @@
       >
         从播放队列移除
       </button>
+      <MetadataEditMenuItem
+        :track-ids="contextTargetTrackIds"
+        @close="closeQueueContextMenu(true)"
+      />
       <TrackSkipMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
     </div>
   </section>
@@ -73,6 +77,7 @@ import type { PlaybackDisplayTrack } from "@/playback/queue/model";
 import { formatTrackDuration } from "@/library/formatTrack";
 import QueueRow from "@/playback/ui/QueueRow.vue";
 import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
+import MetadataEditMenuItem from "@/metadata/ui/MetadataEditMenuItem.vue";
 
 type Track = PlaybackDisplayTrack;
 
@@ -140,7 +145,7 @@ function openQueueContextMenu(request: QueueContextMenuTrigger) {
   if (!props.canRemoveFromQueue) return;
 
   const menuWidth = 216;
-  const menuHeight = 92;
+  const menuHeight = 132;
   menuPosition.value = {
     x: Math.max(0, Math.min(request.x, globalThis.innerWidth - menuWidth)),
     y: Math.max(0, Math.min(request.y, globalThis.innerHeight - menuHeight)),

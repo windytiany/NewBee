@@ -19,6 +19,7 @@ import {
   type PlaybackTransition,
 } from "@/playback/state";
 import type { PlaybackDisplayTrack } from "@/playback/queue/model";
+import type { TrackDetails } from "@/library/model";
 
 export type { PlaybackStatus } from "@/playback/status";
 
@@ -310,6 +311,10 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     setTracksSkipped: trackSkip.setTracksSkipped,
     loadTrackSkipPreferences: trackSkip.load,
     observePlaybackTransition,
+    updateTrackMetadata: (tracks: readonly TrackDetails[]) => {
+      coordinator.updateTrackMetadata(tracks);
+      for (const track of tracks) playbackState.updateTrackMetadata(track);
+    },
     ...commands,
     removeQueueItems: coordinator.removeQueueItems.bind(coordinator),
     removeTrackFromQueue: coordinator.removeTrackFromQueue.bind(coordinator),

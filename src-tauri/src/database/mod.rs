@@ -6,8 +6,10 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 pub(crate) mod commands;
 mod library;
+mod metadata;
 mod path_migration;
 mod playlist;
+mod schema;
 #[cfg(test)]
 mod tests;
 mod track_skip;
@@ -83,6 +85,8 @@ pub struct TrackDetails {
     release_date: Option<String>,
     disc_number: Option<i64>,
     track_number: Option<i64>,
+    disc_total: Option<i64>,
+    track_total: Option<i64>,
     duration_ms: Option<i64>,
     codec: Option<String>,
     sample_rate_hz: Option<i64>,
@@ -113,6 +117,8 @@ pub struct TrackWriteInput {
     pub release_date: Option<String>,
     pub disc_number: Option<i64>,
     pub track_number: Option<i64>,
+    pub disc_total: Option<i64>,
+    pub track_total: Option<i64>,
     pub duration_ms: Option<i64>,
     pub codec: Option<String>,
     pub sample_rate_hz: Option<i64>,
@@ -140,9 +146,9 @@ pub enum TrackArtwork {
 
 impl Database {
     pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Self> {
-        let connection = Connection::open(path)?;
+        let mut connection = Connection::open(path)?;
         connection.execute_batch("PRAGMA foreign_keys = ON;")?;
-        connection.execute_batch(SCHEMA)?;
+        schema::initialize_schema(&mut connection)?;
 
         let skipped_tracks = {
             let mut statement = connection.prepare("SELECT track_id FROM skipped_tracks")?;

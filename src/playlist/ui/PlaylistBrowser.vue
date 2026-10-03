@@ -128,6 +128,11 @@
         >
           添加到队尾
         </button>
+        <MetadataEditMenuItem
+          :track-ids="contextTargetTrackIds"
+          :disabled="props.isPlaylistActionPending"
+          @close="closeContextMenu(true)"
+        />
         <TrackSkipMenuItem
           :track-ids="contextTargetTrackIds"
           :disabled="props.isPlaylistActionPending"
@@ -188,6 +193,7 @@ import type { PlaylistSummary, PlaylistTrackSummary } from "@/playlist/model";
 import PlaylistTrack from "@/playlist/ui/PlaylistTrack.vue";
 import TrackArtwork from "@/artwork/ui/TrackArtwork.vue";
 import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
+import MetadataEditMenuItem from "@/metadata/ui/MetadataEditMenuItem.vue";
 
 const props = withDefaults(
   defineProps<{

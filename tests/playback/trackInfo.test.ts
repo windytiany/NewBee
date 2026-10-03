@@ -29,6 +29,8 @@ function createTrackDetails(id: number): TrackDetails {
     releaseDate: null,
     discNumber: null,
     trackNumber: null,
+    discTotal: null,
+    trackTotal: null,
     durationMs: 180_000,
     codec: "mp3",
     sampleRateHz: 44_100,

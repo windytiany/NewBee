@@ -73,6 +73,7 @@ const dependencies: Record<string, unknown> = {
           }),
     }),
   },
+  "@/metadata/ui/MetadataEditMenuItem.vue": passiveComponent,
   "@/library/ui/TrackSkipMenuItem.vue": passiveComponent,
   "@/library/ui/AlbumContextMenu.vue": passiveComponent,
 };

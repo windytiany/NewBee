@@ -146,6 +146,34 @@ export class PlaybackQueueCoordinator {
     this.publish();
   }
 
+  detachPlayback() {
+    this.invalidatePendingAdvance();
+    this.ignoredEndPlaybackId = this.activePlaybackId;
+    this.activePlaybackId = null;
+    this.publish();
+  }
+
+  updateTrackMetadata(
+    tracks: readonly {
+      id: number;
+      title: string | null;
+      album: string | null;
+      durationMs: number | null;
+    }[],
+  ) {
+    const updates = new Map(tracks.map((track) => [track.id, track]));
+    for (const collection of [this.displayedTracks, this.roundTracks, this.remainingCandidates]) {
+      for (const item of collection) {
+        const track = updates.get(item.trackId);
+        if (!track) continue;
+        item.title = track.title;
+        item.album = track.album;
+        item.durationMs = track.durationMs;
+      }
+    }
+    this.publish();
+  }
+
   replaceAndPlay(
     items: readonly PlaybackDisplayTrack[],
     startRowKey: string,

@@ -136,6 +136,25 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     return !hasNewerPendingCommand && !hasNewerCurrentTrack;
   }
 
+  async function releasePlaybackForEditing(trackIds: readonly number[]) {
+    const track = currentTrack.value;
+    if (!track || track.playbackId === null || !trackIds.includes(track.trackId)) return;
+    const stopped = await invokeCommand<boolean>("stop_playback", { playbackId: track.playbackId });
+    if (!stopped || currentTrack.value?.playbackId !== track.playbackId) {
+      throw new Error("未能确认播放文件已释放，请重试。");
+    }
+    playbackCommandGeneration += 1;
+    currentTrack.value = { ...track, playbackId: null };
+    saveCurrentTrack(currentTrack.value);
+  }
+
+  function updateTrackMetadata(track: { id: number; title: string | null; artist: string | null }) {
+    const current = currentTrack.value;
+    if (current?.trackId !== track.id) return;
+    currentTrack.value = { ...current, title: track.title, artist: track.artist };
+    saveCurrentTrack(currentTrack.value);
+  }
+
   async function finishPlayback(playbackId: number, canFinish: () => boolean) {
     const canReset = () => canFinish() && currentTrack.value?.playbackId === playbackId;
     if (isPlaybackCommandPending.value || !canReset()) return;
@@ -228,6 +247,8 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     adoptTransition,
     stopPlayback,
     stopStalePlayback,
+    releasePlaybackForEditing,
+    updateTrackMetadata,
     finishPlayback,
     consumePlaybackStartFailure,
   };

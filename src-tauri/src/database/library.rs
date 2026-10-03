@@ -67,9 +67,9 @@ impl Database {
                 "INSERT INTO tracks (
                     path, title, artist, album, album_artist, release_date,
                     disc_number, track_number, duration_ms, codec, sample_rate_hz,
-                    bitrate_kbps, channels
+                    bitrate_kbps, channels, disc_total, track_total
                  ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
                  )
                  ON CONFLICT(path) DO UPDATE SET
                     title = excluded.title,
@@ -83,7 +83,9 @@ impl Database {
                     codec = excluded.codec,
                     sample_rate_hz = excluded.sample_rate_hz,
                     bitrate_kbps = excluded.bitrate_kbps,
-                    channels = excluded.channels",
+                    channels = excluded.channels,
+                    disc_total = excluded.disc_total,
+                    track_total = excluded.track_total",
                 params![
                     &track.path,
                     &track.title,
@@ -98,6 +100,8 @@ impl Database {
                     track.sample_rate_hz,
                     track.bitrate_kbps,
                     track.channels,
+                    track.disc_total,
+                    track.track_total,
                 ],
             )
             .map_err(|error| format!("Failed to write track metadata: {error}"))?;
@@ -306,7 +310,7 @@ impl Database {
             .query_row(
                 "SELECT id, path, title, artist, album, album_artist, release_date,
                         disc_number, track_number, duration_ms, codec, sample_rate_hz,
-                        bitrate_kbps, channels
+                        bitrate_kbps, channels, disc_total, track_total
                  FROM tracks
                  WHERE id = ?1",
                 [track_id],
@@ -326,6 +330,8 @@ impl Database {
                         sample_rate_hz: row.get(11)?,
                         bitrate_kbps: row.get(12)?,
                         channels: row.get(13)?,
+                        disc_total: row.get(14)?,
+                        track_total: row.get(15)?,
                     })
                 },
             )

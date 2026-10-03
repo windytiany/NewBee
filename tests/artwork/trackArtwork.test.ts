@@ -74,6 +74,7 @@ class TestImage {
 const dependencies: Record<string, unknown> = {
   vue: Vue,
   "@/notification/center": { notify },
+  "@/library/changes": { LIBRARY_CHANGED_EVENT: "newbee:library-changed" },
   "@/notification/useNotification": { useNotification },
 };
 dependencies["@tauri-apps/api/core"] = {
@@ -124,6 +125,8 @@ function createDetails(trackId: number): TrackDetails {
     releaseDate: null,
     discNumber: null,
     trackNumber: null,
+    discTotal: null,
+    trackTotal: null,
     durationMs: 180_000,
     codec: "mp3",
     sampleRateHz: 44_100,
