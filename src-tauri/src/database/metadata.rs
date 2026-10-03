@@ -1,5 +1,5 @@
 use super::Database;
-use crate::metadata::model::MetadataChange;
+use crate::metadata::model::{MetadataChange, MetadataField};
 use rusqlite::params;
 
 impl Database {
@@ -14,6 +14,10 @@ impl Database {
             .transaction()
             .map_err(|error| error.to_string())?;
         for change in changes {
+            // Lyrics live only in the audio file, not in the library database.
+            if change.field == MetadataField::Lyrics {
+                continue;
+            }
             let sql = format!(
                 "UPDATE tracks SET {} = ?1 WHERE id = ?2",
                 change.field.column()

@@ -14,6 +14,7 @@ use tauri::{ipc::Channel, Manager, State};
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EditableTrack {
     track: TrackDetails,
+    lyrics: Option<String>,
     writable_fields: Vec<MetadataField>,
     issue: Option<String>,
 }
@@ -42,15 +43,14 @@ pub(crate) async fn get_editable_tracks(
                 let track = database
                     .get_track(id)?
                     .ok_or_else(|| format!("曲目 {id} 已不在数据库中"))?;
-                let (writable_fields, issue) = match files::inspect_file(Path::new(track.path())) {
-                    Ok(fields) if fields.is_empty() => {
-                        (fields, Some("此文件格式不支持标签写入".to_owned()))
-                    }
-                    Ok(fields) => (fields, None),
-                    Err(error) => (Vec::new(), Some(error)),
+                let metadata = files::inspect_file(Path::new(track.path()));
+                let (writable_fields, lyrics, issue) = match metadata {
+                    Ok(metadata) => (metadata.writable_fields, metadata.lyrics, metadata.issue),
+                    Err(error) => (Vec::new(), None, Some(error)),
                 };
                 Ok(EditableTrack {
                     track,
+                    lyrics,
                     writable_fields,
                     issue,
                 })
@@ -71,6 +71,13 @@ pub(crate) async fn save_track_metadata(
 ) -> Result<Vec<MetadataSaveResult>, String> {
     let track_ids = validate_track_ids(&track_ids)?;
     normalize_changes(&mut changes)?;
+    if track_ids.len() != 1
+        && changes
+            .iter()
+            .any(|change| change.field == MetadataField::Lyrics)
+    {
+        return Err("歌词仅支持单曲编辑".to_owned());
+    }
     let guard = ingest.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;

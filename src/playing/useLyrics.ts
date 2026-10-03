@@ -5,6 +5,7 @@ import type { PlaybackCommandInvoker } from "@/playback/state";
 import type { PlaybackStatus } from "@/playback/status";
 import type { LyricLine, TrackLyrics } from "@/playing/types";
 import { notify } from "@/notification/center";
+import { LIBRARY_CHANGED_EVENT } from "@/library/changes";
 
 export type PlayingLyricsState =
   | { status: "idle" }
@@ -106,7 +107,16 @@ export function usePlayingLyrics(options: PlayingLyricsOptions) {
     { flush: "sync", immediate: true },
   );
 
+  function reloadCurrentLyrics() {
+    const trackId = options.currentTrack.value?.trackId;
+    if (trackId === undefined) return;
+    lyricsState.value = { status: "loading" };
+    void loadLyrics(trackId, ++requestVersion);
+  }
+  globalThis.window?.addEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentLyrics);
+
   onScopeDispose(() => {
+    globalThis.window?.removeEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentLyrics);
     requestVersion += 1;
   });
 

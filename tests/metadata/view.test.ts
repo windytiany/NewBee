@@ -64,7 +64,8 @@ function track(id: number): EditableTrack {
       bitrateKbps: 128,
       channels: 2,
     },
-    writableFields: METADATA_FIELDS.map(({ key }) => key),
+    lyrics: "[00:01.00]Original lyrics\n[00:02.00]Second line",
+    writableFields: [...METADATA_FIELDS.map(({ key }) => key), "lyrics"],
     issue: null,
   };
 }
@@ -78,7 +79,7 @@ function mountDialog(readOnly = false) {
     loadTracks: async (ids) =>
       ids.map((id) => ({
         ...track(id),
-        writableFields: readOnly ? [] : METADATA_FIELDS.map(({ key }) => key),
+        writableFields: readOnly ? [] : track(id).writableFields,
       })),
     loadAlbum: async () => [1, 2],
     save: async (ids, changes) => {
@@ -134,13 +135,91 @@ describe("metadata editor views", () => {
     await settle();
     expect(editor.state.confirmDiscard).toBe(true);
     expect(dialog?.open).toBe(true);
-    expect(getTextContent(root)).toContain("丢弃并关闭");
+    const confirmation = findNode(root, (node) => node.props.role === "alertdialog") as DialogNode;
+    expect(confirmation.open).toBe(true);
+    expect(confirmation.parent).toBe(dialog?.parent ?? null);
+    expect(getTextContent(confirmation)).toContain("未保存的修改将丢失");
+  });
+
+  it("cancels discard confirmation without losing edits and closes both dialogs when discarding", async () => {
+    const { editor, root, saved } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    const dialog = findNode(
+      root,
+      (node) => node.props["aria-labelledby"] === "metadata-editor-title",
+    ) as DialogNode;
+    const confirmation = findNode(root, (node) => node.props.role === "alertdialog") as DialogNode;
+    expect(confirmation.open).toBe(false);
+    (input(root, "title").props.onInput as (event: { target: { value: string } }) => void)({
+      target: { value: "Unsaved title" },
+    });
+    expect(editor.state.dirty).toBe(true);
+    const cancelEditor = findNode(
+      dialog,
+      (node) => node.type === "button" && getTextContent(node).trim() === "取消",
+    );
+    (cancelEditor?.props.onClick as () => void)();
+    await settle();
+    expect(editor.state.confirmDiscard).toBe(true);
+    expect(findNode(root, (node) => node.props.role === "alertdialog")).toBe(confirmation);
+    expect(dialog.open).toBe(true);
+    expect(confirmation.open).toBe(true);
+    expect(input(root, "title").props.disabled).toBe(true);
+    const cancelDiscard = findNode(
+      confirmation,
+      (node) => node.type === "button" && getTextContent(node).trim() === "取消",
+    );
+    expect(cancelDiscard?.props.autofocus).toBeDefined();
+    (cancelDiscard?.props.onClick as () => void)();
+    await settle();
+    expect(confirmation.open).toBe(false);
+    expect(dialog.open).toBe(true);
+    expect(editor.state.dirty).toBe(true);
+    expect(input(root, "title").props.value).toBe("Unsaved title");
+    expect(input(root, "title").props.disabled).toBe(false);
+
+    editor.requestClose();
+    await settle();
+    (confirmation.props.onCancel as (event: { preventDefault: () => void }) => void)({
+      preventDefault() {},
+    });
+    await settle();
+    expect(confirmation.open).toBe(false);
+    expect(dialog.open).toBe(true);
+
+    editor.requestClose();
+    await settle();
+    const discard = findNode(
+      confirmation,
+      (node) => node.type === "button" && getTextContent(node).trim() === "丢弃",
+    );
+    (discard?.props.onClick as () => void)();
+    await settle();
+    expect(confirmation.open).toBe(false);
+    expect(dialog.open).toBe(false);
+    expect(editor.state.open).toBe(false);
+    expect(saved).toHaveLength(0);
+  });
+
+  it("closes immediately without confirmation when nothing has been edited", async () => {
+    const { editor, root } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    editor.requestClose();
+    await settle();
+    expect(editor.state.open).toBe(false);
+    expect((findNode(root, (node) => node.props.role === "alertdialog") as DialogNode).open).toBe(
+      false,
+    );
   });
 
   it("keeps unavailable fields read-only and disables saving when nothing is writable", async () => {
     const { editor, root } = mountDialog(true);
     await editor.openTracks([1]);
     await settle();
+    expect(input(root, "lyrics").props.readonly).toBe(true);
+    expect(input(root, "lyrics").props.value).toContain("Original lyrics");
     expect(input(root, "title").props.readonly).toBe(true);
     expect(input(root, "title").props.value).toBe("Database title 1");
     expect(findNode(root, (node) => node.props.type === "submit")?.props.disabled).toBe(true);
@@ -153,6 +232,8 @@ describe("metadata editor views", () => {
     expect(input(root, "title").props.placeholder).toContain("多个值");
     expect(findNode(root, (node) => node.props.type === "checkbox")).toBeNull();
     expect(findNode(root, (node) => node.props.id === "metadata-panel-properties")).toBeNull();
+    expect(findNode(root, (node) => node.props.id === "metadata-tab-lyrics")).toBeNull();
+    expect(findNode(root, (node) => node.props.id === "metadata-lyrics")).toBeNull();
     expect(getTextContent(root)).toContain("2 首曲目");
     expect(getTextContent(root)).not.toContain("/music/");
     expect(getTextContent(root)).not.toContain("以数据库值为准");
@@ -203,6 +284,40 @@ describe("metadata editor views", () => {
     await settle();
     expect(propertiesTab?.props["aria-selected"]).toBe(true);
     expect(getTextContent(root)).toContain("/music/1.mp3");
+  });
+
+  it("shows editable raw lyrics in a single-track tab and supports keyboard navigation", async () => {
+    const { editor, root, saved } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    const lyricsTab = findNode(root, (node) => node.props.id === "metadata-tab-lyrics");
+    const tagsTab = findNode(root, (node) => node.props.id === "metadata-tab-tags");
+    expect(input(root, "lyrics").type).toBe("textarea");
+    expect(input(root, "lyrics").props.value).toBe(
+      "[00:01.00]Original lyrics\n[00:02.00]Second line",
+    );
+    (tagsTab?.props.onKeydown as (event: { key: string; preventDefault: () => void }) => void)({
+      key: "ArrowRight",
+      preventDefault() {},
+    });
+    await settle();
+    expect(lyricsTab?.props["aria-selected"]).toBe(true);
+    expect(
+      (findNode(root, (node) => node.props.id === "metadata-panel-lyrics") as DialogNode).style
+        .display,
+    ).not.toBe("none");
+    (input(root, "lyrics").props.onInput as (event: { target: { value: string } }) => void)({
+      target: { value: "[00:03.00]Edited lyrics" },
+    });
+    expect(editor.state.dirty).toBe(true);
+    const form = findNode(root, (node) => node.type === "form");
+    (form?.props.onSubmit as (event: { preventDefault: () => void }) => void)({
+      preventDefault() {},
+    });
+    await settle();
+    expect(saved[0]?.find(({ field }) => field === "lyrics")?.value).toBe(
+      "[00:03.00]Edited lyrics",
+    );
   });
 
   it("the edit menu captures track IDs before closing and supports album targets", async () => {

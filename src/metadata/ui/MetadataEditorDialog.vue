@@ -55,6 +55,26 @@
       >
         标签
       </button>
+      <button
+        v-if="singleTrack && state.mode === 'tracks'"
+        id="metadata-tab-lyrics"
+        ref="lyricsTab"
+        type="button"
+        role="tab"
+        aria-controls="metadata-panel-lyrics"
+        :aria-selected="activeTab === 'lyrics'"
+        :tabindex="activeTab === 'lyrics' ? 0 : -1"
+        :class="
+          activeTab === 'lyrics'
+            ? 'border-spotify-green text-white'
+            : 'text-spotify-muted border-transparent'
+        "
+        class="focus-visible:outline-spotify-green border-b-2 px-5 py-3 text-sm hover:text-white focus-visible:outline-2"
+        @click="activeTab = 'lyrics'"
+        @keydown="onTabKeydown"
+      >
+        歌词
+      </button>
     </div>
 
     <div class="space-y-4 px-5 py-5">
@@ -109,8 +129,15 @@
               class="grid gap-4"
               :class="row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'"
             >
-              <div v-for="(field, index) in row" :key="field.key" class="min-w-0 space-y-1.5">
-                <label :for="`metadata-${field.key}`" class="block text-sm">{{
+              <div
+                v-for="(field, index) in row"
+                :key="field.key"
+                class="grid min-w-0 items-center gap-3"
+                :class="
+                  index === 1 ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[5rem_minmax(0,1fr)]'
+                "
+              >
+                <label :for="`metadata-${field.key}`" class="text-sm">{{
                   row.length === 2 && index === 1 ? "共" : field.label
                 }}</label>
                 <input
@@ -130,6 +157,27 @@
             </div>
           </form>
         </div>
+      </section>
+
+      <section
+        v-if="singleTrack && lyricsField"
+        v-show="activeTab === 'lyrics'"
+        id="metadata-panel-lyrics"
+        role="tabpanel"
+        aria-labelledby="metadata-tab-lyrics"
+      >
+        <textarea
+          id="metadata-lyrics"
+          form="metadata-editor-form"
+          aria-label="内嵌歌词"
+          :value="lyricsField.value"
+          :readonly="!lyricsField.writable"
+          :disabled="state.saving || state.confirmSave || state.confirmDiscard"
+          placeholder="暂无内嵌歌词，可输入纯文本或 LRC 歌词"
+          class="focus-visible:outline-spotify-green min-h-80 w-full resize-y rounded border border-white/15 bg-black/20 px-3 py-2 font-mono text-sm read-only:text-white/50 focus-visible:outline-2 disabled:opacity-50"
+          spellcheck="false"
+          @input="editField(lyricsField, $event)"
+        />
       </section>
 
       <div v-if="state.saving" role="status" class="space-y-2 text-sm" aria-live="polite">
@@ -168,25 +216,6 @@
           </button>
         </div>
       </section>
-      <section
-        v-if="state.confirmDiscard"
-        aria-label="确认丢弃修改"
-        class="space-y-3 rounded border border-white/15 p-3 text-sm"
-      >
-        <p>丢弃未保存的修改？</p>
-        <div class="flex justify-end gap-2">
-          <button
-            type="button"
-            class="rounded px-3 py-2 hover:bg-white/10"
-            @click="state.confirmDiscard = false"
-          >
-            继续编辑
-          </button>
-          <button type="button" class="rounded bg-red-500 px-3 py-2" @click="editor.close()">
-            丢弃并关闭
-          </button>
-        </div>
-      </section>
     </div>
 
     <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -196,7 +225,7 @@
         :disabled="state.saving"
         @click="editor.requestClose()"
       >
-        关闭
+        取消
       </button>
       <button
         v-if="failedCount"
@@ -217,6 +246,36 @@
       </button>
     </footer>
   </dialog>
+
+  <dialog
+    ref="discardDialogElement"
+    role="alertdialog"
+    aria-labelledby="metadata-discard-title"
+    aria-describedby="metadata-discard-description"
+    class="bg-spotify-surface m-auto w-[min(24rem,calc(100vw-2rem))] max-w-none space-y-4 rounded-xl border border-white/10 p-5 text-white shadow-2xl backdrop:bg-black/50"
+    @cancel.prevent="state.confirmDiscard = false"
+    @mousedown.stop
+  >
+    <h2 id="metadata-discard-title" class="text-lg font-semibold">丢弃修改？</h2>
+    <p id="metadata-discard-description" class="text-spotify-muted text-sm">未保存的修改将丢失。</p>
+    <div class="flex justify-end gap-2">
+      <button
+        type="button"
+        autofocus
+        class="focus-visible:outline-spotify-green rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2"
+        @click="state.confirmDiscard = false"
+      >
+        取消
+      </button>
+      <button
+        type="button"
+        class="focus-visible:outline-spotify-green rounded bg-red-500 px-4 py-2 text-sm focus-visible:outline-2"
+        @click="editor.close()"
+      >
+        丢弃
+      </button>
+    </div>
+  </dialog>
 </template>
 
 <script setup lang="ts">
@@ -228,10 +287,14 @@ import { formatTrackDuration } from "@/library/formatTrack";
 
 const editor = useMetadataEditor();
 const state = editor.state;
-const activeTab = ref<"properties" | "tags">("tags");
+type EditorTab = "properties" | "tags" | "lyrics";
+const activeTab = ref<EditorTab>("tags");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
+const discardDialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const propertiesTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const tagsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
+const lyricsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
+const lyricsField = computed(() => state.draft.find((field) => field.key === "lyrics"));
 const multiple = computed(() => state.tracks.length > 1);
 const singleTrack = computed(() => (state.tracks.length === 1 ? state.tracks[0]?.track : null));
 const failedCount = computed(
@@ -264,7 +327,7 @@ const fieldRows = computed(() => {
   const rows: DraftField[][] = [];
   const grouped = new Set<MetadataField>();
   for (const field of state.draft) {
-    if (grouped.has(field.key)) continue;
+    if (field.key === "lyrics" || grouped.has(field.key)) continue;
     const row = [field];
     const totalKey = numberPairs.get(field.key);
     const total = state.draft.find((entry) => entry.key === totalKey);
@@ -285,14 +348,18 @@ const canSave = computed(
     state.draft.some((field) => field.writable && !field.mixed),
 );
 watch(
-  () => state.open,
-  async (open) => {
+  () => [state.open, state.confirmDiscard],
+  async () => {
     await nextTick();
     const dialog = dialogElement.value;
-    if (open && !dialog?.open) {
+    const discardDialog = discardDialogElement.value;
+    const confirmDiscard = state.open && state.confirmDiscard;
+    if (!confirmDiscard && discardDialog?.open) discardDialog.close();
+    if (state.open && !dialog?.open) {
       activeTab.value = "tags";
       dialog?.showModal();
-    } else if (!open && dialog?.open) dialog.close();
+    } else if (!state.open && dialog?.open) dialog.close();
+    if (confirmDiscard && !discardDialog?.open) discardDialog?.showModal();
   },
   { immediate: true },
 );
@@ -309,11 +376,19 @@ function clearMixedValue(field: DraftField, event: InstanceType<typeof globalThi
 }
 function onTabKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
   if (!singleTrack.value) return;
-  if (event.key === "ArrowLeft" || event.key === "Home") activeTab.value = "properties";
-  else if (event.key === "ArrowRight" || event.key === "End") activeTab.value = "tags";
+  const tabs: EditorTab[] = lyricsField.value
+    ? ["properties", "tags", "lyrics"]
+    : ["properties", "tags"];
+  const index = tabs.indexOf(activeTab.value);
+  let nextIndex: number;
+  if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = tabs.length - 1;
+  else if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+  else if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
   else return;
   event.preventDefault();
-  if (activeTab.value === "properties") propertiesTab.value?.focus();
-  else tagsTab.value?.focus();
+  activeTab.value = tabs[nextIndex] ?? "tags";
+  const buttons = { properties: propertiesTab, tags: tagsTab, lyrics: lyricsTab };
+  buttons[activeTab.value].value?.focus();
 }
 </script>

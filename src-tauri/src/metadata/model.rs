@@ -14,10 +14,11 @@ pub(crate) enum MetadataField {
     DiscNumber,
     TrackTotal,
     DiscTotal,
+    Lyrics,
 }
 
 impl MetadataField {
-    pub(crate) const ALL: [Self; 9] = [
+    pub(crate) const ALL: [Self; 10] = [
         Self::Title,
         Self::Artist,
         Self::Album,
@@ -27,6 +28,7 @@ impl MetadataField {
         Self::DiscNumber,
         Self::TrackTotal,
         Self::DiscTotal,
+        Self::Lyrics,
     ];
 
     pub(crate) fn column(self) -> &'static str {
@@ -40,6 +42,7 @@ impl MetadataField {
             Self::DiscNumber => "disc_number",
             Self::TrackTotal => "track_total",
             Self::DiscTotal => "disc_total",
+            Self::Lyrics => "lyrics",
         }
     }
 
@@ -57,6 +60,7 @@ impl MetadataField {
             Self::DiscNumber => ItemKey::DiscNumber,
             Self::TrackTotal => ItemKey::TrackTotal,
             Self::DiscTotal => ItemKey::DiscTotal,
+            Self::Lyrics => ItemKey::Lyrics,
         }
     }
 
@@ -85,8 +89,12 @@ pub(crate) fn normalize_changes(changes: &mut [MetadataChange]) -> Result<(), St
             return Err("写入字段不能重复".to_owned());
         }
         change.value = change.value.take().and_then(|value| {
-            let value = value.trim();
-            (!value.is_empty()).then(|| value.to_owned())
+            if change.field == MetadataField::Lyrics {
+                (!value.is_empty()).then_some(value)
+            } else {
+                let value = value.trim();
+                (!value.is_empty()).then(|| value.to_owned())
+            }
         });
         let Some(value) = change.value.as_mut() else {
             continue;

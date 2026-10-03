@@ -49,16 +49,37 @@ fn writable_fields(file: &TaggedFile, tag: &Tag) -> Vec<MetadataField> {
         .collect()
 }
 
-pub(super) fn inspect_file(path: &Path) -> Result<Vec<MetadataField>, String> {
-    if fs::metadata(path)
+pub(super) struct FileMetadata {
+    pub(super) writable_fields: Vec<MetadataField>,
+    pub(super) lyrics: Option<String>,
+    pub(super) issue: Option<String>,
+}
+
+pub(super) fn inspect_file(path: &Path) -> Result<FileMetadata, String> {
+    let readonly = fs::metadata(path)
         .map_err(|error| error.to_string())?
         .permissions()
-        .readonly()
-    {
-        return Err("文件为只读".to_owned());
-    }
+        .readonly();
     let file = read_file(path)?;
-    Ok(writable_fields(&file, &editing_tag(&file)))
+    let tag = editing_tag(&file);
+    let lyrics = tag.get_string(&ItemKey::Lyrics).map(str::to_owned);
+    let writable_fields = if readonly {
+        Vec::new()
+    } else {
+        writable_fields(&file, &tag)
+    };
+    let issue = if readonly {
+        Some("文件为只读".to_owned())
+    } else if writable_fields.is_empty() {
+        Some("此文件格式不支持标签写入".to_owned())
+    } else {
+        None
+    };
+    Ok(FileMetadata {
+        writable_fields,
+        lyrics,
+        issue,
+    })
 }
 
 fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String> {

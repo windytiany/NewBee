@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { notify } from "@/notification/center";
+import { LIBRARY_CHANGED_EVENT } from "@/library/changes";
 import { evaluateModule, transpileScript } from "../support/moduleLoader";
 import { effectScope, nextTick, ref } from "vue";
 import type { EffectScope, Ref } from "vue";
@@ -88,6 +89,7 @@ const { getActiveLyricIndices, usePlayingLyrics } = evaluateModule<
   {
     vue: Vue,
     "@/notification/center": { notify },
+    "@/library/changes": { LIBRARY_CHANGED_EVENT },
     "@tauri-apps/api/core": {
       invoke: async () => {
         throw new Error("The default invoke should not be used in these tests.");
@@ -101,6 +103,36 @@ afterEach(() => {
 });
 
 describe("PlayingPage 歌词状态", () => {
+  it("保存元数据后重新读取当前歌词，并在销毁时移除订阅", async () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const window = new EventTarget();
+    Object.defineProperty(globalThis, "window", { configurable: true, value: window });
+    try {
+      const calls: InvokeCall[] = [];
+      let text = "Original";
+      const { lyrics, scope } = mountPlayingLyrics(
+        ref<TestTrack | null>({ trackId: 11, title: "Song" }),
+        ref({ ...EMPTY_PLAYBACK_STATUS }),
+        createInvoker(async () => ({ kind: "plain", text }), calls),
+      );
+      await settleLyricsRequests();
+      text = "Edited";
+      window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
+      await settleLyricsRequests();
+      expect(lyrics.state.value).toEqual({
+        status: "ready",
+        lyrics: { kind: "plain", text: "Edited" },
+      });
+      expect(calls).toHaveLength(2);
+      scope.stop();
+      window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
+      expect(calls).toHaveLength(2);
+    } finally {
+      if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
   it("无当前曲目时保持 idle 且不读取歌词", () => {
     const calls: InvokeCall[] = [];
     const { lyrics } = mountPlayingLyrics(

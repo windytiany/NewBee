@@ -11,10 +11,11 @@ export const METADATA_FIELDS = [
   { key: "discNumber", label: "碟号", type: "number" },
   { key: "discTotal", label: "总碟数", type: "number" },
 ] as const;
-export type MetadataField = (typeof METADATA_FIELDS)[number]["key"];
+export type MetadataField = (typeof METADATA_FIELDS)[number]["key"] | "lyrics";
 export type EditMode = "tracks" | "album";
 export type EditableTrack = {
   track: TrackDetails;
+  lyrics: string | null;
   writableFields: MetadataField[];
   issue: string | null;
 };
@@ -33,13 +34,14 @@ export type DraftField = {
   value: string;
   mixed: boolean;
   writable: boolean;
+  originalValue?: string;
 };
 
 export function createMetadataDraft(
   tracks: readonly EditableTrack[],
   mode: EditMode,
 ): DraftField[] {
-  return METADATA_FIELDS.flatMap((field) => {
+  const draft: DraftField[] = METADATA_FIELDS.flatMap((field) => {
     if (mode === "album" && ["title", "trackNumber", "discNumber"].includes(field.key)) return [];
     const values = tracks.map(({ track }) => String(track[field.key] ?? ""));
     const mixed = values.some((value) => value !== values[0]);
@@ -53,6 +55,20 @@ export function createMetadataDraft(
       },
     ];
   });
+  const single = tracks.length === 1 && mode === "tracks" ? tracks[0] : undefined;
+  if (single) {
+    const value = single.lyrics ?? "";
+    draft.push({
+      key: "lyrics",
+      label: "歌词",
+      type: "text",
+      value,
+      originalValue: value,
+      mixed: false,
+      writable: single.writableFields.includes("lyrics"),
+    });
+  }
+  return draft;
 }
 
 function validDate(value: string) {
@@ -78,7 +94,8 @@ export function buildMetadataChanges(
 ): MetadataChange[] {
   const changes = draft.flatMap((field) => {
     if (!field.writable || field.mixed) return [];
-    let value = field.value.trim();
+    if (field.key === "lyrics" && field.value === field.originalValue) return [];
+    let value = field.key === "lyrics" ? field.value : field.value.trim();
     if (value && field.type === "number") {
       if (
         !/^\d+$/.test(value) ||

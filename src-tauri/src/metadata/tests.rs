@@ -175,6 +175,15 @@ fn writes_file_before_updating_only_requested_database_fields() {
     assert_eq!(track["title"], "new");
     assert_eq!(track["artist"], "artist");
     assert_eq!(track["durationMs"], 1000);
+    let lyrics = "[00:01.00]New lyrics\n";
+    let result = save_track(&database, 1, &[change(MetadataField::Lyrics, Some(lyrics))]);
+    assert!(result.file_written && result.database_updated);
+    assert_eq!(
+        files::inspect_file(&path).unwrap().lyrics.as_deref(),
+        Some(lyrics)
+    );
+    let after = serde_json::to_value(database.get_track(1).unwrap().unwrap()).unwrap();
+    assert_eq!(after, track);
     fs::remove_file(&path).unwrap();
     let result = save_track(
         &database,
@@ -201,7 +210,7 @@ fn supported_formats_round_trip_all_exposed_fields() {
         let path = fixture.0.join(format!("track.{extension}"));
         fs::write(&path, bytes).unwrap();
         let writable = files::inspect_file(&path).unwrap();
-        assert_eq!(writable.len(), 9, "{extension}");
+        assert_eq!(writable.writable_fields.len(), 10, "{extension}");
         let changes = [
             change(MetadataField::Title, Some("测试标题")),
             change(MetadataField::Artist, Some("A & B")),
@@ -212,6 +221,10 @@ fn supported_formats_round_trip_all_exposed_fields() {
             change(MetadataField::DiscNumber, Some("1")),
             change(MetadataField::TrackTotal, Some("7")),
             change(MetadataField::DiscTotal, Some("2")),
+            change(
+                MetadataField::Lyrics,
+                Some("  [00:01.00]歌词\n[00:02.00]Second line\n\n"),
+            ),
         ];
         files::write_file(&path, &changes).unwrap_or_else(|error| panic!("{extension}: {error}"));
         let file = lofty::probe::Probe::open(&path)
@@ -226,12 +239,20 @@ fn supported_formats_round_trip_all_exposed_fields() {
         assert_eq!(tag.track(), Some(2));
         assert_eq!(tag.track_total(), Some(7));
         assert_eq!(tag.disk_total(), Some(2));
+        assert_eq!(
+            files::inspect_file(&path).unwrap().lyrics.as_deref(),
+            Some("  [00:01.00]歌词\n[00:02.00]Second line\n\n")
+        );
         let clear: Vec<_> = MetadataField::ALL
             .into_iter()
             .map(|field| change(field, None))
             .collect();
         files::write_file(&path, &clear)
             .unwrap_or_else(|error| panic!("{extension} clear: {error}"));
+        assert!(
+            files::inspect_file(&path).unwrap().lyrics.is_none(),
+            "{extension}"
+        );
     }
 }
 
@@ -244,7 +265,7 @@ fn id3v1_fallback_exposes_only_representable_fields() {
     let mut tag = Tag::new(TagType::Id3v1);
     tag.insert_text(ItemKey::TrackTitle, "legacy".into());
     tag.save_to_path(&path, WriteOptions::default()).unwrap();
-    let writable = files::inspect_file(&path).unwrap();
+    let writable = files::inspect_file(&path).unwrap().writable_fields;
     assert!(writable.contains(&MetadataField::Title));
     assert!(!writable.contains(&MetadataField::AlbumArtist));
     assert!(!writable.contains(&MetadataField::DiscNumber));
@@ -397,7 +418,9 @@ fn read_only_files_are_not_modified() {
     let inspect = files::inspect_file(&path);
     let write = files::write_file(&path, &[change(MetadataField::Title, Some("new"))]);
     fs::set_permissions(&path, original_permissions).unwrap();
-    assert!(inspect.is_err());
+    let inspected = inspect.unwrap();
+    assert!(inspected.writable_fields.is_empty());
+    assert_eq!(inspected.issue.as_deref(), Some("文件为只读"));
     assert!(write.is_err());
     assert!(lofty::read_from_path(&path)
         .unwrap()

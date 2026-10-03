@@ -24,7 +24,8 @@ function editable(id: number, title = `Track ${id}`): EditableTrack {
       bitrateKbps: 128,
       channels: 2,
     },
-    writableFields: METADATA_FIELDS.map(({ key }) => key),
+    lyrics: "[00:01.00]Original lyrics\n[00:02.00]Second line",
+    writableFields: [...METADATA_FIELDS.map(({ key }) => key), "lyrics"],
     issue: null,
   };
 }
@@ -62,6 +63,41 @@ async function settle() {
 }
 
 describe("metadata editing", () => {
+  it("loads raw single-track lyrics, preserves whitespace and saves only edited lyrics", async () => {
+    const { editor, saves } = fixture();
+    await editor.openTracks([1]);
+    const lyrics = editor.state.draft.find(({ key }) => key === "lyrics");
+    if (!lyrics) throw new Error("Missing lyrics");
+    expect(lyrics.value).toBe("[00:01.00]Original lyrics\n[00:02.00]Second line");
+    expect(buildMetadataChanges(editor.state.draft).some(({ field }) => field === "lyrics")).toBe(
+      false,
+    );
+    editor.changeField(lyrics, "  [00:01.00]Edited lyrics\n\n");
+    expect(editor.state.dirty).toBe(true);
+    editor.prepareSave();
+    await settle();
+    expect(saves[0]?.changes.find(({ field }) => field === "lyrics")?.value).toBe(
+      "  [00:01.00]Edited lyrics\n\n",
+    );
+  });
+
+  it("can clear lyrics and never includes lyrics in batch or album drafts", async () => {
+    const { editor, saves } = fixture();
+    await editor.openTracks([1]);
+    const lyrics = editor.state.draft.find(({ key }) => key === "lyrics");
+    if (!lyrics) throw new Error("Missing lyrics");
+    editor.changeField(lyrics, "");
+    editor.prepareSave();
+    await settle();
+    expect(saves[0]?.changes.find(({ field }) => field === "lyrics")?.value).toBeNull();
+    expect(
+      createMetadataDraft([editable(1), editable(2)], "tracks").some(({ key }) => key === "lyrics"),
+    ).toBe(false);
+    expect(createMetadataDraft([editable(1)], "album").some(({ key }) => key === "lyrics")).toBe(
+      false,
+    );
+  });
+
   it("saves all writable single-track database values without requiring changes", async () => {
     const { editor, saves, synchronized } = fixture();
     await editor.openTracks([1]);
