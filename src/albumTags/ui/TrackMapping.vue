@@ -14,7 +14,11 @@ const drag = createMappingDrag({
   preview: (preview) => {
     dragPreview.value = preview;
   },
-  drop: (id, target) => props.editor.move(id, target),
+  drop: (id, target) => {
+    props.editor.move(id, target);
+    expanded.value = null;
+    selectedIndex.value = state.rows.findIndex((row) => row.trackId === id);
+  },
 });
 onScopeDispose(drag.cancel);
 watch(
@@ -24,11 +28,54 @@ watch(
   },
 );
 const expanded = ref<number | null>(null);
-const unmatched = computed(() =>
-  state.tracks.filter(({ track }) => !state.rows.some((row) => row.trackId === track.id)),
+const selectedIndex = ref<number | null>(null);
+watch(
+  () => state.selected,
+  () => {
+    selectedIndex.value = null;
+    expanded.value = null;
+  },
+);
+const mappedIds = computed(() =>
+  state.rows.flatMap((row) => (row.source === null || row.trackId === null ? [] : [row.trackId])),
+);
+const allIncluded = computed(
+  () => mappedIds.value.length > 0 && mappedIds.value.every((id) => state.included.includes(id)),
 );
 const local = (id: number | null) => state.tracks.find(({ track }) => track.id === id);
 const filename = (path: string) => path.split(/[\\/]/).pop() ?? path;
+function toggleAll() {
+  const include = !allIncluded.value;
+  for (const id of mappedIds.value)
+    if (state.included.includes(id) !== include) props.editor.toggleTrack(id);
+}
+function shift(direction: number) {
+  const index = selectedIndex.value;
+  if (index === null) return;
+  const id = state.rows[index]?.trackId;
+  const target = index + direction;
+  if (id === null || id === undefined || target < 0 || target >= state.rows.length) return;
+  props.editor.move(id, target);
+  expanded.value = null;
+  selectedIndex.value = state.rows.findIndex((row) => row.trackId === id);
+}
+function detachSelected() {
+  const id = selectedIndex.value === null ? null : state.rows[selectedIndex.value]?.trackId;
+  if (id === null || id === undefined) return;
+  props.editor.move(id, null);
+  selectedIndex.value = state.rows.findIndex((row) => row.trackId === id);
+  expanded.value = null;
+}
+function startRowDrag(trackId: number | null, event: InstanceType<typeof globalThis.PointerEvent>) {
+  if (
+    trackId === null ||
+    (event.target as InstanceType<typeof globalThis.HTMLElement>).closest(
+      "button, input, select, a",
+    )
+  )
+    return;
+  drag.start(trackId, event);
+}
 function choose(index: number, event: InstanceType<typeof globalThis.Event>) {
   const value = (event.target as InstanceType<typeof globalThis.HTMLSelectElement>).value;
   const previous = state.rows[index]?.trackId;
@@ -42,21 +89,119 @@ function input(index: number, field: AlbumField, event: InstanceType<typeof glob
     (event.target as InstanceType<typeof globalThis.HTMLInputElement>).value,
   );
 }
+function titleDiffers(index: number) {
+  const row = state.rows[index];
+  return (
+    row?.trackId !== null &&
+    row?.values.title !== undefined &&
+    row.values.title !== local(row.trackId)?.track.title
+  );
+}
+function durationDiffers(index: number) {
+  const row = state.rows[index];
+  const duration = local(row?.trackId ?? null)?.track.durationMs;
+  return (
+    row?.source?.durationMs != null &&
+    duration != null &&
+    Math.abs(row.source.durationMs - duration) > 2000
+  );
+}
 </script>
 
 <template>
-  <section aria-label="曲目对应关系" class="space-y-3">
-    <h3 class="font-semibold">曲目对应关系</h3>
-    <p class="text-spotify-muted text-xs">
-      拖拽右侧本地曲目到来源位置，已有对应时交换。也可使用下拉框；跨碟调整不会立即写入文件。
-    </p>
-    <div class="overflow-x-auto rounded border border-white/10">
-      <table class="w-full table-fixed text-left text-sm">
-        <thead class="bg-spotify-interactive">
+  <section
+    aria-label="曲目对应关系"
+    class="flex min-h-0 flex-col gap-1"
+    @click.capture="drag.suppressClick($event)"
+  >
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-1 text-xs">
+      <div class="flex flex-wrap items-center gap-3">
+        <h3 class="font-semibold">曲目对照</h3>
+        <label
+          v-for="field in METADATA_FIELDS.filter(({ key }) =>
+            ['artist', 'title', 'trackNumber', 'trackTotal'].includes(key),
+          )"
+          :key="field.key"
+          class="flex items-center gap-1.5"
+        >
+          <input
+            type="checkbox"
+            :checked="state.fields.includes(field.key)"
+            :disabled="disabled || !state.selected"
+            class="accent-spotify-green"
+            @change="editor.toggleField(field.key)"
+          />{{ field.label }}
+        </label>
+      </div>
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          :disabled="
+            disabled ||
+            selectedIndex === null ||
+            !state.rows[selectedIndex]?.source ||
+            state.rows[selectedIndex]?.trackId == null
+          "
+          class="rounded border border-white/15 px-2 py-1 hover:bg-white/10 disabled:opacity-30"
+          @click="detachSelected()"
+        >
+          解除对应
+        </button>
+        <button
+          type="button"
+          aria-label="上移本地曲目"
+          :disabled="
+            disabled ||
+            selectedIndex === null ||
+            selectedIndex === 0 ||
+            state.rows[selectedIndex]?.trackId == null
+          "
+          class="rounded border border-white/15 px-2 py-1 hover:bg-white/10 disabled:opacity-30"
+          @click="shift(-1)"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          aria-label="下移本地曲目"
+          :disabled="
+            disabled ||
+            selectedIndex === null ||
+            selectedIndex >= state.rows.length - 1 ||
+            state.rows[selectedIndex]?.trackId == null
+          "
+          class="rounded border border-white/15 px-2 py-1 hover:bg-white/10 disabled:opacity-30"
+          @click="shift(1)"
+        >
+          ↓
+        </button>
+      </div>
+    </div>
+    <div
+      data-album-tag-scroll
+      class="max-h-[min(240px,36dvh)] shrink-0 overflow-auto rounded border border-white/10"
+    >
+      <table class="w-full min-w-[800px] table-fixed text-left text-xs [&_td]:py-1 [&_th]:py-1">
+        <thead class="bg-spotify-interactive text-spotify-muted sticky top-0 z-10">
           <tr>
-            <th class="w-12 p-2">保存</th>
-            <th class="w-[40%] p-2">MusicBrainz 曲目</th>
-            <th class="p-2">本地曲目 / 文件</th>
+            <th class="w-8 px-2 py-2">
+              <input
+                type="checkbox"
+                aria-label="选择全部对应曲目"
+                :checked="allIncluded"
+                :indeterminate="!allIncluded && mappedIds.some((id) => state.included.includes(id))"
+                :disabled="disabled || !mappedIds.length"
+                class="accent-spotify-green"
+                @change="toggleAll()"
+              />
+            </th>
+            <th class="w-12 py-2 font-normal">曲号</th>
+            <th class="w-[17%] px-2 py-2 font-normal">艺术家</th>
+            <th class="w-[23%] px-2 py-2 font-normal">标题</th>
+            <th class="w-14 px-2 py-2 font-normal">时间</th>
+            <th class="w-[22%] px-2 py-2 font-normal">原始标题</th>
+            <th class="w-14 px-2 py-2 font-normal">时间</th>
+            <th class="px-2 py-2 font-normal">文件名</th>
           </tr>
         </thead>
         <tbody>
@@ -66,99 +211,117 @@ function input(index: number, field: AlbumField, event: InstanceType<typeof glob
           >
             <tr
               v-if="
-                index === 0 || state.rows[index - 1]?.source.discNumber !== row.source.discNumber
+                row.source &&
+                state.rows.findIndex(
+                  (candidate) => candidate.source?.discNumber === row.source?.discNumber,
+                ) === index
               "
               class="bg-white/5"
             >
-              <th colspan="3" class="p-2">
+              <th colspan="8" class="text-spotify-muted px-2 py-1.5 font-normal">
                 第 {{ row.source.discNumber }} 碟 · {{ row.source.trackTotal }} 首
               </th>
             </tr>
-            <tr class="border-t border-white/10">
-              <td class="p-2 align-top">
+            <tr
+              :data-album-tag-slot="index"
+              class="border-t border-white/5 select-none hover:bg-white/5"
+              :class="[
+                dragPreview?.target === index
+                  ? 'ring-spotify-green bg-white/10 ring-1 ring-inset'
+                  : selectedIndex === index
+                    ? 'bg-white/10'
+                    : '',
+                row.trackId !== null && !disabled
+                  ? 'cursor-grab touch-none active:cursor-grabbing'
+                  : '',
+              ]"
+              :data-local-track-id="row.trackId"
+              @pointerdown="startRowDrag(row.trackId, $event)"
+              @click="selectedIndex = index"
+            >
+              <td class="px-2 py-2">
                 <input
-                  v-if="row.trackId !== null"
+                  v-if="row.source && row.trackId !== null"
                   type="checkbox"
                   :aria-label="`保存 ${local(row.trackId)?.track.title ?? row.trackId}`"
                   :checked="state.included.includes(row.trackId)"
                   :disabled="disabled"
+                  class="accent-spotify-green"
                   @change="editor.toggleTrack(row.trackId)"
                 />
               </td>
-              <td class="space-y-1 p-2 align-top">
-                <p>{{ row.source.trackNumber }}. {{ row.source.title }}</p>
-                <p class="text-spotify-muted text-xs">
-                  {{ row.source.artist ?? "署名缺失" }} ·
-                  {{ formatTrackDuration(row.source.durationMs) ?? "—" }}
-                </p>
+              <td class="text-spotify-muted py-2">
+                {{ row.source ? (row.values.trackNumber ?? row.source.trackNumber) : "" }}
+              </td>
+              <td class="truncate px-2 py-2" :title="row.values.artist">
+                {{ row.source ? (row.values.artist ?? "—") : "" }}
+              </td>
+              <td class="px-2 py-2">
                 <button
+                  v-if="row.source"
                   type="button"
-                  class="text-xs underline"
+                  class="block w-full truncate text-left hover:underline"
+                  :aria-label="`查看差异 / 编辑新值：${row.source.title}`"
                   :aria-expanded="expanded === index"
                   @click="expanded = expanded === index ? null : index"
                 >
-                  {{ expanded === index ? "收起字段" : "查看差异 / 编辑新值" }}
+                  {{ row.values.title ?? row.source.title }}
+                </button>
+              </td>
+              <td class="text-spotify-muted px-2 py-2">
+                {{ row.source ? (formatTrackDuration(row.source.durationMs) ?? "—") : "" }}
+              </td>
+              <td class="px-2 py-2">
+                <button
+                  v-if="row.trackId !== null"
+                  type="button"
+                  :disabled="disabled"
+                  class="block w-full cursor-grab touch-none truncate text-left select-none active:cursor-grabbing"
+                  :class="titleDiffers(index) ? 'text-amber-200' : 'text-spotify-muted'"
+                  :title="local(row.trackId)?.track.title ?? ''"
+                  @pointerdown.stop="drag.start(row.trackId, $event)"
+                  @click="selectedIndex = index"
+                >
+                  {{ local(row.trackId)?.track.title ?? "无标题" }}
                 </button>
               </td>
               <td
-                class="p-2 align-top"
-                :data-album-tag-slot="index"
-                :class="
-                  dragPreview?.target === index
-                    ? 'ring-spotify-green bg-white/10 ring-1 ring-inset'
-                    : ''
-                "
+                class="px-2 py-2"
+                :class="durationDiffers(index) ? 'text-amber-200' : 'text-spotify-muted'"
               >
-                <div
-                  v-if="row.trackId !== null"
-                  class="cursor-grab touch-none space-y-1 rounded p-1 select-none active:cursor-grabbing"
-                  :data-local-track-id="row.trackId"
-                  @pointerdown="drag.start(row.trackId, $event)"
-                >
-                  <p>
-                    {{ local(row.trackId)?.track.discNumber ?? "—" }}-{{
-                      local(row.trackId)?.track.trackNumber ?? "—"
-                    }}. {{ local(row.trackId)?.track.title ?? "无标题" }}
-                  </p>
-                  <p class="text-spotify-muted text-xs">
-                    {{ local(row.trackId)?.track.artist ?? "—" }} ·
-                    {{ formatTrackDuration(local(row.trackId)?.track.durationMs ?? null) ?? "—" }}
-                  </p>
-                  <p
-                    class="text-spotify-muted truncate text-xs"
-                    :title="local(row.trackId)?.track.path"
-                  >
-                    {{ filename(local(row.trackId)?.track.path ?? "") }}
-                  </p>
-                  <p v-if="local(row.trackId)?.issue" class="text-xs text-amber-200">
-                    {{ local(row.trackId)?.issue }}
-                  </p>
-                </div>
-                <p v-else class="text-spotify-muted p-1 text-xs">
-                  无对应文件，不保存。可拖入曲目。
+                {{
+                  row.trackId !== null
+                    ? (formatTrackDuration(local(row.trackId)?.track.durationMs ?? null) ?? "—")
+                    : ""
+                }}
+              </td>
+              <td
+                class="text-spotify-muted truncate px-2 py-2"
+                :title="local(row.trackId)?.track.path"
+              >
+                {{ filename(local(row.trackId)?.track.path ?? "") }}
+                <p v-if="local(row.trackId)?.issue" class="text-amber-200">
+                  {{ local(row.trackId)?.issue }}
                 </p>
+              </td>
+            </tr>
+            <tr v-if="expanded === index && row.source" class="bg-black/10">
+              <td colspan="8" class="p-3">
                 <select
                   :aria-label="`第 ${row.source.discNumber} 碟第 ${row.source.trackNumber} 首对应文件`"
                   :value="row.trackId ?? ''"
                   :disabled="disabled"
-                  class="bg-spotify-interactive mt-2 w-full rounded border border-white/15 p-1 text-xs disabled:opacity-50"
+                  class="bg-spotify-interactive mb-2 w-full rounded border border-white/15 p-1 text-xs disabled:opacity-50"
                   @change="choose(index, $event)"
                 >
-                  <option value="">解除对应</option>
+                  <option value="">无对应文件</option>
                   <option v-for="{ track } in state.tracks" :key="track.id" :value="track.id">
                     {{ filename(track.path) }}
                   </option>
                 </select>
-              </td>
-            </tr>
-            <tr v-if="expanded === index" class="bg-black/10">
-              <td colspan="3" class="p-3">
-                <div class="grid gap-3 md:grid-cols-2">
+                <div class="grid gap-3 md:grid-cols-3">
                   <div v-for="field in METADATA_FIELDS" :key="field.key" class="space-y-1 text-xs">
-                    <label :for="`match-${index}-${field.key}`"
-                      >{{ field.label
-                      }}{{ state.fields.includes(field.key) ? "（将覆盖）" : "（不覆盖）" }}</label
-                    >
+                    <label :for="`match-${index}-${field.key}`">{{ field.label }}</label>
                     <p
                       v-if="
                         row.trackId !== null &&
@@ -166,7 +329,7 @@ function input(index: number, field: AlbumField, event: InstanceType<typeof glob
                       "
                       class="text-amber-200"
                     >
-                      本地文件不支持写入此字段，保存时将报告该曲目失败。
+                      不支持写入
                     </p>
                     <p class="text-spotify-muted break-all">
                       原值：{{
@@ -187,14 +350,15 @@ function input(index: number, field: AlbumField, event: InstanceType<typeof glob
                       <button
                         type="button"
                         :disabled="disabled"
-                        class="hover:underline"
+                        class="hover:underline disabled:opacity-50"
                         @click="editor.setValue(index, field.key, '')"
                       >
-                        清空</button
-                      ><button
+                        清空
+                      </button>
+                      <button
                         type="button"
                         :disabled="disabled"
-                        class="hover:underline"
+                        class="hover:underline disabled:opacity-50"
                         @click="editor.setValue(index, field.key, undefined)"
                       >
                         保留本地
@@ -205,32 +369,20 @@ function input(index: number, field: AlbumField, event: InstanceType<typeof glob
               </td>
             </tr>
           </template>
+          <tr
+            v-for="{ track } in !state.selected ? state.tracks : []"
+            :key="track.id"
+            class="text-spotify-muted border-t border-white/5"
+          >
+            <td></td>
+            <td></td>
+            <td colspan="3"></td>
+            <td class="truncate px-2 py-2">{{ track.title }}</td>
+            <td class="px-2 py-2">{{ formatTrackDuration(track.durationMs) ?? "—" }}</td>
+            <td class="truncate px-2 py-2" :title="track.path">{{ filename(track.path) }}</td>
+          </tr>
         </tbody>
       </table>
-    </div>
-    <div
-      class="min-h-20 rounded border border-dashed border-white/20 p-3"
-      data-album-tag-slot="unmatched"
-      :class="
-        dragPreview && dragPreview.target === null ? 'ring-spotify-green bg-white/10 ring-1' : ''
-      "
-    >
-      <h4 class="text-spotify-muted text-sm">
-        未匹配本地曲目（{{ unmatched.length }}）· 拖到这里解除对应，这些文件不会修改
-      </h4>
-      <div class="mt-2 flex flex-wrap gap-2">
-        <div
-          v-for="{ track, issue } in unmatched"
-          :key="track.id"
-          class="bg-spotify-interactive max-w-full cursor-grab touch-none rounded px-3 py-2 text-xs select-none"
-          :title="track.path"
-          :data-local-track-id="track.id"
-          @pointerdown="drag.start(track.id, $event)"
-        >
-          {{ filename(track.path)
-          }}<span v-if="issue" class="ml-2 text-amber-200">{{ issue }}</span>
-        </div>
-      </div>
     </div>
     <div
       v-if="dragPreview"

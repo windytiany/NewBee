@@ -20,6 +20,41 @@ describe("album tag mapping", () => {
     const rows = createMatchRows(release(), [local(3), local(1), local(4)]);
     expect(rows.map((row) => row.trackId)).toEqual([1, null, 3, 4]);
   });
+  it("keeps every local and source track in the table when their counts differ", () => {
+    const locals = [local(1), local(2), local(3), local(4), local(5), local(6)];
+    const rows = createMatchRows(release(), locals);
+    expect(rows.map((row) => row.trackId)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(rows.slice(4).every((row) => row.source === null)).toBe(true);
+    expect(rows.flatMap((row) => (row.source ? [row.source.title] : []))).toEqual(
+      release().tracks.map((track) => track.title),
+    );
+    const missing = createMatchRows(release(), [local(1)]);
+    expect(missing.length).toBe(4);
+    expect(missing.map((row) => row.trackId)).toEqual([1, null, null, null]);
+  });
+  it("keeps detached local tracks opposite a blank source and never writes tags or covers to them", () => {
+    const locals = [local(1), local(2)];
+    const rows = createMatchRows(release(), locals);
+    assignTrack(rows, 1, null);
+    expect(rows[0]?.trackId).toBeNull();
+    const detached = rows.find((row) => row.trackId === 1);
+    expect(detached?.source).toBeNull();
+    detached!.values.album = "ignored";
+    expect(buildAlbumPatches(rows, locals, fields, [1], true)).toEqual([]);
+    const target = rows.findIndex((row) => row.source?.title === "Song 2");
+    assignTrack(rows, 1, target);
+    expect(rows.find((row) => row.source?.title === "Song 2")?.trackId).toBe(1);
+    expect(rows.find((row) => row.trackId === 2)?.source).toBeNull();
+    expect(
+      rows
+        .filter((row) => row.trackId !== null)
+        .map((row) => row.trackId)
+        .sort(),
+    ).toEqual([1, 2]);
+    expect(
+      buildAlbumPatches(rows, locals, fields, [1, 2], true).map((patch) => patch.trackId),
+    ).toEqual([1]);
+  });
   it("matches only the second disc without shifting it to the first disc", () => {
     const rows = createMatchRows(release(), [local(3, "Song 3", 2), local(4, "Song 4", 2)]);
     expect(rows.map((row) => row.trackId)).toEqual([null, null, 3, 4]);

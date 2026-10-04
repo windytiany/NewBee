@@ -12,129 +12,163 @@ const candidates = computed(() =>
     return rank(b) - rank(a);
   }),
 );
+function scrollResult(event: InstanceType<typeof globalThis.WheelEvent>) {
+  if (event.ctrlKey || event.deltaY === 0) return;
+  const viewport = event.currentTarget as InstanceType<typeof globalThis.HTMLDivElement>;
+  const height = viewport.querySelector("[data-release-row]")?.getBoundingClientRect().height;
+  if (!height) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const position = viewport.scrollTop / height;
+  const next = (event.deltaY > 0 ? Math.floor(position) + 1 : Math.ceil(position) - 1) * height;
+  viewport.scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, next));
+}
 </script>
 
 <template>
-  <section aria-label="搜索发行版本" class="space-y-3">
-    <form class="flex flex-wrap items-end gap-3" @submit.prevent="editor.search()">
-      <label class="min-w-40 flex-1 space-y-1 text-sm"
-        >专辑艺术家
+  <section aria-label="搜索发行版本" class="space-y-1">
+    <form
+      class="grid grid-cols-[1fr_1fr_80px] items-center gap-[8px]"
+      @submit.prevent="editor.search()"
+    >
+      <label class="text-spotify-muted flex min-w-0 items-center gap-2 text-xs whitespace-nowrap">
+        <span class="shrink-0">专辑艺术家</span>
         <input
           v-model="state.artist"
           :disabled="disabled || state.searching"
-          class="mt-1 w-full rounded border border-white/15 bg-black/20 px-3 py-2"
+          autofocus
+          class="focus:border-spotify-green h-6 w-full min-w-0 rounded border border-white/15 bg-black/20 px-2 text-xs text-white focus:outline-none"
         />
       </label>
-      <label class="min-w-40 flex-1 space-y-1 text-sm"
-        >专辑名
+      <label class="text-spotify-muted flex min-w-0 items-center gap-2 text-xs whitespace-nowrap">
+        <span class="shrink-0">专辑</span>
         <input
           v-model="state.album"
           :disabled="disabled || state.searching"
-          class="mt-1 w-full rounded border border-white/15 bg-black/20 px-3 py-2"
+          class="focus:border-spotify-green h-6 w-full min-w-0 rounded border border-white/15 bg-black/20 px-2 text-xs text-white focus:outline-none"
         />
       </label>
       <button
         type="submit"
         :disabled="disabled || state.searching"
-        class="bg-spotify-green rounded px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+        class="bg-spotify-green h-6 rounded px-3 text-xs font-semibold text-black disabled:opacity-50"
       >
-        {{ state.searching ? "搜索中…" : "搜索" }}
+        {{ state.searching ? "查找中…" : "查找" }}
       </button>
     </form>
-    <form class="flex items-end gap-3" @submit.prevent="editor.loadDirect()">
-      <label class="flex-1 text-sm"
-        >MusicBrainz 发行版本链接或 ID
-        <input
-          v-model="state.directId"
-          :disabled="disabled"
-          placeholder="https://musicbrainz.org/release/…"
-          class="mt-1 w-full rounded border border-white/15 bg-black/20 px-3 py-2"
-        />
-      </label>
-      <button
-        type="submit"
-        :disabled="disabled || state.loadingRelease"
-        class="rounded border border-white/20 px-4 py-2 text-sm disabled:opacity-50"
-      >
-        加载
-      </button>
-    </form>
-    <p class="text-spotify-muted text-xs">仅发送搜索条件，不上传音频、本地路径或文件名。</p>
     <div
-      v-if="state.candidates.length"
-      class="max-h-48 overflow-auto rounded border border-white/10"
+      class="box-content h-[164px] max-h-[28dvh] overflow-auto overscroll-contain rounded border border-white/10"
+      :aria-busy="state.searching"
+      @wheel="scrollResult"
     >
-      <table class="w-full text-left text-sm">
-        <thead class="bg-spotify-interactive sticky top-0">
-          <tr>
-            <th class="p-2">发行版本</th>
-            <th>艺术家</th>
-            <th>日期 / 国家</th>
-            <th>介质 / 碟数 / 曲数</th>
-            <th>状态</th>
-            <th class="p-2">操作</th>
+      <table class="w-full min-w-[760px] table-fixed text-left text-xs leading-[18px]">
+        <thead class="bg-spotify-interactive text-spotify-muted sticky top-0 z-10 leading-[16px]">
+          <tr class="h-[24px]">
+            <th class="w-[110px] truncate px-2 font-normal">状态 / 介质</th>
+            <th class="w-[54px] truncate px-2 font-normal">国家</th>
+            <th class="w-[90px] truncate px-2 font-normal">日期</th>
+            <th class="truncate px-2 font-normal">专辑</th>
+            <th class="w-[116px] truncate px-2 font-normal">专辑艺术家</th>
+            <th class="w-[88px] truncate px-2 font-normal">碟 / 曲目</th>
+            <th class="w-[104px] truncate px-2 font-normal">源</th>
           </tr>
         </thead>
         <tbody>
           <tr
             v-for="candidate in candidates"
             :key="candidate.id"
-            :class="state.selected?.summary.id === candidate.id ? 'bg-white/10' : ''"
-            class="border-t border-white/10"
+            data-release-row
+            :aria-selected="state.selected?.summary.id === candidate.id"
+            :class="
+              state.selected?.summary.id === candidate.id
+                ? 'bg-spotify-green/15 text-white'
+                : 'hover:bg-white/5'
+            "
+            class="h-[28px] cursor-pointer border-t border-white/5"
+            @click="!disabled && !state.loadingRelease && editor.selectRelease(candidate.id)"
           >
-            <td class="p-2">
-              {{ candidate.title
-              }}<span v-if="candidate.disambiguation" class="text-spotify-muted block text-xs">{{
-                candidate.disambiguation
-              }}</span>
+            <td
+              class="truncate px-2"
+              :title="[candidate.status, ...candidate.formats].filter(Boolean).join(' · ')"
+            >
+              {{ [candidate.status, ...candidate.formats].filter(Boolean).join(" · ") || "—" }}
             </td>
-            <td class="p-2">{{ candidate.artist ?? "—" }}</td>
-            <td class="p-2 whitespace-nowrap">
-              {{ candidate.releaseDate ?? "—" }} / {{ candidate.country ?? "—" }}
+            <td class="truncate px-2" :title="candidate.country ?? ''">
+              {{ candidate.country ?? "—" }}
             </td>
-            <td class="p-2">
-              {{ candidate.formats.join(" + ") || "—" }} / {{ candidate.discCount }} 碟 /
-              <span :class="candidate.trackCount !== state.tracks.length ? 'text-amber-200' : ''"
-                >{{ candidate.trackCount }} 首</span
-              >
+            <td class="truncate px-2" :title="candidate.releaseDate ?? ''">
+              {{ candidate.releaseDate ?? "—" }}
             </td>
-            <td class="p-2">{{ candidate.status ?? "—" }}</td>
-            <td class="p-2">
+            <td class="px-2">
               <button
                 type="button"
                 :disabled="disabled || state.loadingRelease"
-                class="rounded px-3 py-1 hover:bg-white/10 disabled:opacity-50"
-                @click="editor.selectRelease(candidate.id)"
+                :aria-pressed="state.selected?.summary.id === candidate.id"
+                :title="[candidate.title, candidate.disambiguation].filter(Boolean).join(' · ')"
+                class="block w-full truncate text-left hover:underline disabled:opacity-50"
+                @click.stop="editor.selectRelease(candidate.id)"
               >
-                选择
+                {{ candidate.title
+                }}<span v-if="candidate.disambiguation" class="text-spotify-muted ml-1"
+                  >({{ candidate.disambiguation }})</span
+                >
               </button>
+            </td>
+            <td class="truncate px-2" :title="candidate.artist ?? ''">
+              {{ candidate.artist ?? "—" }}
+            </td>
+            <td
+              class="truncate px-2"
+              :class="candidate.trackCount !== state.tracks.length ? 'text-amber-200' : ''"
+            >
+              {{ candidate.discCount }} / {{ candidate.trackCount }}
+            </td>
+            <td class="text-spotify-muted truncate px-2" title="MusicBrainz">MusicBrainz</td>
+          </tr>
+          <tr v-if="!candidates.length && (state.searching || state.hasSearched)">
+            <td colspan="7" role="status" class="text-spotify-muted px-2 py-2 text-center">
+              {{ state.searching ? "查找中…" : "无结果" }}
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p v-if="state.candidates.length" class="text-spotify-muted text-xs">
-      已加载 {{ state.candidates.length }} / {{ state.count }} 个版本；本地
-      {{ state.tracks.length }} 首。
-    </p>
-    <button
-      v-if="state.offset + 25 < state.count"
-      type="button"
-      :disabled="disabled || state.searching"
-      class="rounded border border-white/20 px-3 py-1 text-sm disabled:opacity-50"
-      @click="editor.loadMore()"
-    >
-      加载更多
-    </button>
-    <p
-      v-if="state.hasSearched && !state.searching && !state.candidates.length"
-      role="status"
-      class="text-spotify-muted text-sm"
-    >
-      没有找到发行版本，请调整搜索条件或输入发行版本链接。
-    </p>
-    <p v-if="state.loadingRelease" role="status" class="text-spotify-muted text-sm">
-      正在加载发行版本…
-    </p>
+    <div class="text-spotify-muted flex items-center justify-between gap-2 text-xs">
+      <p role="status">
+        {{ state.loadingRelease ? "加载中…" : `本地 ${state.tracks.length} 首`
+        }}<span v-if="state.hasSearched"> · {{ state.candidates.length }} / {{ state.count }}</span>
+      </p>
+      <button
+        v-if="state.offset + 25 < state.count"
+        type="button"
+        :disabled="disabled || state.searching"
+        class="text-white hover:underline disabled:opacity-50"
+        @click="editor.loadMore()"
+      >
+        更多
+      </button>
+      <details class="relative ml-auto">
+        <summary class="cursor-pointer hover:text-white">链接 / ID</summary>
+        <form
+          class="bg-spotify-surface absolute top-full right-0 z-20 mt-1 flex gap-1 rounded border border-white/15 p-2 shadow-xl"
+          @submit.prevent="editor.loadDirect()"
+        >
+          <input
+            v-model="state.directId"
+            aria-label="MusicBrainz 发行版本链接或 ID"
+            :disabled="disabled || state.loadingRelease"
+            placeholder="https://musicbrainz.org/release/…"
+            class="w-64 rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+          />
+          <button
+            type="submit"
+            :disabled="disabled || state.loadingRelease"
+            class="rounded border border-white/15 px-2 py-1 text-white disabled:opacity-50"
+          >
+            加载
+          </button>
+        </form>
+      </details>
+    </div>
   </section>
 </template>

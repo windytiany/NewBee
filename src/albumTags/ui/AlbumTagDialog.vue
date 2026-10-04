@@ -40,48 +40,79 @@ watch(
   <dialog
     ref="dialog"
     aria-labelledby="album-tags-title"
-    class="bg-spotify-surface m-auto max-h-[92vh] w-[min(72rem,calc(100vw-2rem))] max-w-none overflow-y-auto rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
+    class="bg-spotify-surface m-auto h-fit max-h-[calc(100dvh-16px)] w-[min(1040px,calc(100vw-16px))] max-w-none overflow-hidden rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
     @cancel.prevent="editor.requestClose()"
     @mousedown.stop
   >
-    <header class="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-      <h2 id="album-tags-title" class="text-lg font-semibold">根据专辑更新标签</h2>
-      <button
-        type="button"
-        :disabled="state.saving"
-        aria-label="关闭标签更新窗口"
-        class="rounded px-3 py-1 hover:bg-white/10 disabled:opacity-50"
-        @click="editor.requestClose()"
-      >
-        关闭
-      </button>
+    <header class="flex h-[36px] items-center justify-between gap-2 border-b border-white/10 px-2">
+      <h2 id="album-tags-title" class="text-sm font-semibold">根据专辑更新标签</h2>
     </header>
-    <div v-if="state.open" class="space-y-5 p-5">
+    <div
+      v-if="state.open"
+      class="flex max-h-[calc(100dvh_-_52px)] flex-col gap-[8px] overflow-y-auto p-[8px]"
+    >
       <p v-if="state.loading" role="status" class="text-spotify-muted text-sm">读取本地曲目中…</p>
       <p v-if="state.error" role="alert" class="text-sm whitespace-pre-wrap text-red-200">
         {{ state.error }}
       </p>
-      <ReleaseSearch :editor="editor" :disabled="disabled" />
-      <template v-if="state.selected">
-        <p class="text-sm">
-          已选择：{{ state.selected.summary.artist }} · {{ state.selected.summary.title }} ·
-          {{ state.selected.summary.releaseDate ?? "日期缺失" }} ·
-          {{ state.selected.summary.country ?? "国家缺失"
-          }}<span
-            v-if="state.selected.summary.trackCount !== state.tracks.length"
-            class="ml-2 text-amber-200"
-            >来源 {{ state.selected.summary.trackCount }} 首 / 本地
-            {{ state.tracks.length }} 首</span
-          >
-        </p>
+      <ReleaseSearch :editor="editor" :disabled="disabled" class="shrink-0" />
+      <div
+        class="grid shrink-0 grid-cols-[minmax(0,1fr)_80px] gap-[8px] border-y border-white/10 py-[8px]"
+      >
         <AlbumTagFields :editor="editor" :disabled="disabled || state.loadingRelease" />
-        <TrackMapping :editor="editor" :disabled="disabled || state.loadingRelease" />
-      </template>
-      <div v-if="state.saving" role="status" aria-live="polite" class="space-y-2 text-sm">
+        <div class="flex flex-col gap-1">
+          <button
+            type="button"
+            :disabled="
+              disabled ||
+              state.loadingRelease ||
+              !state.selected ||
+              !state.rows.some(
+                (row) =>
+                  row.source !== null &&
+                  row.trackId !== null &&
+                  state.included.includes(row.trackId),
+              )
+            "
+            class="bg-spotify-green rounded px-3 py-1 text-xs font-semibold text-black disabled:opacity-50"
+            @click="editor.prepareSave()"
+          >
+            应用
+          </button>
+          <button
+            type="button"
+            :disabled="state.saving"
+            class="rounded border border-white/15 px-3 py-1 text-xs hover:bg-white/10 disabled:opacity-50"
+            @click="editor.requestClose()"
+          >
+            取消
+          </button>
+          <button
+            v-if="failed.length"
+            type="button"
+            :disabled="disabled"
+            class="rounded border border-white/20 px-2 py-1 text-xs disabled:opacity-50"
+            @click="editor.retryFailed()"
+          >
+            仅重试失败项
+          </button>
+          <p
+            v-if="state.selected && state.selected.summary.trackCount !== state.tracks.length"
+            class="text-xs text-amber-200"
+          >
+            来源 {{ state.selected.summary.trackCount }} 首 / 本地 {{ state.tracks.length }} 首
+          </p>
+        </div>
+      </div>
+      <div v-if="state.saving" role="status" aria-live="polite" class="shrink-0 text-xs">
         <p>正在保存 {{ state.completed }} / {{ state.total }}</p>
         <progress :value="state.completed" :max="state.total" class="w-full"></progress>
       </div>
-      <section v-if="state.results.length" aria-label="逐曲保存结果" class="space-y-2 text-sm">
+      <section
+        v-if="state.results.length"
+        aria-label="逐曲保存结果"
+        class="max-h-20 shrink-0 overflow-auto text-xs"
+      >
         <p>{{ state.results.length - failed.length }} 首成功，{{ failed.length }} 首失败。</p>
         <p
           v-for="result in state.results"
@@ -95,70 +126,43 @@ watch(
       <section
         v-if="state.confirmSave"
         aria-label="确认覆盖标签"
-        class="space-y-3 rounded border border-amber-200/30 p-4 text-sm"
+        class="flex shrink-0 items-center justify-between gap-2 rounded border border-amber-200/30 px-2 py-1 text-xs"
       >
-        <p>将向 {{ state.patches.length }} 首曲目写入实际改动：{{ pendingFields.join("、") }}。</p>
-        <p class="text-amber-200">
-          将覆盖音频文件中的所选标签。保存后不可撤销，也不会生成永久备份；部分失败不会回滚已成功曲目。
+        <p class="min-w-0 truncate">
+          {{ state.patches.length }} 首 · {{ pendingFields.join("、") }}
         </p>
-        <div class="flex justify-end gap-3">
+        <div class="flex shrink-0 gap-2">
           <button
             type="button"
-            class="rounded px-3 py-2 hover:bg-white/10"
+            class="rounded px-2 py-1 hover:bg-white/10"
             @click="state.confirmSave = false"
           >
             返回核对</button
           ><button
             type="button"
-            class="bg-spotify-green rounded px-3 py-2 font-semibold text-black"
+            class="bg-spotify-green rounded px-2 py-1 font-semibold text-black"
             @click="editor.save()"
           >
             确认写入
           </button>
         </div>
       </section>
+      <TrackMapping
+        :editor="editor"
+        :disabled="disabled || state.loadingRelease"
+        class="shrink-0"
+      />
     </div>
-    <footer class="flex justify-end gap-3 border-t border-white/10 px-5 py-4">
-      <button
-        type="button"
-        :disabled="state.saving"
-        class="rounded px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-50"
-        @click="editor.requestClose()"
-      >
-        取消
-      </button>
-      <button
-        v-if="failed.length"
-        type="button"
-        :disabled="disabled"
-        class="rounded border border-white/20 px-4 py-2 text-sm disabled:opacity-50"
-        @click="editor.retryFailed()"
-      >
-        仅重试失败项
-      </button>
-      <button
-        type="button"
-        :disabled="disabled || state.loadingRelease || !state.selected"
-        class="bg-spotify-green rounded px-5 py-2 text-sm font-semibold text-black disabled:opacity-50"
-        @click="editor.prepareSave()"
-      >
-        保存
-      </button>
-    </footer>
   </dialog>
   <dialog
     ref="discardDialog"
     role="alertdialog"
     aria-labelledby="album-tags-discard-title"
-    aria-describedby="album-tags-discard-description"
     class="bg-spotify-surface m-auto w-[min(24rem,calc(100vw-2rem))] max-w-none space-y-4 rounded-xl border border-white/10 p-5 text-white backdrop:bg-black/50"
     @cancel.prevent="state.confirmDiscard = false"
     @mousedown.stop
   >
     <h2 id="album-tags-discard-title" class="font-semibold">丢弃调整？</h2>
-    <p id="album-tags-discard-description" class="text-spotify-muted text-sm">
-      未保存的字段、封面选择和曲目对应调整将丢失。已写入文件的改动不会撤销。
-    </p>
     <div class="flex justify-end gap-3">
       <button
         type="button"

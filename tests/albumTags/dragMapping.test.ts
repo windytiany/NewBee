@@ -27,7 +27,7 @@ function fixture() {
   let captured = false;
   const handle = Object.assign(new EventTarget(), {
     ownerDocument: document,
-    closest: () => scroll,
+    closest: (selector: string) => (selector === "[data-album-tag-scroll]" ? scroll : null),
     setPointerCapture: () => {
       captured = true;
     },
@@ -45,7 +45,10 @@ function fixture() {
   });
   const pointer = { button: 0, isPrimary: true, pointerId: 1, clientX: 100, clientY: 100 };
   function start() {
-    drag.start(7, { ...pointer, currentTarget: handle } as unknown as PointerEvent);
+    const event = Object.assign(new Event("pointerdown", { cancelable: true }), pointer);
+    Object.defineProperty(event, "currentTarget", { value: handle });
+    drag.start(7, event as PointerEvent);
+    return event;
   }
   function dispatch(type: string, fields: object = {}) {
     const event = Object.assign(new Event(type, { cancelable: true }), { ...pointer, ...fields });
@@ -77,6 +80,41 @@ function fixture() {
   };
 }
 describe("pointer track mapping drag", () => {
+  it("prevents native selection as soon as a draggable region is pressed", () => {
+    const context = fixture();
+    expect(context.start().defaultPrevented).toBe(true);
+    expect(context.previews).toEqual([]);
+    context.drag.cancel();
+    context.allow(false);
+    expect(context.start().defaultPrevented).toBe(false);
+  });
+  it("suppresses the click following a drag but preserves ordinary clicks", () => {
+    const context = fixture();
+    context.start();
+    context.dispatch("pointerup");
+    const ordinary = new Event("click", { cancelable: true });
+    context.drag.suppressClick(ordinary);
+    expect(ordinary.defaultPrevented).toBe(false);
+    context.start();
+    context.dispatch("pointermove", { clientX: 120 });
+    context.dispatch("pointerup", { clientX: 120 });
+    const afterDrag = new Event("click", { cancelable: true });
+    context.drag.suppressClick(afterDrag);
+    expect(afterDrag.defaultPrevented).toBe(true);
+    const next = new Event("click", { cancelable: true });
+    context.drag.suppressClick(next);
+    expect(next.defaultPrevented).toBe(false);
+  });
+  it("does not suppress a later click when the browser produces no post-drag click", async () => {
+    const context = fixture();
+    context.start();
+    context.dispatch("pointermove", { clientX: 120 });
+    context.dispatch("pointerup", { clientX: 120 });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+    const later = new Event("click", { cancelable: true });
+    context.drag.suppressClick(later);
+    expect(later.defaultPrevented).toBe(false);
+  });
   it("starts only after movement threshold and drops on the pointed source slot", () => {
     const context = fixture();
     context.start();
@@ -134,7 +172,7 @@ describe("pointer track mapping drag", () => {
     context.dispatch("pointerup");
     expect(context.drops).toEqual([]);
   });
-  it("auto-scrolls the modal near its edge and stops scrolling on cancel", () => {
+  it("auto-scrolls the nearest mapping panel near its edge and stops scrolling on cancel", () => {
     const context = fixture();
     context.start();
     context.dispatch("pointermove", { clientY: 390 });

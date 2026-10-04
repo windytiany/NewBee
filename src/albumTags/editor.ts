@@ -280,14 +280,16 @@ export function createAlbumTagEditor(options: AlbumTagOptions) {
   function setValue(index: number, field: AlbumField, value: string | undefined) {
     if (busy() || state.loadingRelease) return;
     const row = state.rows[index];
-    if (row) {
+    if (row?.source) {
       row.values[field] = value;
       edited();
     }
   }
   function setSharedValue(field: AlbumField, value: string | undefined) {
     if (busy() || state.loadingRelease) return;
-    for (const row of state.rows) row.values[field] = value;
+    for (const row of state.rows) {
+      if (row.source) row.values[field] = value;
+    }
     edited();
   }
   function toggleField(field: AlbumField) {

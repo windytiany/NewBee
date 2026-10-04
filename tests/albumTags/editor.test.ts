@@ -79,6 +79,25 @@ describe("album tag editing", () => {
     expect(editor.state.writeCover).toBe(false);
     expect(editor.state.dirty).toBe(false);
   });
+  it("preserves local tracks with a blank source through shared edits and cover saving", async () => {
+    const { editor, saves } = await ready({
+      loadAlbum: async () => [local(1), local(2), local(3), local(4), local(5)],
+      covers: async () => [{ id: "cover", comment: "" }],
+    });
+    editor.move(1, null);
+    editor.setSharedValue("album", "Updated album");
+    const detached = editor.state.rows.filter((row) => row.source === null);
+    expect(detached.map((row) => row.trackId)).toEqual([1, 5]);
+    expect(detached.every((row) => row.values.album === undefined)).toBe(true);
+    editor.toggleCover();
+    editor.prepareSave();
+    expect(editor.state.patches.map((patch) => patch.trackId)).toEqual([2, 3, 4]);
+    expect(editor.state.patches.every((patch) => patch.writeCover)).toBe(true);
+    await editor.save();
+    expect(saves[0]?.map((patch) => patch.trackId)).toEqual([2, 3, 4]);
+    expect(editor.state.tracks.find(({ track }) => track.id === 1)?.track.album).toBe("Album");
+    expect(editor.state.tracks.find(({ track }) => track.id === 5)?.track.album).toBe("Album");
+  });
   it("requires confirmation and saves immutable per-track patches", async () => {
     const { editor, saves, synchronized } = await ready();
     editor.setValue(0, "title", "修订标题");

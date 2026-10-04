@@ -30,16 +30,31 @@ function scrollDistance(bounds: DOMRect, x: number, y: number) {
 /** Pointer-based drag leaves Tauri's native file-drop handler enabled on Windows. */
 export function createMappingDrag(options: MappingDragOptions) {
   let cleanup: (() => void) | null = null;
+  let clickSuppressed = false;
+  let clickTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  function clearClickSuppression() {
+    if (clickTimer !== null) globalThis.clearTimeout(clickTimer);
+    clickTimer = null;
+    clickSuppressed = false;
+  }
+  function suppressClick(event: Event) {
+    if (!clickSuppressed) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearClickSuppression();
+  }
   function cancel() {
     cleanup?.();
+    clearClickSuppression();
   }
   function start(trackId: number, event: PointerEvent) {
     if (!options.canStart() || event.button !== 0 || !event.isPrimary) return;
     cancel();
+    event.preventDefault();
     const handle = event.currentTarget as HTMLElement;
     const document = handle.ownerDocument;
     const view = document.defaultView;
-    const scroll = handle.closest("dialog");
+    const scroll = handle.closest<HTMLElement>("[data-album-tag-scroll]");
     const pointerId = event.pointerId;
     const listeners = new AbortController();
     const startX = event.clientX;
@@ -96,6 +111,10 @@ export function createMappingDrag(options: MappingDragOptions) {
         if (options.canStart() && target !== undefined) options.drop(trackId, target);
       }
       stop();
+      if (dragging) {
+        clickSuppressed = true;
+        clickTimer = globalThis.setTimeout(clearClickSuppression, 0);
+      }
     }
     function pointerCancel(event: PointerEvent) {
       if (event.pointerId === pointerId) stop();
@@ -116,5 +135,5 @@ export function createMappingDrag(options: MappingDragOptions) {
     cleanup = stop;
     handle.setPointerCapture(pointerId);
   }
-  return { start, cancel };
+  return { start, cancel, suppressClick };
 }

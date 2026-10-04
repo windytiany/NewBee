@@ -28,7 +28,7 @@ export type CoverChoice = { id: string; comment: string };
 export type CoverData = { mimeType: string; data: number[] };
 export type AlbumField = (typeof METADATA_FIELDS)[number]["key"];
 export type MatchRow = {
-  source: ReleaseTrack;
+  source: ReleaseTrack | null;
   trackId: number | null;
   values: Partial<Record<AlbumField, string>>;
 };
@@ -107,17 +107,29 @@ export function createMatchRows(
     row.trackId = local.track.id;
     assigned.add(local.track.id);
   }
+  for (const { track } of locals) {
+    if (!assigned.has(track.id)) rows.push({ source: null, trackId: track.id, values: {} });
+  }
   return rows;
 }
 
-/** Move a local file to a source slot; occupied slots exchange their local files. */
+/** Move a local file between rows; a null target leaves its source side blank. */
 export function assignTrack(rows: MatchRow[], trackId: number, target: number | null) {
   const previous = rows.find((row) => row.trackId === trackId);
-  const next = target === null ? undefined : rows[target];
-  if (target !== null && !next) return;
-  if (previous === next) return;
-  if (previous) previous.trackId = next?.trackId ?? null;
-  if (next) next.trackId = trackId;
+  if (!previous) return;
+  if (target === null) {
+    if (previous.source === null) return;
+    previous.trackId = null;
+    rows.splice(rows.indexOf(previous) + 1, 0, { source: null, trackId, values: {} });
+    return;
+  }
+  const next = rows[target];
+  if (!next || previous === next) return;
+  previous.trackId = next.trackId;
+  next.trackId = trackId;
+  for (let index = rows.length - 1; index >= 0; index--) {
+    if (rows[index]?.source === null && rows[index]?.trackId === null) rows.splice(index, 1);
+  }
 }
 
 export function buildAlbumPatches(
@@ -130,7 +142,7 @@ export function buildAlbumPatches(
   const patches: TrackPatch[] = [];
   const seen = new Set<number>();
   for (const row of rows) {
-    if (row.trackId === null || !included.includes(row.trackId)) continue;
+    if (row.source === null || row.trackId === null || !included.includes(row.trackId)) continue;
     if (seen.has(row.trackId)) throw new Error("同一本地曲目不能重复对应。");
     seen.add(row.trackId);
     const local = tracks.find(({ track }) => track.id === row.trackId);
