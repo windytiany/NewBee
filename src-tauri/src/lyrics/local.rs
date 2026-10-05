@@ -1,9 +1,7 @@
 use crate::database::Database;
 use lofty::file::TaggedFileExt;
-use lofty::probe::Probe;
 use lofty::tag::ItemKey;
 use serde::Serialize;
-use std::path::{Path, PathBuf};
 use tauri::State;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -17,6 +15,7 @@ pub struct LyricLine {
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum TrackLyrics {
     None,
+    Instrumental,
     Plain { text: String },
     Synced { lines: Vec<LyricLine> },
 }
@@ -26,37 +25,28 @@ pub async fn get_track_lyrics(
     track_id: i64,
     state: State<'_, Database>,
 ) -> Result<TrackLyrics, String> {
-    let details = state
-        .get_track(track_id)?
-        .ok_or_else(|| format!("Track {track_id} was not found"))?;
-    let path = PathBuf::from(details.path());
-    drop(details);
-
-    let path_context = path.display().to_string();
-    tauri::async_runtime::spawn_blocking(move || read_embedded_lyrics(track_id, &path))
-        .await
-        .map_err(|error| {
-            format!("Blocking lyric read failed for track {track_id} at '{path_context}': {error}")
-        })?
+    let snapshot = state.get_lyrics(track_id)?;
+    Ok(if snapshot.no_lyrics {
+        TrackLyrics::Instrumental
+    } else {
+        snapshot
+            .text
+            .as_deref()
+            .map(parse_embedded_lyrics)
+            .unwrap_or(TrackLyrics::None)
+    })
 }
 
-fn read_embedded_lyrics(track_id: i64, path: &Path) -> Result<TrackLyrics, String> {
-    let context = format!("track {track_id} at '{}'", path.display());
-    let tagged_file = Probe::open(path)
-        .map_err(|error| format!("Failed to open audio file for {context}: {error}"))?
-        .guess_file_type()
-        .map_err(|error| format!("Failed to detect audio file type for {context}: {error}"))?
-        .read()
-        .map_err(|error| format!("Failed to read or parse audio tags for {context}: {error}"))?;
-
+pub(crate) fn embedded_lyrics_text(tagged_file: &lofty::file::TaggedFile) -> Option<&str> {
     let candidates = tagged_file.tags().iter().flat_map(|tag| {
         [ItemKey::Lyrics, ItemKey::UnsyncLyrics]
             .into_iter()
             .flat_map(move |key| tag.get_strings(key))
     });
-    Ok(lyrics_from_candidates(candidates))
+    select_lyrics_candidate(candidates)
 }
 
+#[cfg(test)]
 fn lyrics_from_candidates<'a>(candidates: impl IntoIterator<Item = &'a str>) -> TrackLyrics {
     select_lyrics_candidate(candidates)
         .map(parse_embedded_lyrics)
@@ -68,7 +58,7 @@ fn select_lyrics_candidate<'a>(candidates: impl IntoIterator<Item = &'a str>) ->
 
     for candidate in candidates {
         match parse_embedded_lyrics(candidate) {
-            TrackLyrics::None => {}
+            TrackLyrics::None | TrackLyrics::Instrumental => {}
             TrackLyrics::Plain { .. } => {
                 first_plain.get_or_insert(candidate);
             }

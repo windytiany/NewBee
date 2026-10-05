@@ -13,6 +13,7 @@ function deferred<T>() {
 }
 function setup(overrides: Partial<LyricsBatchOptions> = {}) {
   const writes: Array<[number, string]> = [];
+  const marked: number[] = [];
   const messages: NotificationInput[] = [];
   const tasks = new Map<string, TaskNotification>();
   const finished: number[] = [];
@@ -35,13 +36,22 @@ function setup(overrides: Partial<LyricsBatchOptions> = {}) {
         error: null,
       };
     },
+    mark: async (_batch, trackId) => {
+      marked.push(trackId);
+      return {
+        trackId,
+        path: `${trackId}.mp3`,
+        fileWritten: false,
+        databaseUpdated: true,
+        error: null,
+      };
+    },
     cancel: async (id) => {
       cancelled.push(id);
     },
     finish: async (id) => {
       finished.push(id);
     },
-    loadAlbum: async () => [1, 2, 1],
     synchronize: () => {
       synchronized++;
     },
@@ -62,6 +72,7 @@ function setup(overrides: Partial<LyricsBatchOptions> = {}) {
   return {
     batch,
     writes,
+    marked,
     messages,
     tasks,
     finished,
@@ -86,7 +97,7 @@ describe("lyrics batch", () => {
     expect(result.messages[0]?.message).toContain("2 首已写入");
     expect(result.batch.state.running).toBe(false);
   });
-  it("leaves files untouched on missing, instrumental and network failure, then continues", async () => {
+  it("marks instrumental results but leaves missing and failed results untouched", async () => {
     const result = setup({
       fetch: async (_batch, id) => {
         if (id === 1) return { kind: "missing" };
@@ -97,7 +108,48 @@ describe("lyrics batch", () => {
     });
     await result.batch.startTracks([1, 2, 3, 4]);
     expect(result.writes).toEqual([[4, "correct"]]);
-    expect(result.messages[0]?.message).toContain("1 首未找到，1 首纯音乐，1 首失败");
+    expect(result.marked).toEqual([2]);
+    expect(result.messages[0]?.message).toContain("1 首未找到，1 首纯音乐已标记，1 首失败");
+  });
+  it("refreshes the UI after database-only instrumental marks", async () => {
+    const result = setup({ fetch: async () => ({ kind: "instrumental" }) });
+    await result.batch.startTracks([1]);
+    expect(result.marked).toEqual([1]);
+    expect(result.writes).toEqual([]);
+    expect(result.synchronized()).toBe(1);
+  });
+  it("reports mark failures without counting them as instrumental successes", async () => {
+    const result = setup({
+      fetch: async () => ({ kind: "instrumental" }),
+      mark: async (_batch, trackId) => ({
+        trackId,
+        path: "track.mp3",
+        fileWritten: false,
+        databaseUpdated: false,
+        error: "文件为只读",
+      }),
+    });
+    await result.batch.startTracks([1]);
+    expect(result.batch.state.instrumental).toBe(0);
+    expect(result.batch.state.failed).toBe(1);
+    expect(result.messages[0]?.message).toContain("文件为只读");
+    expect(result.synchronized()).toBe(0);
+  });
+  it("reports a database sync failure even when the file was written", async () => {
+    const result = setup({
+      write: async (_batch, trackId) => ({
+        trackId,
+        path: "track.mp3",
+        fileWritten: true,
+        databaseUpdated: false,
+        error: "文件已写入，但数据库同步失败",
+      }),
+    });
+    await result.batch.startTracks([1]);
+    expect(result.batch.state.written).toBe(1);
+    expect(result.batch.state.failed).toBe(1);
+    expect(result.messages[0]?.type).toBe("warning");
+    expect(result.messages[0]?.message).toContain("数据库同步失败");
   });
   it("cancels during a request without writing its late result or processing later tracks", async () => {
     const request = deferred<LyricsContent>();
@@ -140,10 +192,10 @@ describe("lyrics batch", () => {
     expect(result.batch.state.written).toBe(1);
     expect(result.synchronized()).toBe(1);
   });
-  it("rejects duplicate task starts and resolves album targets", async () => {
+  it("rejects duplicate task starts", async () => {
     const request = deferred<LyricsContent>();
     const result = setup({ fetch: () => request.promise });
-    const running = result.batch.startAlbum({ album: "Album", albumArtist: "Artist" });
+    const running = result.batch.startTracks([1, 2, 1]);
     await result.batch.startTracks([9]);
     request.resolve({ kind: "missing" });
     await running;

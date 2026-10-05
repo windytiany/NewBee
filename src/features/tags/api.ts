@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Channel } from "@tauri-apps/api/core";
-import type { EditableTrack, TagChange, TagSaveResult } from "@/features/tags/types";
+import type {
+  EditableTrack,
+  LyricsMarkAction,
+  TagChange,
+  TagSaveResult,
+} from "@/features/tags/types";
 import type {
   CoverChoice,
   CoverData,
@@ -13,8 +18,18 @@ export function createTagsApi(invokeCommand: typeof invoke = invoke) {
   return {
     editableTracks: (trackIds: number[]) =>
       invokeCommand<EditableTrack[]>("get_editable_tracks", { trackIds }),
-    saveMetadata: (trackIds: number[], changes: TagChange[], onProgress: Channel<TagSaveResult>) =>
-      invokeCommand<TagSaveResult[]>("save_track_metadata", { trackIds, changes, onProgress }),
+    saveMetadata: (
+      trackIds: number[],
+      changes: TagChange[],
+      onProgress: Channel<TagSaveResult>,
+      lyricsAction: LyricsMarkAction,
+    ) =>
+      invokeCommand<TagSaveResult[]>("save_track_metadata", {
+        trackIds,
+        changes,
+        onProgress,
+        lyricsAction,
+      }),
     searchReleases: (artist: string, album: string, offset: number) =>
       invokeCommand<SearchResults>("search_album_releases", { artist, album, offset }),
     release: (releaseId: string) =>

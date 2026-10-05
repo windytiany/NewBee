@@ -124,6 +124,18 @@ impl Database {
                 .map_err(|error| format!("Failed to remove missing track artwork: {error}"))?;
         }
 
+        let lyrics = track
+            .lyrics
+            .as_deref()
+            .filter(|text| !text.trim().is_empty());
+        transaction.execute(
+            "INSERT INTO track_lyrics (track_id, text) VALUES (?1, ?2)
+             ON CONFLICT(track_id) DO UPDATE SET
+                text = excluded.text,
+                no_lyrics = CASE WHEN excluded.text IS NOT NULL THEN 0 ELSE track_lyrics.no_lyrics END",
+            params![track_id, lyrics],
+        ).map_err(|error| format!("Failed to write track lyrics: {error}"))?;
+
         transaction
             .commit()
             .map_err(|error| format!("Failed to finish track update: {error}"))?;

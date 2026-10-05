@@ -25,6 +25,7 @@ function editable(id: number, title = `Track ${id}`): EditableTrack {
       channels: 2,
     },
     lyrics: "[00:01.00]Original lyrics\n[00:02.00]Second line",
+    noLyrics: false,
     writableFields: [...TAG_FIELDS.map(({ key }) => key), "lyrics"],
     issue: null,
   };
@@ -226,6 +227,74 @@ describe("metadata editing", () => {
     expect(synchronized).toEqual([[1], [2]]);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.open).toBe(false);
+  });
+
+  it("sends a bulk mark action without rewriting unchanged tags", async () => {
+    const actions: string[] = [];
+    const { editor, saves } = fixture({
+      save: async (ids, changes, _progress, action) => {
+        saves.push({ ids, changes });
+        actions.push(action);
+        return ids.map((id) => result(id));
+      },
+    });
+    await editor.openAlbum({ album: "Album", albumArtist: "Artist" });
+    expect(editor.state.lyricsAction).toBe("keep");
+    editor.changeLyricsAction("mark");
+    editor.prepareSave();
+    await settle();
+    expect(actions).toEqual(["mark"]);
+    expect(saves).toEqual([{ ids: [1, 2], changes: [] }]);
+  });
+
+  it("clears the single-track draft when marking and cancels the mark when new lyrics are entered", async () => {
+    const { editor } = fixture();
+    await editor.openTracks([1]);
+    const lyrics = editor.state.draft.find(({ key }) => key === "lyrics");
+    if (!lyrics) throw new Error("Missing lyrics");
+    editor.changeLyricsAction("mark");
+    expect(lyrics.value).toBe("");
+    expect(editor.state.dirty).toBe(true);
+    editor.changeField(lyrics, "New lyrics");
+    expect(editor.state.lyricsAction).toBe("keep");
+  });
+
+  it("can cancel a mark for unwritable tracks with no file changes", async () => {
+    const calls: Array<{ changes: TagChange[]; action: string }> = [];
+    const { editor } = fixture({
+      loadTracks: async (ids) =>
+        ids.map((id) => ({ ...editable(id), lyrics: null, noLyrics: true, writableFields: [] })),
+      save: async (ids, changes, _progress, action) => {
+        calls.push({ changes, action });
+        return ids.map((id) => ({ ...result(id), fileWritten: false }));
+      },
+    });
+    await editor.openTracks([1, 2]);
+    editor.changeLyricsAction("unmark");
+    editor.prepareSave();
+    await settle();
+    expect(calls).toEqual([{ changes: [], action: "unmark" }]);
+    expect(editor.state.open).toBe(false);
+  });
+
+  it("retries only failed marks and preserves the selected action", async () => {
+    const calls: Array<{ ids: number[]; action: string }> = [];
+    const { editor } = fixture({
+      save: async (ids, _changes, _progress, action) => {
+        calls.push({ ids, action });
+        return ids.map((id) => result(id, calls.length > 1 || id === 1));
+      },
+    });
+    await editor.openTracks([1, 2]);
+    editor.changeLyricsAction("mark");
+    editor.prepareSave();
+    await settle();
+    editor.retryFailed();
+    await settle();
+    expect(calls).toEqual([
+      { ids: [1, 2], action: "mark" },
+      { ids: [2], action: "mark" },
+    ]);
   });
 
   it("requires discard confirmation only after editing and prevents closing while saving", async () => {

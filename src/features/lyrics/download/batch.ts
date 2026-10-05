@@ -1,7 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { reactive } from "vue";
-import type { LibraryAlbumSelection } from "@/features/library/types";
-import { createLibraryApi } from "@/features/library/api";
 import { createLyricsApi } from "@/features/lyrics/api";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import type { TagSaveResult } from "@/features/tags/types";
@@ -14,9 +12,9 @@ export type LyricsBatchOptions = {
   begin: (trackIds: number[]) => Promise<number>;
   fetch: (batchId: number, trackId: number) => Promise<LyricsContent>;
   write: (batchId: number, trackId: number, text: string) => Promise<TagSaveResult>;
+  mark: (batchId: number, trackId: number) => Promise<TagSaveResult>;
   cancel: (batchId: number) => Promise<void>;
   finish: (batchId: number) => Promise<void>;
-  loadAlbum: (album: LibraryAlbumSelection) => Promise<number[]>;
   synchronize: () => void;
   notifications: Pick<typeof notifications, "notify" | "updateTask" | "removeTask">;
 };
@@ -27,6 +25,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
     completed: 0,
     total: 0,
     written: 0,
+    updated: 0,
     missing: 0,
     instrumental: 0,
     failed: 0,
@@ -53,7 +52,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       cancel,
     });
   }
-  async function run(loadIds: () => Promise<number[]>) {
+  async function run(trackIds: readonly number[]) {
     if (state.running) return;
     Object.assign(state, {
       running: true,
@@ -61,6 +60,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       completed: 0,
       total: 0,
       written: 0,
+      updated: 0,
       missing: 0,
       instrumental: 0,
       failed: 0,
@@ -68,10 +68,15 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
     report();
     let batchId: number | null = null;
     let failure = "";
+    let firstError = "";
+    function recordFailure(error: unknown) {
+      state.failed++;
+      if (!firstError) firstError = error instanceof Error ? error.message : String(error);
+    }
     cancellation.pending = Promise.resolve();
     cancellation.error = "";
     try {
-      const ids = [...new Set(await loadIds())];
+      const ids = [...new Set(trackIds)];
       if (state.cancelling) return;
       if (!ids.length) throw new Error("没有可下载歌词的曲目。");
       state.total = ids.length;
@@ -87,12 +92,18 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
             // Downloads do not hold playback command state; only the actual write releases the file.
             const result = await options.write(batchId, trackId, content.text);
             if (result.fileWritten) state.written++;
-            if (!result.databaseUpdated) state.failed++;
-          } else if (content.kind === "instrumental") state.instrumental++;
-          else state.missing++;
-        } catch {
+            if (result.databaseUpdated) state.updated++;
+            else recordFailure(result.error ?? "歌词已写入，但数据库同步失败。");
+          } else if (content.kind === "instrumental") {
+            const result = await options.mark(batchId, trackId);
+            if (result.databaseUpdated) {
+              state.instrumental++;
+              state.updated++;
+            } else recordFailure(result.error ?? "无歌词标记保存失败。");
+          } else state.missing++;
+        } catch (error) {
           if (state.cancelling) break;
-          state.failed++;
+          recordFailure(error);
         }
         state.completed++;
         report();
@@ -110,7 +121,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         }
       }
       activeBatchId = null;
-      if (state.written > 0) {
+      if (state.written > 0 || state.updated > 0) {
         try {
           options.synchronize();
         } catch (error) {
@@ -122,7 +133,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         type: failure || state.failed ? "warning" : "success",
         message:
           failure ||
-          `歌词更新${state.cancelling ? "已取消" : "完成"}：${state.written} 首已写入，${state.missing} 首未找到，${state.instrumental} 首纯音乐，${state.failed} 首失败。`,
+          `歌词更新${state.cancelling ? "已取消" : "完成"}：${state.written} 首已写入，${state.missing} 首未找到，${state.instrumental} 首纯音乐已标记，${state.failed} 首失败。${firstError ? `\n${firstError}` : ""}`,
       });
       state.running = false;
     }
@@ -130,8 +141,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
   return {
     state,
     cancel,
-    startTracks: (trackIds: readonly number[]) => run(() => Promise.resolve([...trackIds])),
-    startAlbum: (album: LibraryAlbumSelection) => run(() => options.loadAlbum(album)),
+    startTracks: run,
   };
 }
 
@@ -140,15 +150,18 @@ export function useLyricsBatch() {
   if (sharedBatch) return sharedBatch;
   const session = usePlaybackSession();
   const api = createLyricsApi(invoke);
-  const library = createLibraryApi(invoke);
   sharedBatch = createLyricsBatch({
     begin: api.begin,
     fetch: api.fetch,
     write: (batchId, trackId, text) =>
       session.withMetadataEditing([trackId], () => api.write(batchId, trackId, text)),
+    mark: async (batchId, trackId) => {
+      const [target] = await api.targets([trackId]);
+      const save = () => api.mark(batchId, trackId);
+      return target?.hasLyrics ? session.withMetadataEditing([trackId], save) : save();
+    },
     cancel: api.cancel,
     finish: api.finish,
-    loadAlbum: async (album) => (await library.listAlbumTracks(album)).map((track) => track.id),
     synchronize: () => globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT)),
     notifications,
   });

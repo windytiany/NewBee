@@ -51,6 +51,7 @@ pub fn run() {
             import::supported_audio_extensions,
             import::files::import_music_files,
             lyrics::local::get_track_lyrics,
+            database::lyrics::get_lyrics_download_targets,
             lyrics::download::search_lyrics_candidates,
             lyrics::download::get_candidate_lyrics,
             lyrics::download::find_track_lyrics,

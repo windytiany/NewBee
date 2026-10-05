@@ -21,6 +21,7 @@ function deferred<T>() {
 }
 function setup(overrides: Partial<LyricsSearchOptions> = {}) {
   const applied: string[] = [];
+  let marked = 0;
   const search = createLyricsSearch({
     search: async () => ({ candidates: [candidate], nextOffset: null }),
     preview: async () => ({ kind: "available", text: "preview" }),
@@ -28,9 +29,12 @@ function setup(overrides: Partial<LyricsSearchOptions> = {}) {
     apply: (text) => {
       applied.push(text);
     },
+    mark: () => {
+      marked++;
+    },
     ...overrides,
   });
-  return { search, applied };
+  return { search, applied, marked: () => marked };
 }
 
 describe("lyrics search", () => {
@@ -110,13 +114,14 @@ describe("lyrics search", () => {
     await search.automatic(1);
     expect(applied).toEqual(["late"]);
   });
-  it("never replaces the draft with missing or instrumental lyrics", async () => {
-    const { search, applied } = setup({
+  it("marks explicit instrumental results but does not change the draft for missing lyrics", async () => {
+    const { search, applied, marked } = setup({
       automatic: async () => ({ kind: "instrumental" }),
       preview: async () => ({ kind: "missing" }),
     });
     await search.automatic(1);
     expect(search.state.error).toContain("纯音乐");
+    expect(marked()).toBe(1);
     await search.select(candidate);
     search.usePreview();
     expect(search.state.error).toContain("未找到");

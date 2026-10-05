@@ -11,6 +11,7 @@ import type {
   DraftField,
   EditableTrack,
   EditMode,
+  LyricsMarkAction,
   TagChange,
   TagSaveResult,
 } from "@/features/tags/types";
@@ -22,6 +23,7 @@ export type TagEditorOptions = {
     trackIds: number[],
     changes: TagChange[],
     progress: (result: TagSaveResult) => void,
+    lyricsAction: LyricsMarkAction,
   ) => Promise<TagSaveResult[]>;
   synchronize: (trackIds: number[]) => Promise<void>;
   notify: typeof notify;
@@ -41,6 +43,7 @@ export function createTagEditor(options: TagEditorOptions) {
     draft: [] as DraftField[],
     error: "",
     dirty: false,
+    lyricsAction: "keep" as LyricsMarkAction,
     confirmDiscard: false,
     results: [] as TagSaveResult[],
     completed: 0,
@@ -50,6 +53,7 @@ export function createTagEditor(options: TagEditorOptions) {
   let saveGeneration = 0;
   let pendingChanges: TagChange[] = [];
   let pendingTrackIds: number[] = [];
+  let pendingLyricsAction: LyricsMarkAction = "keep";
 
   async function open(loadIds: () => Promise<number[]>, mode: EditMode) {
     if (state.open) return;
@@ -63,6 +67,7 @@ export function createTagEditor(options: TagEditorOptions) {
       draft: [],
       error: "",
       dirty: false,
+      lyricsAction: "keep",
       confirmDiscard: false,
       results: [],
       completed: 0,
@@ -106,6 +111,19 @@ export function createTagEditor(options: TagEditorOptions) {
     if (state.saving || !field.writable) return;
     field.value = value;
     field.mixed = false;
+    if (field.key === "lyrics" && value.trim() && state.lyricsAction === "mark") {
+      state.lyricsAction = "keep";
+    }
+    edited();
+  }
+
+  function changeLyricsAction(action: LyricsMarkAction) {
+    if (state.loading || state.saving) return;
+    state.lyricsAction = action;
+    if (action === "mark") {
+      const lyrics = state.draft.find((field) => field.key === "lyrics");
+      if (lyrics) lyrics.value = "";
+    }
     edited();
   }
 
@@ -119,7 +137,13 @@ export function createTagEditor(options: TagEditorOptions) {
     if (state.loading || state.saving) return;
     state.error = "";
     try {
-      pendingChanges = buildTagChanges(state.draft, state.tracks);
+      pendingLyricsAction = state.lyricsAction;
+      pendingChanges = buildTagChanges(state.draft, state.tracks, {
+        changedOnly: pendingLyricsAction !== "keep",
+        allowEmpty: pendingLyricsAction !== "keep",
+      });
+      if (pendingLyricsAction === "mark")
+        pendingChanges = pendingChanges.filter(({ field }) => field !== "lyrics");
       pendingTrackIds = trackIds;
       if (pendingTrackIds.length === 0) return;
       void save();
@@ -147,7 +171,7 @@ export function createTagEditor(options: TagEditorOptions) {
       state.completed = completedIds.size;
     };
     try {
-      const results = await options.save(ids, pendingChanges, progress);
+      const results = await options.save(ids, pendingChanges, progress, pendingLyricsAction);
       acceptingProgress = false;
       for (const result of results) previous.set(result.trackId, result);
       state.results = [...previous.values()];
@@ -193,6 +217,7 @@ export function createTagEditor(options: TagEditorOptions) {
     requestClose,
     close,
     changeField,
+    changeLyricsAction,
     edited,
     save,
     prepareSave: () => prepareTargetSave(state.tracks.map(({ track }) => track.id)),
@@ -219,12 +244,24 @@ export function useTagEditor() {
   sharedEditor = createTagEditor({
     loadTracks: api.editableTracks,
     loadAlbum: async (album) => (await library.listAlbumTracks(album)).map((track) => track.id),
-    save: (trackIds, changes, progress) =>
-      session.withMetadataEditing(trackIds, () => {
+    save: (trackIds, changes, progress, lyricsAction) => {
+      const writeIds =
+        changes.length > 0
+          ? trackIds
+          : trackIds.filter(
+              (id) =>
+                lyricsAction === "mark" &&
+                sharedEditor?.state.tracks.some(
+                  ({ track, lyrics }) => track.id === id && lyrics !== null,
+                ),
+            );
+      const save = () => {
         const onProgress = new Channel<TagSaveResult>();
         onProgress.onmessage = progress;
-        return api.saveMetadata(trackIds, changes, onProgress);
-      }),
+        return api.saveMetadata(trackIds, changes, onProgress, lyricsAction);
+      };
+      return writeIds.length ? session.withMetadataEditing(writeIds, save) : save();
+    },
     synchronize: synchronize.tracks,
     notify,
   });

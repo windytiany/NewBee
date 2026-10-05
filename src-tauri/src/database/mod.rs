@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 pub(crate) mod commands;
 mod library;
+pub(crate) mod lyrics;
 mod metadata;
 mod paths;
 mod playlist;
@@ -141,6 +142,7 @@ pub struct TrackWriteInput {
     pub bitrate_kbps: Option<i64>,
     pub channels: Option<i64>,
     pub artwork: Option<EmbeddedArtwork>,
+    pub lyrics: Option<String>,
 }
 
 pub struct EmbeddedArtwork {

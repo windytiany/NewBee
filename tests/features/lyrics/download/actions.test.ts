@@ -43,6 +43,7 @@ function setup(
 ) {
   const calls: string[] = [];
   const applied: string[] = [];
+  let marked = 0;
   const props = Vue.reactive({
     track: {
       id: 1,
@@ -102,8 +103,9 @@ function setup(
   scopes.push(scope);
   const bindings = scope.run(() =>
     component.setup(props, {
-      emit: (_name: string, text: string) => {
-        applied.push(text);
+      emit: (name: string, text: string) => {
+        if (name === "mark") marked++;
+        else applied.push(text);
       },
       expose: () => {},
     }),
@@ -111,7 +113,7 @@ function setup(
   if (!bindings) throw new Error("Missing action bindings");
   bindings.searchDialog.value = dialog();
   bindings.replaceDialog.value = dialog();
-  return { bindings, calls, applied, props, scope };
+  return { bindings, calls, applied, props, scope, marked: () => marked };
 }
 
 describe("lyrics editor actions", () => {
@@ -134,6 +136,32 @@ describe("lyrics editor actions", () => {
     await Vue.nextTick();
     expect(applied).toEqual(["downloaded"]);
     expect(bindings.replaceDialog.value?.open).toBe(false);
+  });
+  it("marks explicit instrumental results in the draft without writing a file", async () => {
+    const { bindings, calls, marked, applied } = setup(false, async () => ({
+      kind: "instrumental",
+    }));
+    await bindings.automatic();
+    expect(marked()).toBe(1);
+    expect(applied).toEqual([]);
+    expect(calls.some((command) => command.includes("save") || command.includes("write"))).toBe(
+      false,
+    );
+  });
+  it("requires confirmation before a pure-music result clears unsaved lyrics", async () => {
+    const { bindings, marked } = setup(true, async () => ({ kind: "instrumental" }));
+    await bindings.automatic();
+    await Vue.nextTick();
+    expect(marked()).toBe(0);
+    expect(bindings.replaceDialog.value?.open).toBe(true);
+    bindings.confirmReplace();
+    expect(marked()).toBe(1);
+  });
+  it("does not mark when no lyrics were found", async () => {
+    const { bindings, marked, applied } = setup(false, async () => ({ kind: "missing" }));
+    await bindings.automatic();
+    expect(marked()).toBe(0);
+    expect(applied).toEqual([]);
   });
   it("opens manual results and requires explicit candidate use", async () => {
     const { bindings, applied } = setup();

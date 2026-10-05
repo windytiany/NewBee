@@ -213,6 +213,10 @@ const emptyLibraryPage = () => ({
 const appModules: Record<string, unknown> = {
   ...vueModules,
   "@/shared/notifications/useNotification": { useNotification },
+  "@/features/lyrics/components/LyricsDownloadDialog.vue": {
+    __esModule: true,
+    default: passiveComponent,
+  },
   "@/features/tags/manual/components/TagEditorDialog.vue": {
     __esModule: true,
     default: passiveComponent,

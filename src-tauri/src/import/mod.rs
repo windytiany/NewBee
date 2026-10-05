@@ -103,6 +103,7 @@ fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String> {
         bitrate_kbps: properties.audio_bitrate().map(i64::from),
         channels: properties.channels().map(i64::from),
         artwork,
+        lyrics: crate::lyrics::local::embedded_lyrics_text(&tagged_file).map(str::to_owned),
     }))
 }
 

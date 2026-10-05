@@ -1,5 +1,5 @@
 use super::{
-    lyrics_from_candidates, parse_embedded_lyrics, read_embedded_lyrics, select_lyrics_candidate,
+    embedded_lyrics_text, lyrics_from_candidates, parse_embedded_lyrics, select_lyrics_candidate,
     LyricLine, TrackLyrics,
 };
 use std::path::PathBuf;
@@ -62,36 +62,19 @@ fn reads_lrc_text_from_the_id3_uslt_field() {
     let mut tag = Tag::new(TagType::Id3v2);
     tag.insert_text(ItemKey::UnsyncLyrics, "[00:01.00]words".into());
     tag.save_to_path(&path, WriteOptions::default()).unwrap();
-    let result = read_embedded_lyrics(42, &path);
+    let tagged_file = lofty::read_from_path(&path).unwrap();
+    let result = embedded_lyrics_text(&tagged_file)
+        .map(parse_embedded_lyrics)
+        .unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     assert_eq!(
-        result.unwrap(),
+        result,
         TrackLyrics::Synced {
             lines: vec![LyricLine {
                 start_ms: 1_000,
                 text: "words".into()
             }],
         }
-    );
-}
-
-#[test]
-fn file_read_failure_is_distinct_from_missing_lyrics() {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let missing_path = PathBuf::from(format!(
-        "/tmp/newbee-lyrics-test-{}-{unique}/missing.mp3",
-        std::process::id()
-    ));
-
-    let error = read_embedded_lyrics(42, &missing_path).unwrap_err();
-    assert!(error.contains("track 42"));
-    assert!(error.contains(&missing_path.display().to_string()));
-    assert_eq!(
-        lyrics_from_candidates(std::iter::empty::<&str>()),
-        TrackLyrics::None
     );
 }
 

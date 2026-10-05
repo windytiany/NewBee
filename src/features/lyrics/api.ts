@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   LyricsCandidate,
   LyricsContent,
+  LyricsDownloadTarget,
   LyricsProvider,
   LyricsSearchResults,
   TrackLyrics,
@@ -21,6 +22,10 @@ export function createLyricsApi(invokeCommand: LyricsInvoker = invoke) {
         candidateId: candidate.id,
       }),
     automatic: (trackId: number) => invokeCommand<LyricsContent>("find_track_lyrics", { trackId }),
+    targets: (trackIds: number[]) =>
+      invokeCommand<LyricsDownloadTarget[]>("get_lyrics_download_targets", { trackIds }),
+    mark: (batchId: number, trackId: number) =>
+      invokeCommand<TagSaveResult>("write_batch_lyrics", { batchId, trackId, text: null }),
     begin: (trackIds: number[]) => invokeCommand<number>("begin_lyrics_download", { trackIds }),
     fetch: (batchId: number, trackId: number) =>
       invokeCommand<LyricsContent>("fetch_batch_lyrics", { batchId, trackId }),

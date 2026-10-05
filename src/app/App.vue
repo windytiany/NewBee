@@ -7,6 +7,7 @@ import PlaylistPage from "@/features/playlist/pages/PlaylistPage.vue";
 import NowPlayingPage from "@/features/playback/pages/NowPlayingPage.vue";
 import PlaybackBar from "@/features/playback/components/controls/PlaybackBar.vue";
 import NotificationHost from "@/shared/notifications/NotificationHost.vue";
+import LyricsDownloadDialog from "@/features/lyrics/components/LyricsDownloadDialog.vue";
 import TagEditorDialog from "@/features/tags/manual/components/TagEditorDialog.vue";
 import ReleaseTagDialog from "@/features/tags/releases/components/ReleaseTagDialog.vue";
 import AppShell from "@/app/shell/AppShell.vue";
@@ -39,6 +40,7 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
     </main>
     <PlaybackBar />
     <TagEditorDialog />
+    <LyricsDownloadDialog />
     <ReleaseTagDialog />
     <NotificationHost />
   </div>

@@ -73,6 +73,14 @@ impl MetadataField {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum LyricsMarkAction {
+    Keep,
+    Mark,
+    Unmark,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct MetadataChange {
@@ -91,7 +99,7 @@ pub(crate) fn normalize_changes(changes: &mut [MetadataChange]) -> Result<(), St
         }
         change.value = change.value.take().and_then(|value| {
             if change.field == MetadataField::Lyrics {
-                (!value.is_empty()).then_some(value)
+                (!value.trim().is_empty()).then_some(value)
             } else {
                 let value = value.trim();
                 (!value.is_empty()).then(|| value.to_owned())

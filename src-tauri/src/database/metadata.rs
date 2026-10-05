@@ -1,5 +1,5 @@
 use super::{Database, EmbeddedArtwork};
-use crate::metadata::model::{MetadataChange, MetadataField};
+use crate::metadata::model::{LyricsMarkAction, MetadataChange, MetadataField};
 use rusqlite::params;
 
 impl Database {
@@ -18,13 +18,28 @@ impl Database {
         changes: &[MetadataChange],
         cover: Option<&EmbeddedArtwork>,
     ) -> Result<(), String> {
+        self.update_metadata_cover_and_lyrics(track_id, changes, cover, LyricsMarkAction::Keep)
+    }
+
+    pub(crate) fn update_metadata_cover_and_lyrics(
+        &self,
+        track_id: i64,
+        changes: &[MetadataChange],
+        cover: Option<&EmbeddedArtwork>,
+        action: LyricsMarkAction,
+    ) -> Result<(), String> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction()
             .map_err(|error| error.to_string())?;
         for change in changes {
-            // Lyrics live only in the audio file, not in the library database.
             if change.field == MetadataField::Lyrics {
+                transaction.execute(
+                    "INSERT INTO track_lyrics (track_id, text) VALUES (?1, ?2)
+                     ON CONFLICT(track_id) DO UPDATE SET text = excluded.text,
+                        no_lyrics = CASE WHEN excluded.text IS NOT NULL THEN 0 ELSE track_lyrics.no_lyrics END",
+                    params![track_id, change.value],
+                ).map_err(|error| format!("同步歌词失败：{error}"))?;
                 continue;
             }
             let sql = format!(
@@ -37,6 +52,16 @@ impl Database {
             if count == 0 {
                 return Err(format!("曲目 {track_id} 已不在数据库中"));
             }
+        }
+        if action != LyricsMarkAction::Keep {
+            transaction
+                .execute(
+                    "INSERT INTO track_lyrics (track_id, no_lyrics) VALUES (?1, ?2)
+                 ON CONFLICT(track_id) DO UPDATE SET no_lyrics = excluded.no_lyrics,
+                    text = CASE WHEN excluded.no_lyrics = 1 THEN NULL ELSE track_lyrics.text END",
+                    params![track_id, action == LyricsMarkAction::Mark],
+                )
+                .map_err(|error| format!("更新无歌词标记失败：{error}"))?;
         }
         if let Some(cover) = cover {
             transaction.execute(

@@ -54,7 +54,6 @@ fn writable_fields(file: &TaggedFile, tag: &Tag) -> Vec<MetadataField> {
 
 pub(super) struct FileMetadata {
     pub(super) writable_fields: Vec<MetadataField>,
-    pub(super) lyrics: Option<String>,
     pub(super) issue: Option<String>,
 }
 
@@ -65,9 +64,6 @@ pub(super) fn inspect_file(path: &Path) -> Result<FileMetadata, String> {
         .readonly();
     let file = read_file(path)?;
     let tag = editing_tag(&file);
-    let lyrics = tag
-        .get_string(MetadataField::Lyrics.key(tag.tag_type()))
-        .map(str::to_owned);
     let writable_fields = if readonly {
         Vec::new()
     } else {
@@ -82,7 +78,6 @@ pub(super) fn inspect_file(path: &Path) -> Result<FileMetadata, String> {
     };
     Ok(FileMetadata {
         writable_fields,
-        lyrics,
         issue,
     })
 }
@@ -94,6 +89,9 @@ fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String
             // Import falls back to RecordingDate. Clearing a date must clear that fallback too.
             tag.remove_key(ItemKey::ReleaseDate);
             tag.remove_key(ItemKey::RecordingDate);
+        } else if change.field == MetadataField::Lyrics {
+            tag.remove_key(ItemKey::Lyrics);
+            tag.remove_key(ItemKey::UnsyncLyrics);
         } else {
             tag.remove_key(key);
         }
@@ -286,7 +284,7 @@ fn write_tag(file: &mut File, file_type: FileType, tag: &Tag) -> Result<(), Stri
     }
 }
 
-/// Only the selected tag is written. A failed write or round-trip check never touches the original.
+/// Lyric replacement also clears secondary lyric fields. Failed checks never touch the original.
 pub(super) fn write_file(path: &Path, changes: &[MetadataChange]) -> Result<(), String> {
     write_file_with_cover(path, changes, None)
 }
@@ -344,7 +342,32 @@ pub(crate) fn write_file_with_cover(
         && before
             .items()
             .all(|item| tag.items().any(|candidate| candidate == item));
-    if same_items && before.pictures() == tag.pictures() {
+    let lyrics_change = changes
+        .iter()
+        .find(|change| change.field == MetadataField::Lyrics);
+    let secondary_tags = original
+        .tags()
+        .iter()
+        .filter(|other| other.tag_type() != tag.tag_type())
+        .map(|other| {
+            let mut updated = other.clone();
+            if lyrics_change.is_some() {
+                updated.remove_key(ItemKey::Lyrics);
+                updated.remove_key(ItemKey::UnsyncLyrics);
+            }
+            updated
+        })
+        .collect::<Vec<_>>();
+    let secondary_lyrics = lyrics_change.is_some()
+        && original
+            .tags()
+            .iter()
+            .filter(|other| other.tag_type() != tag.tag_type())
+            .any(|other| {
+                other.get_strings(ItemKey::Lyrics).next().is_some()
+                    || other.get_strings(ItemKey::UnsyncLyrics).next().is_some()
+            });
+    if same_items && before.pictures() == tag.pictures() && !secondary_lyrics {
         return Ok(());
     }
 
@@ -356,6 +379,13 @@ pub(crate) fn write_file_with_cover(
     destination.rewind().map_err(|error| error.to_string())?;
     write_tag(&mut destination, original.file_type(), &tag)
         .map_err(|error| format!("写入标签失败，原文件未修改：{error}"))?;
+    if secondary_lyrics {
+        for other in &secondary_tags {
+            destination.rewind().map_err(|error| error.to_string())?;
+            write_tag(&mut destination, original.file_type(), other)
+                .map_err(|error| format!("清理其他标签的歌词失败，原文件未修改：{error}"))?;
+        }
+    }
     destination.sync_all().map_err(|error| error.to_string())?;
     drop(destination);
 
@@ -373,11 +403,13 @@ pub(crate) fn write_file_with_cover(
     // Verify the requested final tag, allowing empty items to disappear and numbers
     // to lose leading zeroes. Nonempty generic values must survive.
     verify_tag_items(&tag, &after)?;
-    for other in original
-        .tags()
-        .iter()
-        .filter(|other| other.tag_type() != tag.tag_type())
-    {
+    if let Some(change) = lyrics_change {
+        let actual = crate::lyrics::local::embedded_lyrics_text(&written);
+        if actual != change.value.as_deref() {
+            return Err("歌词回读不一致，原文件未修改".to_owned());
+        }
+    }
+    for other in &secondary_tags {
         let empty = Tag::new(other.tag_type());
         let preserved = written.tag(other.tag_type()).unwrap_or(&empty);
         if other.pictures() != preserved.pictures() {

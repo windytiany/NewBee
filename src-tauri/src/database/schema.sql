@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS tracks (
     channels INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS track_lyrics (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    text TEXT,
+    no_lyrics INTEGER NOT NULL DEFAULT 0 CHECK (no_lyrics IN (0, 1)),
+    CHECK (text IS NULL OR no_lyrics = 0)
+);
+
 CREATE TABLE IF NOT EXISTS skipped_tracks (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE
 );

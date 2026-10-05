@@ -31,14 +31,14 @@
     >
       <div ref="contentElement">
         <div
-          v-if="props.lyrics.kind === 'none'"
+          v-if="props.lyrics.kind === 'none' || props.lyrics.kind === 'instrumental'"
           class="text-app-muted/45 mx-auto max-w-5xl leading-tight font-bold tracking-tight"
           :class="[
             props.compact ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-3xl sm:text-4xl md:text-5xl',
             { 'px-6': !props.compact },
           ]"
         >
-          无歌词
+          {{ props.lyrics.kind === "instrumental" ? "此曲目已标记为无歌词" : "无歌词" }}
         </div>
         <p
           v-else-if="props.lyrics.kind === 'plain'"

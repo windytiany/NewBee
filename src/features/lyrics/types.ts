@@ -5,8 +5,17 @@ export type LyricLine = {
 
 export type TrackLyrics =
   | { kind: "none" }
+  | { kind: "instrumental" }
   | { kind: "plain"; text: string }
   | { kind: "synced"; lines: readonly LyricLine[] };
+
+export type LyricsDownloadTarget = {
+  id: number;
+  title: string | null;
+  artist: string | null;
+  hasLyrics: boolean;
+  noLyrics: boolean;
+};
 
 export type LyricsProvider = "netease";
 export type LyricsCandidate = {

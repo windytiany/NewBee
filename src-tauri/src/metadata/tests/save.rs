@@ -29,6 +29,7 @@ fn writes_file_before_updating_only_requested_database_fields() {
             bitrate_kbps: None,
             channels: Some(1),
             artwork: None,
+            lyrics: None,
         })
         .unwrap();
     let result = save_track(&database, 1, &[change(MetadataField::Title, Some("new"))]);
@@ -46,7 +47,7 @@ fn writes_file_before_updating_only_requested_database_fields() {
     let result = save_track(&database, 1, &[change(MetadataField::Lyrics, Some(lyrics))]);
     assert!(result.file_written && result.database_updated);
     assert_eq!(
-        files::inspect_file(&path).unwrap().lyrics.as_deref(),
+        crate::lyrics::local::embedded_lyrics_text(&lofty::read_from_path(&path).unwrap()),
         Some(lyrics)
     );
     let after = serde_json::to_value(database.get_track(1).unwrap().unwrap()).unwrap();

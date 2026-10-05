@@ -24,13 +24,13 @@ function mount(properties: { trackIds?: number[]; album?: LibraryAlbumSelection 
     compileSfc(source, "DownloadMenuItem.vue"),
     {
       vue: Vue,
-      "@/features/lyrics/download/batch": {
-        useLyricsBatch: () => ({
-          state,
-          startTracks: async (ids: number[]) => {
+      "@/features/lyrics/download/confirmation": {
+        useLyricsConfirmation: () => ({
+          busy: Vue.computed(() => state.running),
+          openTracks: async (ids: number[]) => {
             tracks.push(ids);
           },
-          startAlbum: async (album: LibraryAlbumSelection) => {
+          openAlbum: async (album: LibraryAlbumSelection) => {
             albums.push(album);
           },
         }),
@@ -65,7 +65,7 @@ it("retains the exact menu name and snapshots selected targets before closing", 
   expect(result.closed()).toBe(1);
   expect(result.tracks).toEqual([[1, 2]]);
 });
-it("passes the selected album to the batch downloader", () => {
+it("passes the selected album to the download confirmation", () => {
   const album = { album: "Album", albumArtist: "Artist" };
   const result = mount({ album });
   const click = result.button.props.onClick as (event: { stopPropagation: () => void }) => void;

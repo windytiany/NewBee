@@ -13,12 +13,13 @@ const api = createLyricsApi(invoke);
 const settingsApi = createSettingsApi(invoke);
 
 const props = defineProps<{ track: TrackDetails; modified: boolean; disabled: boolean }>();
-const emit = defineEmits<{ apply: [text: string] }>();
+const emit = defineEmits<{ apply: [text: string]; mark: [] }>();
 const searchDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const replaceDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const enabled = ref(false);
 const settingsError = ref("");
 const pendingText = ref<string | null>(null);
+const pendingMark = ref(false);
 const preparing = ref(false);
 let settingsGeneration = 0;
 let alive = true;
@@ -28,8 +29,16 @@ const search = createLyricsSearch({
   automatic: api.automatic,
   apply: (text) => {
     if (!alive || props.disabled) return;
+    pendingMark.value = false;
     if (props.modified) pendingText.value = text;
     else apply(text);
+  },
+  mark: () => {
+    if (!alive || props.disabled) return;
+    if (props.modified) {
+      pendingMark.value = true;
+      pendingText.value = "";
+    } else mark();
   },
 });
 const state = search.state;
@@ -59,8 +68,17 @@ function apply(text: string) {
   closeSearch();
   emit("apply", text);
 }
+function mark() {
+  pendingText.value = null;
+  pendingMark.value = false;
+  replaceDialog.value?.close();
+  closeSearch();
+  emit("mark");
+}
 function confirmReplace() {
-  if (pendingText.value !== null && !props.disabled) apply(pendingText.value);
+  if (pendingText.value === null || props.disabled) return;
+  if (pendingMark.value) mark();
+  else apply(pendingText.value);
 }
 async function withProvider(action: () => Promise<void>) {
   if (preparing.value || state.automatic || props.disabled) return;
@@ -212,11 +230,15 @@ void loadSettings();
       </button>
       <button
         type="button"
-        :disabled="props.disabled || state.previewing || !state.preview.trim()"
+        :disabled="
+          props.disabled ||
+          state.previewing ||
+          (!state.preview.trim() && !state.previewInstrumental)
+        "
         class="bg-app-accent focus-visible:outline-app-accent rounded px-4 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
         @click="search.usePreview"
       >
-        使用此歌词
+        {{ state.previewInstrumental ? "标记为无歌词" : "使用此歌词" }}
       </button>
     </footer>
   </dialog>

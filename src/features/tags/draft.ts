@@ -22,6 +22,7 @@ export function createTagDraft(tracks: readonly EditableTrack[], mode: EditMode)
       {
         ...field,
         value: mixed ? "" : (values[0] ?? ""),
+        originalValue: mixed ? undefined : (values[0] ?? ""),
         mixed,
         writable:
           tracks.length > 0 && tracks.every((track) => track.writableFields.includes(field.key)),
@@ -64,10 +65,12 @@ function validDate(value: string) {
 export function buildTagChanges(
   draft: readonly DraftField[],
   tracks: readonly EditableTrack[] = [],
+  options: { changedOnly?: boolean; allowEmpty?: boolean } = {},
 ): TagChange[] {
   const changes = draft.flatMap((field) => {
     if (!field.writable || field.mixed) return [];
-    if (field.key === "lyrics" && field.value === field.originalValue) return [];
+    if ((field.key === "lyrics" || options.changedOnly) && field.value === field.originalValue)
+      return [];
     let value = field.key === "lyrics" ? field.value : field.value.trim();
     if (value && field.type === "number") {
       if (
@@ -86,7 +89,7 @@ export function buildTagChanges(
     if (value.includes("\0")) throw new Error(`${field.label}不能包含空字符。`);
     return [{ field: field.key, value: value || null }];
   });
-  if (changes.length === 0) throw new Error("没有可写入的字段。");
+  if (changes.length === 0 && !options.allowEmpty) throw new Error("没有可写入的字段。");
   for (const { track } of tracks) validateNumberTotals(track, changes);
   return changes;
 }

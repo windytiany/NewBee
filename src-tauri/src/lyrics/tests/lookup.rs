@@ -23,6 +23,7 @@ fn track() -> TrackDetails {
             bitrate_kbps: None,
             channels: None,
             artwork: None,
+            lyrics: None,
         })
         .unwrap();
     database.get_track(1).unwrap().unwrap()

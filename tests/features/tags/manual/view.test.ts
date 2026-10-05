@@ -68,6 +68,7 @@ function track(id: number): EditableTrack {
       channels: 2,
     },
     lyrics: "[00:01.00]Original lyrics\n[00:02.00]Second line",
+    noLyrics: false,
     writableFields: [...TAG_FIELDS.map(({ key }) => key), "lyrics"],
     issue: null,
   };
@@ -76,17 +77,21 @@ async function settle() {
   await Vue.nextTick();
   await Vue.nextTick();
 }
-function mountDialog(readOnly = false) {
+function mountDialog(readOnly = false, marked = false) {
   const saved: TagChange[][] = [];
+  const savedActions: string[] = [];
   const editor = createTagEditor({
     loadTracks: async (ids) =>
       ids.map((id) => ({
         ...track(id),
+        lyrics: marked ? null : track(id).lyrics,
+        noLyrics: marked,
         writableFields: readOnly ? [] : track(id).writableFields,
       })),
     loadAlbum: async () => [1, 2],
-    save: async (ids, changes) => {
+    save: async (ids, changes, _progress, action) => {
       saved.push(changes);
+      savedActions.push(action);
       return ids.map((trackId) => ({
         trackId,
         path: `/music/${trackId}.mp3`,
@@ -117,7 +122,7 @@ function mountDialog(readOnly = false) {
   const app = createHostRenderer(createNode).createApp(component);
   app.mount(root);
   apps.push(app);
-  return { editor, root, saved };
+  return { editor, root, saved, savedActions };
 }
 function input(root: HostNode, id: string) {
   const node = findNode(root, (entry) => entry.props.id === `metadata-${id}`);
@@ -241,7 +246,10 @@ describe("metadata editor views", () => {
     expect(input(root, "title").props.placeholder).toContain("多个值");
     expect(findNode(root, (node) => node.props.type === "checkbox")).toBeNull();
     expect(findNode(root, (node) => node.props.id === "metadata-panel-properties")).toBeNull();
-    expect(findNode(root, (node) => node.props.id === "metadata-tab-lyrics")).toBeNull();
+    expect(findNode(root, (node) => node.props.id === "metadata-tab-lyrics")).not.toBeNull();
+    expect(findNode(root, (node) => node.props.id === "metadata-lyrics-action")?.props.value).toBe(
+      "keep",
+    );
     expect(findNode(root, (node) => node.props.id === "metadata-lyrics")).toBeNull();
     expect(getTextContent(root)).toContain("2 首曲目");
     expect(getTextContent(root)).not.toContain("/music/");
@@ -270,6 +278,69 @@ describe("metadata editor views", () => {
     await settle();
     expect(saved).toHaveLength(1);
     expect(getTextContent(root)).not.toContain("确认写入");
+  });
+
+  it("places a small checkbox below single-track lyrics instead of a dropdown", async () => {
+    const { editor, root, saved, savedActions } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    expect(findNode(root, (node) => node.props.id === "metadata-lyrics-action")).toBeNull();
+    const checkbox = input(root, "no-lyrics");
+    const textarea = input(root, "lyrics");
+    expect(checkbox.props.type).toBe("checkbox");
+    expect(checkbox.props.checked).toBe(false);
+    expect(getTextContent(checkbox.parent!)).toContain("标记为无歌词");
+    const panel = findNode(root, (node) => node.props.id === "metadata-panel-lyrics");
+    if (!panel) throw new Error("Missing lyrics panel");
+    const textareaIndex = panel.children.findIndex((node) =>
+      findNode(node, (entry) => entry === textarea),
+    );
+    const checkboxIndex = panel.children.findIndex((node) =>
+      findNode(node, (entry) => entry === checkbox),
+    );
+    expect(textareaIndex).toBeGreaterThanOrEqual(0);
+    expect(checkboxIndex).toBeGreaterThan(textareaIndex);
+    (checkbox.props.onChange as (event: { target: { checked: boolean } }) => void)({
+      target: { checked: true },
+    });
+    await settle();
+    expect(checkbox.props.checked).toBe(true);
+    expect(textarea.props.value).toBe("");
+    expect(getTextContent(panel)).toContain("保存时将清除原有的内嵌歌词");
+    editor.prepareSave();
+    await settle();
+    expect(saved).toEqual([[]]);
+    expect(savedActions).toEqual(["mark"]);
+  });
+
+  it("loads the existing single-track mark and allows unchecking without writing lyrics", async () => {
+    const { editor, root, saved, savedActions } = mountDialog(true, true);
+    await editor.openTracks([1]);
+    await settle();
+    const checkbox = input(root, "no-lyrics");
+    expect(checkbox.props.checked).toBe(true);
+    expect(checkbox.props.disabled).toBe(false);
+    (checkbox.props.onChange as (event: { target: { checked: boolean } }) => void)({
+      target: { checked: false },
+    });
+    await settle();
+    expect(checkbox.props.checked).toBe(false);
+    editor.prepareSave();
+    await settle();
+    expect(saved).toEqual([[]]);
+    expect(savedActions).toEqual(["unmark"]);
+  });
+
+  it("unchecks the single-track mark when nonempty lyrics are entered", async () => {
+    const { editor, root } = mountDialog(false, true);
+    await editor.openTracks([1]);
+    await settle();
+    expect(input(root, "no-lyrics").props.checked).toBe(true);
+    (input(root, "lyrics").props.onInput as (event: { target: { value: string } }) => void)({
+      target: { value: "New lyrics" },
+    });
+    await settle();
+    expect(input(root, "no-lyrics").props.checked).toBe(false);
   });
 
   it("separates single-track properties and tags and groups each number with its total", async () => {

@@ -54,7 +54,6 @@
         标签
       </button>
       <button
-        v-if="singleTrack && state.mode === 'tracks'"
         id="metadata-tab-lyrics"
         ref="lyricsTab"
         type="button"
@@ -158,14 +157,30 @@
       </section>
 
       <section
-        v-if="singleTrack && lyricsField"
         v-show="activeTab === 'lyrics'"
         id="metadata-panel-lyrics"
         role="tabpanel"
         aria-labelledby="metadata-tab-lyrics"
       >
+        <div v-if="multiple" class="mb-4 space-y-2 text-sm">
+          <label for="metadata-lyrics-action" class="block">无歌词标记</label>
+          <select
+            id="metadata-lyrics-action"
+            :value="state.lyricsAction"
+            :disabled="state.loading || state.saving || state.confirmDiscard"
+            class="bg-app-surface focus-visible:outline-app-accent w-full rounded border border-white/15 px-3 py-2 focus-visible:outline-2 disabled:opacity-50"
+            @change="changeLyricsAction"
+          >
+            <option value="keep">保持原样</option>
+            <option value="mark">全部标记为“无歌词”</option>
+            <option value="unmark">全部取消标记</option>
+          </select>
+          <p v-if="state.lyricsAction === 'mark'" class="text-amber-200">
+            保存时将清除这些曲目的内嵌歌词，并标记为无歌词。
+          </p>
+        </div>
         <LyricsEditor
-          v-if="state.open"
+          v-if="state.open && singleTrack && lyricsField"
           :key="singleTrack.id"
           :track="singleTrack"
           :model-value="lyricsField.value"
@@ -175,7 +190,27 @@
           input-id="metadata-lyrics"
           form="metadata-editor-form"
           @update:model-value="editor.changeField(lyricsField, $event)"
+          @mark="editor.changeLyricsAction('mark')"
         />
+        <div v-if="singleTrack" class="mt-3 space-y-2">
+          <label class="text-app-muted inline-flex items-center gap-2 text-xs">
+            <input
+              id="metadata-no-lyrics"
+              type="checkbox"
+              :checked="lyricsMarked"
+              :disabled="state.loading || state.saving || state.confirmDiscard"
+              class="accent-app-accent size-3.5"
+              @change="toggleLyricsMark"
+            />
+            标记为无歌词
+          </label>
+          <p
+            v-if="state.lyricsAction === 'mark' && lyricsField?.originalValue?.trim()"
+            class="text-xs text-amber-200"
+          >
+            保存时将清除原有的内嵌歌词。
+          </p>
+        </div>
       </section>
 
       <p v-if="batch.state.running" role="status" class="text-app-muted text-sm">
@@ -257,7 +292,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { useTagEditor } from "@/features/tags/manual/useEditor";
-import type { DraftField, TagField } from "@/features/tags/types";
+import type { DraftField, LyricsMarkAction, TagField } from "@/features/tags/types";
 import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
 import { formatTrackDuration } from "@/features/library/format";
 import LyricsEditor from "@/features/lyrics/components/LyricsEditor.vue";
@@ -275,6 +310,13 @@ const tagsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(nu
 const lyricsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const lyricsField = computed(() => state.draft.find((field) => field.key === "lyrics"));
 const multiple = computed(() => state.tracks.length > 1);
+const lyricsMarked = computed(
+  () =>
+    state.lyricsAction === "mark" ||
+    (state.lyricsAction === "keep" &&
+      !!state.tracks[0]?.noLyrics &&
+      !lyricsField.value?.value.trim()),
+);
 const singleTrack = computed(() => (state.tracks.length === 1 ? state.tracks[0]?.track : null));
 const failedCount = computed(
   () => state.results.filter((result) => !result.databaseUpdated).length,
@@ -324,7 +366,8 @@ const canSave = computed(
     !state.saving &&
     !batch.state.running &&
     !state.confirmDiscard &&
-    state.draft.some((field) => field.writable && !field.mixed),
+    state.tracks.length > 0 &&
+    (state.lyricsAction !== "keep" || state.draft.some((field) => field.writable && !field.mixed)),
 );
 watch(
   () => [state.open, state.confirmDiscard],
@@ -342,6 +385,15 @@ watch(
   },
   { immediate: true },
 );
+function changeLyricsAction(event: InstanceType<typeof globalThis.Event>) {
+  const action = (event.target as InstanceType<typeof globalThis.HTMLSelectElement>).value;
+  if (["keep", "mark", "unmark"].includes(action))
+    editor.changeLyricsAction(action as LyricsMarkAction);
+}
+function toggleLyricsMark(event: InstanceType<typeof globalThis.Event>) {
+  const checked = (event.target as InstanceType<typeof globalThis.HTMLInputElement>).checked;
+  editor.changeLyricsAction(checked ? "mark" : "unmark");
+}
 function editField(field: DraftField, event: InstanceType<typeof globalThis.Event>) {
   editor.changeField(
     field,
@@ -354,10 +406,9 @@ function clearMixedValue(field: DraftField, event: InstanceType<typeof globalThi
   editor.changeField(field, "");
 }
 function onTabKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
-  if (!singleTrack.value) return;
-  const tabs: EditorTab[] = lyricsField.value
+  const tabs: EditorTab[] = singleTrack.value
     ? ["properties", "tags", "lyrics"]
-    : ["properties", "tags"];
+    : ["tags", "lyrics"];
   const index = tabs.indexOf(activeTab.value);
   let nextIndex: number;
   if (event.key === "Home") nextIndex = 0;

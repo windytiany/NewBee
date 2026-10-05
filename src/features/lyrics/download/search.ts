@@ -16,6 +16,7 @@ export type LyricsSearchOptions = {
   preview: (candidate: LyricsCandidate) => Promise<LyricsContent>;
   automatic: (trackId: number) => Promise<LyricsContent>;
   apply: (text: string) => void;
+  mark: () => void;
 };
 
 export function createLyricsSearch(options: LyricsSearchOptions) {
@@ -26,6 +27,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     nextOffset: null as number | null,
     selected: null as LyricsCandidate | null,
     preview: "",
+    previewInstrumental: false,
     error: "",
     searching: false,
     previewing: false,
@@ -46,6 +48,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       nextOffset: null,
       selected: null,
       preview: "",
+      previewInstrumental: false,
       error: "",
     });
   }
@@ -68,6 +71,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     state.previewing = false;
     state.selected = null;
     state.preview = "";
+    state.previewInstrumental = false;
     state.searching = true;
     state.error = "";
     state.candidates = previous;
@@ -106,13 +110,17 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     const generation = ++previewGeneration;
     state.selected = candidate;
     state.preview = "";
+    state.previewInstrumental = false;
     state.previewing = true;
     state.error = "";
     try {
       const content = await options.preview(candidate);
       if (generation !== previewGeneration) return;
       if (content.kind === "available") state.preview = content.text;
-      else state.error = contentMessage(content);
+      else {
+        state.previewInstrumental = content.kind === "instrumental";
+        state.error = contentMessage(content);
+      }
     } catch (error) {
       if (generation === previewGeneration)
         state.error = String(error instanceof Error ? error.message : error);
@@ -128,7 +136,10 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       const content = await options.automatic(trackId);
       if (generation !== automaticGeneration) return;
       if (content.kind === "available") options.apply(content.text);
-      else state.error = contentMessage(content);
+      else {
+        state.error = contentMessage(content);
+        if (content.kind === "instrumental") options.mark();
+      }
     } catch (error) {
       if (generation === automaticGeneration)
         state.error = String(error instanceof Error ? error.message : error);
@@ -137,7 +148,9 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     }
   }
   function usePreview() {
-    if (!state.previewing && state.preview.trim()) options.apply(state.preview);
+    if (state.previewing) return;
+    if (state.previewInstrumental) options.mark();
+    else if (state.preview.trim()) options.apply(state.preview);
   }
   return { state, reset, invalidate, search, loadMore, select, automatic, usePreview };
 }

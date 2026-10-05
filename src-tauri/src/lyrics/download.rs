@@ -7,7 +7,9 @@ use crate::{
     },
     metadata::{
         self,
-        model::{normalize_changes, validate_track_ids, MetadataChange, MetadataField},
+        model::{
+            normalize_changes, validate_track_ids, LyricsMarkAction, MetadataChange, MetadataField,
+        },
         MetadataSaveResult,
     },
     settings::SettingsState,
@@ -310,17 +312,25 @@ pub(crate) async fn fetch_batch_lyrics(
 pub(crate) async fn write_batch_lyrics(
     batch_id: u64,
     track_id: i64,
-    text: String,
+    text: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<MetadataSaveResult, String> {
-    if text.trim().is_empty() || text.len() > 1024 * 1024 {
-        return Err("歌词为空或过大，原文件未修改".to_owned());
+    let action = if text.is_some() {
+        LyricsMarkAction::Keep
+    } else {
+        LyricsMarkAction::Mark
+    };
+    let mut changes = Vec::new();
+    if let Some(text) = text {
+        if text.trim().is_empty() || text.len() > 1024 * 1024 {
+            return Err("歌词为空或过大，原文件未修改".to_owned());
+        }
+        changes.push(MetadataChange {
+            field: MetadataField::Lyrics,
+            value: Some(text),
+        });
+        normalize_changes(&mut changes)?;
     }
-    let mut changes = vec![MetadataChange {
-        field: MetadataField::Lyrics,
-        value: Some(text),
-    }];
-    normalize_changes(&mut changes)?;
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<LyricsDownloadState>();
         let batch = state.batch.lock().map_err(|error| error.to_string())?;
@@ -332,11 +342,12 @@ pub(crate) async fn write_batch_lyrics(
             return Err("歌词任务已取消".to_owned());
         }
         // Keep the batch guard until the atomic file replacement has finished.
-        Ok(metadata::save_track(
-            &app.state::<Database>(),
-            track_id,
-            &changes,
-        ))
+        let database = app.state::<Database>();
+        Ok(if action == LyricsMarkAction::Keep {
+            metadata::save_track(&database, track_id, &changes)
+        } else {
+            metadata::save_track_with_lyrics_action(&database, track_id, &changes, action)
+        })
     })
     .await
     .map_err(|error| format!("歌词写入任务失败：{error}"))?

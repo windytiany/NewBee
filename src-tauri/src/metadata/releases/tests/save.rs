@@ -26,6 +26,7 @@ fn input(path: &Path) -> TrackWriteInput {
         bitrate_kbps: None,
         channels: None,
         artwork: None,
+        lyrics: None,
     }
 }
 #[test]

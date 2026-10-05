@@ -11,7 +11,7 @@ const props = defineProps<{
   form: string;
   inputId: string;
 }>();
-const emit = defineEmits<{ "update:modelValue": [value: string] }>();
+const emit = defineEmits<{ "update:modelValue": [value: string]; mark: [] }>();
 function edit(event: InstanceType<typeof globalThis.Event>) {
   emit(
     "update:modelValue",
@@ -26,6 +26,7 @@ function edit(event: InstanceType<typeof globalThis.Event>) {
     :modified="modelValue !== originalValue"
     :disabled="!writable || disabled"
     @apply="emit('update:modelValue', $event)"
+    @mark="emit('mark')"
   />
   <textarea
     :id="inputId"

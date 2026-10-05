@@ -2,10 +2,12 @@ import type { TrackDetails } from "@/features/library/types";
 import type { TAG_FIELDS } from "@/features/tags/draft";
 
 export type TagField = (typeof TAG_FIELDS)[number]["key"] | "lyrics";
+export type LyricsMarkAction = "keep" | "mark" | "unmark";
 export type EditMode = "tracks" | "album";
 export type EditableTrack = {
   track: TrackDetails;
   lyrics: string | null;
+  noLyrics: boolean;
   writableFields: TagField[];
   issue: string | null;
 };

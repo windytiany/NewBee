@@ -512,7 +512,7 @@ fn supported_formats_round_trip_all_exposed_fields() {
         assert_eq!(tag.track_total(), Some(7));
         assert_eq!(tag.disk_total(), Some(2));
         assert_eq!(
-            files::inspect_file(&path).unwrap().lyrics.as_deref(),
+            crate::lyrics::local::embedded_lyrics_text(&file),
             Some("  [00:01.00]歌词\n[00:02.00]Second line\n\n")
         );
         let clear: Vec<_> = MetadataField::ALL
@@ -522,7 +522,15 @@ fn supported_formats_round_trip_all_exposed_fields() {
         files::write_file(&path, &clear)
             .unwrap_or_else(|error| panic!("{extension} clear: {error}"));
         assert!(
-            files::inspect_file(&path).unwrap().lyrics.is_none(),
+            crate::lyrics::local::embedded_lyrics_text(
+                &lofty::probe::Probe::open(&path)
+                    .unwrap()
+                    .guess_file_type()
+                    .unwrap()
+                    .read()
+                    .unwrap()
+            )
+            .is_none(),
             "{extension}"
         );
     }

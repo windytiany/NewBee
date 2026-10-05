@@ -23,6 +23,7 @@ export function local(id: number, title = `Song ${id}`, discNumber = 1): Editabl
       channels: 2,
     },
     lyrics: null,
+    noLyrics: false,
     writableFields: TAG_FIELDS.map(({ key }) => key),
     issue: null,
   };
