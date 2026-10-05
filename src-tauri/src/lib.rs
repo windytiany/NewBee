@@ -1,22 +1,17 @@
-mod album_tags;
 mod database;
-mod ingest;
+mod import;
 pub mod lyrics;
-mod lyrics_download;
 mod metadata;
 mod playback;
 mod settings;
-#[cfg(windows)]
-mod system_media;
-mod tray;
-mod window_lifecycle;
+mod window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(playback::PlaybackState::default())
-        .manage(ingest::IngestState::default())
-        .manage(lyrics_download::LyricsDownloadState::default())
+        .manage(database::write::WriteState::default())
+        .manage(lyrics::download::LyricsDownloadState::default())
         .setup(|app| {
             use tauri::Manager;
 
@@ -27,43 +22,43 @@ pub fn run() {
             app.manage(settings::SettingsState::load(
                 app_data_dir.join("settings.json"),
             )?);
-            window_lifecycle::initialize(app.handle());
-            tray::initialize(app.handle())?;
+            window::initialize(app.handle());
+            window::tray::initialize(app.handle())?;
             #[cfg(windows)]
-            if let Err(error) = system_media::initialize(app.handle()) {
+            if let Err(error) = playback::media::initialize(app.handle()) {
                 eprintln!("Could not initialize Windows media controls: {error}");
             }
             Ok(())
         })
-        .on_window_event(window_lifecycle::on_window_event)
+        .on_window_event(window::on_window_event)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_state_flags(window_lifecycle::STATE_FLAGS)
+                .with_state_flags(window::STATE_FLAGS)
                 .skip_initial_state("main")
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
-            window_lifecycle::show_main_window,
+            window::show_main_window,
             settings::get_settings,
             settings::save_settings,
             database::commands::list_music_library_directories,
             database::commands::add_music_library_directory,
             database::commands::remove_music_library_directory,
             database::commands::migrate_track_paths,
-            ingest::directory::scan_music_library,
-            ingest::supported_audio_extensions,
-            ingest::files::import_music_files,
-            lyrics::get_track_lyrics,
-            lyrics_download::search_lyrics_candidates,
-            lyrics_download::get_candidate_lyrics,
-            lyrics_download::find_track_lyrics,
-            lyrics_download::begin_lyrics_download,
-            lyrics_download::fetch_batch_lyrics,
-            lyrics_download::write_batch_lyrics,
-            lyrics_download::cancel_lyrics_download,
-            lyrics_download::finish_lyrics_download,
+            import::directory::scan_music_library,
+            import::supported_audio_extensions,
+            import::files::import_music_files,
+            lyrics::local::get_track_lyrics,
+            lyrics::download::search_lyrics_candidates,
+            lyrics::download::get_candidate_lyrics,
+            lyrics::download::find_track_lyrics,
+            lyrics::download::begin_lyrics_download,
+            lyrics::download::fetch_batch_lyrics,
+            lyrics::download::write_batch_lyrics,
+            lyrics::download::cancel_lyrics_download,
+            lyrics::download::finish_lyrics_download,
             database::commands::list_album_artists,
             database::commands::list_albums,
             database::commands::get_album_artwork,
@@ -83,11 +78,11 @@ pub fn run() {
             database::commands::get_track_artwork,
             metadata::get_editable_tracks,
             metadata::save_track_metadata,
-            album_tags::search_album_releases,
-            album_tags::get_album_release,
-            album_tags::get_release_covers,
-            album_tags::get_release_cover,
-            album_tags::save::save_album_tags,
+            metadata::releases::search_album_releases,
+            metadata::releases::get_album_release,
+            metadata::releases::get_release_covers,
+            metadata::releases::get_release_cover,
+            metadata::releases::save::save_album_tags,
             playback::play_track,
             playback::prepare_next_track,
             playback::set_volume,

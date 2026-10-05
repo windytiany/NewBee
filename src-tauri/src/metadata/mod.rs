@@ -1,10 +1,10 @@
 pub(crate) mod files;
 pub(crate) mod model;
+pub(crate) mod releases;
 #[cfg(test)]
 mod tests;
 
-use crate::database::{Database, TrackDetails};
-use crate::ingest::IngestState;
+use crate::database::{write::WriteState, Database, TrackDetails};
 use model::{normalize_changes, validate_track_ids, MetadataChange, MetadataField};
 use serde::Serialize;
 use std::path::Path;
@@ -67,7 +67,7 @@ pub(crate) async fn save_track_metadata(
     mut changes: Vec<MetadataChange>,
     on_progress: Channel<MetadataSaveResult>,
     app: tauri::AppHandle,
-    ingest: State<'_, IngestState>,
+    write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
     let track_ids = validate_track_ids(&track_ids)?;
     normalize_changes(&mut changes)?;
@@ -78,7 +78,7 @@ pub(crate) async fn save_track_metadata(
     {
         return Err("歌词仅支持单曲编辑".to_owned());
     }
-    let guard = ingest.acquire()?;
+    let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
         let database = app.state::<Database>();

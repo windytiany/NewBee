@@ -1,4 +1,4 @@
 mod library;
 mod playlist;
+mod skip;
 mod support;
-mod track_skip;

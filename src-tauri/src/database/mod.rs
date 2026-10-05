@@ -7,12 +7,13 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 pub(crate) mod commands;
 mod library;
 mod metadata;
-mod path_migration;
+mod paths;
 mod playlist;
 mod schema;
+mod skip;
 #[cfg(test)]
 mod tests;
-mod track_skip;
+pub(crate) mod write;
 
 pub use playlist::PlaylistReorderError;
 
