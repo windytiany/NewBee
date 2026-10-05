@@ -28,7 +28,8 @@ fn cover_round_trip_supported_formats_preserves_other_images_and_labels() {
             original.insert_tag(lofty::tag::Tag::new(primary));
         }
         let tag = original.primary_tag_mut().unwrap();
-        tag.insert_text(ItemKey::Lyrics, "keep lyrics".into());
+        let lyrics_key = MetadataField::Lyrics.key(tag.tag_type());
+        tag.insert_text(lyrics_key, "keep lyrics".into());
         tag.insert_text(ItemKey::Comment, "keep comment".into());
         let mut old_front = new_cover.clone();
         old_front.set_description(Some("old".into()));
@@ -60,8 +61,8 @@ fn cover_round_trip_supported_formats_preserves_other_images_and_labels() {
         let written = lofty::read_from_path(&path).unwrap();
         let tag = written.primary_tag().unwrap();
         assert_eq!(tag.title().as_deref(), Some("new title"));
-        assert_eq!(tag.get_string(&ItemKey::Lyrics), Some("keep lyrics"));
-        assert_eq!(tag.get_string(&ItemKey::Comment), Some("keep comment"));
+        assert_eq!(tag.get_string(lyrics_key), Some("keep lyrics"));
+        assert_eq!(tag.get_string(ItemKey::Comment), Some("keep comment"));
         if is_mp4 {
             assert_eq!(tag.pictures()[0].data(), new_cover.data());
             assert_eq!(tag.pictures()[1..], preserved);
@@ -98,8 +99,8 @@ fn explicit_date_clear_is_not_mistaken_for_a_noop_when_recording_date_exists() {
     files::write_file(&path, &[change(MetadataField::ReleaseDate, None)]).unwrap();
     let written = lofty::read_from_path(&path).unwrap();
     let tag = written.primary_tag().unwrap();
-    assert!(tag.get_string(&ItemKey::RecordingDate).is_none());
-    assert!(tag.get_string(&ItemKey::ReleaseDate).is_none());
+    assert!(tag.get_string(ItemKey::RecordingDate).is_none());
+    assert!(tag.get_string(ItemKey::ReleaseDate).is_none());
     assert_eq!(tag.title().as_deref(), Some("keep"));
 }
 

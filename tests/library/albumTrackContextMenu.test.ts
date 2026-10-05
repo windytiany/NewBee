@@ -161,6 +161,9 @@ function createComponent(source: string) {
     "@/interaction/itemFocus": { useItemFocusList: useTestItemFocusList },
     "@/library/ui/AlbumTrack.vue": { __esModule: true, default: AlbumTrack },
     "@/library/useAlbumTrackColumns": { useAlbumTrackColumns: () => Vue.ref(2) },
+    "@/lyricsDownload/ui/LyricsDownloadMenuItem.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
     "@/metadata/ui/MetadataEditMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>

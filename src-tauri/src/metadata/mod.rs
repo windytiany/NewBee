@@ -108,7 +108,7 @@ pub(crate) async fn save_track_metadata(
     .map_err(|error| format!("保存标签任务失败：{error}"))?
 }
 
-fn save_track(
+pub(crate) fn save_track(
     database: &Database,
     track_id: i64,
     changes: &[MetadataChange],

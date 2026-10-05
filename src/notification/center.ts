@@ -7,6 +7,14 @@ export type NotificationInput = {
   key?: string;
 };
 export type Notification = NotificationInput & { id: number; count: number };
+export type TaskNotification = {
+  key: string;
+  message: string;
+  completed: number;
+  total: number;
+  cancelling: boolean;
+  cancel: () => void;
+};
 type PauseReason = "hover" | "focus";
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
 type Clock = {
@@ -31,6 +39,15 @@ const systemClock: Clock = {
 
 export function createNotificationCenter(clock: Clock = systemClock) {
   const items = shallowRef<Notification[]>([]);
+  const tasks = shallowRef<TaskNotification[]>([]);
+
+  function updateTask(task: TaskNotification) {
+    tasks.value = [...tasks.value.filter((item) => item.key !== task.key), task];
+  }
+
+  function removeTask(key: string) {
+    tasks.value = tasks.value.filter((item) => item.key !== key);
+  }
   const visible = computed(() => items.value.slice(0, MAX_VISIBLE));
   const lifetimes = new Map<number, Lifetime>();
   let nextId = 0;
@@ -101,7 +118,17 @@ export function createNotificationCenter(clock: Clock = systemClock) {
     items.value = [];
   }
 
-  return { items: readonly(items), visible: readonly(visible), notify, dismiss, pause, clear };
+  return {
+    items: readonly(items),
+    visible: readonly(visible),
+    tasks: readonly(tasks),
+    updateTask,
+    removeTask,
+    notify,
+    dismiss,
+    pause,
+    clear,
+  };
 }
 
 export const notifications = createNotificationCenter();

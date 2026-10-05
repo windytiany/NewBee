@@ -35,7 +35,7 @@ pub enum Theme {
     Catppuccin,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
     pub theme: Theme,
@@ -43,6 +43,21 @@ pub struct Settings {
     pub close_behavior: CloseBehavior,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
+    #[serde(default = "crate::lyrics_download::default_providers")]
+    pub lyrics_providers: Vec<crate::lyrics_download::LyricsProvider>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            theme: Theme::default(),
+            album_cover_background: false,
+            close_behavior: CloseBehavior::default(),
+            album_sort_by: AlbumSortBy::default(),
+            album_sort_order: AlbumSortOrder::default(),
+            lyrics_providers: crate::lyrics_download::default_providers(),
+        }
+    }
 }
 
 pub struct SettingsState {
@@ -88,6 +103,14 @@ pub fn get_settings(state: State<'_, SettingsState>) -> Result<Settings, String>
 
 #[tauri::command]
 pub fn save_settings(state: State<'_, SettingsState>, settings: Settings) -> Result<(), String> {
+    let mut providers = std::collections::HashSet::new();
+    if settings
+        .lyrics_providers
+        .iter()
+        .any(|provider| !providers.insert(*provider))
+    {
+        return Err("歌词来源不能重复".to_owned());
+    }
     let mut current = state
         .settings
         .lock()
@@ -184,6 +207,22 @@ mod tests {
             assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
         }
         assert!(serde_json::from_str::<Settings>(r#"{"albumCoverBackground":"true"}"#).is_err());
+    }
+
+    #[test]
+    fn lyrics_providers_default_enabled_and_preserve_disabled_settings() {
+        use crate::lyrics_download::LyricsProvider;
+        let defaults: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(defaults.lyrics_providers, vec![LyricsProvider::Netease]);
+        for lyrics_providers in [vec![], vec![LyricsProvider::Netease]] {
+            let settings = Settings {
+                lyrics_providers,
+                ..Settings::default()
+            };
+            let json = serde_json::to_string(&settings).unwrap();
+            assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
+        }
+        assert!(serde_json::from_str::<Settings>(r#"{"lyricsProviders":["invalid"]}"#).is_err());
     }
 
     #[test]

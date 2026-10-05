@@ -35,6 +35,9 @@ const modules: Record<string, unknown> = {
     setup: (props) => () =>
       Vue.h("button", { "data-update-album": JSON.stringify(props.album) }, "根据专辑更新标签"),
   }),
+  "@/lyricsDownload/ui/LyricsDownloadMenuItem.vue": Vue.defineComponent({
+    setup: () => () => null,
+  }),
   "@/metadata/ui/MetadataEditMenuItem.vue": Vue.defineComponent({
     props: ["album"],
     setup: (props) => () =>

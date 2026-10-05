@@ -1,10 +1,11 @@
 use super::model::{MetadataChange, MetadataField};
-use lofty::config::WriteOptions;
+use lofty::config::{ParseOptions, WriteOptions};
 use lofty::file::{FileType, TaggedFile, TaggedFileExt};
+use lofty::ogg::{tag::VorbisComments, OggPictureStorage};
 use lofty::picture::{Picture, PictureType};
 use lofty::prelude::*;
 use lofty::probe::Probe;
-use lofty::tag::{ItemKey, Tag, TagType};
+use lofty::tag::{ItemKey, MergeTag, SplitTag, Tag, TagItem, TagType};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Seek};
 use std::path::{Path, PathBuf};
@@ -64,7 +65,9 @@ pub(super) fn inspect_file(path: &Path) -> Result<FileMetadata, String> {
         .readonly();
     let file = read_file(path)?;
     let tag = editing_tag(&file);
-    let lyrics = tag.get_string(&ItemKey::Lyrics).map(str::to_owned);
+    let lyrics = tag
+        .get_string(MetadataField::Lyrics.key(tag.tag_type()))
+        .map(str::to_owned);
     let writable_fields = if readonly {
         Vec::new()
     } else {
@@ -89,10 +92,10 @@ fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String
         let key = change.field.key(tag.tag_type());
         if change.field == MetadataField::ReleaseDate {
             // Import falls back to RecordingDate. Clearing a date must clear that fallback too.
-            tag.remove_key(&ItemKey::ReleaseDate);
-            tag.remove_key(&ItemKey::RecordingDate);
+            tag.remove_key(ItemKey::ReleaseDate);
+            tag.remove_key(ItemKey::RecordingDate);
         } else {
-            tag.remove_key(&key);
+            tag.remove_key(key);
         }
         if let Some(value) = &change.value {
             if !tag.insert_text(key, value.clone()) {
@@ -105,16 +108,16 @@ fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String
 
 fn verify_changes(tag: &Tag, changes: &[MetadataChange]) -> Result<(), String> {
     for change in changes {
-        let actual = tag.get_string(&change.field.key(tag.tag_type()));
-        let matches = if change.field.is_number() {
-            let actual = actual.and_then(|value| value.split('/').next()?.parse::<u32>().ok());
-            let expected = change
-                .value
-                .as_deref()
-                .and_then(|value| value.parse::<u32>().ok());
-            actual == expected
-        } else {
-            actual.filter(|value| !value.is_empty()) == change.value.as_deref()
+        let actual = tag
+            .get_string(change.field.key(tag.tag_type()))
+            .filter(|value| !value.is_empty());
+        let matches = match change.value.as_deref() {
+            None => actual.is_none(),
+            Some(expected) if change.field.is_number() => {
+                let actual = actual.and_then(|value| value.split('/').next()?.parse::<u32>().ok());
+                matches!((actual, expected.parse::<u32>().ok()), (Some(a), Some(b)) if a == b)
+            }
+            Some(expected) => actual == Some(expected),
         };
         if !matches {
             return Err(format!(
@@ -160,6 +163,127 @@ pub(super) fn validate_file(path: &Path, changes: &[MetadataChange]) -> Result<(
     let file = read_file(path)?;
     let tag = editing_tag(&file);
     validate_totals(&tag, changes)
+}
+
+fn same_item(expected: &TagItem, actual: &TagItem) -> bool {
+    if expected == actual {
+        return true;
+    }
+    if expected.key() != actual.key()
+        || expected.lang() != actual.lang()
+        || expected.description() != actual.description()
+        || !matches!(
+            expected.key(),
+            ItemKey::TrackNumber | ItemKey::TrackTotal | ItemKey::DiscNumber | ItemKey::DiscTotal
+        )
+    {
+        return false;
+    }
+    // Number formatting is not metadata: 02 and 2 represent the same track number.
+    let number = |item: &TagItem| item.value().text()?.parse::<u32>().ok();
+    matches!((number(expected), number(actual)), (Some(a), Some(b)) if a == b)
+}
+
+fn verify_tag_items(expected: &Tag, actual: &Tag) -> Result<(), String> {
+    let mut remaining = actual.items().collect::<Vec<_>>();
+    for item in expected.items().filter(|item| !item.value().is_empty()) {
+        let Some(index) = remaining
+            .iter()
+            .position(|candidate| same_item(item, candidate))
+        else {
+            return Err(format!(
+                "标签 {:?} 的字段 {:?} 写入后回读不一致，原文件未修改",
+                expected.tag_type(),
+                item.key()
+            ));
+        };
+        // Match occurrences, not just membership, so repeated nonempty values are preserved.
+        remaining.remove(index);
+    }
+    Ok(())
+}
+
+fn save_tag<T: TagExt>(tag: &T, file: &mut File) -> Result<(), String> {
+    file.rewind().map_err(|error| error.to_string())?;
+    tag.save_to(file, WriteOptions::default())
+        .map_err(|error| error.to_string())
+}
+
+fn save_vorbis_tag(mut native: VorbisComments, tag: &Tag, file: &mut File) -> Result<(), String> {
+    let editable = |key| {
+        key == ItemKey::RecordingDate
+            || MetadataField::ALL
+                .iter()
+                .any(|field| field.key(TagType::VorbisComments) == key)
+    };
+    // Replace editor fields only. Keep vendor, encoder, custom comments and all
+    // other native fields outside the generic conversion path.
+    for (key, value) in native.take_items() {
+        if !ItemKey::from_key(TagType::VorbisComments, &key).is_some_and(editable) {
+            native.push(key, value);
+        }
+    }
+    for item in tag.items().filter(|item| editable(item.key())) {
+        if let (Some(key), Some(value)) = (
+            item.key().map_key(TagType::VorbisComments),
+            item.value().text(),
+        ) {
+            native.push(key.to_owned(), value.to_owned());
+        }
+    }
+    while !native.pictures().is_empty() {
+        native.remove_picture(0);
+    }
+    for picture in tag.pictures() {
+        native
+            .insert_picture(picture.clone(), None)
+            .map_err(|error| error.to_string())?;
+    }
+    save_tag(&native, file)
+}
+
+fn write_tag(file: &mut File, file_type: FileType, tag: &Tag) -> Result<(), String> {
+    // Use concrete tags for formats whose unmapped fields are not retained by
+    // generic Tag. No raw metadata block parsing or rewriting is needed.
+    let options = ParseOptions::default();
+    match (file_type, tag.tag_type()) {
+        (FileType::Flac, TagType::VorbisComments) => {
+            let native = lofty::flac::FlacFile::read_from(file, options)
+                .map_err(|error| error.to_string())?
+                .remove_vorbis_comments()
+                .unwrap_or_default();
+            save_vorbis_tag(native, tag, file)
+        }
+        (FileType::Vorbis, TagType::VorbisComments) => {
+            let native = lofty::ogg::VorbisFile::read_from(file, options)
+                .map_err(|error| error.to_string())?
+                .remove_vorbis_comments();
+            save_vorbis_tag(native, tag, file)
+        }
+        (FileType::Wav, TagType::RiffInfo) => {
+            let native = lofty::iff::wav::WavFile::read_from(file, options)
+                .map_err(|error| error.to_string())?
+                .remove_riff_info()
+                .unwrap_or_default();
+            let mut merged = lofty::iff::wav::RiffInfoList::from(tag.clone());
+            for (key, value) in native {
+                if ItemKey::from_key(TagType::RiffInfo, &key).is_none() {
+                    merged.insert(key, value);
+                }
+            }
+            save_tag(&merged, file)
+        }
+        (FileType::Mpeg, TagType::Ape) => {
+            let native = lofty::mpeg::MpegFile::read_from(file, options)
+                .map_err(|error| error.to_string())?
+                .remove_ape()
+                .unwrap_or_default();
+            let (remainder, _) = native.split_tag();
+            save_tag(&remainder.merge_tag(tag.clone()), file)
+        }
+        // Generic ID3v2 and MP4 tags carry their format-specific companion data.
+        _ => save_tag(tag, file),
+    }
 }
 
 /// Only the selected tag is written. A failed write or round-trip check never touches the original.
@@ -230,7 +354,7 @@ pub(crate) fn write_file_with_cover(
         .map_err(|error| format!("创建安全副本失败：{error}"))?;
     drop(source);
     destination.rewind().map_err(|error| error.to_string())?;
-    tag.save_to(&mut destination, WriteOptions::default())
+    write_tag(&mut destination, original.file_type(), &tag)
         .map_err(|error| format!("写入标签失败，原文件未修改：{error}"))?;
     destination.sync_all().map_err(|error| error.to_string())?;
     drop(destination);
@@ -246,32 +370,20 @@ pub(crate) fn write_file_with_cover(
     if cover.is_some() && tag.pictures() != after.pictures() {
         return Err("封面回读不一致或其他图片发生变化，原文件未修改".to_owned());
     }
-    // Generic tag conversion retains format-specific companion data. Also verify all visible
-    // untouched items, rather than silently dropping custom fields or totals.
-    for item in before.items().filter(|item| {
-        !changes.iter().any(|change| {
-            item.key() == &change.field.key(before.tag_type())
-                || (change.field == MetadataField::ReleaseDate
-                    && item.key() == &ItemKey::RecordingDate)
-        })
-    }) {
-        if !after.items().any(|candidate| candidate == item) {
-            return Err("写入影响了未编辑的标签，原文件未修改".to_owned());
-        }
-    }
+    // Verify the requested final tag, allowing empty items to disappear and numbers
+    // to lose leading zeroes. Nonempty generic values must survive.
+    verify_tag_items(&tag, &after)?;
     for other in original
         .tags()
         .iter()
         .filter(|other| other.tag_type() != tag.tag_type())
     {
-        let preserved = written
-            .tag(other.tag_type())
-            .ok_or_else(|| "其他标签格式丢失".to_owned())?;
-        if other.pictures() != preserved.pictures()
-            || other.items().collect::<Vec<_>>() != preserved.items().collect::<Vec<_>>()
-        {
-            return Err("写入影响了其他标签格式，原文件未修改".to_owned());
+        let empty = Tag::new(other.tag_type());
+        let preserved = written.tag(other.tag_type()).unwrap_or(&empty);
+        if other.pictures() != preserved.pictures() {
+            return Err("写入影响了其他标签格式的图片，原文件未修改".to_owned());
         }
+        verify_tag_items(other, preserved)?;
     }
     fs::set_permissions(&temporary.0, metadata.permissions()).map_err(|error| error.to_string())?;
     fs::rename(&temporary.0, path)
@@ -314,5 +426,62 @@ impl Drop for TemporaryFile {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod verification_tests {
+    use super::{
+        verify_changes, verify_tag_items, ItemKey, MetadataChange, MetadataField, Tag, TagType,
+    };
+    use lofty::tag::{ItemValue, TagItem};
+
+    #[test]
+    fn allows_empty_removal_number_formatting_and_item_reordering() {
+        let mut expected = Tag::new(TagType::Id3v2);
+        expected.insert_text(ItemKey::Genre, String::new());
+        expected.insert_text(ItemKey::TrackNumber, "02".into());
+        expected.insert_text(ItemKey::TrackTotal, "012".into());
+        expected.insert_text(ItemKey::TrackTitle, "keep".into());
+        let mut actual = Tag::new(TagType::Id3v2);
+        actual.insert_text(ItemKey::TrackTitle, "keep".into());
+        actual.insert_text(ItemKey::TrackTotal, "12".into());
+        actual.insert_text(ItemKey::TrackNumber, "2".into());
+        assert!(verify_tag_items(&expected, &actual).is_ok());
+        actual.insert_text(ItemKey::TrackNumber, "3".into());
+        let error = verify_tag_items(&expected, &actual).unwrap_err();
+        assert!(error.contains("Id3v2"));
+        assert!(error.contains("TrackNumber"));
+    }
+
+    #[test]
+    fn cleared_numbers_must_be_absent_not_unparseable() {
+        let mut actual = Tag::new(TagType::Id3v2);
+        actual.insert_text(ItemKey::TrackNumber, "invalid".into());
+        let changes = [MetadataChange {
+            field: MetadataField::TrackNumber,
+            value: None,
+        }];
+        assert!(verify_changes(&actual, &changes).is_err());
+        actual.remove_key(ItemKey::TrackNumber);
+        assert!(verify_changes(&actual, &changes).is_ok());
+    }
+
+    #[test]
+    fn rejects_nonempty_loss_value_changes_and_lost_duplicate_occurrences() {
+        let mut expected = Tag::new(TagType::VorbisComments);
+        let artist = TagItem::new(ItemKey::TrackArtist, ItemValue::Text("Guest".into()));
+        expected.push(artist.clone());
+        expected.push(artist.clone());
+        let mut actual = expected.clone();
+        assert!(verify_tag_items(&expected, &actual).is_ok());
+        actual.insert(artist);
+        assert!(verify_tag_items(&expected, &actual)
+            .unwrap_err()
+            .contains("TrackArtist"));
+        actual.insert_text(ItemKey::TrackArtist, "Someone else".into());
+        assert!(verify_tag_items(&expected, &actual).is_err());
+        actual.remove_key(ItemKey::TrackArtist);
+        assert!(verify_tag_items(&expected, &actual).is_err());
     }
 }

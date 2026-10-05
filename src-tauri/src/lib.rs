@@ -2,6 +2,7 @@ mod album_tags;
 mod database;
 mod ingest;
 pub mod lyrics;
+mod lyrics_download;
 mod metadata;
 mod playback;
 mod settings;
@@ -15,6 +16,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(playback::PlaybackState::default())
         .manage(ingest::IngestState::default())
+        .manage(lyrics_download::LyricsDownloadState::default())
         .setup(|app| {
             use tauri::Manager;
 
@@ -54,6 +56,14 @@ pub fn run() {
             ingest::supported_audio_extensions,
             ingest::files::import_music_files,
             lyrics::get_track_lyrics,
+            lyrics_download::search_lyrics_candidates,
+            lyrics_download::get_candidate_lyrics,
+            lyrics_download::find_track_lyrics,
+            lyrics_download::begin_lyrics_download,
+            lyrics_download::fetch_batch_lyrics,
+            lyrics_download::write_batch_lyrics,
+            lyrics_download::cancel_lyrics_download,
+            lyrics_download::finish_lyrics_download,
             database::commands::list_album_artists,
             database::commands::list_albums,
             database::commands::get_album_artwork,

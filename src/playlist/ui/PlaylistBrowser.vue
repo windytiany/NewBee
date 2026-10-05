@@ -133,6 +133,11 @@
           :disabled="props.isPlaylistActionPending"
           @close="closeContextMenu(true)"
         />
+        <LyricsDownloadMenuItem
+          :track-ids="contextTargetTrackIds"
+          :disabled="props.isPlaylistActionPending"
+          @close="closeContextMenu(true)"
+        />
         <TrackSkipMenuItem
           :track-ids="contextTargetTrackIds"
           :disabled="props.isPlaylistActionPending"
@@ -194,6 +199,7 @@ import PlaylistTrack from "@/playlist/ui/PlaylistTrack.vue";
 import TrackArtwork from "@/artwork/ui/TrackArtwork.vue";
 import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
 import MetadataEditMenuItem from "@/metadata/ui/MetadataEditMenuItem.vue";
+import LyricsDownloadMenuItem from "@/lyricsDownload/ui/LyricsDownloadMenuItem.vue";
 
 const props = withDefaults(
   defineProps<{

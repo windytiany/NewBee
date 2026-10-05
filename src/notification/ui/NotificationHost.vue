@@ -8,6 +8,31 @@
       @mousedown.stop
     >
       <article
+        v-for="task in notifications.tasks.value"
+        :key="task.key"
+        data-task-notification
+        class="bg-spotify-interactive pointer-events-auto space-y-2 rounded-xl px-4 py-3 text-sm text-white shadow-xl ring-1 ring-white/15"
+      >
+        <p role="status" aria-live="polite">{{ task.message }}</p>
+        <progress
+          aria-label="任务进度"
+          :value="task.completed"
+          :max="Math.max(1, task.total)"
+          class="accent-spotify-green w-full"
+        ></progress>
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-spotify-muted">已处理 {{ task.completed }} / {{ task.total }}</span>
+          <button
+            type="button"
+            :disabled="task.cancelling"
+            class="focus-visible:outline-spotify-green rounded px-3 py-1 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+            @click="task.cancel()"
+          >
+            {{ task.cancelling ? "正在取消…" : "取消" }}
+          </button>
+        </div>
+      </article>
+      <article
         v-for="item in notifications.visible.value"
         :key="item.id"
         :data-notification-id="item.id"

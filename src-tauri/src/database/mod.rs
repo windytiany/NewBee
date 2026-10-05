@@ -100,6 +100,19 @@ impl TrackDetails {
     pub(crate) fn path(&self) -> &str {
         &self.path
     }
+
+    pub(crate) fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+    pub(crate) fn artist(&self) -> Option<&str> {
+        self.artist.as_deref()
+    }
+    pub(crate) fn album(&self) -> Option<&str> {
+        self.album.as_deref()
+    }
+    pub(crate) fn duration_ms(&self) -> Option<i64> {
+        self.duration_ms
+    }
 }
 
 #[derive(Serialize)]

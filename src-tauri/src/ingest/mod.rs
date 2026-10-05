@@ -29,7 +29,7 @@ impl IngestState {
         self.0
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| {
-                "A music library scan, import or metadata save is already running".to_owned()
+                "音乐库扫描、导入、标签保存或歌词下载任务正在运行，请稍后重试".to_owned()
             })?;
         Ok(IngestGuard(Arc::clone(&self.0)))
     }
@@ -154,7 +154,7 @@ fn codec_for_file_type(file_type: FileType) -> Option<&'static str> {
 }
 
 fn tag_text(tag: &Tag, key: &ItemKey) -> Option<String> {
-    tag.get_string(key)
+    tag.get_string(*key)
         .filter(|value| !value.trim().is_empty())
         .map(str::to_owned)
 }

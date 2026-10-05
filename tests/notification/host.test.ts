@@ -140,6 +140,37 @@ afterEach(() => {
 });
 
 describe("notification host", () => {
+  it("renders persistent progress with cancellation rather than a dismiss button", async () => {
+    mountHost();
+    let cancelled = 0;
+    notifications.updateTask({
+      key: "lyrics",
+      message: "正在更新缺少的歌词",
+      completed: 3,
+      total: 10,
+      cancelling: false,
+      cancel: () => {
+        cancelled++;
+      },
+    });
+    try {
+      await Vue.nextTick();
+      const task = find(host(), (node) => node.props["data-task-notification"] !== undefined);
+      if (!task) throw new Error("Missing task notification");
+      expect(find(task, (node) => node.type === "progress")?.props.value).toBe(3);
+      const button = task.querySelector("button");
+      if (!button) throw new Error("Missing cancel button");
+      expect(button.props["aria-label"]).not.toBe("关闭通知");
+      click(button);
+      expect(cancelled).toBe(1);
+      notifications.removeTask("lyrics");
+      await Vue.nextTick();
+      expect(find(host(), (node) => node.props["data-task-notification"] !== undefined)).toBeNull();
+    } finally {
+      notifications.removeTask("lyrics");
+    }
+  });
+
   it("renders accessible dismissable toasts outside the page layout", async () => {
     mountHost();
     notifications.notify({ type: "success", message: "已添加到歌单" });

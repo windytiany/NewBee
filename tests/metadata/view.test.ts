@@ -100,6 +100,10 @@ function mountDialog(readOnly = false) {
     {
       vue: Vue,
       "@/metadata/editor": { useMetadataEditor: () => editor },
+      "@/lyricsDownload/batch": { useLyricsBatch: () => ({ state: { running: false } }) },
+      "@/lyricsDownload/ui/LyricsSearchActions.vue": Vue.defineComponent({
+        setup: () => () => null,
+      }),
       "@/artwork/ui/TrackArtwork.vue": Vue.defineComponent({ setup: () => () => null }),
       "@/library/formatTrack": { formatTrackDuration: () => "0:01" },
     },

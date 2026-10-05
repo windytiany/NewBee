@@ -5,7 +5,12 @@ import { SETTINGS_CHANGED_EVENT, type Settings } from "@/settings/types";
 import { applyTheme, THEMES } from "@/settings/theme";
 import InfoHelp from "@/ui/InfoHelp.vue";
 
-const categories = { general: "常规", appearance: "外观", library: "媒体库" } as const;
+const categories = {
+  general: "常规",
+  appearance: "外观",
+  library: "媒体库",
+  lyrics: "歌词",
+} as const;
 const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
@@ -13,6 +18,7 @@ const theme = ref<Settings["theme"]>("spotify");
 const albumCoverBackground = ref(false);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
+const neteaseEnabled = ref(true);
 const isLoading = ref(false);
 const isLoaded = ref(false);
 const isSaving = ref(false);
@@ -41,6 +47,7 @@ async function show() {
     albumCoverBackground.value = settings.albumCoverBackground;
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
+    neteaseEnabled.value = settings.lyricsProviders.includes("netease");
     isLoaded.value = true;
   } catch (reason) {
     if (requestId === loadRequestSequence) {
@@ -68,6 +75,7 @@ async function save() {
         albumCoverBackground: albumCoverBackground.value,
         albumSortBy: albumSortBy.value,
         albumSortOrder: albumSortOrder.value,
+        lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
       },
     });
     applyTheme(theme.value);
@@ -138,6 +146,10 @@ defineExpose({ show });
                 <p>启用专辑封面背景后，展开专辑时使用封面生成的模糊背景；关闭后使用默认背景。</p>
                 <p>保存后立即生效，下次启动时自动恢复。</p>
               </template>
+              <template v-else-if="selectedCategory === 'lyrics'">
+                <p>按启用的来源顺序获取歌词，无需登录网易云。</p>
+                <p>当前批量操作下载成功后直接覆盖内嵌歌词，不检查是否缺少。</p>
+              </template>
               <template v-else>
                 <p>按完整发布日期排序，专辑仍只显示年份。</p>
                 <p>缺少日期的专辑排在最后，相同日期按名称排序。</p>
@@ -202,6 +214,22 @@ defineExpose({ show });
                 value="exit"
               />
               <span class="text-sm">直接退出</span>
+            </label>
+          </fieldset>
+          <fieldset
+            v-else-if="selectedCategory === 'lyrics'"
+            :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+          >
+            <legend class="sr-only">歌词来源</legend>
+            <h4 class="mb-3 text-sm font-semibold">歌词来源</h4>
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3">
+              <input
+                v-model="neteaseEnabled"
+                type="checkbox"
+                name="netease-lyrics"
+                class="accent-spotify-green mt-1"
+              />
+              <span class="text-sm">网易云音乐</span>
             </label>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">

@@ -14,7 +14,8 @@ import { THEMES } from "@/settings/theme";
 
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
-  selectedCategory: Vue.Ref<"general" | "appearance" | "library">;
+  selectedCategory: Vue.Ref<"general" | "appearance" | "library" | "lyrics">;
+  neteaseEnabled: Vue.Ref<boolean>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   theme: Vue.Ref<Settings["theme"]>;
   albumCoverBackground: Vue.Ref<boolean>;
@@ -33,6 +34,7 @@ const defaults: Settings = {
   closeBehavior: "tray",
   albumSortBy: "name",
   albumSortOrder: "ascending",
+  lyricsProviders: ["netease"],
 };
 
 const filename = "src/settings/ui/SettingsDialog.vue";
@@ -151,6 +153,7 @@ describe("settings dialog", () => {
         ["常规", "关闭窗口时", "主题"],
         ["外观", "主题", "专辑排序"],
         ["媒体库", "专辑排序", "关闭窗口时"],
+        ["歌词", "网易云音乐", "关闭窗口时"],
       ] as const) {
         const button = findNode(
           navigation,
@@ -168,6 +171,7 @@ describe("settings dialog", () => {
           常规: "托盘菜单中的",
           外观: "保存后立即生效",
           媒体库: "缺少日期的专辑",
+          歌词: "不检查是否缺少",
         }[category];
         expect(getTextContent(panel)).not.toContain(explanation);
         const help = findNode(panel, (node) => node.props["aria-label"] === `${category}设置说明`);
@@ -218,6 +222,7 @@ describe("settings dialog", () => {
       closeBehavior: "exit",
       albumSortBy: "year",
       albumSortOrder: "descending",
+      lyricsProviders: ["netease"],
     };
     const { bindings, element, events } = createDialog(async (command, args) => {
       calls.push([command, args]);
@@ -304,9 +309,22 @@ describe("settings dialog", () => {
           closeBehavior: "exit",
           albumSortBy: "year",
           albumSortOrder: "descending",
+          lyricsProviders: ["netease"],
         },
       },
     ]);
+  });
+
+  it("persists disabled lyric providers", async () => {
+    const saved: unknown[] = [];
+    const { bindings } = createDialog(async (command, args) => {
+      if (command === "get_settings") return defaults;
+      saved.push(args);
+    });
+    await bindings.show();
+    bindings.neteaseEnabled.value = false;
+    await bindings.save();
+    expect(saved).toEqual([{ settings: { ...defaults, lyricsProviders: [] } }]);
   });
 
   it("blocks saving when loading fails", async () => {
@@ -351,6 +369,7 @@ describe("settings dialog", () => {
       closeBehavior: "exit",
       albumSortBy: "year",
       albumSortOrder: "descending",
+      lyricsProviders: ["netease"],
     });
     await firstShow;
     expect(bindings.isLoading.value).toBe(true);

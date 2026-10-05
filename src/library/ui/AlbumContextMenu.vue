@@ -75,6 +75,7 @@
       </button>
     </div>
     <MetadataEditMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
+    <LyricsDownloadMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
     <AlbumTagMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
     <div class="my-1 border-t border-white/10" role="separator"></div>
     <button
@@ -94,6 +95,7 @@ import { nextTick, ref, watch } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import { useContextMenu } from "@/interaction/contextMenu";
 import MetadataEditMenuItem from "@/metadata/ui/MetadataEditMenuItem.vue";
+import LyricsDownloadMenuItem from "@/lyricsDownload/ui/LyricsDownloadMenuItem.vue";
 import AlbumTagMenuItem from "@/albumTags/ui/AlbumTagMenuItem.vue";
 import type { LibraryAlbumSelection } from "@/library/selection";
 import type { PlaylistSummary } from "@/playlist/model";

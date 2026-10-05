@@ -1,0 +1,82 @@
+import { afterEach, expect, it } from "bun:test";
+import * as Vue from "vue";
+import { compileSfc, evaluateModule } from "../support/moduleLoader";
+import {
+  createHostNode,
+  createHostRenderer,
+  findNode,
+  getTextContent,
+} from "../support/hostRenderer";
+import type { LibraryAlbumSelection } from "@/library/selection";
+
+const source = await Bun.file("src/lyricsDownload/ui/LyricsDownloadMenuItem.vue").text();
+const apps: Array<{ unmount: () => void }> = [];
+afterEach(() => {
+  for (const app of apps.splice(0)) app.unmount();
+});
+function mount(properties: { trackIds?: number[]; album?: LibraryAlbumSelection }) {
+  const tracks: number[][] = [];
+  const albums: LibraryAlbumSelection[] = [];
+  const state = Vue.reactive({ running: false });
+  const props = Vue.reactive(properties);
+  const component = evaluateModule<{ default: Vue.Component }>(
+    compileSfc(source, "LyricsDownloadMenuItem.vue"),
+    {
+      vue: Vue,
+      "@/lyricsDownload/batch": {
+        useLyricsBatch: () => ({
+          state,
+          startTracks: async (ids: number[]) => {
+            tracks.push(ids);
+          },
+          startAlbum: async (album: LibraryAlbumSelection) => {
+            albums.push(album);
+          },
+        }),
+      },
+    },
+  ).default;
+  const root = createHostNode("root");
+  let closed = 0;
+  const app = createHostRenderer(createHostNode).createApp(
+    Vue.defineComponent({
+      setup: () => () =>
+        Vue.h(component, {
+          ...props,
+          onClose: () => {
+            closed++;
+            props.trackIds = [99];
+          },
+        }),
+    }),
+  );
+  app.mount(root);
+  apps.push(app);
+  const button = findNode(root, (node) => node.type === "button");
+  if (!button) throw new Error("Missing lyrics menu item");
+  return { button, tracks, albums, state, closed: () => closed };
+}
+it("retains the exact menu name and snapshots selected targets before closing", () => {
+  const result = mount({ trackIds: [1, 2] });
+  expect(getTextContent(result.button).trim()).toBe("更新缺少的歌词");
+  const click = result.button.props.onClick as (event: { stopPropagation: () => void }) => void;
+  click({ stopPropagation() {} });
+  expect(result.closed()).toBe(1);
+  expect(result.tracks).toEqual([[1, 2]]);
+});
+it("passes the selected album to the batch downloader", () => {
+  const album = { album: "Album", albumArtist: "Artist" };
+  const result = mount({ album });
+  const click = result.button.props.onClick as (event: { stopPropagation: () => void }) => void;
+  click({ stopPropagation() {} });
+  expect(result.albums).toEqual([album]);
+});
+it("disables additional downloads while a batch is running", async () => {
+  const result = mount({ trackIds: [1] });
+  result.state.running = true;
+  await Vue.nextTick();
+  expect(result.button.props.disabled).toBe(true);
+  const click = result.button.props.onClick as (event: { stopPropagation: () => void }) => void;
+  click({ stopPropagation() {} });
+  expect(result.tracks).toEqual([]);
+});

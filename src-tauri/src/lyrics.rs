@@ -49,11 +49,11 @@ fn read_embedded_lyrics(track_id: i64, path: &Path) -> Result<TrackLyrics, Strin
         .read()
         .map_err(|error| format!("Failed to read or parse audio tags for {context}: {error}"))?;
 
-    let lyrics_key = ItemKey::Lyrics;
-    let candidates = tagged_file
-        .tags()
-        .iter()
-        .flat_map(|tag| tag.get_strings(&lyrics_key));
+    let candidates = tagged_file.tags().iter().flat_map(|tag| {
+        [ItemKey::Lyrics, ItemKey::UnsyncLyrics]
+            .into_iter()
+            .flat_map(move |key| tag.get_strings(key))
+    });
     Ok(lyrics_from_candidates(candidates))
 }
 
@@ -248,6 +248,40 @@ mod tests {
         assert_eq!(
             lyrics_from_candidates(std::iter::empty::<&str>()),
             TrackLyrics::None
+        );
+    }
+
+    #[test]
+    fn reads_lrc_text_from_the_id3_uslt_field() {
+        use lofty::{
+            config::WriteOptions,
+            prelude::*,
+            tag::{ItemKey, Tag, TagType},
+        };
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = PathBuf::from(format!(
+            "/tmp/newbee-lyrics-uslt-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("track.mp3");
+        std::fs::write(&path, include_bytes!("metadata/fixtures/silence.mp3")).unwrap();
+        let mut tag = Tag::new(TagType::Id3v2);
+        tag.insert_text(ItemKey::UnsyncLyrics, "[00:01.00]words".into());
+        tag.save_to_path(&path, WriteOptions::default()).unwrap();
+        let result = read_embedded_lyrics(42, &path);
+        std::fs::remove_dir_all(directory).unwrap();
+        assert_eq!(
+            result.unwrap(),
+            TrackLyrics::Synced {
+                lines: vec![LyricLine {
+                    start_ms: 1_000,
+                    text: "words".into()
+                }],
+            }
         );
     }
 

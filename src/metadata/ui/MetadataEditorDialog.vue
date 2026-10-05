@@ -166,6 +166,14 @@
         role="tabpanel"
         aria-labelledby="metadata-tab-lyrics"
       >
+        <LyricsSearchActions
+          v-if="state.open"
+          :key="singleTrack.id"
+          :track="singleTrack"
+          :modified="lyricsField.value !== lyricsField.originalValue"
+          :disabled="!lyricsField.writable || state.saving || state.confirmDiscard"
+          @apply="editor.changeField(lyricsField, $event)"
+        />
         <textarea
           id="metadata-lyrics"
           form="metadata-editor-form"
@@ -180,6 +188,9 @@
         />
       </section>
 
+      <p v-if="batch.state.running" role="status" class="text-spotify-muted text-sm">
+        歌词下载任务运行中，暂时无法保存标签。
+      </p>
       <div v-if="state.saving" role="status" class="space-y-2 text-sm" aria-live="polite">
         <p>{{ multiple ? `正在保存 ${state.completed} / ${state.total}` : "保存中…" }}</p>
         <progress :value="state.completed" :max="state.total" class="w-full"></progress>
@@ -259,9 +270,12 @@ import { useMetadataEditor } from "@/metadata/editor";
 import type { DraftField, MetadataField } from "@/metadata/model";
 import TrackArtwork from "@/artwork/ui/TrackArtwork.vue";
 import { formatTrackDuration } from "@/library/formatTrack";
+import LyricsSearchActions from "@/lyricsDownload/ui/LyricsSearchActions.vue";
+import { useLyricsBatch } from "@/lyricsDownload/batch";
 
 const editor = useMetadataEditor();
 const state = editor.state;
+const batch = useLyricsBatch();
 type EditorTab = "properties" | "tags" | "lyrics";
 const activeTab = ref<EditorTab>("tags");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
@@ -318,6 +332,7 @@ const canSave = computed(
   () =>
     !state.loading &&
     !state.saving &&
+    !batch.state.running &&
     !state.confirmDiscard &&
     state.draft.some((field) => field.writable && !field.mixed),
 );

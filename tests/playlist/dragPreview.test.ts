@@ -54,6 +54,7 @@ function createPlaylistBrowserComponent(source: string) {
     vue: Vue,
     "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon, X: icon },
     "@/metadata/ui/MetadataEditMenuItem.vue": icon,
+    "@/lyricsDownload/ui/LyricsDownloadMenuItem.vue": icon,
     "@/library/ui/TrackSkipMenuItem.vue": icon,
     "@/interaction/contextMenu": {
       useContextMenu: () => ({

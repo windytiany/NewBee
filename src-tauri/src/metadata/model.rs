@@ -52,7 +52,7 @@ impl MetadataField {
             Self::Artist => ItemKey::TrackArtist,
             Self::Album => ItemKey::AlbumTitle,
             Self::AlbumArtist => ItemKey::AlbumArtist,
-            Self::ReleaseDate if ItemKey::ReleaseDate.map_key(tag_type, false).is_none() => {
+            Self::ReleaseDate if ItemKey::ReleaseDate.map_key(tag_type).is_none() => {
                 ItemKey::RecordingDate
             }
             Self::ReleaseDate => ItemKey::ReleaseDate,
@@ -60,6 +60,7 @@ impl MetadataField {
             Self::DiscNumber => ItemKey::DiscNumber,
             Self::TrackTotal => ItemKey::TrackTotal,
             Self::DiscTotal => ItemKey::DiscTotal,
+            Self::Lyrics if tag_type == TagType::Id3v2 => ItemKey::UnsyncLyrics,
             Self::Lyrics => ItemKey::Lyrics,
         }
     }

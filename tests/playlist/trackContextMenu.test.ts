@@ -176,6 +176,9 @@ function createComponent(source: string) {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@lucide/vue": { DiscAlbum: icon, Play: icon, X: icon },
+    "@/lyricsDownload/ui/LyricsDownloadMenuItem.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
     "@/metadata/ui/MetadataEditMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>

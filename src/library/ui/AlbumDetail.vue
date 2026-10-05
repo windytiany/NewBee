@@ -170,6 +170,11 @@
         :disabled="props.trackActionPending"
         @close="closeTrackContextMenu(true)"
       />
+      <LyricsDownloadMenuItem
+        :track-ids="contextMenu.payload.targetTrackIds"
+        :disabled="props.trackActionPending"
+        @close="closeTrackContextMenu(true)"
+      />
       <TrackSkipMenuItem
         :track-ids="contextMenu.payload.targetTrackIds"
         :disabled="props.trackActionPending"
@@ -204,6 +209,7 @@ import type { PlaylistSummary } from "@/playlist/model";
 import AlbumTrack from "@/library/ui/AlbumTrack.vue";
 import TrackSkipMenuItem from "@/library/ui/TrackSkipMenuItem.vue";
 import MetadataEditMenuItem from "@/metadata/ui/MetadataEditMenuItem.vue";
+import LyricsDownloadMenuItem from "@/lyricsDownload/ui/LyricsDownloadMenuItem.vue";
 import { useAlbumTrackColumns } from "@/library/useAlbumTrackColumns";
 
 type TrackContextMenuTrigger = {
