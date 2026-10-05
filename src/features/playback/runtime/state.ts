@@ -90,6 +90,11 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
 
   function clearCurrentTrack(playbackId: number) {
     if (currentTrack.value?.playbackId !== playbackId) return false;
+    return resetCurrentTrack();
+  }
+
+  function resetCurrentTrack() {
+    if (currentTrack.value === null) return false;
 
     currentTrack.value = null;
     try {
@@ -231,6 +236,7 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     adoptTransition,
     stopPlayback,
     stopStalePlayback,
+    resetCurrentTrack,
     releasePlaybackForEditing,
     updateTrackMetadata,
     finishPlayback,

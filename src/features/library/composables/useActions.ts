@@ -35,6 +35,7 @@ export function useLibraryActions(
     addTracksToNext: enqueueTracksToNext,
     addTracksToQueueEnd: enqueueTracksToQueueEnd,
     removeTrackFromQueue,
+    clearQueue: clearPlaybackQueue,
   } = playbackSession;
   function errorMessage(error: unknown) {
     if (error instanceof Error) return error.message;
@@ -213,14 +214,22 @@ export function useLibraryActions(
     }
   }
 
-  async function deleteLibraryTrack(trackId: number): Promise<LibraryTrackRemovalResult> {
+  async function removeTrackFromLibraryDatabase(
+    trackId: number,
+  ): Promise<LibraryTrackRemovalResult> {
     try {
       await libraryApi.removeTrack(trackId);
+      return { status: "deleted" };
     } catch (error) {
       const message = `从曲库删除失败：${errorMessage(error)}`;
       trackActionError.value = message;
       return { status: "not-deleted", message };
     }
+  }
+
+  async function deleteLibraryTrack(trackId: number): Promise<LibraryTrackRemovalResult> {
+    const deletion = await removeTrackFromLibraryDatabase(trackId);
+    if (deletion.status !== "deleted") return deletion;
 
     let queueResult:
       Awaited<ReturnType<typeof removeTrackFromQueue>> | { status: "queue-error"; message: string };
@@ -298,8 +307,43 @@ export function useLibraryActions(
     const failures: string[] = [];
     const completed = await runTrackAction("从曲库删除专辑", async () => {
       const sourceTracks = await loadAlbumActionTracks(selection);
+      const clearsActivePlayback = sourceTracks.some(
+        (track) => track.id === currentTrack.value?.trackId,
+      );
+      if (clearsActivePlayback) {
+        let queueResult:
+          | Awaited<ReturnType<typeof clearPlaybackQueue>>
+          | { status: "queue-error"; message: string };
+        try {
+          queueResult = await clearPlaybackQueue();
+        } catch (error) {
+          queueResult = { status: "queue-error", message: errorMessage(error) };
+        }
+        switch (queueResult.status) {
+          case "removed":
+          case "not-found":
+            break;
+          case "stop-failed":
+            failures.push(`播放队列（停止当前播放失败：${queueResult.message}）`);
+            break;
+          case "stop-unconfirmed":
+            failures.push("播放队列（无法确认当前播放已停止）");
+            break;
+          case "superseded":
+            failures.push("播放队列（清理已被较新的播放操作取代）");
+            break;
+          case "queue-error":
+            failures.push(`播放队列（同步失败：${queueResult.message}）`);
+            break;
+          default:
+            throw new Error("Unexpected playback queue clear result.");
+        }
+      }
+
       for (const track of sourceTracks) {
-        const result = await deleteLibraryTrack(track.id);
+        const result = clearsActivePlayback
+          ? await removeTrackFromLibraryDatabase(track.id)
+          : await deleteLibraryTrack(track.id);
         if (result.status !== "not-deleted") deletedTrackIds.push(track.id);
         if (result.status !== "deleted") {
           failures.push(`${track.title ?? `曲目 ${track.id}`}（${result.message}）`);

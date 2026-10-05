@@ -53,6 +53,12 @@ let queueRemovalResult:
   | { status: "stop-failed"; message: string } = { status: "not-found" };
 let queueRemovalError: Error | null = null;
 let queueRemovalCalls: number[] = [];
+let clearQueueCalls = 0;
+const mockedCurrentTrack = ref<{
+  trackId: number;
+  title: string | null;
+  artist: string | null;
+} | null>(null);
 const mockedIsSeeking = ref(false);
 const mockedPlaybackCommandPending = ref(false);
 const mockedPlaybackStatus = ref({ positionMs: 0 });
@@ -124,7 +130,7 @@ dependencies["@/features/playback/session"] = {
   PLAYBACK_STATUS_POLL_INTERVAL_MS: 500,
   usePlaybackSession: () => ({
     state: {
-      currentTrack: ref(null),
+      currentTrack: mockedCurrentTrack,
       isSeeking: mockedIsSeeking,
       isPlaybackCommandPending: mockedPlaybackCommandPending,
       playbackStatus: mockedPlaybackStatus,
@@ -152,6 +158,11 @@ dependencies["@/features/playback/session"] = {
       queueRemovalCalls.push(trackId);
       if (queueRemovalError) throw queueRemovalError;
       return queueRemovalResult;
+    },
+    clearQueue: async () => {
+      clearQueueCalls += 1;
+      if (queueRemovalError) throw queueRemovalError;
+      return { status: "removed" };
     },
   }),
 };
@@ -221,6 +232,8 @@ beforeEach(() => {
   queueRemovalResult = { status: "not-found" };
   queueRemovalError = null;
   queueRemovalCalls = [];
+  clearQueueCalls = 0;
+  mockedCurrentTrack.value = null;
   mockedIsSeeking.value = false;
   mockedPlaybackCommandPending.value = false;
   mockedPlaybackStatus.value = { positionMs: 0 };
@@ -320,6 +333,24 @@ describe("library album actions", () => {
     expect(databaseDeleteCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
     expect(queueRemovalCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
     expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(2);
+  });
+
+  it("clears playback and the entire queue when deleting the active track's album", async () => {
+    availableTracks = [track, secondTrack, thirdTrack];
+    mockedCurrentTrack.value = {
+      trackId: secondTrack.id,
+      title: secondTrack.title,
+      artist: "Artist",
+    };
+    const page = mountLibraryPage();
+    await settleRequests();
+
+    const result = await page.removeAlbumFromLibrary(selection);
+
+    expect(result).toEqual({ completed: true, deletedCount: 3, message: "" });
+    expect(clearQueueCalls).toBe(1);
+    expect(queueRemovalCalls).toEqual([]);
+    expect(databaseDeleteCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
   });
 
   it("reports partial deletion and continues deleting the remaining tracks", async () => {

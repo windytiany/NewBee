@@ -236,6 +236,11 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     {
       isTrackSkipped: trackSkip.isSkipped,
       loadTrackPreferences,
+      clearPlayback: () => {
+        playbackState.resetCurrentTrack();
+        playbackState.consumePlaybackStartFailure();
+        playbackError.value = "";
+      },
       stopPlayback: playbackState.stopPlayback,
       stopStalePlayback: playbackState.stopStalePlayback,
       finishPlayback: async (playbackId, canFinish) => {
@@ -321,6 +326,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     ...commands,
     removeQueueItems: coordinator.removeQueueItems.bind(coordinator),
     removeTrackFromQueue: coordinator.removeTrackFromQueue.bind(coordinator),
+    clearQueue: coordinator.clearQueue.bind(coordinator),
     addToNext: coordinator.addToNext.bind(coordinator),
     addTracksToNext: coordinator.addTracksToNext.bind(coordinator),
     addToQueueEnd: coordinator.addToQueueEnd.bind(coordinator),

@@ -25,6 +25,7 @@ type StopPlayback = (playbackId: number) => Promise<boolean>;
 type StopStalePlayback = (playbackId: number) => Promise<void>;
 type PlaybackQueueCoordinatorOptions = {
   random?: () => number;
+  clearPlayback?: () => void;
   stopPlayback?: StopPlayback;
   stopStalePlayback?: StopStalePlayback;
   finishPlayback?: (playbackId: number, canFinish: () => boolean) => Promise<void>;
@@ -70,6 +71,7 @@ export class PlaybackQueueCoordinator {
   private operationGeneration = 0;
   private operationTail: Promise<void> = Promise.resolve();
   private readonly random: () => number;
+  private readonly clearPlayback: () => void;
   private readonly stopPlayback: StopPlayback;
   private readonly stopStalePlayback: StopStalePlayback;
   private readonly finishPlayback: NonNullable<PlaybackQueueCoordinatorOptions["finishPlayback"]>;
@@ -85,6 +87,7 @@ export class PlaybackQueueCoordinator {
     options: PlaybackQueueCoordinatorOptions = {},
   ) {
     this.random = options.random ?? Math.random;
+    this.clearPlayback = options.clearPlayback ?? (() => {});
     this.stopPlayback = options.stopPlayback ?? (async () => true);
     this.stopStalePlayback = options.stopStalePlayback ?? (async () => {});
     this.finishPlayback = options.finishPlayback ?? (async () => {});
@@ -317,6 +320,39 @@ export class PlaybackQueueCoordinator {
       return this.removeItemsFromQueue([...matchingItems.values()], generation);
     });
     return this.finishQueueRemoval(removal, generation);
+  }
+
+  clearQueue(): Promise<QueueTrackRemovalResult> {
+    const generation = this.beginQueueRemoval();
+    return this.enqueue(async () => {
+      if (!this.isCurrentOperation(generation)) return { status: "superseded" };
+
+      const playbackId = this.activePlaybackId;
+      this.displayedTracks = [];
+      this.roundTracks = [];
+      this.remainingCandidates = [];
+      this.playbackHistory = [];
+      this.historyIndex = -1;
+      this.currentRowKey = null;
+      this.failures = [];
+      this.repeatOneEnabled = false;
+      this.shuffleEnabled = false;
+      this.activePlaybackId = null;
+      this.handledEndPlaybackId = null;
+      this.ignoredEndPlaybackId = playbackId;
+      this.publish();
+      this.clearPlayback();
+
+      if (playbackId === null) return { status: "removed" };
+      try {
+        const stopped = await this.stopPlayback(playbackId);
+        if (!this.isCurrentOperation(generation)) return { status: "superseded" };
+        return stopped ? { status: "removed" } : { status: "stop-unconfirmed" };
+      } catch (error) {
+        if (!this.isCurrentOperation(generation)) return { status: "superseded" };
+        return { status: "stop-failed", message: errorMessage(error) };
+      }
+    });
   }
 
   private beginQueueRemoval() {

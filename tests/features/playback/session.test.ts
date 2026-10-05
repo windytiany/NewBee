@@ -7,6 +7,7 @@ import type {
 } from "@/features/playback/types";
 
 const CURRENT_TRACK_STORAGE_KEY = "newbee.current-track";
+const PLAYBACK_QUEUE_STORAGE_KEY = "newbee.playback-queue";
 const storedValues = new Map<string, string>();
 const localStorage = {
   getItem(key: string) {
@@ -104,6 +105,69 @@ async function settlePendingCallbacks() {
 beforeEach(resetStorage);
 
 describe("playback session", () => {
+  it("clears playback and the persisted queue without advancing to another queued track", async () => {
+    let activePlaybackId: number | null = null;
+    const attemptedTrackIds: number[] = [];
+    const stoppedPlaybackIds: number[] = [];
+    const invokeCommand = asPlaybackInvoker((command, args) => {
+      if (command === "playback_status") {
+        return activePlaybackId === null ? noAudioStatus() : playingStatus(activePlaybackId);
+      }
+      if (command === "play_track") {
+        const trackId = args?.trackId as number;
+        attemptedTrackIds.push(trackId);
+        activePlaybackId = trackId + 100;
+        return trackStarted(trackId, activePlaybackId);
+      }
+      if (command === "stop_playback") {
+        stoppedPlaybackIds.push(args?.playbackId as number);
+        activePlaybackId = null;
+        return true;
+      }
+      throw new Error(`Unexpected playback command: ${command}`);
+    });
+    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
+    await session.playTracks(tracks(["album-current", 1], ["other-album", 2]), "album-current");
+    await settlePendingCallbacks();
+
+    expect(
+      JSON.parse(storedValues.get(PLAYBACK_QUEUE_STORAGE_KEY) ?? "null").displayedTracks,
+    ).toHaveLength(2);
+    expect(storedValues.has(CURRENT_TRACK_STORAGE_KEY)).toBe(true);
+
+    expect(await session.clearQueue()).toEqual({ status: "removed" });
+    await settlePendingCallbacks();
+
+    expect(session.state.displayedTracks.value).toEqual([]);
+    expect(session.state.currentRowKey.value).toBeNull();
+    expect(session.state.currentTrack.value).toBeNull();
+    expect(session.state.playbackStatus.value).toEqual({
+      hasAudio: false,
+      isPlaying: false,
+      hasEnded: false,
+      positionMs: 0,
+      durationMs: 0,
+    });
+    expect(storedValues.has(CURRENT_TRACK_STORAGE_KEY)).toBe(false);
+    expect(JSON.parse(storedValues.get(PLAYBACK_QUEUE_STORAGE_KEY) ?? "null")).toEqual({
+      version: 2,
+      displayedTracks: [],
+      currentRowKey: null,
+      nextRowKeys: [],
+      shuffleEnabled: false,
+      repeatOneEnabled: false,
+    });
+    expect(attemptedTrackIds).toEqual([1]);
+    expect(stoppedPlaybackIds).toEqual([101]);
+
+    const restartedSession = createPlaybackSession({ invokeCommand });
+    expect(restartedSession.state.displayedTracks.value).toEqual([]);
+    expect(restartedSession.state.currentTrack.value).toBeNull();
+    expect(restartedSession.state.canStartRestoredQueue.value).toBe(false);
+    expect(await restartedSession.togglePlayback(async () => true)).toBe(false);
+    expect(attemptedTrackIds).toEqual([1]);
+  });
+
   for (const shuffleEnabled of [false, true]) {
     it(`rewinds and pauses the final track in ${shuffleEnabled ? "shuffle" : "sequential"} mode while retaining its metadata and queue row`, async () => {
       let activeStatus = playingStatus(1);
