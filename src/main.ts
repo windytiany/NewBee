@@ -1,8 +1,7 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
-import { createApp, nextTick } from "vue";
-import App from "@/App.vue";
-import "@/style.css";
-import { restoreTheme } from "@/settings/theme";
+import { createApp } from "vue";
+import App from "@/app/App.vue";
+import "@/app/styles/main.css";
+import { showMainWindow } from "@/app/startup";
 
 globalThis.document.addEventListener(
   "contextmenu",
@@ -13,23 +12,5 @@ globalThis.document.addEventListener(
 );
 
 createApp(App).mount("#app");
-
-async function showMainWindow() {
-  if (!isTauri()) return;
-
-  try {
-    await restoreTheme();
-    await nextTick();
-    // nextTick flushes DOM updates; the second frame runs after the first paint.
-    await new Promise<void>((resolve) => {
-      globalThis.requestAnimationFrame(() => {
-        globalThis.requestAnimationFrame(() => resolve());
-      });
-    });
-    await invoke("show_main_window");
-  } catch (error) {
-    globalThis.console.error("Could not show the main window after startup.", error);
-  }
-}
 
 void showMainWindow();

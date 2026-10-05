@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { evaluateModule, transpileScript } from "../support/moduleLoader";
+import { transpileScript, evaluateSource } from "../support/moduleLoader";
 
 const config = JSON.parse(
   await Bun.file(new URL("../../src-tauri/tauri.conf.json", import.meta.url)).text(),
@@ -41,9 +41,9 @@ function start(isTauriApp = true) {
       createApp: () => ({ mount: () => events.push("mount") }),
       nextTick: () => rendered,
     },
-    "@/App.vue": { default: {} },
-    "@/style.css": {},
-    "@/settings/theme": { restoreTheme: async () => events.push("restore-theme") },
+    "@/app/App.vue": { default: {} },
+    "@/app/styles/main.css": {},
+    "@/features/settings/theme": { restoreTheme: async () => events.push("restore-theme") },
     "@tauri-apps/api/core": {
       isTauri: () => isTauriApp,
       invoke: async (command: string) => {
@@ -51,7 +51,7 @@ function start(isTauriApp = true) {
       },
     },
   };
-  evaluateModule(output, modules);
+  evaluateSource(output, modules);
   return { events, frames, finishRendering };
 }
 

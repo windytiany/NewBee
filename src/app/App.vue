@@ -1,0 +1,45 @@
+<script setup lang="ts">
+import { shallowRef } from "vue";
+import { usePersistentActivePage } from "@/app/pages";
+import type { PlaylistCatalog } from "@/features/playlist/types";
+import LibraryPage from "@/features/library/pages/LibraryPage.vue";
+import PlaylistPage from "@/features/playlist/pages/PlaylistPage.vue";
+import NowPlayingPage from "@/features/playback/pages/NowPlayingPage.vue";
+import PlaybackBar from "@/features/playback/components/controls/PlaybackBar.vue";
+import NotificationHost from "@/shared/notifications/NotificationHost.vue";
+import TagEditorDialog from "@/features/tags/manual/components/TagEditorDialog.vue";
+import ReleaseTagDialog from "@/features/tags/releases/components/ReleaseTagDialog.vue";
+import AppShell from "@/app/shell/AppShell.vue";
+import QueuePanel from "@/features/playback/queue/components/QueuePanel.vue";
+import TrackInfoPanel from "@/features/playback/components/current-track/TrackInfoPanel.vue";
+import TitleBar from "@/app/shell/TitleBar.vue";
+
+const { activePage } = usePersistentActivePage();
+const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
+</script>
+
+<template>
+  <div class="bg-app-base min-h-screen font-sans text-white">
+    <TitleBar v-model:active-page="activePage" />
+    <main class="grid min-h-screen place-items-center pt-14 pb-20 sm:pb-10">
+      <AppShell :mode="activePage === 'Playing' ? 'playing' : 'workspace'">
+        <template #workspace>
+          <PlaylistPage
+            :active="activePage === 'Playlist'"
+            @catalog-ready="playlistCatalog = $event"
+          />
+          <LibraryPage :active="activePage === 'Library'" :catalog="playlistCatalog" />
+        </template>
+        <template #playing>
+          <NowPlayingPage v-if="activePage === 'Playing'" />
+        </template>
+        <template #queue><QueuePanel /></template>
+        <template #details><TrackInfoPanel /></template>
+      </AppShell>
+    </main>
+    <PlaybackBar />
+    <TagEditorDialog />
+    <ReleaseTagDialog />
+    <NotificationHost />
+  </div>
+</template>

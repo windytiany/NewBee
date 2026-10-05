@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "@fontsource-variable/noto-sans-sc";
+@import "@fontsource-variable/noto-sans-jp";
+@import "./themes.css";
+
+@theme inline {
+  --font-sans: "Noto Sans SC Variable", "Noto Sans JP Variable", sans-serif;
+  --color-app-base: var(--app-base);
+  --color-app-surface: var(--app-surface);
+  --color-app-interactive: var(--app-interactive);
+  --color-app-accent: var(--app-accent);
+  --color-app-muted: var(--app-muted);
+  --color-app-track: var(--app-track);
+  --color-app-highlight: var(--app-highlight);
+  --color-app-header: var(--app-header);
+  --color-app-header-middle: var(--app-header-middle);
+  /* Existing foreground/overlay utilities share the theme's text color. */
+  --color-white: var(--app-text);
+}
+
+@layer base {
+  body {
+    background-color: var(--app-base);
+    color: var(--app-text);
+  }
+
+  :lang(ja) {
+    font-family: "Noto Sans JP Variable", "Noto Sans SC Variable", sans-serif;
+  }
+}
+
+.sidebar-scrollbars,
+.sidebar-scrollbars * {
+  scrollbar-color: color-mix(in srgb, var(--app-text) 16%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.sidebar-scrollbars::-webkit-scrollbar,
+.sidebar-scrollbars *::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.sidebar-scrollbars::-webkit-scrollbar-track,
+.sidebar-scrollbars *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbars::-webkit-scrollbar-thumb,
+.sidebar-scrollbars *::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--app-text) 16%, transparent);
+}
+
+.sidebar-scrollbars::-webkit-scrollbar-thumb:hover,
+.sidebar-scrollbars *::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--app-text) 26%, transparent);
+}

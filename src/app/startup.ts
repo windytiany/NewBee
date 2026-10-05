@@ -1,0 +1,21 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { nextTick } from "vue";
+import { restoreTheme } from "@/features/settings/theme";
+
+export async function showMainWindow() {
+  if (!isTauri()) return;
+
+  try {
+    await restoreTheme();
+    await nextTick();
+    // nextTick flushes DOM updates; the second frame runs after the first paint.
+    await new Promise<void>((resolve) => {
+      globalThis.requestAnimationFrame(() => {
+        globalThis.requestAnimationFrame(() => resolve());
+      });
+    });
+    await invoke("show_main_window");
+  } catch (error) {
+    globalThis.console.error("Could not show the main window after startup.", error);
+  }
+}

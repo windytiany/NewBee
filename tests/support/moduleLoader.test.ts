@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import * as desktopApi from "@tauri-apps/api/core";
-import { compileSfc, evaluateModule, transpileScript } from "./moduleLoader";
+import { compileSfc, evaluateModule, evaluateSource, transpileScript } from "./moduleLoader";
 import { createHostNode, createHostRenderer, getTextContent } from "./hostRenderer";
 
 const apps: Array<{ unmount: () => void }> = [];
@@ -71,6 +71,36 @@ describe("test module loader", () => {
   it("reports malformed SFC input with its filename", () => {
     expect(() => compileSfc("<script setup>const count = 2;", "broken.vue")).toThrow(
       "Cannot compile broken.vue",
+    );
+  });
+
+  it("loads local source implementations behind injected adapters and honors explicit overrides", async () => {
+    const output = transpileScript(`
+      import { createSettingsApi } from "@/features/settings/api";
+      export const settings = createSettingsApi();
+    `);
+    const calls: string[] = [];
+    const value = { theme: "spotify" };
+    const real = evaluateSource<{ settings: { get: () => Promise<unknown> } }>(output, {
+      "@tauri-apps/api/core": {
+        invoke: async (command: string) => {
+          calls.push(command);
+          return value;
+        },
+      },
+    });
+    expect(await real.settings.get()).toBe(value);
+    expect(calls).toEqual(["get_settings"]);
+    const overridden = evaluateSource<{ settings: { get: () => Promise<unknown> } }>(output, {
+      "@/features/settings/api": { createSettingsApi: () => ({ get: async () => "override" }) },
+    });
+    expect(await overridden.settings.get()).toBe("override");
+  });
+
+  it("never implicitly loads external packages for source fixtures", () => {
+    const output = transpileScript('import "@/features/settings/api";');
+    expect(() => evaluateSource(output, {})).toThrow(
+      "Missing test dependency: @tauri-apps/api/core",
     );
   });
 });
