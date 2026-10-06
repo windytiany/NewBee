@@ -343,11 +343,9 @@ pub(crate) async fn write_batch_lyrics(
         }
         // Keep the batch guard until the atomic file replacement has finished.
         let database = app.state::<Database>();
-        Ok(if action == LyricsMarkAction::Keep {
-            metadata::save_track(&database, track_id, &changes)
-        } else {
-            metadata::save_track_with_lyrics_action(&database, track_id, &changes, action)
-        })
+        Ok(metadata::save::save_track(
+            &database, track_id, &changes, action, None,
+        ))
     })
     .await
     .map_err(|error| format!("歌词写入任务失败：{error}"))?

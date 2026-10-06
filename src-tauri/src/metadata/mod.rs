@@ -1,6 +1,7 @@
 pub(crate) mod files;
 pub(crate) mod model;
 pub(crate) mod releases;
+pub(crate) mod save;
 #[cfg(test)]
 mod tests;
 
@@ -103,7 +104,7 @@ pub(crate) async fn save_track_metadata(
         let results = track_ids
             .into_iter()
             .map(|id| {
-                let result = save_track_with_lyrics_action(&database, id, &changes, lyrics_action);
+                let result = save::save_track(&database, id, &changes, lyrics_action, None);
                 if let Err(error) = on_progress.send(result.clone()) {
                     eprintln!("Could not report metadata progress: {error}");
                 }
@@ -114,79 +115,4 @@ pub(crate) async fn save_track_metadata(
     })
     .await
     .map_err(|error| format!("保存标签任务失败：{error}"))?
-}
-
-pub(crate) fn save_track(
-    database: &Database,
-    track_id: i64,
-    changes: &[MetadataChange],
-) -> MetadataSaveResult {
-    save_track_with_lyrics_action(database, track_id, changes, LyricsMarkAction::Keep)
-}
-
-pub(crate) fn save_track_with_lyrics_action(
-    database: &Database,
-    track_id: i64,
-    changes: &[MetadataChange],
-    action: LyricsMarkAction,
-) -> MetadataSaveResult {
-    let mut result = MetadataSaveResult {
-        track_id,
-        path: String::new(),
-        file_written: false,
-        database_updated: false,
-        error: None,
-    };
-    let track = match database.get_track(track_id) {
-        Ok(Some(track)) => track,
-        Ok(None) => {
-            result.error = Some(format!("曲目 {track_id} 已不在数据库中"));
-            return result;
-        }
-        Err(error) => {
-            result.error = Some(error);
-            return result;
-        }
-    };
-    result.path = track.path().to_owned();
-    let mut effective_changes = changes.to_vec();
-    if action == LyricsMarkAction::Mark {
-        effective_changes.retain(|change| change.field != MetadataField::Lyrics);
-        let snapshot = match database.get_lyrics(track_id) {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                result.error = Some(error);
-                return result;
-            }
-        };
-        if snapshot.text.is_some() {
-            effective_changes.push(MetadataChange {
-                field: MetadataField::Lyrics,
-                value: None,
-            });
-        }
-    }
-    if !effective_changes.is_empty() {
-        if let Err(error) = files::write_file(Path::new(track.path()), &effective_changes) {
-            result.error = Some(error);
-            return result;
-        }
-        result.file_written = true;
-    }
-    let update = if action == LyricsMarkAction::Keep {
-        database.update_track_metadata(track_id, &effective_changes)
-    } else {
-        database.update_metadata_cover_and_lyrics(track_id, &effective_changes, None, action)
-    };
-    match update {
-        Ok(()) => result.database_updated = true,
-        Err(error) => {
-            result.error = Some(if result.file_written {
-                format!("文件已写入，但数据库同步失败。请再次保存或重新扫描：{error}")
-            } else {
-                format!("数据库更新失败：{error}")
-            })
-        }
-    }
-    result
 }

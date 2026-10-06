@@ -1,7 +1,7 @@
 use super::{super::files::run_import, support::TestFiles};
 use crate::{
     database::Database,
-    metadata::{model::LyricsMarkAction, save_track_with_lyrics_action},
+    metadata::{model::LyricsMarkAction, save::save_track},
 };
 use lofty::{
     config::WriteOptions,
@@ -16,9 +16,7 @@ fn scan_caches_lyrics_preserves_empty_marks_and_clears_marks_when_lyrics_appear(
     let database = Database::open(":memory:").unwrap();
     assert_eq!(run_import(&database, std::slice::from_ref(&path)).added, 1);
     assert!(database.get_lyrics(1).unwrap().text.is_none());
-    assert!(
-        save_track_with_lyrics_action(&database, 1, &[], LyricsMarkAction::Mark).database_updated
-    );
+    assert!(save_track(&database, 1, &[], LyricsMarkAction::Mark, None).database_updated);
     assert_eq!(
         run_import(&database, std::slice::from_ref(&path)).updated,
         1

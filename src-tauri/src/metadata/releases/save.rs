@@ -1,14 +1,16 @@
 use super::CoverData;
 use crate::{
-    database::{write::WriteState, Database, EmbeddedArtwork},
+    database::{write::WriteState, Database},
     metadata::{
         files,
-        model::{normalize_changes, validate_track_ids, MetadataChange, MetadataField},
+        model::{
+            normalize_changes, validate_track_ids, LyricsMarkAction, MetadataChange, MetadataField,
+        },
+        save::{save_track, CoverUpdate},
         MetadataSaveResult,
     },
 };
 use serde::Deserialize;
-use std::path::Path;
 use tauri::{ipc::Channel, Manager, State};
 
 #[derive(Deserialize)]
@@ -55,18 +57,10 @@ pub(crate) async fn save_album_tags(
     write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
     validate_patches(&mut patches, cover.as_ref())?;
-    let picture = cover
+    let cover = cover
         .as_ref()
-        .map(|cover| files::cover_picture(&cover.data))
+        .map(|cover| files::cover_picture(&cover.data).map(CoverUpdate::new))
         .transpose()?;
-    // Derive MIME from bytes rather than trusting the frontend.
-    let artwork = picture.as_ref().map(|picture| EmbeddedArtwork {
-        mime_type: picture
-            .mime_type()
-            .map(ToString::to_string)
-            .unwrap_or_default(),
-        image: picture.data().to_vec(),
-    });
     let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
@@ -74,7 +68,17 @@ pub(crate) async fn save_album_tags(
         let results = patches
             .iter()
             .map(|patch| {
-                let result = save_patch(&database, patch, picture.as_ref(), artwork.as_ref());
+                let result = save_track(
+                    &database,
+                    patch.track_id,
+                    &patch.changes,
+                    LyricsMarkAction::Keep,
+                    if patch.write_cover {
+                        cover.as_ref()
+                    } else {
+                        None
+                    },
+                );
                 if let Err(error) = on_progress.send(result.clone()) {
                     eprintln!("Could not report album metadata progress: {error}");
                 }
@@ -85,43 +89,6 @@ pub(crate) async fn save_album_tags(
     })
     .await
     .map_err(|error| format!("保存标签任务失败：{error}"))?
-}
-fn save_patch(
-    database: &Database,
-    patch: &TrackPatch,
-    picture: Option<&lofty::picture::Picture>,
-    artwork: Option<&EmbeddedArtwork>,
-) -> MetadataSaveResult {
-    let mut result = MetadataSaveResult {
-        track_id: patch.track_id,
-        path: String::new(),
-        file_written: false,
-        database_updated: false,
-        error: None,
-    };
-    let outcome = (|| {
-        let track = database
-            .get_track(patch.track_id)?
-            .ok_or_else(|| "曲目已不在数据库中".to_owned())?;
-        result.path = track.path().to_owned();
-        files::write_file_with_cover(
-            Path::new(track.path()),
-            &patch.changes,
-            if patch.write_cover { picture } else { None },
-        )?;
-        result.file_written = true;
-        database
-            .update_metadata_and_cover(
-                patch.track_id,
-                &patch.changes,
-                if patch.write_cover { artwork } else { None },
-            )
-            .map_err(|error| format!("文件已写入，但数据库同步失败，请重试或重新扫描：{error}"))?;
-        result.database_updated = true;
-        Ok::<_, String>(())
-    })();
-    result.error = outcome.err();
-    result
 }
 #[cfg(test)]
 #[path = "tests/save.rs"]

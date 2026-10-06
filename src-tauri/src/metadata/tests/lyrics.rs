@@ -5,7 +5,7 @@ use crate::{
     metadata::{
         files,
         model::{LyricsMarkAction, MetadataField},
-        save_track, save_track_with_lyrics_action,
+        save::save_track,
     },
 };
 use lofty::{
@@ -50,7 +50,7 @@ fn marking_deletes_file_lyrics_and_unmarking_does_not_restore_them() {
     let fixture = Fixture::new();
     let path = mp3(&fixture, Some("[00:01.00]Old lyrics"));
     let database = library(&fixture, &path, Some("[00:01.00]Old lyrics"));
-    let result = save_track_with_lyrics_action(&database, 1, &[], LyricsMarkAction::Mark);
+    let result = save_track(&database, 1, &[], LyricsMarkAction::Mark, None);
     assert!(
         result.file_written && result.database_updated,
         "{:?}",
@@ -65,7 +65,7 @@ fn marking_deletes_file_lyrics_and_unmarking_does_not_restore_them() {
         Some("Preserved title")
     );
     let bytes = fs::read(&path).unwrap();
-    let result = save_track_with_lyrics_action(&database, 1, &[], LyricsMarkAction::Unmark);
+    let result = save_track(&database, 1, &[], LyricsMarkAction::Unmark, None);
     assert!(!result.file_written && result.database_updated);
     assert!(!database.get_lyrics(1).unwrap().no_lyrics);
     assert_eq!(fs::read(&path).unwrap(), bytes);
@@ -77,7 +77,7 @@ fn file_write_failure_leaves_both_lyrics_and_mark_unchanged() {
     let path = mp3(&fixture, Some("Old lyrics"));
     let database = library(&fixture, &path, Some("Old lyrics"));
     fs::remove_file(&path).unwrap();
-    let result = save_track_with_lyrics_action(&database, 1, &[], LyricsMarkAction::Mark);
+    let result = save_track(&database, 1, &[], LyricsMarkAction::Mark, None);
     assert!(!result.file_written && !result.database_updated);
     let snapshot = database.get_lyrics(1).unwrap();
     assert_eq!(snapshot.text.as_deref(), Some("Old lyrics"));
@@ -93,10 +93,37 @@ fn a_missing_file_does_not_block_database_only_mark_operations() {
         (LyricsMarkAction::Mark, true),
         (LyricsMarkAction::Unmark, false),
     ] {
-        let result = save_track_with_lyrics_action(&database, 1, &[], action);
+        let result = save_track(&database, 1, &[], action, None);
         assert!(!result.file_written && result.database_updated);
         assert_eq!(database.get_lyrics(1).unwrap().no_lyrics, expected);
     }
+}
+
+#[test]
+fn database_only_mark_failure_preserves_snapshot_and_allows_retry() {
+    let fixture = Fixture::new();
+    let path = fixture.0.join("missing.mp3");
+    let database = library(&fixture, &path, None);
+    let connection = rusqlite::Connection::open(fixture.0.join("library.sqlite3")).unwrap();
+    for (action, expected) in [
+        (LyricsMarkAction::Mark, true),
+        (LyricsMarkAction::Unmark, false),
+    ] {
+        let previous = database.get_lyrics(1).unwrap().no_lyrics;
+        connection.execute_batch("CREATE TRIGGER fail_lyrics BEFORE UPDATE ON track_lyrics BEGIN SELECT RAISE(FAIL, 'mark unavailable'); END;").unwrap();
+        let failed = save_track(&database, 1, &[], action, None);
+        assert!(!failed.file_written && !failed.database_updated);
+        let error = failed.error.unwrap();
+        assert!(error.starts_with("数据库更新失败：") && error.contains("mark unavailable"));
+        assert_eq!(database.get_lyrics(1).unwrap().no_lyrics, previous);
+        connection
+            .execute_batch("DROP TRIGGER fail_lyrics")
+            .unwrap();
+        let retried = save_track(&database, 1, &[], action, None);
+        assert!(!retried.file_written && retried.database_updated);
+        assert_eq!(database.get_lyrics(1).unwrap().no_lyrics, expected);
+    }
+    assert!(!path.exists());
 }
 
 #[test]
@@ -104,11 +131,15 @@ fn saving_nonempty_lyrics_clears_the_mark_and_caches_original_text() {
     let fixture = Fixture::new();
     let path = mp3(&fixture, None);
     let database = library(&fixture, &path, None);
-    assert!(
-        save_track_with_lyrics_action(&database, 1, &[], LyricsMarkAction::Mark).database_updated
-    );
+    assert!(save_track(&database, 1, &[], LyricsMarkAction::Mark, None).database_updated);
     let text = "  [00:01.00]New lyrics\n\n";
-    let result = save_track(&database, 1, &[change(MetadataField::Lyrics, Some(text))]);
+    let result = save_track(
+        &database,
+        1,
+        &[change(MetadataField::Lyrics, Some(text))],
+        LyricsMarkAction::Keep,
+        None,
+    );
     assert!(
         result.file_written && result.database_updated,
         "{:?}",
@@ -126,7 +157,7 @@ fn database_failure_after_clearing_file_is_reported_and_retry_repairs_snapshot()
     let database = library(&fixture, &path, Some("Old lyrics"));
     let connection = rusqlite::Connection::open(fixture.0.join("library.sqlite3")).unwrap();
     connection.execute_batch("CREATE TRIGGER fail_lyrics BEFORE UPDATE ON track_lyrics BEGIN SELECT RAISE(FAIL, 'unavailable'); END;").unwrap();
-    let result = save_track_with_lyrics_action(&database, 1, &[], LyricsMarkAction::Mark);
+    let result = save_track(&database, 1, &[], LyricsMarkAction::Mark, None);
     assert!(result.file_written && !result.database_updated);
     assert!(result.error.unwrap().contains("数据库同步失败"));
     let snapshot = database.get_lyrics(1).unwrap();
@@ -136,9 +167,7 @@ fn database_failure_after_clearing_file_is_reported_and_retry_repairs_snapshot()
     connection
         .execute_batch("DROP TRIGGER fail_lyrics;")
         .unwrap();
-    assert!(
-        save_track_with_lyrics_action(&database, 1, &[], LyricsMarkAction::Mark).database_updated
-    );
+    assert!(save_track(&database, 1, &[], LyricsMarkAction::Mark, None).database_updated);
     assert!(database.get_lyrics(1).unwrap().no_lyrics);
 }
 

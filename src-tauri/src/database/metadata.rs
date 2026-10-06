@@ -3,24 +3,8 @@ use crate::metadata::model::{LyricsMarkAction, MetadataChange, MetadataField};
 use rusqlite::params;
 
 impl Database {
-    /// Do not touch technical properties, artwork, IDs, skipped state or playlist references.
-    pub(crate) fn update_track_metadata(
-        &self,
-        track_id: i64,
-        changes: &[MetadataChange],
-    ) -> Result<(), String> {
-        self.update_metadata_and_cover(track_id, changes, None)
-    }
-
-    pub(crate) fn update_metadata_and_cover(
-        &self,
-        track_id: i64,
-        changes: &[MetadataChange],
-        cover: Option<&EmbeddedArtwork>,
-    ) -> Result<(), String> {
-        self.update_metadata_cover_and_lyrics(track_id, changes, cover, LyricsMarkAction::Keep)
-    }
-
+    /// Update requested metadata, cover and lyrics in one transaction.
+    /// Preserve technical properties, IDs, skipped state and playlist references.
     pub(crate) fn update_metadata_cover_and_lyrics(
         &self,
         track_id: i64,
