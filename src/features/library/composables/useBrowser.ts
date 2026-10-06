@@ -30,7 +30,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   } = useLibrarySelection();
 
   let isMounted = false;
-  let isSubscribedToLibraryChanges = false;
+  let libraryNeedsRefresh = true;
   let artistsRequestGeneration = 0;
   let albumsRequestGeneration = 0;
   let tracksRequestGeneration = 0;
@@ -54,6 +54,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   async function refreshLibrary() {
     if (!isMounted || !active.value) return;
 
+    libraryNeedsRefresh = false;
     const generation = ++artistsRequestGeneration;
     ++albumsRequestGeneration;
     ++tracksRequestGeneration;
@@ -79,6 +80,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
       }
     } catch (error) {
       if (!isMounted || !active.value || generation !== artistsRequestGeneration) return;
+      libraryNeedsRefresh = true;
       artistsError.value = `读取专辑演出者失败：${errorMessage(error)}`;
       isLoadingTracks.value = false;
     } finally {
@@ -121,6 +123,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
       }
     } catch (error) {
       if (!isMounted || !active.value || generation !== albumsRequestGeneration) return;
+      libraryNeedsRefresh = true;
       albumsError.value = `读取专辑失败：${errorMessage(error)}`;
       isLoadingTracks.value = false;
     } finally {
@@ -159,6 +162,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
       ) {
         return;
       }
+      libraryNeedsRefresh = true;
       tracksError.value = `读取曲目失败：${errorMessage(error)}`;
     } finally {
       if (isMounted && active.value && generation === tracksRequestGeneration) {
@@ -184,32 +188,28 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   }
 
   function onLibraryChanged() {
+    libraryNeedsRefresh = true;
     void refreshLibrary();
   }
 
   function onSettingsChanged() {
+    if (!active.value) {
+      libraryNeedsRefresh = true;
+      return;
+    }
     const group = selectedGroup.value;
     if (group) void loadAlbums(group);
   }
 
   function activate() {
-    if (!isMounted || !active.value) return;
-
-    if (!isSubscribedToLibraryChanges) {
-      globalThis.window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
-      globalThis.window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
-      isSubscribedToLibraryChanges = true;
-    }
+    if (!isMounted || !active.value || !libraryNeedsRefresh) return;
     void refreshLibrary();
   }
 
   function deactivate() {
-    if (isSubscribedToLibraryChanges) {
-      globalThis.window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
-      globalThis.window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
-      isSubscribedToLibraryChanges = false;
+    if (isLoadingArtists.value || isLoadingAlbums.value || isLoadingTracks.value) {
+      libraryNeedsRefresh = true;
     }
-
     ++artistsRequestGeneration;
     ++albumsRequestGeneration;
     ++tracksRequestGeneration;
@@ -230,11 +230,15 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
 
   onMounted(() => {
     isMounted = true;
+    globalThis.window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    globalThis.window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
     if (active.value) activate();
   });
 
   onUnmounted(() => {
     isMounted = false;
+    globalThis.window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    globalThis.window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
     deactivate();
   });
 

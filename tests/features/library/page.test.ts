@@ -43,6 +43,7 @@ let queueNextBatchCalls: number[][] = [];
 let queueEndBatchCalls: number[][] = [];
 let albumTrackRequests: Record<string, unknown>[] = [];
 let albumTracksError: Error | null = null;
+let albumTracksResponse: Promise<typeof availableTracks> | null = null;
 let databaseDeleteFailures = new Map<number, Error>();
 let databaseDeleteCalls: number[] = [];
 
@@ -82,7 +83,7 @@ dependencies["@tauri-apps/api/core"] = {
     if (command === "list_album_tracks") {
       albumTrackRequests.push(args ?? {});
       if (albumTracksError) throw albumTracksError;
-      return availableTracks;
+      return albumTracksResponse ?? availableTracks;
     }
     if (command === "remove_track_from_library") {
       const trackId = args?.trackId as number;
@@ -226,6 +227,7 @@ beforeEach(() => {
   queueEndBatchCalls = [];
   albumTrackRequests = [];
   albumTracksError = null;
+  albumTracksResponse = null;
   databaseDeleteFailures = new Map();
   databaseDeleteCalls = [];
   databaseDeleteError = null;
@@ -252,6 +254,90 @@ afterEach(() => {
   } else {
     Reflect.deleteProperty(globalThis, "window");
   }
+});
+
+describe("library page switching", () => {
+  it("loads once on first activation when initially hidden", async () => {
+    const active = ref(false);
+    const page = mountLibraryPage(active);
+    await settleRequests();
+    expect(invokeCalls).toEqual([]);
+    active.value = true;
+    await settleRequests();
+    expect(page.artists.value).toEqual([artist]);
+    expect(invokeCalls).toEqual(["list_album_artists"]);
+    active.value = false;
+    active.value = true;
+    await settleRequests();
+    expect(invokeCalls).toEqual(["list_album_artists"]);
+  });
+
+  it("retries interrupted loading and ignores results from before deactivation", async () => {
+    const active = ref(true);
+    const page = mountLibraryPage(active);
+    await loadTrack(page);
+    let resolveOld!: (tracks: typeof availableTracks) => void;
+    albumTracksResponse = new Promise((resolve) => {
+      resolveOld = resolve;
+    });
+    page.selectAlbum(album);
+    expect(page.isLoadingTracks.value).toBe(true);
+    active.value = false;
+    albumTracksResponse = null;
+    availableTracks = [secondTrack];
+    active.value = true;
+    await settleRequests();
+    expect(page.tracks.value).toEqual([secondTrack]);
+    resolveOld([track]);
+    await settleRequests();
+    expect(page.tracks.value).toEqual([secondTrack]);
+    expect(page.isLoadingTracks.value).toBe(false);
+  });
+
+  it("keeps loaded albums and tracks without queries or loading states on reactivation", async () => {
+    const active = ref(true);
+    const page = mountLibraryPage(active);
+    await loadTrack(page);
+    const artists = page.artists.value;
+    const albums = page.albums.value;
+    const tracks = page.tracks.value;
+    invokeCalls = [];
+
+    for (let index = 0; index < 3; index += 1) {
+      active.value = false;
+      active.value = true;
+      expect(page.isLoadingArtists.value).toBe(false);
+      expect(page.isLoadingAlbums.value).toBe(false);
+      expect(page.isLoadingTracks.value).toBe(false);
+      await settleRequests();
+      expect(page.artists.value).toBe(artists);
+      expect(page.albums.value).toBe(albums);
+      expect(page.tracks.value).toBe(tracks);
+    }
+    expect(invokeCalls).toEqual([]);
+  });
+
+  it("defers and coalesces library changes while hidden, then refreshes once", async () => {
+    const active = ref(true);
+    const page = mountLibraryPage(active);
+    await loadTrack(page);
+    active.value = false;
+    invokeCalls = [];
+    availableTracks = [track, secondTrack];
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    globalThis.window.dispatchEvent(new Event("library-changed"));
+    await settleRequests();
+    expect(invokeCalls).toEqual([]);
+    active.value = true;
+    await settleRequests();
+    expect(page.tracks.value).toEqual(availableTracks);
+    expect(invokeCalls).toEqual(["list_album_artists", "list_albums", "list_album_tracks"]);
+    invokeCalls = [];
+    active.value = false;
+    active.value = true;
+    await settleRequests();
+    expect(invokeCalls).toEqual([]);
+  });
 });
 
 describe("library album sorting updates", () => {
