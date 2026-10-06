@@ -1,6 +1,8 @@
 import type { Theme } from "@/features/settings/theme";
 import type { LyricsProvider } from "@/features/lyrics/types";
 
+export type NeteaseLyricsMode = "original" | "translated" | "bilingual";
+
 export type Settings = {
   theme: Theme;
   albumCoverBackground: boolean;
@@ -8,4 +10,5 @@ export type Settings = {
   albumSortBy: "name" | "year";
   albumSortOrder: "ascending" | "descending";
   lyricsProviders: LyricsProvider[];
+  neteaseLyricsMode: NeteaseLyricsMode;
 };

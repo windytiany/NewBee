@@ -45,6 +45,8 @@ pub struct Settings {
     pub album_sort_order: AlbumSortOrder,
     #[serde(default = "crate::lyrics::default_providers")]
     pub lyrics_providers: Vec<crate::lyrics::LyricsProvider>,
+    #[serde(default)]
+    pub netease_lyrics_mode: crate::lyrics::NeteaseLyricsMode,
 }
 
 impl Default for Settings {
@@ -56,6 +58,7 @@ impl Default for Settings {
             album_sort_by: AlbumSortBy::default(),
             album_sort_order: AlbumSortOrder::default(),
             lyrics_providers: crate::lyrics::default_providers(),
+            netease_lyrics_mode: crate::lyrics::NeteaseLyricsMode::default(),
         }
     }
 }

@@ -99,6 +99,27 @@ fn lyrics_providers_default_enabled_and_preserve_disabled_settings() {
 }
 
 #[test]
+fn netease_lyrics_mode_defaults_to_original_and_round_trips() {
+    use crate::lyrics::NeteaseLyricsMode;
+    let defaults: Settings = serde_json::from_str("{}").unwrap();
+    assert_eq!(defaults.netease_lyrics_mode, NeteaseLyricsMode::Original);
+    for (netease_lyrics_mode, name) in [
+        (NeteaseLyricsMode::Original, "original"),
+        (NeteaseLyricsMode::Translated, "translated"),
+        (NeteaseLyricsMode::Bilingual, "bilingual"),
+    ] {
+        let settings = Settings {
+            netease_lyrics_mode,
+            ..Settings::default()
+        };
+        let data = serde_json::to_value(&settings).unwrap();
+        assert_eq!(data["neteaseLyricsMode"], name);
+        assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+    }
+    assert!(serde_json::from_str::<Settings>(r#"{"neteaseLyricsMode":"invalid"}"#).is_err());
+}
+
+#[test]
 fn rejects_unknown_close_behavior() {
     assert!(serde_json::from_str::<Settings>(r#"{"closeBehavior":"invalid"}"#).is_err());
 }

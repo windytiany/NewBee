@@ -534,7 +534,8 @@ pub(crate) async fn run_lyrics_download(
     on_progress: Channel<BatchEvent>,
     app: tauri::AppHandle,
 ) -> Result<BatchSummary, String> {
-    let providers = download::providers(&app.state::<SettingsState>())?;
+    let provider_set = download::provider_set(&app.state::<SettingsState>())?;
+    let providers = provider_set.enabled().to_vec();
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<LyricsBatchState>().run(
             &app.state::<Database>(),
@@ -549,7 +550,7 @@ pub(crate) async fn run_lyrics_download(
                     .send(event)
                     .map_err(|error| format!("歌词任务通信失败：{error}"))
             },
-            download::automatic,
+            |track, _, cancelled| download::automatic(track, &provider_set, cancelled),
         )
     })
     .await

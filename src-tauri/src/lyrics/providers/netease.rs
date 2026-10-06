@@ -1,11 +1,20 @@
 use super::{LyricsCandidate, LyricsContent, LyricsSearchResults};
 use reqwest::blocking::{Client, Response};
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     io::Read,
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum NeteaseLyricsMode {
+    #[default]
+    Original,
+    Translated,
+    Bilingual,
+}
 
 const MAX_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
 const PAGE_SIZE: u32 = 30;
@@ -146,13 +155,15 @@ struct LyricResponse {
     #[serde(default, rename = "pureMusic")]
     pure_music: bool,
     lrc: Option<LyricText>,
+    #[serde(default)]
+    tlyric: Option<LyricText>,
 }
 #[derive(Deserialize)]
 struct LyricText {
     lyric: Option<String>,
 }
 
-pub(super) fn lyrics(id: i64) -> Result<LyricsContent, String> {
+pub(super) fn lyrics(id: i64, mode: NeteaseLyricsMode) -> Result<LyricsContent, String> {
     let response: LyricResponse = request(|client| {
         client
             .get("https://music.163.com/api/song/lyric")
@@ -160,30 +171,104 @@ pub(super) fn lyrics(id: i64) -> Result<LyricsContent, String> {
             .query(&[
                 ("id", id.to_string()),
                 ("lv", "-1".to_owned()),
-                ("kv", "-1".to_owned()),
+                ("kv", "1".to_owned()),
                 ("tv", "-1".to_owned()),
             ])
             .send()
     })?;
-    decode_lyrics(response)
+    decode_lyrics(response, mode)
 }
 
-fn decode_lyrics(response: LyricResponse) -> Result<LyricsContent, String> {
+fn decode_lyrics(
+    response: LyricResponse,
+    mode: NeteaseLyricsMode,
+) -> Result<LyricsContent, String> {
     if response.code != 200 {
         return Err(format!("网易云歌词请求失败（{}）", response.code));
     }
     if response.nolyric || response.pure_music {
         return Ok(LyricsContent::Instrumental);
     }
-    match response.lrc.and_then(|lrc| lrc.lyric) {
-        Some(text) if !text.trim().is_empty() => {
-            if text.contains('\0') {
-                return Err("网易云歌词包含无效字符".to_owned());
+    let original = response
+        .lrc
+        .and_then(|lyric| lyric.lyric)
+        .filter(|text| !text.trim().is_empty());
+    let translated = response
+        .tlyric
+        .and_then(|lyric| lyric.lyric)
+        .filter(|text| !text.trim().is_empty());
+    let text = match mode {
+        NeteaseLyricsMode::Original => original,
+        NeteaseLyricsMode::Translated => translated.or(original),
+        NeteaseLyricsMode::Bilingual => match (original, translated) {
+            (Some(original), Some(translated)) => {
+                if original.contains('\0') || translated.contains('\0') {
+                    return Err("网易云歌词包含无效字符".to_owned());
+                }
+                Some(bilingual_lyrics(&original, &translated))
             }
-            Ok(LyricsContent::Available { text })
-        }
-        _ => Ok(LyricsContent::Missing),
+            (original, _) => original,
+        },
+    };
+    match text {
+        Some(text) if text.contains('\0') => Err("网易云歌词包含无效字符".to_owned()),
+        Some(text) => Ok(LyricsContent::Available { text }),
+        None => Ok(LyricsContent::Missing),
     }
+}
+
+fn bilingual_lyrics(original: &str, translated: &str) -> String {
+    use crate::lyrics::{parse_embedded_lyrics, TrackLyrics};
+
+    if let TrackLyrics::Synced { lines } = parse_embedded_lyrics(original) {
+        let mut translations = std::collections::BTreeMap::new();
+        if let TrackLyrics::Synced { lines } = parse_embedded_lyrics(translated) {
+            for line in lines {
+                if !line.text.trim().is_empty() {
+                    translations.entry(line.start_ms).or_insert(line.text);
+                }
+            }
+        }
+        return lines
+            .into_iter()
+            .map(|line| {
+                let text = match translations.get(&line.start_ms) {
+                    Some(translation) => format!("{} / {}", line.text, translation.trim()),
+                    None => line.text,
+                };
+                format!(
+                    "[{:02}:{:02}.{:03}]{text}",
+                    line.start_ms / 60_000,
+                    line.start_ms / 1_000 % 60,
+                    line.start_ms % 1_000,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    let mut translations = translated.lines();
+    original
+        .lines()
+        .map(|line| {
+            let translation = translations.next().unwrap_or_default();
+            let text = match parse_embedded_lyrics(translation) {
+                TrackLyrics::Synced { lines } => lines
+                    .into_iter()
+                    .next()
+                    .map(|line| line.text)
+                    .unwrap_or_default(),
+                TrackLyrics::Plain { text } => text,
+                TrackLyrics::None | TrackLyrics::Instrumental => String::new(),
+            };
+            if text.trim().is_empty() {
+                line.to_owned()
+            } else {
+                format!("{line} / {}", text.trim())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]

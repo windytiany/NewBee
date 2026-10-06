@@ -32,12 +32,149 @@ fn distinguishes_missing_instrumental_and_failure() {
         ),
     ] {
         assert_eq!(
-            decode_lyrics(serde_json::from_str(json).unwrap()).unwrap(),
+            decode_lyrics(
+                serde_json::from_str(json).unwrap(),
+                NeteaseLyricsMode::Original
+            )
+            .unwrap(),
             expected
         );
     }
-    assert!(decode_lyrics(serde_json::from_str(r#"{"code":460}"#).unwrap()).is_err());
+    assert!(decode_lyrics(
+        serde_json::from_str(r#"{"code":460}"#).unwrap(),
+        NeteaseLyricsMode::Original
+    )
+    .is_err());
     assert!(decode_search(serde_json::from_str(r#"{"code":460}"#).unwrap(), 0).is_err());
+}
+#[test]
+fn selects_original_translated_and_bilingual_lyrics() {
+    let response = || {
+        serde_json::from_str::<LyricResponse>(
+            r#"{"code":200,"lrc":{"lyric":"[00:01]hello\n[00:02]world"},"tlyric":{"lyric":"[00:01]你好\n[00:02]世界"}}"#,
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        decode_lyrics(response(), NeteaseLyricsMode::Original).unwrap(),
+        LyricsContent::Available {
+            text: "[00:01]hello\n[00:02]world".into(),
+        }
+    );
+    assert_eq!(
+        decode_lyrics(response(), NeteaseLyricsMode::Translated).unwrap(),
+        LyricsContent::Available {
+            text: "[00:01]你好\n[00:02]世界".into(),
+        }
+    );
+    assert_eq!(
+        decode_lyrics(response(), NeteaseLyricsMode::Bilingual).unwrap(),
+        LyricsContent::Available {
+            text: "[00:01.000]hello / 你好\n[00:02.000]world / 世界".into(),
+        }
+    );
+}
+#[test]
+fn missing_translation_falls_back_to_original() {
+    let original = || {
+        serde_json::from_str::<LyricResponse>(r#"{"code":200,"lrc":{"lyric":"[00:01]hello"}}"#)
+            .unwrap()
+    };
+    assert_eq!(
+        decode_lyrics(original(), NeteaseLyricsMode::Translated).unwrap(),
+        LyricsContent::Available {
+            text: "[00:01]hello".into(),
+        }
+    );
+    assert_eq!(
+        decode_lyrics(original(), NeteaseLyricsMode::Bilingual).unwrap(),
+        LyricsContent::Available {
+            text: "[00:01]hello".into(),
+        }
+    );
+    for mode in [NeteaseLyricsMode::Translated, NeteaseLyricsMode::Bilingual] {
+        let response =
+            serde_json::from_str(r#"{"code":200,"lrc":{"lyric":"hello"},"tlyric":{"lyric":"  "}}"#)
+                .unwrap();
+        assert_eq!(
+            decode_lyrics(response, mode).unwrap(),
+            LyricsContent::Available {
+                text: "hello".into(),
+            }
+        );
+    }
+}
+#[test]
+fn bilingual_matches_timestamps_not_line_numbers() {
+    let response = serde_json::from_str(
+        r#"{"code":200,"lrc":{"lyric":"[00:00.000] 作词 : Adele Adkins\n[00:01.000] 作曲 : Adele Adkins/Greg Kurstin\n[00:06.220]Hello, it's me\n[00:11.320]I was wondering"},"tlyric":{"lyric":"[by:歌词上传者]\n[00:06.22]你好 是我\n[00:11.32]我犹豫着\n[00:15.000]多余翻译"}}"#,
+    ).unwrap();
+    assert_eq!(
+        decode_lyrics(response, NeteaseLyricsMode::Bilingual).unwrap(),
+        LyricsContent::Available {
+            text: "[00:00.000] 作词 : Adele Adkins\n[00:01.000] 作曲 : Adele Adkins/Greg Kurstin\n[00:06.220]Hello, it's me / 你好 是我\n[00:11.320]I was wondering / 我犹豫着".into(),
+        }
+    );
+}
+#[test]
+fn bilingual_expands_repeated_timestamps_and_requires_exact_matches() {
+    let response = serde_json::from_str(
+        r#"{"code":200,"lrc":{"lyric":"[00:01.00][00:03.000]hello\r\n[00:02]world"},"tlyric":{"lyric":"[00:03]你好\n[00:02.001]世界\n[00:04]多余翻译"}}"#,
+    ).unwrap();
+    assert_eq!(
+        decode_lyrics(response, NeteaseLyricsMode::Bilingual).unwrap(),
+        LyricsContent::Available {
+            text: "[00:01.000]hello\n[00:02.000]world\n[00:03.000]hello / 你好".into(),
+        }
+    );
+}
+#[test]
+fn bilingual_matches_effective_timestamps_with_offsets() {
+    let response = serde_json::from_str(
+        r#"{"code":200,"lrc":{"lyric":"[offset:100]\n[00:01]hello"},"tlyric":{"lyric":"[00:01.100]你好"}}"#,
+    ).unwrap();
+    assert_eq!(
+        decode_lyrics(response, NeteaseLyricsMode::Bilingual).unwrap(),
+        LyricsContent::Available {
+            text: "[00:01.100]hello / 你好".into(),
+        }
+    );
+}
+#[test]
+fn bilingual_plain_text_and_partial_translation() {
+    for (original, translated, expected) in [
+        ("hello\nworld", "你好", "hello / 你好\nworld"),
+        (
+            "[00:01]hello\n[00:02]world",
+            "[00:01]\n[00:02]世界",
+            "[00:01.000]hello\n[00:02.000]world / 世界",
+        ),
+    ] {
+        let response = serde_json::from_value(serde_json::json!({
+            "code": 200, "lrc": {"lyric": original}, "tlyric": {"lyric": translated},
+        }))
+        .unwrap();
+        assert_eq!(
+            decode_lyrics(response, NeteaseLyricsMode::Bilingual).unwrap(),
+            LyricsContent::Available {
+                text: expected.into(),
+            }
+        );
+    }
+}
+#[test]
+fn rejects_invalid_characters_in_selected_lyrics() {
+    for mode in [
+        NeteaseLyricsMode::Original,
+        NeteaseLyricsMode::Translated,
+        NeteaseLyricsMode::Bilingual,
+    ] {
+        let response = serde_json::from_value(serde_json::json!({
+            "code": 200, "lrc": {"lyric": "hello\u{0000}"}, "tlyric": {"lyric": "你好\u{0000}"},
+        }))
+        .unwrap();
+        assert!(decode_lyrics(response, mode).is_err());
+    }
 }
 #[test]
 #[ignore = "requires live access to NetEase"]
@@ -48,7 +185,13 @@ fn live_search_and_lyrics() {
         .iter()
         .any(|candidate| candidate.id == 66842));
     assert!(matches!(
-        lyrics(66842).unwrap(),
+        lyrics(66842, NeteaseLyricsMode::Original).unwrap(),
         LyricsContent::Available { .. }
     ));
+    let LyricsContent::Available { text } = lyrics(35847388, NeteaseLyricsMode::Bilingual).unwrap()
+    else {
+        panic!("expected bilingual lyrics for Adele - Hello");
+    };
+    assert!(text.contains("[00:06.220]Hello, it's me / 你好 是我"));
+    assert!(!text.contains("作曲 : Adele Adkins/Greg Kurstin / 你好 是我"));
 }

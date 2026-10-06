@@ -22,6 +22,7 @@ type DialogBindings = {
   changeLogging: () => Promise<void>;
   openLogs: () => Promise<void>;
   neteaseEnabled: Vue.Ref<boolean>;
+  neteaseLyricsMode: Vue.Ref<Settings["neteaseLyricsMode"]>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   theme: Vue.Ref<Settings["theme"]>;
   albumCoverBackground: Vue.Ref<boolean>;
@@ -41,6 +42,7 @@ const defaults: Settings = {
   albumSortBy: "name",
   albumSortOrder: "ascending",
   lyricsProviders: ["netease"],
+  neteaseLyricsMode: "original",
 };
 
 const filename = "src/features/settings/components/SettingsDialog.vue";
@@ -239,6 +241,19 @@ describe("settings dialog", () => {
             findNode(panel, (node) => node.props.name === "album-cover-background")?.props.type,
           ).toBe("checkbox");
         }
+        if (category === "歌词") {
+          expect(getTextContent(panel)).toContain("网易云歌词内容");
+          const neteaseModeSelect = findNode(
+            panel,
+            (node) => node.props.name === "netease-lyrics-mode",
+          );
+          expect(neteaseModeSelect?.type).toBe("select");
+          expect(neteaseModeSelect?.children.map((node) => node.props.value)).toEqual([
+            "original",
+            "translated",
+            "bilingual",
+          ]);
+        }
       }
     } finally {
       app.unmount();
@@ -270,6 +285,7 @@ describe("settings dialog", () => {
       albumSortBy: "year",
       albumSortOrder: "descending",
       lyricsProviders: ["netease"],
+      neteaseLyricsMode: "translated",
     };
     const { bindings, element, events } = createDialog(async (command, args) => {
       calls.push([command, args]);
@@ -281,6 +297,7 @@ describe("settings dialog", () => {
     expect(bindings.albumCoverBackground.value).toBe(true);
     expect(bindings.albumSortBy.value).toBe("year");
     expect(bindings.albumSortOrder.value).toBe("descending");
+    expect(bindings.neteaseLyricsMode.value).toBe("translated");
     expect(element.open).toBe(true);
     expect(events).toEqual([]);
     bindings.theme.value = "spotify";
@@ -288,10 +305,11 @@ describe("settings dialog", () => {
     bindings.closeBehavior.value = "tray";
     bindings.albumSortBy.value = "name";
     bindings.albumSortOrder.value = "ascending";
+    bindings.neteaseLyricsMode.value = "bilingual";
     await bindings.save();
     expect(calls).toEqual([
       ["get_settings", undefined],
-      ["save_settings", { settings: defaults }],
+      ["save_settings", { settings: { ...defaults, neteaseLyricsMode: "bilingual" } }],
     ]);
     expect(events).toEqual([SETTINGS_CHANGED_EVENT]);
     expect(element.open).toBe(false);
@@ -309,6 +327,7 @@ describe("settings dialog", () => {
     bindings.albumSortOrder.value = "descending";
     bindings.theme.value = "catppuccin";
     bindings.albumCoverBackground.value = true;
+    bindings.neteaseLyricsMode.value = "translated";
     bindings.selectedCategory.value = "appearance";
     bindings.close();
     await bindings.show();
@@ -317,6 +336,7 @@ describe("settings dialog", () => {
     );
     expect<Settings["theme"]>(bindings.theme.value).toBe("spotify");
     expect(bindings.albumCoverBackground.value).toBe(false);
+    expect<Settings["neteaseLyricsMode"]>(bindings.neteaseLyricsMode.value).toBe("original");
     expect(appliedThemes).toEqual([]);
     expect<Settings["closeBehavior"]>(bindings.closeBehavior.value).toBe("tray");
     expect<Settings["albumSortBy"]>(bindings.albumSortBy.value).toBe("name");
@@ -340,6 +360,7 @@ describe("settings dialog", () => {
     bindings.selectedCategory.value = "library";
     bindings.albumSortBy.value = "year";
     bindings.albumSortOrder.value = "descending";
+    bindings.neteaseLyricsMode.value = "bilingual";
     bindings.selectedCategory.value = "general";
     expect(bindings.closeBehavior.value).toBe("exit");
     expect(bindings.theme.value).toBe("tokyoNight");
@@ -357,6 +378,7 @@ describe("settings dialog", () => {
           albumSortBy: "year",
           albumSortOrder: "descending",
           lyricsProviders: ["netease"],
+          neteaseLyricsMode: "bilingual",
         },
       },
     ]);
@@ -417,6 +439,7 @@ describe("settings dialog", () => {
       albumSortBy: "year",
       albumSortOrder: "descending",
       lyricsProviders: ["netease"],
+      neteaseLyricsMode: "translated",
     });
     await firstShow;
     expect(bindings.isLoading.value).toBe(true);

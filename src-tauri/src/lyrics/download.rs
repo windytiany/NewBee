@@ -10,12 +10,8 @@ use std::{
 };
 use tauri::{Manager, State};
 
-pub(super) fn providers(state: &SettingsState) -> Result<Vec<LyricsProvider>, String> {
-    let providers = state.get()?.lyrics_providers;
-    if providers.is_empty() {
-        return Err("请先在设置中启用歌词来源".to_owned());
-    }
-    Ok(providers)
+pub(super) fn provider_set(state: &SettingsState) -> Result<providers::LyricsProviderSet, String> {
+    providers::LyricsProviderSet::from_settings(state.get()?)
 }
 fn check_provider(provider: LyricsProvider, enabled: &[LyricsProvider]) -> Result<(), String> {
     if enabled.contains(&provider) {
@@ -32,7 +28,8 @@ fn search(
     let started = std::time::Instant::now();
     let result = providers::search(provider, query, offset);
     log::debug!(
-        "event=lyrics_search provider=netease elapsedMs={} success={}",
+        "event=lyrics_search provider={} elapsedMs={} success={}",
+        provider.identifier(),
         started.elapsed().as_millis(),
         result.is_ok()
     );
@@ -41,14 +38,19 @@ fn search(
     }
     result
 }
-fn lyrics(provider: LyricsProvider, id: i64) -> Result<LyricsContent, String> {
+fn lyrics(
+    provider_set: &providers::LyricsProviderSet,
+    provider: LyricsProvider,
+    id: i64,
+) -> Result<LyricsContent, String> {
     if id <= 0 {
         return Err("无效的歌词候选 ID".to_owned());
     }
     let started = std::time::Instant::now();
-    let result = providers::lyrics(provider, id);
+    let result = provider_set.lyrics(provider, id);
     log::debug!(
-        "event=lyrics_fetch provider=netease candidateId={id} elapsedMs={} success={}",
+        "event=lyrics_fetch provider={} candidateId={id} elapsedMs={} success={}",
+        provider.identifier(),
         started.elapsed().as_millis(),
         result.is_ok()
     );
@@ -65,7 +67,7 @@ pub(crate) async fn search_lyrics_candidates(
     offset: u32,
     settings: State<'_, SettingsState>,
 ) -> Result<LyricsSearchResults, String> {
-    let enabled = providers(&settings)?;
+    let enabled = provider_set(&settings)?.enabled().to_vec();
     let selected = provider
         .map(|provider| check_provider(provider, &enabled).map(|()| vec![provider]))
         .transpose()?
@@ -75,7 +77,7 @@ pub(crate) async fn search_lyrics_candidates(
         return Err("请输入有效的搜索条件".to_owned());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        // Only NetEase is implemented; the ordered selection remains the provider seam.
+        // The first configured provider is the default search source.
         search(selected[0], &query, offset)
     })
     .await
@@ -88,8 +90,9 @@ pub(crate) async fn get_candidate_lyrics(
     candidate_id: i64,
     settings: State<'_, SettingsState>,
 ) -> Result<LyricsContent, String> {
-    check_provider(provider, &providers(&settings)?)?;
-    tauri::async_runtime::spawn_blocking(move || lyrics(provider, candidate_id))
+    let provider_set = provider_set(&settings)?;
+    check_provider(provider, provider_set.enabled())?;
+    tauri::async_runtime::spawn_blocking(move || lyrics(&provider_set, provider, candidate_id))
         .await
         .map_err(|error| format!("歌词预览任务失败：{error}"))?
 }
@@ -159,10 +162,16 @@ fn match_score(
 
 pub(super) fn automatic(
     track: &TrackDetails,
-    enabled: &[LyricsProvider],
+    provider_set: &providers::LyricsProviderSet,
     cancelled: &AtomicBool,
 ) -> Result<LyricsContent, String> {
-    lookup(track, enabled, cancelled, search, lyrics)
+    lookup(
+        track,
+        provider_set.enabled(),
+        cancelled,
+        search,
+        |provider, id| lyrics(provider_set, provider, id),
+    )
 }
 
 fn lookup(
@@ -227,13 +236,13 @@ pub(crate) async fn find_track_lyrics(
     track_id: i64,
     app: tauri::AppHandle,
 ) -> Result<LyricsContent, String> {
-    let enabled = providers(&app.state::<SettingsState>())?;
+    let provider_set = provider_set(&app.state::<SettingsState>())?;
     tauri::async_runtime::spawn_blocking(move || {
         let track = app
             .state::<Database>()
             .get_track(track_id)?
             .ok_or_else(|| "曲目已不在曲库中".to_owned())?;
-        automatic(&track, &enabled, &AtomicBool::new(false))
+        automatic(&track, &provider_set, &AtomicBool::new(false))
     })
     .await
     .map_err(|error| format!("自动获取歌词失败：{error}"))?

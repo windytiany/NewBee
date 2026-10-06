@@ -50,6 +50,7 @@ const albumCoverBackground = ref(false);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const neteaseEnabled = ref(true);
+const neteaseLyricsMode = ref<Settings["neteaseLyricsMode"]>("original");
 const isLoading = ref(false);
 const isLoaded = ref(false);
 const isSaving = ref(false);
@@ -79,6 +80,7 @@ async function show() {
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
     neteaseEnabled.value = settings.lyricsProviders.includes("netease");
+    neteaseLyricsMode.value = settings.neteaseLyricsMode;
     isLoaded.value = true;
   } catch (reason) {
     if (requestId === loadRequestSequence) {
@@ -107,6 +109,7 @@ async function save() {
       albumSortBy: albumSortBy.value,
       albumSortOrder: albumSortOrder.value,
       lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
+      neteaseLyricsMode: neteaseLyricsMode.value,
     });
     applyTheme(theme.value);
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
@@ -179,6 +182,7 @@ defineExpose({ show });
               </template>
               <template v-else-if="selectedCategory === 'lyrics'">
                 <p>按启用的来源顺序获取歌词，无需登录网易云。</p>
+                <p>网易云歌词可以选择原始歌词、翻译歌词或双语歌词。</p>
                 <p>当前批量操作下载成功后直接覆盖内嵌歌词，不检查是否缺少。</p>
               </template>
               <template v-else-if="selectedCategory === 'diagnostics'">
@@ -265,6 +269,18 @@ defineExpose({ show });
                 class="accent-app-accent mt-1"
               />
               <span class="text-sm">网易云音乐</span>
+            </label>
+            <label class="mt-5 flex flex-col gap-2 text-sm font-semibold">
+              网易云歌词内容
+              <select
+                v-model="neteaseLyricsMode"
+                name="netease-lyrics-mode"
+                class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
+              >
+                <option value="original">原始歌词</option>
+                <option value="translated">翻译歌词</option>
+                <option value="bilingual">双语歌词</option>
+              </select>
             </label>
           </fieldset>
           <fieldset v-else-if="selectedCategory === 'diagnostics'" :disabled="!isTauriApp">

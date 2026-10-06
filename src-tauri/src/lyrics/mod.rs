@@ -2,6 +2,7 @@ pub(crate) mod batch;
 pub(crate) mod download;
 pub(crate) mod local;
 mod providers;
+pub(crate) use providers::NeteaseLyricsMode;
 
 pub use local::{parse_embedded_lyrics, LyricLine, TrackLyrics};
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,14 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub(crate) enum LyricsProvider {
     Netease,
+}
+
+impl LyricsProvider {
+    pub(crate) fn identifier(self) -> &'static str {
+        match self {
+            Self::Netease => "netease",
+        }
+    }
 }
 
 pub(crate) fn default_providers() -> Vec<LyricsProvider> {
