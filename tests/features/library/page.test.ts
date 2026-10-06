@@ -353,6 +353,32 @@ describe("library album actions", () => {
     expect(databaseDeleteCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
   });
 
+  it("reports zero deletions accurately and allows retrying the failed album", async () => {
+    availableTracks = [track, secondTrack];
+    databaseDeleteFailures.set(track.id, new Error("database busy"));
+    databaseDeleteFailures.set(secondTrack.id, new Error("database busy"));
+    const page = mountLibraryPage();
+    await settleRequests();
+    const result = await page.removeAlbumFromLibrary(selection);
+    expect(result.completed).toBe(false);
+    expect(result.deletedCount).toBe(0);
+    expect(result.message).toBe("已从曲库移除 0 首，2 首移除失败，请重试或查看日志");
+    expect(page.trackActionRemoval.value).toEqual({
+      deletedCount: 0,
+      failedCount: 2,
+      queueSyncFailed: false,
+    });
+    expect(queueRemovalCalls).toEqual([]);
+    databaseDeleteFailures.clear();
+    const retried = await page.removeAlbumFromLibrary(selection);
+    expect(retried).toEqual({ completed: true, deletedCount: 2, message: "" });
+    expect(page.trackActionRemoval.value).toEqual({
+      deletedCount: 2,
+      failedCount: 0,
+      queueSyncFailed: false,
+    });
+  });
+
   it("reports partial deletion and continues deleting the remaining tracks", async () => {
     availableTracks = [track, secondTrack, thirdTrack];
     databaseDeleteFailures.set(secondTrack.id, new Error("database busy"));
@@ -363,8 +389,13 @@ describe("library album actions", () => {
 
     expect(result.completed).toBe(false);
     expect(result.deletedCount).toBe(2);
+    expect(page.trackActionRemoval.value).toEqual({
+      deletedCount: 2,
+      failedCount: 1,
+      queueSyncFailed: false,
+    });
     expect(page.trackActionMessage.value).toBe("已从曲库删除 2 首曲目。");
-    expect(result.message).toContain("Second song（从曲库删除失败：database busy）");
+    expect(result.message).toBe("已从曲库移除 2 首，1 首移除失败，请重试或查看日志");
     expect(queueRemovalCalls).toEqual([track.id, thirdTrack.id]);
   });
 
@@ -377,7 +408,7 @@ describe("library album actions", () => {
     expect((await page.removeAlbumFromLibrary(selection)).completed).toBe(false);
     expect(queueNextBatchCalls).toEqual([]);
     expect(databaseDeleteCalls).toEqual([]);
-    expect(page.trackActionError.value).toContain("database unavailable");
+    expect(page.trackActionError.value).toBe("从曲库删除专辑失败");
     expect(page.isTrackActionPending.value).toBe(false);
   });
 });
@@ -411,9 +442,7 @@ describe("library track actions", () => {
         },
       ],
     });
-    expect(page.trackActionMessage.value).toBe(
-      "已成功添加 2 首；1 首失败：Second song（permission denied）",
-    );
+    expect(page.trackActionMessage.value).toBe("已添加 2 首，1 首失败（详情见日志）");
   });
 
   it("keeps deletion failure separate and does not clean the playback queue", async () => {
@@ -425,13 +454,13 @@ describe("library track actions", () => {
 
     expect(result).toEqual({
       status: "not-deleted",
-      message: "从曲库删除失败：database unavailable",
+      message: "从曲库移除失败，请重试或查看日志",
     });
     expect(queueRemovalCalls).toEqual([]);
     expect(invokeCalls.filter((command) => command === "remove_track_from_library")).toHaveLength(
       1,
     );
-    expect(page.trackActionError.value).toContain("database unavailable");
+    expect(page.trackActionError.value).toBe("从曲库移除失败，请重试或查看日志");
     expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(1);
   });
 

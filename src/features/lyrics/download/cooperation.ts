@@ -11,6 +11,7 @@ export type LyricsBatchCooperationOptions = {
   run: (
     trackIds: number[],
     receive: (event: LyricsBatchEvent) => void,
+    operationId: string,
   ) => Promise<LyricsBatchSummary>;
   commitStep: (batchId: number, stepId: number) => Promise<TagSaveResult>;
   completeStep: (batchId: number, stepId: number, error: string | null) => Promise<void>;
@@ -25,7 +26,11 @@ function message(error: unknown) {
 // One instance per run owns frontend permissions, cancellation and late-message rejection.
 export function createLyricsBatchCooperation(
   options: LyricsBatchCooperationOptions,
-  progress: { started: (total: number) => void; outcome: (outcome: LyricsBatchOutcome) => void },
+  progress: {
+    operationId: string;
+    started: (total: number, batchId: number) => void;
+    outcome: (outcome: LyricsBatchOutcome) => void;
+  },
 ) {
   let activeBatchId: number | null = null;
   let accepting = true;
@@ -54,6 +59,7 @@ export function createLyricsBatchCooperation(
     const saving = createMetadataSave({ editFiles: options.editFiles, synchronize: () => {} });
     let confirmed: TagSaveResult | null = null;
     await saving.run({
+      operationId: progress.operationId,
       targets: [{ trackId: event.trackId, path: event.path }],
       writeTrackIds: [event.trackId],
       deferSynchronization: true,
@@ -94,7 +100,7 @@ export function createLyricsBatchCooperation(
       if (activeBatchId !== null) return;
       activeBatchId = event.batchId;
       if (cancelling) void sendCancellation();
-      progress.started(event.total);
+      progress.started(event.total, event.batchId);
     } else if (event.batchId === activeBatchId) {
       if (event.kind === "trackCompleted") progress.outcome(event.outcome);
       else if (!handledSteps.has(event.stepId)) {
@@ -105,7 +111,7 @@ export function createLyricsBatchCooperation(
   }
   async function run(trackIds: number[]) {
     try {
-      return await options.run(trackIds, receive);
+      return await options.run(trackIds, receive, progress.operationId);
     } catch (error) {
       throw new Error(
         [message(error), cancellationError, cooperationError].filter(Boolean).join("\n"),

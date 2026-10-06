@@ -1,5 +1,6 @@
 mod database;
 mod import;
+mod logging;
 pub mod lyrics;
 mod metadata;
 mod playback;
@@ -8,27 +9,38 @@ mod window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .manage(playback::PlaybackState::default())
         .manage(database::write::WriteState::default())
         .manage(lyrics::batch::LyricsBatchState::default())
         .setup(|app| {
             use tauri::Manager;
 
-            let app_data_dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&app_data_dir)?;
-            let database_path = app_data_dir.join("music-library.sqlite3");
-            app.manage(database::Database::open(database_path)?);
-            app.manage(settings::SettingsState::load(
-                app_data_dir.join("settings.json"),
-            )?);
-            window::initialize(app.handle());
-            window::tray::initialize(app.handle())?;
-            #[cfg(windows)]
-            if let Err(error) = playback::media::initialize(app.handle()) {
-                eprintln!("Could not initialize Windows media controls: {error}");
+            logging::initialize(app.handle());
+            let mut stage = "data_directory";
+            let setup = (|| {
+                let app_data_dir = app.path().app_data_dir()?;
+                std::fs::create_dir_all(&app_data_dir)?;
+                stage = "database";
+                let database_path = app_data_dir.join("music-library.sqlite3");
+                app.manage(database::Database::open(database_path)?);
+                stage = "settings";
+                app.manage(settings::SettingsState::load(
+                    app_data_dir.join("settings.json"),
+                )?);
+                stage = "window";
+                window::initialize(app.handle());
+                window::tray::initialize(app.handle())?;
+                #[cfg(windows)]
+                if let Err(error) = playback::media::initialize(app.handle()) {
+                    log::warn!("Could not initialize Windows media controls: {error}");
+                }
+                Ok::<_, Box<dyn std::error::Error>>(())
+            })();
+            if let Err(error) = &setup {
+                log::error!("event=application_setup_failed stage={stage} error={error}");
             }
-            Ok(())
+            setup
         })
         .on_window_event(window::on_window_event)
         .plugin(tauri_plugin_opener::init())
@@ -40,6 +52,8 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            logging::open_logs_directory,
+            logging::set_detailed_logging,
             window::show_main_window,
             settings::get_settings,
             settings::save_settings,
@@ -93,6 +107,10 @@ pub fn run() {
             playback::playback_status,
             playback::playback_spectrum,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+    if let Err(error) = &result {
+        log::error!("event=application_run_failed error={error}");
+        log::logger().flush();
+    }
+    result.expect("error while running tauri application");
 }

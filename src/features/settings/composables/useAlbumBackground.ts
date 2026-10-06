@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
 import { onMounted, onScopeDispose, readonly, ref } from "vue";
@@ -16,7 +17,11 @@ export function useAlbumBackground() {
       if (sequence === requestSequence) enabled.value = settings.albumCoverBackground;
     } catch (error) {
       if (sequence === requestSequence) {
-        globalThis.console.error("Could not restore the album cover background setting.", error);
+        logger.warn(
+          "features/settings/composables/useAlbumBackground",
+          "Could not restore the album cover background setting.",
+          error,
+        );
       }
     }
   }

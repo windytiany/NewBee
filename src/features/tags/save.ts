@@ -1,4 +1,5 @@
 import { reactive } from "vue";
+import { logger, operationId } from "@/shared/logging/logger";
 import type { TagSaveResult } from "@/features/tags/types";
 
 export type MetadataFileEditor = <Result>(
@@ -8,9 +9,13 @@ export type MetadataFileEditor = <Result>(
 
 type SaveTarget = { trackId: number; path: string };
 type SaveRequest = {
+  operationId?: string;
   targets: readonly SaveTarget[];
   writeTrackIds: readonly number[];
-  execute: (progress: (result: TagSaveResult) => void) => Promise<TagSaveResult[]>;
+  execute: (
+    progress: (result: TagSaveResult) => void,
+    operationId: string,
+  ) => Promise<TagSaveResult[]>;
   deferSynchronization?: boolean;
 };
 type MetadataSaveOptions = {
@@ -42,20 +47,27 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     });
   }
 
-  async function synchronize() {
+  async function synchronize(id: string) {
     if (!pendingSynchronization.size) return;
     try {
       await options.synchronize([...pendingSynchronization]);
+      logger.info("tags", "synchronization_completed", {
+        operationId: id,
+        count: pendingSynchronization.size,
+      });
       pendingSynchronization.clear();
       state.synchronizationError = "";
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      logger.warn("tags", "synchronization_failed", error, { operationId: id });
       state.synchronizationError = `元数据已保存，但界面刷新失败：${message}`;
     }
   }
 
   async function run(request: SaveRequest) {
     if (state.saving) throw new Error("元数据保存尚未完成，请稍后重试。");
+    const id = request.operationId ?? operationId("metadata-save");
+    logger.info("tags", "save_started", { operationId: id, count: request.targets.length });
     const targets = new Map(request.targets.map((target) => [target.trackId, target]));
     const results = new Map(state.results.map((result) => [result.trackId, result]));
     const reported = new Map<number, TagSaveResult>();
@@ -74,10 +86,11 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     };
     try {
       const execute = async () => {
-        for (const result of await request.execute(progress)) progress(result);
+        for (const result of await request.execute(progress, id)) progress(result);
       };
       await (writeIds.length ? options.editFiles(writeIds, execute) : execute());
     } catch (error) {
+      logger.error("tags", "save_request_failed", error, { operationId: id });
       state.error = error instanceof Error ? error.message : String(error);
     } finally {
       accepting = false;
@@ -88,6 +101,14 @@ export function createMetadataSave(options: MetadataSaveOptions) {
           databaseUpdated: false,
           error: state.error || "保存未返回结果，请重试或重新扫描。",
         };
+        logger.write(result.databaseUpdated ? "info" : "warn", "tags", "save_result", {
+          operationId: id,
+          trackId: result.trackId,
+          path: result.path,
+          error: result.error,
+          fileWritten: result.fileWritten,
+          databaseUpdated: result.databaseUpdated,
+        });
         results.set(target.trackId, result);
         reported.set(target.trackId, result);
         if (result.databaseUpdated || (options.refreshWrittenFiles && result.fileWritten)) {
@@ -96,7 +117,12 @@ export function createMetadataSave(options: MetadataSaveOptions) {
       }
       state.results = [...results.values()];
       state.completed = targets.size;
-      if (!request.deferSynchronization) await synchronize();
+      if (!request.deferSynchronization) await synchronize(id);
+      logger.info("tags", "save_completed", {
+        operationId: id,
+        count: reported.size,
+        refreshFailed: Boolean(state.synchronizationError),
+      });
       state.saving = false;
     }
     return [...reported.values()];
@@ -106,7 +132,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     if (state.saving) return;
     state.saving = true;
     try {
-      await synchronize();
+      await synchronize(operationId("metadata-refresh"));
     } finally {
       state.saving = false;
     }

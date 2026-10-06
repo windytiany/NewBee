@@ -50,7 +50,6 @@ function fixture(synchronize: () => Promise<void> = async () => {}) {
       })),
     synchronize,
     editFiles: (_ids, save) => save(),
-    notify: () => 1,
   });
 }
 function node(root: HostNode, predicate: (node: HostNode) => boolean) {

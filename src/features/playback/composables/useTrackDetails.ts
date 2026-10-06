@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import type { TrackDetails } from "@/features/library/types";
-import { useNotification } from "@/shared/notifications/useNotification";
+import { logger } from "@/shared/logging/logger";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 
 export type TrackDetailsInvoker = <Result>(
@@ -17,19 +17,11 @@ export function useTrackDetails(
   currentTrackDetails: Readonly<Ref<TrackDetails | null>>;
   isLoading: Readonly<Ref<boolean>>;
   currentTrackDetailsError: Readonly<Ref<string>>;
+  retry: () => void;
 } {
   const currentTrackDetails = ref<TrackDetails | null>(null);
   const isLoading = ref(false);
   const currentTrackDetailsError = ref("");
-  useNotification(() =>
-    currentTrackDetailsError.value
-      ? {
-          type: "error",
-          message: currentTrackDetailsError.value,
-          key: `track-details:${toValue(trackIdSource)}`,
-        }
-      : null,
-  );
   let currentTrackId: number | null = null;
   let detailsRequestGeneration = 0;
 
@@ -66,7 +58,8 @@ export function useTrackDetails(
     } catch (error) {
       if (generation !== detailsRequestGeneration || currentTrackId !== trackId) return;
       const message = error instanceof Error ? error.message : String(error ?? "未知错误");
-      currentTrackDetailsError.value = `读取曲目详情失败：${message}`;
+      logger.warn("playback", "details_read_failed", message, { trackId });
+      currentTrackDetailsError.value = "读取曲目详情失败";
     } finally {
       if (generation === detailsRequestGeneration && currentTrackId === trackId) {
         isLoading.value = false;
@@ -92,6 +85,7 @@ export function useTrackDetails(
   });
 
   return {
+    retry: reloadCurrentTrack,
     currentTrackDetails: readonly(currentTrackDetails),
     isLoading: readonly(isLoading),
     currentTrackDetailsError: readonly(currentTrackDetailsError),

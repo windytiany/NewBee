@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { onMounted, onUnmounted, ref } from "vue";
@@ -12,7 +13,7 @@ export function useWindow() {
     try {
       await action();
     } catch (error) {
-      globalThis.console.error(`Failed to ${description} the window.`, error);
+      logger.warn("app/shell/useWindow", `Failed to ${description} the window.`, error);
     }
   }
 
@@ -22,7 +23,7 @@ export function useWindow() {
     try {
       isMaximized.value = await appWindow.isMaximized();
     } catch (error) {
-      globalThis.console.error("Failed to read the window maximized state.", error);
+      logger.warn("app/shell/useWindow", "Failed to read the window maximized state.", error);
     }
   }
 
@@ -64,7 +65,7 @@ export function useWindow() {
         void syncMaximizedState();
       });
     } catch (error) {
-      globalThis.console.error("Failed to listen for window resize events.", error);
+      logger.warn("app/shell/useWindow", "Failed to listen for window resize events.", error);
     }
   });
 

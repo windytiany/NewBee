@@ -107,7 +107,7 @@ it("reports failed persistence without changing the visible preference", async (
   await (h.button.props.onClick as (event: { stopPropagation: () => void }) => Promise<void>)({
     stopPropagation: () => {},
   });
-  expect(h.errors).toEqual(["更新跳过标记失败：database unavailable"]);
+  expect(h.errors).toEqual(["更新跳过标记失败"]);
   expect(h.preferences.isSkipped(1)).toBe(true);
 });
 

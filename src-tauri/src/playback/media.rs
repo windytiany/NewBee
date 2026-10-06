@@ -15,6 +15,7 @@ use windows::Win32::System::WinRT::ISystemMediaTransportControlsInterop;
 pub struct SystemMedia {
     controls: Mutex<SystemMediaTransportControls>,
     button_token: i64,
+    diagnostics: Mutex<crate::logging::RepeatedFailure>,
 }
 
 pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +25,8 @@ pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let interop: ISystemMediaTransportControlsInterop =
         factory::<SystemMediaTransportControls, ISystemMediaTransportControlsInterop>()?;
     // The main window owns the HWND for the lifetime of these controls.
-    let controls: SystemMediaTransportControls = unsafe { interop.GetForWindow(window.hwnd()?) }?;
+    let hwnd = windows::Win32::Foundation::HWND(window.hwnd()?.0);
+    let controls: SystemMediaTransportControls = unsafe { interop.GetForWindow(hwnd) }?;
     controls.SetIsPlayEnabled(true)?;
     controls.SetIsPauseEnabled(true)?;
     controls.SetIsPreviousEnabled(true)?;
@@ -46,13 +48,14 @@ pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             _ => return Ok(()),
         };
         if let Err(error) = event_app.emit("system-media-command", command) {
-            eprintln!("Could not forward Windows media command: {error}");
+            log::warn!("Could not forward Windows media command: {error}");
         }
         Ok(())
     }))?;
     app.manage(SystemMedia {
         controls: Mutex::new(controls),
         button_token,
+        diagnostics: Mutex::new(crate::logging::RepeatedFailure::default()),
     });
     Ok(())
 }
@@ -70,9 +73,12 @@ fn update(
         .lock()
         .map_err(|_| "Windows media state is unavailable".to_owned())
         .and_then(|controls| action(&controls));
-    if let Err(error) = result {
-        eprintln!("Could not update Windows media controls: {error}");
-    }
+    if let Ok(mut diagnostics) = media.diagnostics.lock() {
+        diagnostics.report(
+            "playback.system_media",
+            result.as_ref().err().map(String::as_str),
+        );
+    };
 }
 
 pub fn set_track(app: &AppHandle, database: &Database, track_id: i64, title: &str, artist: &str) {
@@ -96,7 +102,7 @@ pub fn set_track(app: &AppHandle, database: &Database, track_id: i64, title: &st
         // ClearAll also clears the previous thumbnail when this track has no artwork.
         // Artwork failure should not prevent the title/artist from being published.
         if let Err(error) = set_artwork(database, track_id, &updater) {
-            eprintln!("Could not update Windows media artwork: {error}");
+            log::warn!("Could not update Windows media artwork: {error}");
         }
         updater.Update().map_err(|error| error.to_string())?;
         controls
@@ -166,10 +172,10 @@ impl Drop for SystemMedia {
     fn drop(&mut self) {
         if let Ok(controls) = self.controls.get_mut() {
             if let Err(error) = controls.RemoveButtonPressed(self.button_token) {
-                eprintln!("Could not detach Windows media controls: {error}");
+                log::warn!("Could not detach Windows media controls: {error}");
             }
             if let Err(error) = controls.SetIsEnabled(false) {
-                eprintln!("Could not disable Windows media controls: {error}");
+                log::warn!("Could not disable Windows media controls: {error}");
             }
         }
     }

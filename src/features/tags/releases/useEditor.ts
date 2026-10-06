@@ -25,7 +25,6 @@ import { createTagSynchronization } from "@/features/tags/synchronize";
 import { createMetadataSave } from "@/features/tags/save";
 import type { MetadataFileEditor } from "@/features/tags/save";
 import { usePlaybackSession } from "@/features/playback/session";
-import { notify } from "@/shared/notifications/center";
 
 export type ReleaseEditorOptions = {
   loadAlbum: (album: LibraryAlbumSelection) => Promise<EditableTrack[]>;
@@ -37,10 +36,10 @@ export type ReleaseEditorOptions = {
     patches: TrackPatch[],
     cover: CoverData | null,
     progress: (result: TagSaveResult) => void,
+    operationId?: string,
   ) => Promise<TagSaveResult[]>;
   editFiles: MetadataFileEditor;
   synchronize: (ids: number[]) => Promise<void>;
-  notify: typeof notify;
 };
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -366,7 +365,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     const results = await saving.run({
       targets,
       writeTrackIds: patches.map(({ trackId }) => trackId),
-      execute: (progress) => options.save(patches, savedCover, progress),
+      execute: (progress, operationId) => options.save(patches, savedCover, progress, operationId),
     });
     const updated = new Set(
       results.flatMap((result) => (result.databaseUpdated ? [result.trackId] : [])),
@@ -383,12 +382,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
         Object.assign(local.track, { [change.field]: value });
       }
     }
-    const failed = results.filter((result) => !result.databaseUpdated).length;
     const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
-    options.notify({
-      type: failed || error ? "warning" : "success",
-      message: `专辑标签保存：${results.length - failed} 首成功，${failed} 首失败。${error ? `\n${error}` : ""}`,
-    });
     state.dirty = state.results.some((result) => !result.databaseUpdated);
     if (!state.dirty && !error) close();
   }
@@ -437,14 +431,13 @@ export function useReleaseEditor() {
     release: api.release,
     covers: api.covers,
     cover: api.cover,
-    save: (patches, cover, progress) => {
+    save: (patches, cover, progress, operationId) => {
       const onProgress = new Channel<TagSaveResult>();
       onProgress.onmessage = progress;
-      return api.saveRelease(patches, cover, onProgress);
+      return api.saveRelease(patches, cover, onProgress, operationId);
     },
     editFiles: session.withMetadataEditing,
     synchronize: synchronize.artwork,
-    notify,
   });
   return shared;
 }

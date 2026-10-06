@@ -16,7 +16,11 @@ import { THEMES } from "@/features/settings/theme";
 
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
-  selectedCategory: Vue.Ref<"general" | "appearance" | "library" | "lyrics">;
+  selectedCategory: Vue.Ref<"general" | "appearance" | "library" | "lyrics" | "diagnostics">;
+  detailedLogging: Vue.Ref<boolean>;
+  isChangingLogging: Vue.Ref<boolean>;
+  changeLogging: () => Promise<void>;
+  openLogs: () => Promise<void>;
   neteaseEnabled: Vue.Ref<boolean>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   theme: Vue.Ref<Settings["theme"]>;
@@ -93,6 +97,47 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("opens only the app log directory and switches detail immediately without persisting it", async () => {
+    const calls: Array<[string, unknown]> = [];
+    const { bindings } = createDialog(async (command, args) => {
+      calls.push([command, args]);
+      return defaults;
+    });
+    await bindings.show();
+    await bindings.openLogs();
+    bindings.detailedLogging.value = true;
+    await bindings.changeLogging();
+    expect(calls).toEqual([
+      ["get_settings", undefined],
+      ["open_logs_directory", undefined],
+      ["set_detailed_logging", { enabled: true }],
+    ]);
+    await bindings.save();
+    expect(calls[calls.length - 1]).toEqual(["save_settings", { settings: defaults }]);
+    expect(JSON.stringify(calls[calls.length - 1])).not.toContain("detailedLogging");
+    expect(createDialog(async () => defaults).bindings.detailedLogging.value).toBe(false);
+  });
+
+  it("keeps diagnostic failures inline, rolls back the toggle and permits retry", async () => {
+    let fail = true;
+    const { bindings } = createDialog(async (command) => {
+      if (command === "get_settings") return defaults;
+      if (fail) throw new Error("permission denied");
+    });
+    await bindings.show();
+    await bindings.openLogs();
+    expect(bindings.error.value).toContain("打开日志目录失败");
+    bindings.detailedLogging.value = true;
+    await bindings.changeLogging();
+    expect(bindings.detailedLogging.value).toBe(false);
+    expect(bindings.error.value).toContain("切换日志级别失败");
+    expect(bindings.isChangingLogging.value).toBe(false);
+    fail = false;
+    bindings.detailedLogging.value = true;
+    await bindings.changeLogging();
+    expect(bindings.detailedLogging.value).toBe(true);
+  });
+
   it("renders settings with category navigation and only cancel/save footer actions", async () => {
     const modules: Record<string, unknown> = {
       vue: Vue,

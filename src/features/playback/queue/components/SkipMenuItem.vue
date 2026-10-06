@@ -13,6 +13,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { usePlaybackSession } from "@/features/playback/session";
+import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 
 const props = withDefaults(defineProps<{ trackIds: readonly number[]; disabled?: boolean }>(), {
@@ -28,9 +29,10 @@ const allSkipped = computed(
 );
 
 function reportError(error: unknown) {
+  logger.error("playback", "skip_update_failed", error);
   notify({
     type: "error",
-    message: `更新跳过标记失败：${error instanceof Error ? error.message : String(error)}`,
+    message: "更新跳过标记失败",
     key: "track-skip",
   });
 }

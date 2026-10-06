@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import type { ComputedRef, Ref } from "vue";
 import { PlaybackQueueCoordinator } from "@/features/playback/queue/coordinator";
 import type { InternalPlaybackStatus } from "@/features/playback/runtime/status";
@@ -143,11 +144,13 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
         }
       } else if (status.isPlaying) {
         await options.invokeCommand<void>("pause");
+        logger.info("playback", "paused");
         options.coordinator.suppressPlaybackEnd(
           options.currentTrack.value?.playbackId ?? status.playbackId,
         );
       } else {
         await options.invokeCommand<void>("resume");
+        logger.info("playback", "resumed");
         options.coordinator.allowPlaybackEnd(
           options.currentTrack.value?.playbackId ?? status.playbackId,
         );
@@ -161,6 +164,7 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
       return true;
     } catch (error) {
       if (isCurrentUserIntent(generation)) {
+        logger.error("playback", "command_failed", error);
         const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
         options.playbackError.value = `Playback command failed: ${message}`;
         setSessionCommandPending(generation, false);
@@ -193,10 +197,12 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
     setSessionCommandPending(generation, true);
     try {
       await options.invokeCommand<void>("seek_to", { positionMs });
+      logger.debug("playback", "seek_completed");
       options.playbackError.value = "";
       options.playbackState.consumePlaybackStartFailure();
       return true;
     } catch (error) {
+      logger.error("playback", "seek_failed", error);
       const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
       options.playbackError.value = `Seek failed: ${message}`;
       return false;

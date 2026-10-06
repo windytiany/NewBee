@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import App from "@/app/App.vue";
 import "@/app/styles/main.css";
 import { showMainWindow } from "@/app/startup";
+import { installErrorLogging } from "@/app/logging";
 
 globalThis.document.addEventListener(
   "contextmenu",
@@ -11,6 +12,8 @@ globalThis.document.addEventListener(
   { capture: true },
 );
 
-createApp(App).mount("#app");
+const app = createApp(App);
+installErrorLogging(app);
+app.mount("#app");
 
 void showMainWindow();

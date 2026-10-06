@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { createTrackSkipState } from "@/features/playback/queue/skip";
-import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import { computed, readonly, ref, watch } from "vue";
 import { PlaybackQueueCoordinator } from "@/features/playback/queue/coordinator";
 import type {
@@ -86,6 +86,9 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   function syncQueueState(snapshot: PlaybackQueueSnapshot) {
     displayedTracks.value = [...snapshot.displayedTracks];
     currentRowKey.value = snapshot.currentRowKey;
+    if (snapshot.queuePlaybackError && snapshot.queuePlaybackError !== queuePlaybackError.value) {
+      logger.error("playback.queue", "transition_failed", snapshot.queuePlaybackError);
+    }
     queuePlaybackError.value = snapshot.queuePlaybackError;
     repeatOneEnabled.value = snapshot.repeatOneEnabled;
     shuffleEnabled.value = snapshot.shuffleEnabled;
@@ -183,6 +186,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
         return;
       } catch (error) {
         if (generation !== preparationGeneration) return;
+        logger.warn("playback", "next_track_preparation_failed", error, { trackId: item?.trackId });
         const message = error instanceof Error ? error.message : String(error);
         if (item === null) {
           playbackError.value = `Could not cancel next track: ${message}`;
@@ -220,8 +224,9 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       return true;
     } catch (error) {
       const message = `读取跳过标记失败：${error instanceof Error ? error.message : String(error)}`;
+      logger.error("playback", "preferences_load_failed", error);
       playbackError.value = message;
-      notify({ type: "error", message, key: "track-skip" });
+
       return false;
     }
   }

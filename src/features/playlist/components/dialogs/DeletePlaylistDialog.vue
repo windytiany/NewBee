@@ -20,6 +20,9 @@
         </p>
       </div>
 
+      <p v-if="props.error" role="alert" class="px-5 pb-4 text-sm text-red-400">
+        {{ props.error }}
+      </p>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           ref="cancelButton"
@@ -50,6 +53,7 @@ import type { PlaylistSummary } from "@/features/playlist/types";
 const props = defineProps<{
   playlist: PlaylistSummary;
   isPending: boolean;
+  error?: string;
 }>();
 
 const emit = defineEmits<{

@@ -1,3 +1,4 @@
+import { logger, operationId } from "@/shared/logging/logger";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
@@ -13,6 +14,8 @@ export function useLibraryFileImport() {
     // Hold the lock while the picker is open too, so repeated clicks cannot open
     // another picker or submit a second batch.
     isImporting.value = true;
+    const id = operationId("library-import");
+    const started = performance.now();
     try {
       const extensions = await invoke<string[]>("supported_audio_extensions");
       const paths = await open({
@@ -21,17 +24,28 @@ export function useLibraryFileImport() {
         multiple: true,
         filters: [{ name: "支持的音频文件", extensions }],
       });
-      if (!paths || paths.length === 0) return;
-      const result = await invoke<IngestResult>("import_music_files", { paths });
+      if (!paths || paths.length === 0) {
+        logger.info("library", "file_import_cancelled", { operationId: id });
+        return;
+      }
+      logger.info("library", "import_started", { operationId: id });
+      const result = await invoke<IngestResult>("import_music_files", { paths, operationId: id });
+      logger.info("library", "import_completed", {
+        operationId: id,
+        elapsedMs: Math.round(performance.now() - started),
+        ...result,
+      });
       notify({
         type: result.failed > 0 ? "warning" : "success",
-        message: `导入完成：新增 ${result.added}，更新 ${result.updated}，跳过 ${result.skipped}，读取失败 ${result.failed}`,
+        message: result.failed
+          ? `导入完成，${result.failed} 首失败（详情见日志）`
+          : `导入完成：新增 ${result.added} 首，更新 ${result.updated} 首`,
         key: "library-file-import",
       });
       reportLibraryImport(result);
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : String(reason);
-      notify({ type: "error", message: `导入失败：${message}`, key: "library-file-import" });
+      logger.error("library", "file_import_failed", reason, { operationId: id });
+      notify({ type: "error", message: "导入失败，请查看日志", key: "library-file-import" });
     } finally {
       isImporting.value = false;
     }

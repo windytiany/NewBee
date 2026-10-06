@@ -110,11 +110,17 @@ describe("audio file import", () => {
     ]);
     expect(importer.calls).toEqual([
       ["supported_audio_extensions", undefined],
-      ["import_music_files", { paths: ["C:\\Music\\one.mp3", "D:\\Music\\two.flac"] }],
+      [
+        "import_music_files",
+        {
+          operationId: expect.stringContaining("library-import:"),
+          paths: ["C:\\Music\\one.mp3", "D:\\Music\\two.flac"],
+        },
+      ],
     ]);
     expect(importer.notices[0]).toMatchObject({
       type: "success",
-      message: "导入完成：新增 2，更新 1，跳过 0，读取失败 0",
+      message: "导入完成：新增 2 首，更新 1 首",
     });
     expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
     expect(importer.effects).toEqual(["artwork", "refresh"]);
@@ -135,7 +141,10 @@ describe("audio file import", () => {
   it("accepts a single selected path", async () => {
     const importer = createImport({ pick: async () => ["/Music/song.wav"] });
     await importer.importMusicFiles();
-    expect(importer.calls[1]).toEqual(["import_music_files", { paths: ["/Music/song.wav"] }]);
+    expect(importer.calls[1]).toEqual([
+      "import_music_files",
+      { paths: ["/Music/song.wav"], operationId: expect.stringContaining("library-import:") },
+    ]);
   });
 
   it("reports partial failures and still refreshes successfully imported tracks", async () => {
@@ -145,7 +154,7 @@ describe("audio file import", () => {
     });
     await importer.importMusicFiles();
     expect(importer.notices[0]?.type).toBe("warning");
-    expect(importer.notices[0]?.message).toContain("读取失败 1");
+    expect(importer.notices[0]?.message).toContain("1 首失败");
     expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
   });
 

@@ -18,10 +18,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "~2.12.1", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-log = "=2.10.0"
+log = "0.4"
+regex = "1.13.1"
 lofty = "0.25.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -29,6 +32,8 @@ reqwest = { version = "0.13.5", default-features = false, features = ["blocking"
 rodio = { version = "0.22.2", default-features = false, features = ["playback", "mp3", "flac", "mp4", "wav", "vorbis"] }
 rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
 
+[dev-dependencies]
+tauri = { version = "~2.12.1", features = ["test"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

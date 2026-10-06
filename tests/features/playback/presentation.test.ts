@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { effectScope } from "vue";
 import type { EffectScope } from "vue";
@@ -5,7 +6,7 @@ import { useDisplayMode } from "@/features/playback/composables/useDisplayMode";
 
 const STORAGE_KEY = "newbee.playing-presentation";
 const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
-const originalConsoleError = globalThis.console.error;
+const originalConsoleError = logger.warn;
 const scopes: EffectScope[] = [];
 let storedValues: Map<string, string>;
 let loggedErrors: unknown[][];
@@ -31,7 +32,7 @@ beforeEach(() => {
     },
   };
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
-  globalThis.console.error = (...args: unknown[]) => {
+  logger.warn = (...args: unknown[]) => {
     loggedErrors.push(args);
   };
 });
@@ -40,7 +41,7 @@ afterEach(() => {
   for (const scope of scopes.splice(0)) scope.stop();
   if (originalStorage) Object.defineProperty(globalThis, "localStorage", originalStorage);
   else Reflect.deleteProperty(globalThis, "localStorage");
-  globalThis.console.error = originalConsoleError;
+  logger.warn = originalConsoleError;
 });
 
 describe("NowPlayingPage 布局持久化", () => {
@@ -99,7 +100,7 @@ describe("NowPlayingPage 布局持久化", () => {
     presentation.value = "lyrics";
     expect(presentation.value).toBe("lyrics");
     expect(loggedErrors).toHaveLength(2);
-    expect(loggedErrors[1]?.[0]).toBe("Could not save the playing presentation.");
+    expect(loggedErrors[1]?.[1]).toBe("Could not save the playing presentation.");
   });
 
   it("页面卸载后不再写入存储", () => {

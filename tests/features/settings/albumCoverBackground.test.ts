@@ -1,3 +1,4 @@
+import { logger as diagnosticLogger } from "@/shared/logging/logger";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as Vue from "vue";
 import { loadSourceModules } from "../../support/moduleLoader";
@@ -117,7 +118,7 @@ describe("专辑封面背景设置", () => {
   });
 
   it("读取失败使用关闭状态，并保留错误上下文", async () => {
-    const logger = spyOn(console, "error").mockImplementation(() => {});
+    const logger = spyOn(diagnosticLogger, "warn").mockImplementation(() => {});
     try {
       const { enabled } = mountPreference();
       const failure = new Error("Settings unavailable");
@@ -125,6 +126,7 @@ describe("专辑封面背景设置", () => {
       await settle();
       expect(enabled.value).toBe(false);
       expect(logger).toHaveBeenCalledWith(
+        "features/settings/composables/useAlbumBackground",
         "Could not restore the album cover background setting.",
         failure,
       );

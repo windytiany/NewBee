@@ -24,6 +24,11 @@ const page = {
   isTrackActionPending: Vue.ref(false),
   trackActionError: Vue.ref(""),
   trackActionMessage: Vue.ref(""),
+  trackActionRemoval: Vue.ref<{
+    deletedCount: number;
+    failedCount: number;
+    queueSyncFailed: boolean;
+  } | null>(null),
   trackActionMessageType: Vue.ref<"success" | "warning">("success"),
   addTracksToPlaylist: async () => ({ successfulTrackIds, failures: [] }),
   addAlbumToPlaylist: async () => ({ successfulTrackIds }),
@@ -91,6 +96,7 @@ beforeEach(() => {
   page.tracksError.value = "";
   page.trackActionError.value = "";
   page.trackActionMessage.value = "";
+  page.trackActionRemoval.value = null;
   page.trackActionMessageType.value = "success";
 });
 
@@ -152,6 +158,45 @@ describe("媒体库 workspace", () => {
     expect(workspace.deleteAlbumTarget).toBeNull();
     expect(closeCalls).toBe(1);
     expect(refreshCalls).toBe(0);
+  });
+
+  it("does not infer removal or persistence from error text or playlist partial success", async () => {
+    createWorkspace();
+    page.trackActionMessage.value = "已添加 2 首，1 首失败（详情见日志）";
+    page.trackActionMessageType.value = "warning";
+    await Vue.nextTick();
+    expect(notifications.items.value[0]?.message).toContain("已添加 2 首");
+    expect(notifications.items.value[0]?.persistent).toBe(false);
+    notifications.clear();
+    page.trackActionError.value = "已删除是底层错误中的文本";
+    await Vue.nextTick();
+    expect(notifications.items.value[0]?.message).toBe("已添加 2 首，1 首失败（详情见日志）");
+    expect(notifications.items.value[0]?.message).not.toContain("已从曲库移除");
+    expect(notifications.items.value[0]?.persistent).toBe(false);
+  });
+
+  it("uses explicit zero, partial and queue-sync removal outcomes for notification lifetime", async () => {
+    createWorkspace();
+    page.trackActionRemoval.value = { deletedCount: 0, failedCount: 2, queueSyncFailed: false };
+    page.trackActionMessage.value = "已从曲库删除 0 首曲目。";
+    page.trackActionError.value = "移除失败";
+    await Vue.nextTick();
+    expect(notifications.items.value[0]?.message).toBe("曲库移除失败，请重试或查看日志");
+    expect(notifications.items.value[0]?.persistent).toBe(false);
+    page.trackActionRemoval.value = { deletedCount: 1, failedCount: 1, queueSyncFailed: false };
+    await Vue.nextTick();
+    expect(notifications.items.value[0]?.message).toBe(
+      "已从曲库移除 1 首，1 首移除失败，请查看日志",
+    );
+    expect(notifications.items.value[0]?.persistent).toBe(true);
+    page.trackActionMessage.value = "";
+    page.trackActionRemoval.value = { deletedCount: 1, failedCount: 0, queueSyncFailed: true };
+    await Vue.nextTick();
+    expect(notifications.items.value[0]?.message).toBe(
+      "已从曲库移除 1 首，队列同步失败，请查看日志",
+    );
+    expect(notifications.items.value[0]?.type).toBe("warning");
+    expect(notifications.items.value[0]?.persistent).toBe(true);
   });
 
   it("keeps library confirmations when the page becomes inactive", async () => {

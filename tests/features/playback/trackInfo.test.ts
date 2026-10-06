@@ -144,7 +144,7 @@ describe("useTrackDetails", () => {
       }),
     );
     await settleRequests();
-    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败：database unavailable");
+    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败");
     expect(trackInfo.isLoading.value).toBe(false);
   });
 
@@ -154,7 +154,7 @@ describe("useTrackDetails", () => {
       createInvoker(() => Promise.reject("backend unavailable")),
     );
     await settleRequests();
-    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败：backend unavailable");
+    expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败");
   });
 
   it("销毁 scope 后忽略迟到的结果", async () => {

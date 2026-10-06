@@ -1,3 +1,4 @@
+import { logger, operationId } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { notify } from "@/shared/notifications/center";
@@ -15,18 +16,29 @@ export function useLibraryScan() {
     isScanning.value = true;
     scanResult.value = null;
     scanError.value = "";
+    const id = operationId("library-import");
+    const started = performance.now();
     try {
-      scanResult.value = await invoke<IngestResult>("scan_music_library");
+      logger.info("library", "import_started", { operationId: id });
+      scanResult.value = await invoke<IngestResult>("scan_music_library", { operationId: id });
       const result = scanResult.value;
+      logger.info("library", "import_completed", {
+        operationId: id,
+        elapsedMs: Math.round(performance.now() - started),
+        ...result,
+      });
       notify({
         type: result.failed > 0 ? "warning" : "success",
-        message: `扫描完成：新增 ${result.added}，更新 ${result.updated}，跳过 ${result.skipped}，读取失败 ${result.failed}`,
+        message: result.failed
+          ? `扫描完成，${result.failed} 首失败（详情见日志）`
+          : `扫描完成：新增 ${result.added} 首，更新 ${result.updated} 首`,
         key: "library-scan",
       });
       reportLibraryImport(result);
     } catch (error) {
       scanError.value = error instanceof Error ? error.message : String(error);
-      notify({ type: "error", message: `扫描失败：${scanError.value}`, key: "library-scan" });
+      logger.error("library", "scan_failed", error, { operationId: id });
+      notify({ type: "error", message: "扫描失败，请查看日志", key: "library-scan" });
     } finally {
       isScanning.value = false;
     }

@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { computed, ref, watch } from "vue";
 import type { PlaylistSummary } from "@/features/playlist/types";
 
@@ -13,7 +14,11 @@ function loadSelectedPlaylistId(availablePlaylists: PlaylistSummary[]): number |
 
     return availablePlaylists.some(({ id }) => id === playlistId) ? playlistId : null;
   } catch (error) {
-    console.error("Could not read the saved playlist selection; using an empty selection.", error);
+    logger.warn(
+      "features/playlist/composables/useSelection",
+      "Could not read the saved playlist selection; using an empty selection.",
+      error,
+    );
     return null;
   }
 }
@@ -27,7 +32,11 @@ function saveSelectedPlaylistId(playlistId: number | null) {
 
     globalThis.localStorage.setItem(STORAGE_KEY, String(playlistId));
   } catch (error) {
-    globalThis.console.error("Could not save the playlist selection.", error);
+    logger.warn(
+      "features/playlist/composables/useSelection",
+      "Could not save the playlist selection.",
+      error,
+    );
   }
 }
 

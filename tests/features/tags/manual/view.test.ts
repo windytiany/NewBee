@@ -106,7 +106,6 @@ function mountDialog(
     },
     synchronize,
     editFiles: (_ids, save) => save(),
-    notify: () => 1,
   });
   const component = evaluateSource<{ default: Vue.Component }>(
     compileSfc(dialogSource, "TagEditorDialog.vue"),

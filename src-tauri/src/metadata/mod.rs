@@ -73,6 +73,7 @@ pub(crate) async fn save_track_metadata(
     mut changes: Vec<MetadataChange>,
     lyrics_action: LyricsMarkAction,
     on_progress: Channel<MetadataSaveResult>,
+    operation_id: Option<String>,
     app: tauri::AppHandle,
     write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
@@ -89,29 +90,31 @@ pub(crate) async fn save_track_metadata(
     }
     let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = guard;
-        let database = app.state::<Database>();
-        // Validate combinations for every readable target before modifying the first file.
-        // Missing/unreadable files are reported individually, not used to block other targets.
-        for id in track_ids.iter().filter(|_| !changes.is_empty()) {
-            if let Some(track) = database.get_track(*id)? {
-                if files::inspect_file(Path::new(track.path())).is_ok() {
-                    files::validate_file(Path::new(track.path()), &changes)
-                        .map_err(|error| format!("{}：{error}", track.path()))?;
+        crate::logging::with_operation(operation_id.clone(), || {
+            let _guard = guard;
+            let database = app.state::<Database>();
+            // Validate combinations for every readable target before modifying the first file.
+            // Missing/unreadable files are reported individually, not used to block other targets.
+            for id in track_ids.iter().filter(|_| !changes.is_empty()) {
+                if let Some(track) = database.get_track(*id)? {
+                    if files::inspect_file(Path::new(track.path())).is_ok() {
+                        files::validate_file(Path::new(track.path()), &changes)
+                            .map_err(|error| format!("{}：{error}", track.path()))?;
+                    }
                 }
             }
-        }
-        let results = track_ids
-            .into_iter()
-            .map(|id| {
-                let result = save::save_track(&database, id, &changes, lyrics_action, None);
-                if let Err(error) = on_progress.send(result.clone()) {
-                    eprintln!("Could not report metadata progress: {error}");
-                }
-                result
-            })
-            .collect();
-        Ok(results)
+            let results = track_ids
+                .into_iter()
+                .map(|id| {
+                    let result = save::save_track(&database, id, &changes, lyrics_action, None);
+                    if let Err(error) = on_progress.send(result.clone()) {
+                        log::warn!("Could not report metadata progress: {error}");
+                    }
+                    result
+                })
+                .collect();
+            Ok(results)
+        })
     })
     .await
     .map_err(|error| format!("保存标签任务失败：{error}"))?

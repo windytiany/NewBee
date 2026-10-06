@@ -36,6 +36,9 @@
       >
         未选择歌曲
       </p>
+      <p v-if="lyricsState.status === 'error'" role="alert" class="px-6 text-sm text-amber-200">
+        歌词读取失败 <button type="button" @click="retry">重试</button>
+      </p>
       <LyricsView
         v-show="lyricsState.status === 'ready' && presentation !== 'track'"
         class="max-w-none"
@@ -70,6 +73,7 @@ const { presentation } = useDisplayMode();
 const session = usePlaybackSession();
 const { currentTrack, playbackStatus, isSeeking } = session.state;
 const {
+  retry,
   state: lyricsState,
   activeIndex,
   activeGroupStartIndex,

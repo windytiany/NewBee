@@ -479,7 +479,7 @@ afterEach(() => {
 });
 
 describe("歌单 workspace 管理", () => {
-  it("空名称通过 toast 校验，保留输入焦点和 aria-invalid", async () => {
+  it("空名称通过内联校验，保留输入焦点和 aria-invalid", async () => {
     let renameCalls = 0;
     renameAction = async () => {
       renameCalls++;
@@ -496,16 +496,17 @@ describe("歌单 workspace 管理", () => {
     expect(renameCalls).toBe(0);
     expect(input.props["aria-invalid"]).toBe("true");
     expect(focusedNode).toBe(input);
-    expect(notifications.items.value[0]).toMatchObject({
-      type: "error",
-      message: "歌单名称不能为空。",
-    });
-    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
-    notifications.dismiss(notifications.items.value[0].id);
+    expect(notifications.items.value).toEqual([]);
+    expect(getTextContent(findNode(root, (node) => node.props.role === "alert")!)).toContain(
+      "请输入歌单名称",
+    );
     expect(input.props["aria-invalid"]).toBe("true");
     submitRename(root);
     await settleApp();
-    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value).toEqual([]);
+    expect(getTextContent(findNode(root, (node) => node.props.role === "alert")!)).toContain(
+      "请输入歌单名称",
+    );
     setInputValue(input, "Valid name");
     await Vue.nextTick();
     expect(input.props["aria-invalid"]).toBeUndefined();
@@ -524,10 +525,10 @@ describe("歌单 workspace 管理", () => {
     await settleApp();
 
     expect(input.value).toBe("My edited name");
-    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
-    expect(notifications.items.value.map(({ message }) => message)).toEqual([
-      "重命名歌单失败：数据库不可用",
-    ]);
+    expect(getTextContent(findNode(root, (node) => node.props.role === "alert")!)).toContain(
+      "重命名歌单失败",
+    );
+    expect(notifications.items.value).toEqual([]);
     expect(findNode(root, (node) => node.type === "dialog" && node.open)).not.toBeNull();
     expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
     expect(findByTestId(root, "right-playlist")?.props["data-playlist-id"]).toBe("1");

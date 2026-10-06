@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 
 const PLAYBACK_QUEUE_STORAGE_KEY = "newbee.playback-queue";
@@ -128,13 +129,20 @@ export function loadPlaybackQueueSnapshot(
     if (serializedSnapshot === null) return null;
     storedSnapshot = JSON.parse(serializedSnapshot);
   } catch (error) {
-    globalThis.console.error("Could not read saved playback queue; using an empty queue.", error);
+    logger.warn(
+      "features/playback/queue/persistence",
+      "Could not read saved playback queue; using an empty queue.",
+      error,
+    );
     return null;
   }
 
   const snapshot = parsePlaybackQueueSnapshot(storedSnapshot);
   if (snapshot === null) {
-    globalThis.console.error("Saved playback queue is invalid; using an empty queue.");
+    logger.warn(
+      "features/playback/queue/persistence",
+      "Saved playback queue is invalid; using an empty queue.",
+    );
   }
   return snapshot;
 }
@@ -153,7 +161,7 @@ export function savePlaybackQueueSnapshot(
     );
     return true;
   } catch (error) {
-    globalThis.console.error("Could not save playback queue.", error);
+    logger.warn("features/playback/queue/persistence", "Could not save playback queue.", error);
     return false;
   }
 }

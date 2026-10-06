@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, ref, watch } from "vue";
 
@@ -25,7 +26,10 @@ function loadPlaybackVolume(): PlaybackVolumeState {
 
     const parsedVolume: unknown = JSON.parse(serializedVolume);
     if (typeof parsedVolume !== "object" || parsedVolume === null || Array.isArray(parsedVolume)) {
-      globalThis.console.error("Saved playback volume has an invalid format; using the default.");
+      logger.warn(
+        "features/playback/composables/useVolume",
+        "Saved playback volume has an invalid format; using the default.",
+      );
       return { ...DEFAULT_PLAYBACK_VOLUME };
     }
 
@@ -35,7 +39,10 @@ function loadPlaybackVolume(): PlaybackVolumeState {
       !isVolumeLevel(storedVolume.lastNonMutedVolume) ||
       storedVolume.lastNonMutedVolume === 0
     ) {
-      globalThis.console.error("Saved playback volume is invalid; using the default.");
+      logger.warn(
+        "features/playback/composables/useVolume",
+        "Saved playback volume is invalid; using the default.",
+      );
       return { ...DEFAULT_PLAYBACK_VOLUME };
     }
 
@@ -45,7 +52,11 @@ function loadPlaybackVolume(): PlaybackVolumeState {
         storedVolume.volume > 0 ? storedVolume.volume : storedVolume.lastNonMutedVolume,
     };
   } catch (error) {
-    globalThis.console.error("Could not read saved playback volume; using the default.", error);
+    logger.warn(
+      "features/playback/composables/useVolume",
+      "Could not read saved playback volume; using the default.",
+      error,
+    );
     return { ...DEFAULT_PLAYBACK_VOLUME };
   }
 }
@@ -57,7 +68,11 @@ function savePlaybackVolume(volume: number, lastNonMutedVolume: number) {
       JSON.stringify({ volume, lastNonMutedVolume }),
     );
   } catch (error) {
-    globalThis.console.error("Could not save playback volume.", error);
+    logger.warn(
+      "features/playback/composables/useVolume",
+      "Could not save playback volume.",
+      error,
+    );
   }
 }
 
@@ -91,6 +106,7 @@ export function usePlaybackVolume() {
           volumeError.value = "";
         }
       } catch (error) {
+        logger.warn("playback", "volume_update_failed", error);
         synchronizedVolume = null;
         isVolumeSyncReady.value = false;
         volumeError.value = `Volume update failed: ${errorMessage(error)}`;

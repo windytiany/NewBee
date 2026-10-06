@@ -81,5 +81,14 @@ pub(crate) fn save_track(
         Ok::<_, String>(())
     })();
     result.error = outcome.err();
+    if result.database_updated {
+        log::info!(
+            "event=metadata_saved trackId={track_id} path={:?} fileWritten={} databaseUpdated=true",
+            result.path,
+            result.file_written
+        );
+    } else {
+        log::warn!("event=metadata_save_failed trackId={track_id} path={:?} fileWritten={} databaseUpdated=false error={:?}", result.path, result.file_written, result.error);
+    }
     result
 }

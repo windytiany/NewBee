@@ -173,6 +173,7 @@
 </template>
 
 <script setup lang="ts">
+import { logger } from "@/shared/logging/logger";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { usePlaybackControls } from "@/features/playback/composables/useControls";
 import PlaybackSpectrum from "@/features/playback/components/controls/PlaybackSpectrum.vue";
@@ -292,7 +293,9 @@ useNotification(() => {
       ].filter(Boolean),
     ),
   ].join("\n");
-  return message ? { type: "error", message, key: "playback" } : null;
+  if (!message) return null;
+  logger.info("playback", "failure_feedback_shown");
+  return { type: "error", message: "播放操作失败，请重试或查看日志", key: "playback" };
 });
 const progressPercent = computed(() =>
   playbackStatus.value.durationMs > 0

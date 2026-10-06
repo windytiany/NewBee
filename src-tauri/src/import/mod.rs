@@ -162,5 +162,5 @@ fn read_artwork(tag: &Tag) -> Result<Option<EmbeddedArtwork>, String> {
 
 fn record_failure(result: &mut ImportResult, path: &Path, error: &str) {
     result.failed += 1;
-    eprintln!("Failed to scan '{}': {error}", path.display());
+    log::warn!("Failed to scan '{}': {error}", path.display());
 }

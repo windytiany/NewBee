@@ -429,7 +429,7 @@ fn start_playback(
                 track.artist.as_deref().unwrap_or(""),
             );
             if let Err(error) = app.emit("playback-track-started", &track) {
-                eprintln!("Could not notify track transition: {error}");
+                log::warn!("Could not notify track transition: {error}");
             }
         }
     });

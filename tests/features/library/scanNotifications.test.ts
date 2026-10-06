@@ -54,17 +54,17 @@ describe("scan notifications", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "success",
-      message: "扫描完成：新增 2，更新 3，跳过 4，读取失败 0",
+      message: "扫描完成：新增 2 首，更新 3 首",
     });
     expect(events).toEqual(["newbee:library-changed"]);
     expect(scan.isScanning.value).toBe(false);
   });
 
-  it("keeps partial failure statistics as a persistent warning", async () => {
+  it("reports partial failures as a recoverable warning", async () => {
     const scan = createScan(async () => ({ added: 2, updated: 0, skipped: 0, failed: 1 }));
     await scan.scanMusicLibrary();
     expect(notifications.items.value[0]).toMatchObject({ type: "warning" });
-    expect(notifications.items.value[0].message).toContain("读取失败 1");
+    expect(notifications.items.value[0].message).toContain("1 首失败");
     notifications.dismiss(notifications.items.value[0].id);
     expect(scan.scanResult.value?.failed).toBe(1);
   });
@@ -77,7 +77,7 @@ describe("scan notifications", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "扫描失败：permission denied",
+      message: "扫描失败，请查看日志",
     });
     expect(events).toEqual([]);
     expect(scan.isScanning.value).toBe(false);

@@ -23,12 +23,14 @@ export function createTagsApi(invokeCommand: typeof invoke = invoke) {
       changes: TagChange[],
       onProgress: Channel<TagSaveResult>,
       lyricsAction: LyricsMarkAction,
+      operationId?: string,
     ) =>
       invokeCommand<TagSaveResult[]>("save_track_metadata", {
         trackIds,
         changes,
         onProgress,
         lyricsAction,
+        ...(operationId ? { operationId } : {}),
       }),
     searchReleases: (artist: string, album: string, offset: number) =>
       invokeCommand<SearchResults>("search_album_releases", { artist, album, offset }),
@@ -42,6 +44,13 @@ export function createTagsApi(invokeCommand: typeof invoke = invoke) {
       patches: TrackPatch[],
       cover: CoverData | null,
       onProgress: Channel<TagSaveResult>,
-    ) => invokeCommand<TagSaveResult[]>("save_album_tags", { patches, cover, onProgress }),
+      operationId?: string,
+    ) =>
+      invokeCommand<TagSaveResult[]>("save_album_tags", {
+        patches,
+        cover,
+        onProgress,
+        ...(operationId ? { operationId } : {}),
+      }),
   };
 }

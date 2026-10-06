@@ -7,15 +7,21 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn scan_music_library(
+    operation_id: Option<String>,
     app: tauri::AppHandle,
     write: State<'_, WriteState>,
 ) -> Result<ImportResult, String> {
     let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = guard;
-        use tauri::Manager;
-        let database = app.state::<Database>();
-        run_scan(&database)
+        crate::logging::with_operation(operation_id.clone(), || {
+            let _guard = guard;
+            log::info!("event=import_started operationId={operation_id:?}");
+            use tauri::Manager;
+            let database = app.state::<Database>();
+            let result = run_scan(&database);
+            log::info!("event=import_completed operationId={operation_id:?}");
+            result
+        })
     })
     .await
     .map_err(|error| format!("Music library scan task failed: {error}"))?

@@ -1,6 +1,6 @@
 import { computed, markRaw, nextTick, reactive, ref, watch } from "vue";
 import type { Ref } from "vue";
-import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import { useNotification } from "@/shared/notifications/useNotification";
 import { usePlaylistPage } from "@/features/playlist/composables/usePage";
 import { usePlaybackSession } from "@/features/playback/session";
@@ -19,6 +19,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
   const playlistList = ref<PlaylistListFocus | null>(null);
   const renamePlaylistDialog = ref<ManagementDialog | null>(null);
   const deletePlaylistDialog = ref<ManagementDialog | null>(null);
+  const managementError = ref("");
   const managementPlaylistId = ref<number | null>(null);
   const managementDialogType = ref<PlaylistManagementDialog | null>(null);
   const managementOriginalIndex = ref<number | null>(null);
@@ -38,10 +39,18 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
   for (const [key, source] of [
     ["playlist-list", page.playlistsError],
     ["playlist-tracks", page.playlistTracksError],
-    ["playlist-action", page.playlistActionError],
   ] as const) {
-    useNotification(() => (source.value ? { type: "error", message: source.value, key } : null));
+    watch(source, (message) => {
+      if (message) logger.error("playlist", key, message);
+    });
   }
+
+  useNotification(() => {
+    const message = page.playlistActionError.value;
+    if (!message) return null;
+    logger.error("playlist", "action_failed", message);
+    return { type: "error", message: "歌单操作失败，请重试或查看日志", key: "playlist-action" };
+  });
 
   function showCreatePlaylistDialog() {
     createPlaylistDialog.value?.show();
@@ -53,6 +62,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
   }
 
   function resetPlaylistManagement() {
+    managementError.value = "";
     closePlaylistManagementDialog();
     activePlaylistManagementRequestId = ++playlistManagementRequestSequence;
     managementPlaylistId.value = null;
@@ -75,6 +85,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
 
   function requestPlaylistManagement(dialogType: PlaylistManagementDialog, playlistId: number) {
     if (!active.value) return;
+    managementError.value = "";
     const originalIndex = page.playlists.value.findIndex((playlist) => playlist.id === playlistId);
     if (originalIndex < 0 || page.pendingPlaylistIds.value.includes(playlistId)) return;
 
@@ -142,11 +153,8 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
     if (!isCurrentPlaylistManagementRequest(playlistId, "rename", requestId)) return;
 
     if (result.status === "error") {
-      notify({
-        type: "error",
-        message: `重命名歌单失败：${result.message}`,
-        key: "playlist-management",
-      });
+      logger.error("playlist", "rename_failed", result.message, { playlistId });
+      managementError.value = "重命名歌单失败，请重试或查看日志";
       return;
     }
     resetPlaylistManagement();
@@ -168,11 +176,8 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
     if (!isCurrentPlaylistManagementRequest(playlistId, "delete", requestId)) return;
 
     if (result.status === "error") {
-      notify({
-        type: "error",
-        message: `删除歌单失败：${result.message}`,
-        key: "playlist-management",
-      });
+      logger.error("playlist", "delete_failed", result.message, { playlistId });
+      managementError.value = "删除歌单失败，请重试或查看日志";
       return;
     }
     resetPlaylistManagement();
@@ -203,6 +208,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
       renamePlaylistDialog,
       deletePlaylistDialog,
     }),
+    managementError,
     managementPlaylist,
     managementDialogType,
     managementPlaylistPending,

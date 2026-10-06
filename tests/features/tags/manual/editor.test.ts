@@ -55,7 +55,6 @@ function fixture(overrides: Partial<TagEditorOptions> = {}) {
       synchronized.push(ids);
     },
     editFiles: (_ids, save) => save(),
-    notify: () => 1,
     ...overrides,
   });
   return { editor, saves, synchronized };

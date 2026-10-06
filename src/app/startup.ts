@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
 import { restoreTheme } from "@/features/settings/theme";
@@ -16,6 +17,6 @@ export async function showMainWindow() {
     });
     await invoke("show_main_window");
   } catch (error) {
-    globalThis.console.error("Could not show the main window after startup.", error);
+    logger.warn("app/startup", "Could not show the main window after startup.", error);
   }
 }

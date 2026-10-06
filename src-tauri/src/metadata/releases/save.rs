@@ -53,6 +53,7 @@ pub(crate) async fn save_album_tags(
     mut patches: Vec<TrackPatch>,
     cover: Option<CoverData>,
     on_progress: Channel<MetadataSaveResult>,
+    operation_id: Option<String>,
     app: tauri::AppHandle,
     write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
@@ -63,29 +64,31 @@ pub(crate) async fn save_album_tags(
         .transpose()?;
     let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = guard;
-        let database = app.state::<Database>();
-        let results = patches
-            .iter()
-            .map(|patch| {
-                let result = save_track(
-                    &database,
-                    patch.track_id,
-                    &patch.changes,
-                    LyricsMarkAction::Keep,
-                    if patch.write_cover {
-                        cover.as_ref()
-                    } else {
-                        None
-                    },
-                );
-                if let Err(error) = on_progress.send(result.clone()) {
-                    eprintln!("Could not report album metadata progress: {error}");
-                }
-                result
-            })
-            .collect();
-        Ok(results)
+        crate::logging::with_operation(operation_id.clone(), || {
+            let _guard = guard;
+            let database = app.state::<Database>();
+            let results = patches
+                .iter()
+                .map(|patch| {
+                    let result = save_track(
+                        &database,
+                        patch.track_id,
+                        &patch.changes,
+                        LyricsMarkAction::Keep,
+                        if patch.write_cover {
+                            cover.as_ref()
+                        } else {
+                            None
+                        },
+                    );
+                    if let Err(error) = on_progress.send(result.clone()) {
+                        log::warn!("Could not report album metadata progress: {error}");
+                    }
+                    result
+                })
+                .collect();
+            Ok(results)
+        })
     })
     .await
     .map_err(|error| format!("保存标签任务失败：{error}"))?

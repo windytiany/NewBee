@@ -44,7 +44,6 @@ function fixture(overrides: Partial<ReleaseEditorOptions> = {}) {
       synchronized.push(ids);
     },
     editFiles: (_ids, save) => save(),
-    notify: () => 1,
     ...overrides,
   });
   return { editor, saves, searches, synchronized };

@@ -9,6 +9,8 @@ import { notifications } from "@/shared/notifications/center";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { LyricsBatchEvent, LyricsBatchOutcome } from "@/features/lyrics/types";
 
+import { logger, operationId } from "@/shared/logging/logger";
+
 const TASK_KEY = "lyrics-download";
 export type LyricsBatchOptions = LyricsBatchCooperationOptions & {
   synchronize: () => void | Promise<void>;
@@ -51,6 +53,8 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
 
   async function run(trackIds: readonly number[]) {
     if (state.running) return;
+    const id = operationId("lyrics-download");
+    logger.info("lyrics", "download_started", { operationId: id, count: trackIds.length });
     synchronization.reset();
     Object.assign(state, {
       running: true,
@@ -82,12 +86,30 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       });
       report();
     }
+    function logOutcome(outcome: LyricsBatchOutcome, final = false) {
+      logger.write(
+        outcome.error || outcome.result?.error ? "warn" : "info",
+        "lyrics",
+        final ? "download_final_result" : "download_result",
+        {
+          operationId: id,
+          trackId: outcome.trackId,
+          kind: outcome.kind,
+          error: outcome.error || outcome.result?.error,
+          fileWritten: outcome.result?.fileWritten,
+          databaseUpdated: outcome.result?.databaseUpdated,
+        },
+      );
+    }
     const cooperation = createLyricsBatchCooperation(options, {
-      started: (total) => {
+      operationId: id,
+      started: (total, batchId) => {
+        logger.info("lyrics", "batch_started", { operationId: id, batchId, count: total });
         state.total = total;
         report();
       },
       outcome: (outcome) => {
+        logOutcome(outcome);
         outcomes.set(outcome.trackId, outcome);
         update();
       },
@@ -100,7 +122,10 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       state.total = ids.length;
       const summary = await cooperation.run(ids);
       outcomes.clear();
-      for (const outcome of summary.results) outcomes.set(outcome.trackId, outcome);
+      for (const outcome of summary.results) {
+        logOutcome(outcome, true);
+        outcomes.set(outcome.trackId, outcome);
+      }
       state.cancelling = summary.status === "cancelled";
       failure = summary.error || (summary.status === "failed" ? "歌词下载批次失败。" : "");
       update();
@@ -112,22 +137,34 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         outcome.result ? [outcome.result] : [],
       );
       await synchronization.run({
+        operationId: id,
         targets: results.map(({ trackId, path }) => ({ trackId, path })),
         writeTrackIds: [],
         execute: async () => results,
       });
       if (state.synchronizationError)
         failure = [failure, state.synchronizationError].filter(Boolean).join("\n");
-      const firstError = [...outcomes.values()].find(
-        (outcome) => outcome.error || outcome.result?.error,
-      );
-      const detail = firstError?.error || firstError?.result?.error;
+      const inconsistent = results.some((result) => result.fileWritten && !result.databaseUpdated);
+      logger.info("lyrics", "download_completed", {
+        operationId: id,
+        cancelled: state.cancelling,
+        written: state.written,
+        missing: state.missing,
+        instrumental: state.instrumental,
+        failed: state.failed,
+      });
+      if (failure) logger.warn("lyrics", "download_failed", failure, { operationId: id });
       options.notifications.removeTask(TASK_KEY);
       options.notifications.notify({
         type: failure || state.failed ? "warning" : "success",
-        message:
-          failure ||
-          `歌词更新${state.cancelling ? "已取消" : "完成"}：${state.written} 首已写入，${state.missing} 首未找到，${state.instrumental} 首纯音乐已标记，${state.failed} 首失败。${detail ? `\n${detail}` : ""}`,
+        persistent: inconsistent || Boolean(state.synchronizationError),
+        message: state.synchronizationError
+          ? "歌词已保存，但界面刷新失败，请重试刷新"
+          : inconsistent
+            ? "歌词已写入，但曲库更新失败，请重新扫描"
+            : failure
+              ? "歌词更新失败，请查看日志"
+              : `歌词更新${state.cancelling ? "已取消" : "完成"}：写入 ${state.written} 首${state.failed ? `，${state.failed} 首失败（详情见日志）` : ""}`,
       });
       state.running = false;
     }
@@ -142,10 +179,13 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       state.running = true;
       try {
         await synchronization.retrySynchronization();
-        options.notifications.notify({
-          type: state.synchronizationError ? "warning" : "success",
-          message: state.synchronizationError || "歌词界面已刷新。",
-        });
+        if (state.synchronizationError)
+          options.notifications.notify({
+            type: "warning",
+            persistent: true,
+            message: "歌词已保存，但界面刷新仍失败，请查看日志",
+            key: TASK_KEY,
+          });
       } finally {
         state.running = false;
       }
@@ -159,10 +199,10 @@ export function useLyricsBatch() {
   const session = usePlaybackSession();
   const api = createLyricsApi(invoke);
   sharedBatch = createLyricsBatch({
-    run: (ids, receive) => {
+    run: (ids, receive, id) => {
       const onProgress = new Channel<LyricsBatchEvent>();
       onProgress.onmessage = receive;
-      return api.run(ids, onProgress);
+      return api.run(ids, onProgress, id);
     },
     commitStep: api.commitStep,
     completeStep: api.completeStep,

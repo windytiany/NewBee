@@ -27,8 +27,12 @@ export function createLyricsApi(invokeCommand: LyricsInvoker = invoke) {
     automatic: (trackId: number) => invokeCommand<LyricsContent>("find_track_lyrics", { trackId }),
     targets: (trackIds: number[]) =>
       invokeCommand<LyricsDownloadTarget[]>("get_lyrics_download_targets", { trackIds }),
-    run: (trackIds: number[], onProgress: Channel<LyricsBatchEvent>) =>
-      invokeCommand<LyricsBatchSummary>("run_lyrics_download", { trackIds, onProgress }),
+    run: (trackIds: number[], onProgress: Channel<LyricsBatchEvent>, operationId: string) =>
+      invokeCommand<LyricsBatchSummary>("run_lyrics_download", {
+        trackIds,
+        onProgress,
+        operationId,
+      }),
     commitStep: (batchId: number, stepId: number) =>
       invokeCommand<TagSaveResult>("commit_lyrics_download_step", { batchId, stepId }),
     completeStep: (batchId: number, stepId: number, error: string | null) =>

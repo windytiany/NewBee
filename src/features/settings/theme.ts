@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
 
@@ -21,6 +22,6 @@ export async function restoreTheme() {
     const settings = await api.get();
     applyTheme(settings.theme);
   } catch (error) {
-    globalThis.console.error("Could not restore the saved theme.", error);
+    logger.warn("features/settings/theme", "Could not restore the saved theme.", error);
   }
 }

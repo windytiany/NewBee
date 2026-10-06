@@ -41,6 +41,7 @@ function start(isTauriApp = true) {
       createApp: () => ({ mount: () => events.push("mount") }),
       nextTick: () => rendered,
     },
+    "@/app/logging": { installErrorLogging: () => {} },
     "@/app/App.vue": { default: {} },
     "@/app/styles/main.css": {},
     "@/features/settings/theme": { restoreTheme: async () => events.push("restore-theme") },

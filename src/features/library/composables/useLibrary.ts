@@ -1,4 +1,5 @@
-import { nextTick, reactive, ref, markRaw } from "vue";
+import { logger } from "@/shared/logging/logger";
+import { watch, nextTick, reactive, ref, markRaw } from "vue";
 import type { Ref } from "vue";
 import { useLibraryBrowser } from "@/features/library/composables/useBrowser";
 import type { LibraryAlbumSelection, TrackSummary } from "@/features/library/types";
@@ -28,7 +29,9 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
     ["library-albums", page.albumsError],
     ["library-tracks", page.tracksError],
   ] as const) {
-    useNotification(() => (source.value ? { type: "error", message: source.value, key } : null));
+    watch(source, (message) => {
+      if (message) logger.error("library", key, message);
+    });
   }
   useNotification(() => {
     if (page.isTrackActionPending.value) return null;
@@ -38,7 +41,27 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
     if (!message) return null;
     let type = page.trackActionMessageType.value as "success" | "warning" | "error";
     if (page.trackActionError.value) type = page.trackActionMessage.value ? "warning" : "error";
-    return { type, message, key: type === "success" ? undefined : "library-action" };
+    if (page.trackActionError.value)
+      logger.warn("library", "action_failed", page.trackActionError.value);
+    if (deleteAlbumTarget.value || deleteTrackTarget.value) return null;
+    const removal = page.trackActionRemoval.value;
+    const inconsistent = Boolean(
+      removal && removal.deletedCount > 0 && (removal.failedCount > 0 || removal.queueSyncFailed),
+    );
+    if (inconsistent) type = "warning";
+    else if (removal && removal.failedCount > 0) type = "error";
+    return {
+      type,
+      message: page.trackActionError.value
+        ? inconsistent
+          ? `已从曲库移除 ${removal?.deletedCount} 首${removal?.failedCount ? `，${removal?.failedCount} 首移除失败` : ""}${removal?.queueSyncFailed ? "，队列同步失败" : ""}，请查看日志`
+          : removal
+            ? "曲库移除失败，请重试或查看日志"
+            : page.trackActionMessage.value || "曲库操作失败，请重试或查看日志"
+        : message,
+      persistent: inconsistent,
+      key: type === "success" ? undefined : "library-action",
+    };
   });
 
   async function addTracksToExistingPlaylist(trackIds: number[], playlistId: number) {
@@ -53,6 +76,9 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
 
   function requestAlbumDeletion(album: LibraryAlbumSelection) {
     if (page.isTrackActionPending.value) return;
+    page.trackActionError.value = "";
+    page.trackActionMessage.value = "";
+    page.trackActionRemoval.value = null;
     deleteAlbumTarget.value = album;
     void nextTick(() => deleteAlbumDialog.value?.show());
   }
@@ -72,6 +98,9 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
   function requestTrackDeletion(trackId: number) {
     const track = page.tracks.value.find((entry) => entry.id === trackId);
     if (!track) return;
+    page.trackActionError.value = "";
+    page.trackActionMessage.value = "";
+    page.trackActionRemoval.value = null;
     deleteTrackTarget.value = track;
     void nextTick(() => deleteTrackDialog.value?.show());
   }

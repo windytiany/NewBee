@@ -196,13 +196,11 @@ describe("library scan dialog", () => {
     await settle();
     click(button(dialog.root, "添加目录"));
     await settle();
-    expect(notifications.items.value[0]).toMatchObject({
-      type: "info",
-      message: "该目录已经保存。",
-    });
+    expect(textContent(dialog.root)).toContain("目录已添加");
+    expect(notifications.items.value).toEqual([]);
   });
 
-  it("directory operation failures still notify and do not remove the saved entry", async () => {
+  it("directory operation failures stay inline and do not remove the saved entry", async () => {
     const dialog = mountDialog(idleScan(), async (command) => {
       if (command === "list_music_library_directories") return [directory];
       throw new Error("permission denied");
@@ -210,17 +208,13 @@ describe("library scan dialog", () => {
     await settle();
     click(button(dialog.root, "添加目录"));
     await settle();
-    expect(notifications.items.value[0]).toMatchObject({
-      type: "error",
-      message: "添加目录失败：permission denied",
-    });
+    expect(textContent(dialog.root)).toContain("添加目录失败");
+    expect(notifications.items.value).toEqual([]);
     notifications.clear();
     click(button(dialog.root, "移除"));
     await settle();
-    expect(notifications.items.value[0]).toMatchObject({
-      type: "error",
-      message: "移除目录失败：permission denied",
-    });
+    expect(textContent(dialog.root)).toContain("移除目录失败");
+    expect(notifications.items.value).toEqual([]);
     expect(textContent(dialog.root)).toContain(directory.displayPath);
   });
 
@@ -246,7 +240,7 @@ describe("library scan dialog", () => {
     expect(scan.isScanning.value).toBe(false);
     expect(notifications.items.value[0]).toMatchObject({
       type: "success",
-      message: "扫描完成：新增 2，更新 1，跳过 0，读取失败 0",
+      message: "扫描完成：新增 2 首，更新 1 首",
     });
     expect(events).toEqual(["newbee:library-changed"]);
   });
@@ -275,7 +269,7 @@ describe("library scan dialog", () => {
     await settle();
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "扫描失败：database unavailable",
+      message: "扫描失败，请查看日志",
     });
     expect(events).toEqual([]);
   });

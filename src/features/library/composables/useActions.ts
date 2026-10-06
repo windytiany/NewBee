@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { ref } from "vue";
 import type { Ref } from "vue";
 import type { LibraryInvoker } from "@/features/library/api";
@@ -28,6 +29,11 @@ export function useLibraryActions(
   const trackActionError = ref("");
   const trackActionMessage = ref("");
   const trackActionMessageType = ref<"success" | "warning">("success");
+  const trackActionRemoval = ref<{
+    deletedCount: number;
+    failedCount: number;
+    queueSyncFailed: boolean;
+  } | null>(null);
   const playbackSession = usePlaybackSession();
   const { currentTrack, activeQueueRowKey } = playbackSession.state;
   const {
@@ -48,6 +54,7 @@ export function useLibraryActions(
     isTrackActionPending.value = true;
     trackActionError.value = "";
     trackActionMessage.value = "";
+    trackActionRemoval.value = null;
     try {
       if (!(await action())) {
         trackActionError.value = `${name}失败：操作未执行。`;
@@ -55,7 +62,8 @@ export function useLibraryActions(
       }
       return true;
     } catch (error) {
-      trackActionError.value = `${name}失败：${errorMessage(error)}`;
+      logger.error("library", "action_failed", error, { action: name });
+      trackActionError.value = `${name}失败`;
       return false;
     } finally {
       isTrackActionPending.value = false;
@@ -143,12 +151,14 @@ export function useLibraryActions(
         .map(({ trackName, message }) => `${trackName}（${message}）`)
         .join("、")}`;
       trackActionMessage.value = "";
+      trackActionRemoval.value = null;
       return { successfulTrackIds, failures: unavailableTracks };
     }
 
     isTrackActionPending.value = true;
     trackActionError.value = "";
     trackActionMessage.value = "";
+    trackActionRemoval.value = null;
     try {
       return await appendSourceTracksToPlaylist(trackIds, playlistId, tracks.value);
     } finally {
@@ -178,6 +188,7 @@ export function useLibraryActions(
         await playlistApi.addTrack(trackId, playlistId);
         successfulTrackIds.push(trackId);
       } catch (error) {
+        logger.warn("library", "playlist_add_failed", error, { trackId, playlistId });
         failures.push({
           trackId,
           trackName: track.title ?? `曲目 ${trackId}`,
@@ -188,10 +199,8 @@ export function useLibraryActions(
 
     trackActionMessageType.value = failures.length ? "warning" : "success";
     trackActionMessage.value = failures.length
-      ? `已成功添加 ${successfulTrackIds.length} 首；${failures.length} 首失败：${failures
-          .map(({ trackName, message }) => `${trackName}（${message}）`)
-          .join("、")}`
-      : `已成功添加 ${successfulTrackIds.length} 首到播放列表。`;
+      ? `已添加 ${successfulTrackIds.length} 首，${failures.length} 首失败（详情见日志）`
+      : `已添加 ${successfulTrackIds.length} 首到歌单`;
     return { successfulTrackIds, failures };
   }
 
@@ -205,8 +214,14 @@ export function useLibraryActions(
     isTrackActionPending.value = true;
     trackActionError.value = "";
     trackActionMessage.value = "";
+    trackActionRemoval.value = null;
     try {
       const result = await deleteLibraryTrack(trackId);
+      trackActionRemoval.value = {
+        deletedCount: result.status === "not-deleted" ? 0 : 1,
+        failedCount: result.status === "not-deleted" ? 1 : 0,
+        queueSyncFailed: result.status === "deleted-queue-sync-failed",
+      };
       if (result.status !== "not-deleted") reportLibraryRemoval([trackId]);
       return result;
     } finally {
@@ -221,7 +236,8 @@ export function useLibraryActions(
       await libraryApi.removeTrack(trackId);
       return { status: "deleted" };
     } catch (error) {
-      const message = `从曲库删除失败：${errorMessage(error)}`;
+      logger.error("library", "remove_failed", error, { trackId });
+      const message = "从曲库移除失败，请重试或查看日志";
       trackActionError.value = message;
       return { status: "not-deleted", message };
     }
@@ -265,6 +281,7 @@ export function useLibraryActions(
       default:
         throw new Error("Unexpected queue removal result.");
     }
+    logger.warn("library", "removed_queue_sync_failed", message, { trackId, issue });
     trackActionError.value = message;
     return { status: "deleted-queue-sync-failed", issue, message };
   }
@@ -305,6 +322,8 @@ export function useLibraryActions(
   async function removeAlbumFromLibrary(selection: LibraryAlbumSelection) {
     const deletedTrackIds: number[] = [];
     const failures: string[] = [];
+    let failedCount = 0;
+    let queueSyncFailed = false;
     const completed = await runTrackAction("从曲库删除专辑", async () => {
       const sourceTracks = await loadAlbumActionTracks(selection);
       const clearsActivePlayback = sourceTracks.some(
@@ -340,17 +359,28 @@ export function useLibraryActions(
         }
       }
 
+      queueSyncFailed = failures.length > 0;
       for (const track of sourceTracks) {
         const result = clearsActivePlayback
           ? await removeTrackFromLibraryDatabase(track.id)
           : await deleteLibraryTrack(track.id);
         if (result.status !== "not-deleted") deletedTrackIds.push(track.id);
+        else failedCount++;
+        if (result.status === "deleted-queue-sync-failed") queueSyncFailed = true;
         if (result.status !== "deleted") {
           failures.push(`${track.title ?? `曲目 ${track.id}`}（${result.message}）`);
         }
       }
       reportLibraryRemoval(deletedTrackIds);
-      trackActionError.value = failures.length ? failures.join("、") : "";
+      for (const message of failures) logger.warn("library", "album_remove_partial", message);
+      trackActionRemoval.value = {
+        deletedCount: deletedTrackIds.length,
+        failedCount,
+        queueSyncFailed,
+      };
+      trackActionError.value = failures.length
+        ? `已从曲库移除 ${deletedTrackIds.length} 首${failedCount ? `，${failedCount} 首移除失败` : ""}${queueSyncFailed ? "，队列同步失败" : ""}，请重试或查看日志`
+        : "";
       trackActionMessageType.value = "success";
       trackActionMessage.value = failures.length
         ? `已从曲库删除 ${deletedTrackIds.length} 首曲目。`
@@ -369,6 +399,7 @@ export function useLibraryActions(
     trackActionError,
     trackActionMessage,
     trackActionMessageType,
+    trackActionRemoval,
     currentTrack,
     activeQueueRowKey,
     playTrackFromLibrary,

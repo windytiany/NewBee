@@ -5,6 +5,7 @@ export type NotificationInput = {
   type: NotificationType;
   message: string;
   key?: string;
+  persistent?: boolean;
 };
 export type Notification = NotificationInput & { id: number; count: number };
 export type TaskNotification = {
@@ -61,7 +62,7 @@ export function createNotificationCenter(clock: Clock = systemClock) {
 
   function syncTimers() {
     const visibleIds = new Set(
-      visible.value.flatMap(({ id, type }) => (type === "success" || type === "info" ? [id] : [])),
+      visible.value.flatMap(({ id, persistent }) => (persistent ? [] : [id])),
     );
     for (const [id, lifetime] of lifetimes) {
       if (!visibleIds.has(id) || lifetime.reasons.size > 0) {

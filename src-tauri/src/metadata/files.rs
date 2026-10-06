@@ -452,7 +452,7 @@ impl Drop for TemporaryFile {
     fn drop(&mut self) {
         if let Err(error) = fs::remove_file(&self.0) {
             if error.kind() != io::ErrorKind::NotFound {
-                eprintln!(
+                log::warn!(
                     "Could not clean metadata temporary file '{}': {error}",
                     self.0.display()
                 );

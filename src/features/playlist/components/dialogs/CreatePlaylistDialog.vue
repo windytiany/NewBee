@@ -31,6 +31,7 @@
         />
       </div>
 
+      <p v-if="error" role="alert" class="px-5 pb-4 text-sm text-red-400">{{ error }}</p>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           class="focus-visible:outline-app-accent rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -56,7 +57,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { createPlaylistApi } from "@/features/playlist/api";
 import { ref } from "vue";
-import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 
 const api = createPlaylistApi(invoke);
 
@@ -67,19 +68,16 @@ const emit = defineEmits<{
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const nameInput = ref<InstanceType<typeof globalThis.HTMLInputElement> | null>(null);
 const name = ref("");
+const error = ref("");
 const invalidName = ref(false);
 const isCreating = ref(false);
-
-function errorMessage(value: unknown) {
-  if (value instanceof Error) return value.message;
-  return typeof value === "string" ? value : "未知错误";
-}
 
 function show() {
   if (dialogElement.value?.open) return;
 
   name.value = "";
   invalidName.value = false;
+  error.value = "";
   dialogElement.value?.showModal();
   nameInput.value?.focus();
 }
@@ -92,6 +90,7 @@ function closeDialog() {
 function resetForm() {
   name.value = "";
   invalidName.value = false;
+  error.value = "";
 }
 
 async function createPlaylist() {
@@ -100,23 +99,21 @@ async function createPlaylist() {
   const trimmedName = name.value.trim();
   if (!trimmedName) {
     invalidName.value = true;
-    notify({ type: "error", message: "歌单名称不能为空。", key: "playlist-name-validation" });
+    error.value = "请输入歌单名称";
     nameInput.value?.focus();
     return;
   }
 
   isCreating.value = true;
   invalidName.value = false;
+  error.value = "";
   try {
     const playlistId = await api.create(trimmedName);
     dialogElement.value?.close();
     emit("created", playlistId);
   } catch (cause) {
-    notify({
-      type: "error",
-      message: `创建歌单失败：${errorMessage(cause)}`,
-      key: "playlist-create",
-    });
+    logger.error("playlist", "create_failed", cause);
+    error.value = "创建歌单失败，请重试或查看日志";
   } finally {
     isCreating.value = false;
   }

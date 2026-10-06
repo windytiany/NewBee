@@ -50,6 +50,7 @@ impl Drop for Fixture {
 fn request(ids: &[i64]) -> BatchRequest {
     BatchRequest {
         track_ids: ids.to_vec(),
+        operation_id: "lyrics-test:1".into(),
         providers: default_providers(),
     }
 }
@@ -97,6 +98,7 @@ fn runs_real_saves_marks_and_missing_results_and_releases_the_guard() {
                         assert!(payload.get("text").is_none());
                         requested.borrow_mut().push(track_id);
                         let task = state.task(batch_id).unwrap();
+                        assert_eq!(task.operation_id, "lyrics-test:1");
                         assert!(task.authorize(step_id + 100).is_err());
                         assert!(state.task(batch_id + 100).is_err());
                         scope.spawn(move || {

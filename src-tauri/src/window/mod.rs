@@ -44,7 +44,9 @@ pub fn initialize(app: &AppHandle) {
             match window.is_visible() {
                 Ok(true) => save_state(&app),
                 Ok(false) => {}
-                Err(error) => eprintln!("Could not check window visibility before saving: {error}"),
+                Err(error) => {
+                    log::warn!("Could not check window visibility before saving: {error}")
+                }
             }
         }
     });
@@ -57,7 +59,7 @@ pub fn is_ready(app: &AppHandle) -> bool {
 
 fn save_state(app: &AppHandle) {
     if let Err(error) = app.save_window_state(STATE_FLAGS) {
-        eprintln!("Could not persist window state: {error}");
+        log::warn!("Could not persist window state: {error}");
     }
 }
 
@@ -88,7 +90,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
             let lifecycle = window.state::<WindowLifecycle>();
             if let Err(error) = lifecycle.save_requests.send(()) {
-                eprintln!("Could not schedule window state persistence: {error}");
+                log::warn!("Could not schedule window state persistence: {error}");
             }
         }
         WindowEvent::CloseRequested { api, .. } => {
@@ -98,7 +100,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 CloseBehavior::Tray => {
                     // Keep the webview alive for queue controls and track transitions.
                     if let Err(error) = window.hide() {
-                        eprintln!("Could not hide main window: {error}");
+                        log::warn!("Could not hide main window: {error}");
                     }
                 }
                 CloseBehavior::Exit => window.app_handle().exit(0),

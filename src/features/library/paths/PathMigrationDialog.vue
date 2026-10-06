@@ -4,10 +4,18 @@ import { usePathMigration } from "@/features/library/paths/usePathMigration";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
 
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
-const { oldPath, newPath, isMigrating, isTauriApp, migrate: migratePaths } = usePathMigration();
+const {
+  migrationError,
+  oldPath,
+  newPath,
+  isMigrating,
+  isTauriApp,
+  migrate: migratePaths,
+} = usePathMigration();
 
 function show() {
   if (dialogElement.value?.open || isMigrating.value) return;
+  migrationError.value = "";
   oldPath.value = "";
   newPath.value = "";
   dialogElement.value?.showModal();
@@ -76,6 +84,9 @@ defineExpose({ show });
           />
         </label>
       </fieldset>
+      <p v-if="migrationError" role="alert" class="px-5 pb-4 text-sm text-amber-200">
+        {{ migrationError }}
+      </p>
       <p v-if="!isTauriApp" class="text-app-muted px-5 pb-4 text-sm">请在桌面应用中迁移路径。</p>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button

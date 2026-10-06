@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { ref, watch } from "vue";
 export const pageNames = ["Playing", "Library", "Playlist"] as const;
 export type PageName = (typeof pageNames)[number];
@@ -14,7 +15,7 @@ function loadActivePage(): PageName {
     const storedPageName = globalThis.localStorage.getItem(STORAGE_KEY);
     return isPageName(storedPageName) ? storedPageName : DEFAULT_PAGE;
   } catch (error) {
-    globalThis.console.error("Could not read the saved active page; using Playing.", error);
+    logger.warn("app/pages", "Could not read the saved active page; using Playing.", error);
     return DEFAULT_PAGE;
   }
 }
@@ -23,7 +24,7 @@ function saveActivePage(pageName: PageName) {
   try {
     globalThis.localStorage.setItem(STORAGE_KEY, pageName);
   } catch (error) {
-    globalThis.console.error("Could not save the active page.", error);
+    logger.warn("app/pages", "Could not save the active page.", error);
   }
 }
 

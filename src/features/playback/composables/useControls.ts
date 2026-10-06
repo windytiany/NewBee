@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import {
@@ -63,11 +64,19 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
         else unlistenTrackTransition = unlisten;
       })
       .catch((error: unknown) => {
-        globalThis.console.error("Could not listen for track transitions.", error);
+        logger.warn(
+          "features/playback/composables/useControls",
+          "Could not listen for track transitions.",
+          error,
+        );
       });
     void listen<SystemMediaCommand>("system-media-command", ({ payload }) => {
       void handleSystemMediaCommand(payload).catch((error: unknown) => {
-        globalThis.console.error("Could not handle media command.", error);
+        logger.warn(
+          "features/playback/composables/useControls",
+          "Could not handle media command.",
+          error,
+        );
       });
     })
       .then((unlisten) => {
@@ -75,7 +84,11 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
         else unlistenSystemMedia = unlisten;
       })
       .catch((error: unknown) => {
-        globalThis.console.error("Could not listen for media commands.", error);
+        logger.warn(
+          "features/playback/composables/useControls",
+          "Could not listen for media commands.",
+          error,
+        );
       });
     void session.refreshPlaybackStatus();
     playbackStatusPoll = globalThis.setInterval(

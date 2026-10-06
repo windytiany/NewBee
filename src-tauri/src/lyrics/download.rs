@@ -29,13 +29,33 @@ fn search(
     query: &str,
     offset: u32,
 ) -> Result<LyricsSearchResults, String> {
-    providers::search(provider, query, offset)
+    let started = std::time::Instant::now();
+    let result = providers::search(provider, query, offset);
+    log::debug!(
+        "event=lyrics_search provider=netease elapsedMs={} success={}",
+        started.elapsed().as_millis(),
+        result.is_ok()
+    );
+    if let Err(error) = &result {
+        log::warn!("event=lyrics_search_failed error={error}");
+    }
+    result
 }
 fn lyrics(provider: LyricsProvider, id: i64) -> Result<LyricsContent, String> {
     if id <= 0 {
         return Err("无效的歌词候选 ID".to_owned());
     }
-    providers::lyrics(provider, id)
+    let started = std::time::Instant::now();
+    let result = providers::lyrics(provider, id);
+    log::debug!(
+        "event=lyrics_fetch provider=netease candidateId={id} elapsedMs={} success={}",
+        started.elapsed().as_millis(),
+        result.is_ok()
+    );
+    if let Err(error) = &result {
+        log::warn!("event=lyrics_fetch_failed error={error}");
+    }
+    result
 }
 
 #[tauri::command]

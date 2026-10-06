@@ -111,6 +111,7 @@ struct Round {
 
 struct Task {
     id: u64,
+    operation_id: String,
     cancelled: AtomicBool,
     round: Mutex<Option<Round>>,
     changed: Condvar,
@@ -234,7 +235,9 @@ impl Task {
                 LyricsContent::Instrumental => (vec![], LyricsMarkAction::Mark),
                 LyricsContent::Missing => return Err("未找到歌词，不能保存".to_owned()),
             };
-            let result = save_track(database, track_id, &changes, action, None);
+            let result = crate::logging::with_operation(Some(self.operation_id.clone()), || {
+                save_track(database, track_id, &changes, action, None)
+            });
             let deadline = Instant::now() + timeout;
             let mut round = self.lock()?;
             let current = round
@@ -287,6 +290,7 @@ enum RoundOutcome {
 
 pub(crate) struct BatchRequest {
     track_ids: Vec<i64>,
+    operation_id: String,
     providers: Vec<LyricsProvider>,
 }
 
@@ -372,6 +376,7 @@ impl LyricsBatchState {
             let guard = write.acquire()?;
             let task = Arc::new(Task {
                 id: self.next_id.fetch_add(1, Ordering::Relaxed) + 1,
+                operation_id: request.operation_id.clone(),
                 cancelled: AtomicBool::new(false),
                 round: Mutex::new(None),
                 changed: Condvar::new(),
@@ -384,104 +389,120 @@ impl LyricsBatchState {
             }
         };
         let task = &lease.task;
-        let mut summary = BatchSummary {
-            batch_id: task.id,
-            status: BatchStatus::Completed,
-            results: vec![],
-            error: None,
-        };
-        let operation = (|| {
-            send(BatchEvent::Started {
+        crate::logging::with_operation(Some(task.operation_id.clone()), || {
+            log::info!(
+                "event=lyrics_batch_started batchId={} count={}",
+                task.id,
+                ids.len()
+            );
+            let mut summary = BatchSummary {
                 batch_id: task.id,
-                total: ids.len(),
-            })?;
-            for (index, track_id) in ids.into_iter().enumerate() {
-                if task.cancelled.load(Ordering::Acquire) {
-                    break;
-                }
-                let track = database.get_track(track_id).and_then(|track| {
-                    track.ok_or_else(|| format!("曲目 {track_id} 已不在数据库中"))
-                });
-                let found = track
-                    .as_ref()
-                    .map_err(Clone::clone)
-                    .and_then(|track| lookup(track, &request.providers, &task.cancelled));
-                if task.cancelled.load(Ordering::Acquire) {
-                    break;
-                }
-                let mut fatal = None;
-                let outcome = match found.and_then(validate_content) {
-                    Err(error) => TrackOutcome::failed(track_id, error),
-                    Ok(LyricsContent::Missing) => TrackOutcome {
-                        track_id,
-                        kind: TrackKind::Missing,
-                        result: None,
-                        error: None,
-                    },
-                    Ok(content) => {
-                        let kind = if matches!(content, LyricsContent::Instrumental) {
-                            TrackKind::Instrumental
-                        } else {
-                            TrackKind::Available
-                        };
-                        let step_id = index as u64 + 1;
-                        *task.lock()? = Some(Round {
-                            step_id,
-                            deadline: Instant::now() + self.timeout,
-                            phase: Phase::AwaitingAuthorization,
-                        });
-                        send(BatchEvent::SaveRequested {
-                            batch_id: task.id,
-                            step_id,
+                status: BatchStatus::Completed,
+                results: vec![],
+                error: None,
+            };
+            let operation = (|| {
+                send(BatchEvent::Started {
+                    batch_id: task.id,
+                    total: ids.len(),
+                })?;
+                for (index, track_id) in ids.into_iter().enumerate() {
+                    if task.cancelled.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let track = database.get_track(track_id).and_then(|track| {
+                        track.ok_or_else(|| format!("曲目 {track_id} 已不在数据库中"))
+                    });
+                    let found = track
+                        .as_ref()
+                        .map_err(Clone::clone)
+                        .and_then(|track| lookup(track, &request.providers, &task.cancelled));
+                    if task.cancelled.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let mut fatal = None;
+                    let outcome = match found.and_then(validate_content) {
+                        Err(error) => TrackOutcome::failed(track_id, error),
+                        Ok(LyricsContent::Missing) => TrackOutcome {
                             track_id,
-                            path: track.as_ref().map_err(Clone::clone)?.path().to_owned(),
-                            content: kind,
-                        })?;
-                        let saved = task.save(database, step_id, track_id, content, self.timeout);
-                        *task.lock()? = None;
-                        task.changed.notify_all();
-                        match saved {
-                            RoundOutcome::Cancelled => break,
-                            RoundOutcome::Finished { result, error } => TrackOutcome {
+                            kind: TrackKind::Missing,
+                            result: None,
+                            error: None,
+                        },
+                        Ok(content) => {
+                            let kind = if matches!(content, LyricsContent::Instrumental) {
+                                TrackKind::Instrumental
+                            } else {
+                                TrackKind::Available
+                            };
+                            let step_id = index as u64 + 1;
+                            *task.lock()? = Some(Round {
+                                step_id,
+                                deadline: Instant::now() + self.timeout,
+                                phase: Phase::AwaitingAuthorization,
+                            });
+                            send(BatchEvent::SaveRequested {
+                                batch_id: task.id,
+                                step_id,
                                 track_id,
-                                kind,
-                                result,
-                                error,
-                            },
-                            RoundOutcome::Failed { result, error } => {
-                                // An unstarted commit is not a failed track; the batch error explains it.
-                                if result.is_none() {
-                                    return Err(error);
-                                }
-                                fatal = Some(error);
-                                TrackOutcome {
+                                path: track.as_ref().map_err(Clone::clone)?.path().to_owned(),
+                                content: kind,
+                            })?;
+                            let saved =
+                                task.save(database, step_id, track_id, content, self.timeout);
+                            *task.lock()? = None;
+                            task.changed.notify_all();
+                            match saved {
+                                RoundOutcome::Cancelled => break,
+                                RoundOutcome::Finished { result, error } => TrackOutcome {
                                     track_id,
                                     kind,
                                     result,
-                                    error: None,
+                                    error,
+                                },
+                                RoundOutcome::Failed { result, error } => {
+                                    // An unstarted commit is not a failed track; the batch error explains it.
+                                    if result.is_none() {
+                                        return Err(error);
+                                    }
+                                    fatal = Some(error);
+                                    TrackOutcome {
+                                        track_id,
+                                        kind,
+                                        result,
+                                        error: None,
+                                    }
                                 }
                             }
                         }
+                    };
+                    log::info!("event=lyrics_track_completed batchId={} trackId={} kind={:?} fileWritten={} databaseUpdated={} error={:?}", task.id, track_id, outcome.kind, outcome.result.as_ref().is_some_and(|result| result.file_written), outcome.result.as_ref().is_some_and(|result| result.database_updated), outcome.error.as_ref().or_else(|| outcome.result.as_ref().and_then(|result| result.error.as_ref())));
+                    summary.results.push(outcome.clone());
+                    send(BatchEvent::TrackCompleted {
+                        batch_id: task.id,
+                        outcome,
+                    })?;
+                    if let Some(error) = fatal {
+                        return Err(error);
                     }
-                };
-                summary.results.push(outcome.clone());
-                send(BatchEvent::TrackCompleted {
-                    batch_id: task.id,
-                    outcome,
-                })?;
-                if let Some(error) = fatal {
-                    return Err(error);
                 }
+                Ok::<_, String>(())
+            })();
+            if let Err(error) = operation {
+                summary.status = BatchStatus::Failed;
+                summary.error = Some(error);
+            } else if task.cancelled.load(Ordering::Acquire) {
+                summary.status = BatchStatus::Cancelled;
             }
-            Ok::<_, String>(())
-        })();
-        if let Err(error) = operation {
-            summary.status = BatchStatus::Failed;
-            summary.error = Some(error);
-        } else if task.cancelled.load(Ordering::Acquire) {
-            summary.status = BatchStatus::Cancelled;
-        }
-        Ok(summary)
+            log::info!(
+                "event=lyrics_batch_completed batchId={} cancelled={} count={} error={:?}",
+                task.id,
+                task.cancelled.load(Ordering::Acquire),
+                summary.results.len(),
+                summary.error
+            );
+            Ok(summary)
+        })
     }
 }
 
@@ -509,6 +530,7 @@ fn validate_content(content: LyricsContent) -> Result<LyricsContent, String> {
 #[tauri::command]
 pub(crate) async fn run_lyrics_download(
     track_ids: Vec<i64>,
+    operation_id: String,
     on_progress: Channel<BatchEvent>,
     app: tauri::AppHandle,
 ) -> Result<BatchSummary, String> {
@@ -519,6 +541,7 @@ pub(crate) async fn run_lyrics_download(
             &app.state::<WriteState>(),
             BatchRequest {
                 track_ids,
+                operation_id,
                 providers,
             },
             |event| {

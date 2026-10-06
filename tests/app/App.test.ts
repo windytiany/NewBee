@@ -41,6 +41,11 @@ const mountedApps: Array<{ unmount: () => void }> = [];
 const libraryTrackActionError = Vue.ref("");
 const libraryTrackActionMessage = Vue.ref("");
 const libraryTrackActionMessageType = Vue.ref<"success" | "warning">("success");
+const libraryTrackActionRemoval = Vue.ref<{
+  deletedCount: number;
+  failedCount: number;
+  queueSyncFailed: boolean;
+} | null>(null);
 const libraryTrackActionPending = Vue.ref(false);
 const playlistActionError = Vue.ref("");
 const artistsError = Vue.ref("");
@@ -62,6 +67,7 @@ async function createComponent(source: string) {
       tracksError: Vue.ref(""),
       isTrackActionPending: libraryTrackActionPending,
       trackActionError: libraryTrackActionError,
+      trackActionRemoval: libraryTrackActionRemoval,
       trackActionMessage: libraryTrackActionMessage,
       trackActionMessageType: libraryTrackActionMessageType,
       currentTrack: Vue.ref(null),
@@ -77,6 +83,11 @@ async function createComponent(source: string) {
       addTracksToPlaylist: async () => ({ successfulTrackIds: [], failures: [] }),
       removeTrackFromLibrary: async () => {
         removalCalls += 1;
+        libraryTrackActionRemoval.value = {
+          deletedCount: removalResult.status === "not-deleted" ? 0 : 1,
+          failedCount: removalResult.status === "not-deleted" ? 1 : 0,
+          queueSyncFailed: removalResult.status === "deleted-queue-sync-failed",
+        };
         if (removalResult.status === "not-deleted") {
           libraryTrackActionError.value = removalResult.message;
         } else if (removalResult.status === "deleted-queue-sync-failed") {
@@ -257,6 +268,7 @@ beforeEach(() => {
   layoutMounts = 0;
   layoutUnmounts = 0;
   libraryTrackActionError.value = "";
+  libraryTrackActionRemoval.value = null;
   libraryTrackActionMessage.value = "";
   libraryTrackActionMessageType.value = "success";
   libraryTrackActionPending.value = false;
@@ -324,15 +336,16 @@ describe("App notification integration", () => {
     expect(notifications.items.value).toEqual([]);
   });
 
-  it("reports a load failure exactly once, even after unrelated state changes", async () => {
+  it("keeps load failures in inline business state without a toast", async () => {
     mountApp();
     artistsError.value = "读取专辑演出者失败：database unavailable";
     await Vue.nextTick();
-    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value).toEqual([]);
+    expect(artistsError.value).toContain("database unavailable");
     activePage.value = "Playlist";
     await Vue.nextTick();
-    expect(notifications.items.value).toHaveLength(1);
-    expect(notifications.items.value[0].count).toBe(1);
+    expect(notifications.items.value).toEqual([]);
+    expect(artistsError.value).toContain("database unavailable");
   });
 });
 
@@ -365,9 +378,8 @@ describe("App track deletion confirmation", () => {
     expect(dialogShowCalls).toBe(1);
     expect(dialogCloseCalls).toBe(0);
     expect(findByTestId(root, "delete-dialog")).not.toBeNull();
-    expect(findByTestId(root, "dialog-error")).toBeNull();
-    expect(notifications.items.value.map(({ message }) => message)).toEqual(["数据库不可用"]);
-    notifications.dismiss(notifications.items.value[0].id);
+    expect(findByTestId(root, "dialog-error")?.text).toBe("数据库不可用");
+    expect(notifications.items.value).toEqual([]);
     expect(libraryTrackActionError.value).toBe("数据库不可用");
     expect(findByTestId(root, "delete-dialog")).not.toBeNull();
     expect(playlistRefreshCalls).toBe(0);
@@ -387,7 +399,10 @@ describe("App track deletion confirmation", () => {
     expect(dialogCloseCalls).toBe(1);
     expect(findByTestId(root, "delete-dialog")).toBeNull();
     expect(findByTestId(root, "library-error")).toBeNull();
-    expect(notifications.items.value.map(({ message }) => message)).toEqual([warning]);
+    expect(notifications.items.value[0]).toMatchObject({
+      message: "已从曲库移除 1 首，队列同步失败，请查看日志",
+      persistent: true,
+    });
     expect(removalCalls).toBe(1);
     expect(playlistRefreshCalls).toBe(0);
   });

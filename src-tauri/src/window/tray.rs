@@ -16,7 +16,7 @@ fn show_main_window(app: &AppHandle) {
         .and_then(|_| window.unminimize())
         .and_then(|_| window.set_focus())
     {
-        eprintln!("Could not restore main window: {error}");
+        log::warn!("Could not restore main window: {error}");
     }
 }
 
@@ -37,7 +37,7 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
             "exit" => app.exit(0),
             command @ ("previous" | "toggle" | "next") => {
                 if let Err(error) = app.emit_to("main", "system-media-command", command) {
-                    eprintln!("Could not forward tray playback command: {error}");
+                    log::warn!("Could not forward tray playback command: {error}");
                 }
             }
             _ => {}

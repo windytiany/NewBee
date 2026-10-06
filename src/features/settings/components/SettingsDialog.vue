@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { logger } from "@/shared/logging/logger";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
 import { ref } from "vue";
@@ -8,12 +9,38 @@ import { applyTheme, THEMES } from "@/features/settings/theme";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
 
 const api = createSettingsApi(invoke);
+const detailedLogging = ref(false);
+const isChangingLogging = ref(false);
+async function changeLogging() {
+  if (isChangingLogging.value) return;
+  isChangingLogging.value = true;
+  error.value = "";
+  try {
+    await invoke<void>("set_detailed_logging", { enabled: detailedLogging.value });
+  } catch (reason) {
+    logger.error("settings", "logging_level_change_failed", reason);
+    detailedLogging.value = !detailedLogging.value;
+    error.value = `切换日志级别失败：${errorMessage(reason)}`;
+  } finally {
+    isChangingLogging.value = false;
+  }
+}
+async function openLogs() {
+  error.value = "";
+  try {
+    await invoke<void>("open_logs_directory");
+  } catch (reason) {
+    logger.error("settings", "open_logs_failed", reason);
+    error.value = `打开日志目录失败：${errorMessage(reason)}`;
+  }
+}
 
 const categories = {
   general: "常规",
   appearance: "外观",
   library: "媒体库",
   lyrics: "歌词",
+  diagnostics: "诊断",
 } as const;
 const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
@@ -55,6 +82,7 @@ async function show() {
     isLoaded.value = true;
   } catch (reason) {
     if (requestId === loadRequestSequence) {
+      logger.error("settings", "load_failed", reason);
       error.value = `读取设置失败：${errorMessage(reason)}`;
     }
   } finally {
@@ -84,6 +112,7 @@ async function save() {
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
   } catch (reason) {
+    logger.error("settings", "save_failed", reason);
     error.value = `保存设置失败：${errorMessage(reason)}`;
   } finally {
     isSaving.value = false;
@@ -151,6 +180,10 @@ defineExpose({ show });
               <template v-else-if="selectedCategory === 'lyrics'">
                 <p>按启用的来源顺序获取歌词，无需登录网易云。</p>
                 <p>当前批量操作下载成功后直接覆盖内嵌歌词，不检查是否缺少。</p>
+              </template>
+              <template v-else-if="selectedCategory === 'diagnostics'">
+                <p>日志仅保存在本机，最多保留约 30 MB。分享前请检查文件路径等隐私信息。</p>
+                <p>详细日志立即生效，下次启动恢复普通日志。不记录歌词正文或封面数据。</p>
               </template>
               <template v-else>
                 <p>按完整发布日期排序，专辑仍只显示年份。</p>
@@ -233,6 +266,27 @@ defineExpose({ show });
               />
               <span class="text-sm">网易云音乐</span>
             </label>
+          </fieldset>
+          <fieldset v-else-if="selectedCategory === 'diagnostics'" :disabled="!isTauriApp">
+            <legend class="sr-only">诊断日志</legend>
+            <button
+              type="button"
+              class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
+              @click="openLogs"
+            >
+              打开日志目录
+            </button>
+            <label class="mt-5 flex items-center gap-3 text-sm">
+              <input
+                v-model="detailedLogging"
+                :disabled="isChangingLogging"
+                type="checkbox"
+                class="accent-app-accent"
+                @change="changeLogging"
+              />
+              详细日志（下次启动恢复默认）
+            </label>
+            <p class="text-app-muted mt-3 text-sm">日志仅保存在本机。分享前请检查路径隐私。</p>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
             <legend class="sr-only">专辑排序</legend>

@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { readonly, ref, watch } from "vue";
 
@@ -17,7 +18,10 @@ function loadCurrentTrack(): NowPlayingTrack | null {
 
     const parsedTrack: unknown = JSON.parse(serializedTrack);
     if (typeof parsedTrack !== "object" || parsedTrack === null || Array.isArray(parsedTrack)) {
-      globalThis.console.error("Saved current track has an invalid format; ignoring it.");
+      logger.warn(
+        "features/playback/runtime/state",
+        "Saved current track has an invalid format; ignoring it.",
+      );
       return null;
     }
 
@@ -28,7 +32,10 @@ function loadCurrentTrack(): NowPlayingTrack | null {
       (storedTrack.title !== null && typeof storedTrack.title !== "string") ||
       (storedTrack.artist !== null && typeof storedTrack.artist !== "string")
     ) {
-      globalThis.console.error("Saved current track is invalid; ignoring it.");
+      logger.warn(
+        "features/playback/runtime/state",
+        "Saved current track is invalid; ignoring it.",
+      );
       return null;
     }
 
@@ -39,7 +46,11 @@ function loadCurrentTrack(): NowPlayingTrack | null {
       playbackId: null,
     };
   } catch (error) {
-    globalThis.console.error("Could not read saved current track; using no current track.", error);
+    logger.warn(
+      "features/playback/runtime/state",
+      "Could not read saved current track; using no current track.",
+      error,
+    );
     return null;
   }
 }
@@ -51,7 +62,7 @@ function saveCurrentTrack(track: NowPlayingTrack) {
       JSON.stringify({ trackId: track.trackId, title: track.title, artist: track.artist }),
     );
   } catch (error) {
-    globalThis.console.error("Could not save current track.", error);
+    logger.warn("features/playback/runtime/state", "Could not save current track.", error);
   }
 }
 
@@ -100,7 +111,11 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     try {
       globalThis.localStorage.removeItem(CURRENT_TRACK_STORAGE_KEY);
     } catch (error) {
-      globalThis.console.error("Could not clear the saved current track.", error);
+      logger.warn(
+        "features/playback/runtime/state",
+        "Could not clear the saved current track.",
+        error,
+      );
     }
     return true;
   }
@@ -171,6 +186,7 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
   ): Promise<boolean> {
     if (isPlaybackCommandPending.value || !canStart()) return false;
 
+    logger.info("playback", "start_requested", { trackId });
     const commandGeneration = playbackCommandGeneration;
     pendingPlaybackCommandGeneration = commandGeneration;
     isPlaybackCommandPending.value = true;
@@ -198,10 +214,12 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
         return false;
       }
 
+      logger.info("playback", "started", { trackId, playbackId: track.playbackId });
       currentTrack.value = track;
       saveCurrentTrack(track);
       return true;
     } catch (error) {
+      logger.error("playback", "start_failed", error, { trackId });
       const message = errorMessage(error);
       const missingFilePrefix = "AUDIO_FILE_NOT_FOUND:";
       playbackStartFailure.value = message.startsWith(missingFilePrefix)

@@ -8,15 +8,21 @@ use tauri::State;
 #[tauri::command]
 pub async fn import_music_files(
     paths: Vec<String>,
+    operation_id: Option<String>,
     app: tauri::AppHandle,
     write: State<'_, WriteState>,
 ) -> Result<ImportResult, String> {
     let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = guard;
-        use tauri::Manager;
-        let database = app.state::<Database>();
-        run_import(&database, &paths)
+        crate::logging::with_operation(operation_id.clone(), || {
+            let _guard = guard;
+            log::info!("event=import_started operationId={operation_id:?}");
+            use tauri::Manager;
+            let database = app.state::<Database>();
+            let result = run_import(&database, &paths);
+            log::info!("event=import_completed operationId={operation_id:?}");
+            result
+        })
     })
     .await
     .map_err(|error| format!("Music file import task failed: {error}"))

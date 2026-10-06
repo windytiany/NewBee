@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { ref, watch } from "vue";
 
 export type PlaybackDisplayMode = "track" | "lyrics" | "both";
@@ -17,7 +18,11 @@ function loadPresentation(): PlaybackDisplayMode {
     }
     return DEFAULT_PRESENTATION;
   } catch (error) {
-    globalThis.console.error("Could not read the saved playing presentation; using track.", error);
+    logger.warn(
+      "features/playback/composables/useDisplayMode",
+      "Could not read the saved playing presentation; using track.",
+      error,
+    );
     return DEFAULT_PRESENTATION;
   }
 }
@@ -26,7 +31,11 @@ function savePresentation(presentation: PlaybackDisplayMode) {
   try {
     globalThis.localStorage.setItem(STORAGE_KEY, presentation);
   } catch (error) {
-    globalThis.console.error("Could not save the playing presentation.", error);
+    logger.warn(
+      "features/playback/composables/useDisplayMode",
+      "Could not save the playing presentation.",
+      error,
+    );
   }
 }
 

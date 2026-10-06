@@ -5,7 +5,7 @@ import type { Ref } from "vue";
 import type { PlaybackCommandInvoker, PlaybackStatus } from "@/features/playback/types";
 
 import type { LyricLine, TrackLyrics } from "@/features/lyrics/types";
-import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 
 export type LyricsState =
@@ -79,11 +79,7 @@ export function useLyrics(options: LyricsOptions) {
     } finally {
       if (version === requestVersion) {
         if (outcome.status === "error") {
-          notify({
-            type: "error",
-            message: `歌词读取失败：${outcome.message}`,
-            key: `track-lyrics:${trackId}`,
-          });
+          logger.warn("lyrics", "read_failed", outcome.message, { trackId });
         }
         lyricsState.value =
           outcome.status === "ready"
@@ -122,6 +118,7 @@ export function useLyrics(options: LyricsOptions) {
   });
 
   return Object.freeze({
+    retry: reloadCurrentLyrics,
     state: readonly(lyricsState),
     activeIndex: computed(() => activeIndices.value.activeIndex),
     activeGroupStartIndex: computed(() => activeIndices.value.activeGroupStartIndex),

@@ -89,7 +89,7 @@ impl SettingsState {
         match self.settings.lock() {
             Ok(settings) => settings.close_behavior,
             Err(error) => {
-                eprintln!("Could not read close behavior: {error}");
+                log::warn!("Could not read close behavior: {error}");
                 CloseBehavior::Tray
             }
         }

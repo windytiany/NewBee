@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { ref } from "vue";
 import type {
   AlbumArtistSummary,
@@ -57,7 +58,8 @@ function loadLibrarySelection(): StoredLibrarySelection {
       album: selection.album,
     };
   } catch (error) {
-    globalThis.console.error(
+    logger.warn(
+      "features/library/composables/useSelection",
       "Could not read the saved library selection; using an empty selection.",
       error,
     );
@@ -85,7 +87,11 @@ export function useLibrarySelection() {
     try {
       globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(selection));
     } catch (error) {
-      globalThis.console.error("Could not save the library selection.", error);
+      logger.warn(
+        "features/library/composables/useSelection",
+        "Could not save the library selection.",
+        error,
+      );
     }
   }
 

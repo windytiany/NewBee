@@ -1,3 +1,4 @@
+import { loggingDependencies } from "./logging";
 import { readFileSync } from "node:fs";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
@@ -23,6 +24,7 @@ export function evaluateModule<Exports = Record<string, unknown>>(
   output: string,
   dependencies: Record<string, unknown>,
 ): Exports {
+  dependencies = { ...loggingDependencies, ...dependencies };
   const module = { exports: {} as Exports };
   new Function("require", "module", "exports", output)(
     (name: string) => {
@@ -58,6 +60,7 @@ export function evaluateSource<Exports = Record<string, unknown>>(
   output: string,
   dependencies: Record<string, unknown>,
 ): Exports {
+  dependencies = { ...loggingDependencies, ...dependencies };
   const modules = new Map<string, { exports: unknown }>();
   function evaluate(source: string, module: { exports: unknown }) {
     new Function("require", "module", "exports", source)(resolve, module, module.exports);

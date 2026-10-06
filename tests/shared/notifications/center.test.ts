@@ -66,13 +66,17 @@ describe("notification center", () => {
     expect(center.tasks.value).toEqual([]);
   });
 
-  it("success/info expire after four seconds, warning/error remain dismissable", () => {
+  it("timed messages expire, explicitly persistent warnings and errors remain dismissable", () => {
     const { clock, advance } = createClock();
     const center = createNotificationCenter(clock);
     center.notify({ type: "success", message: "saved" });
     center.notify({ type: "info", message: "already saved" });
-    const warning = center.notify({ type: "warning", message: "partially saved" });
-    const error = center.notify({ type: "error", message: "failed" });
+    const warning = center.notify({
+      type: "warning",
+      persistent: true,
+      message: "partially saved",
+    });
+    const error = center.notify({ type: "error", persistent: true, message: "failed" });
     advance(3_999);
     expect(center.items.value).toHaveLength(4);
     advance(1);
@@ -87,7 +91,9 @@ describe("notification center", () => {
   it("queued notifications only start their lifetime when visible", () => {
     const { clock, advance } = createClock();
     const center = createNotificationCenter(clock);
-    const errors = [1, 2, 3].map((id) => center.notify({ type: "error", message: String(id) }));
+    const errors = [1, 2, 3].map((id) =>
+      center.notify({ type: "error", persistent: true, message: String(id) }),
+    );
     const queued = center.notify({ type: "success", message: "queued" });
     expect(center.visible.value).toHaveLength(3);
     advance(60_000);
@@ -152,7 +158,12 @@ describe("notification center", () => {
   it("retains hover/focus pauses when a persistent message becomes timed", () => {
     const { clock, advance, tasks } = createClock();
     const center = createNotificationCenter(clock);
-    const id = center.notify({ type: "error", message: "failed", key: "operation" });
+    const id = center.notify({
+      type: "error",
+      persistent: true,
+      message: "failed",
+      key: "operation",
+    });
     center.pause(id, "focus", true);
     center.notify({ type: "success", message: "saved", key: "operation" });
     expect(tasks.size).toBe(0);
@@ -167,7 +178,7 @@ describe("notification center", () => {
     const { clock, advance, tasks } = createClock();
     const center = createNotificationCenter(clock);
     center.notify({ type: "success", message: "saved", key: "operation" });
-    center.notify({ type: "error", message: "failed", key: "operation" });
+    center.notify({ type: "error", persistent: true, message: "failed", key: "operation" });
     expect(tasks.size).toBe(0);
     advance(60_000);
     expect(center.items.value[0].message).toBe("failed");

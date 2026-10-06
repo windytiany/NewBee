@@ -6,7 +6,6 @@ import { createTagsApi } from "@/features/tags/api";
 import { createTagSynchronization } from "@/features/tags/synchronize";
 import { createMetadataSave } from "@/features/tags/save";
 import type { MetadataFileEditor } from "@/features/tags/save";
-import { notify } from "@/shared/notifications/center";
 import { usePlaybackSession } from "@/features/playback/session";
 import { buildTagChanges, createTagDraft } from "@/features/tags/draft";
 import type {
@@ -26,10 +25,10 @@ export type TagEditorOptions = {
     changes: TagChange[],
     progress: (result: TagSaveResult) => void,
     lyricsAction: LyricsMarkAction,
+    operationId?: string,
   ) => Promise<TagSaveResult[]>;
   editFiles: MetadataFileEditor;
   synchronize: (trackIds: number[]) => Promise<void>;
-  notify: typeof notify;
 };
 
 function errorMessage(error: unknown) {
@@ -168,23 +167,10 @@ export function createTagEditor(options: TagEditorOptions) {
     await saving.run({
       targets,
       writeTrackIds: writeIds,
-      execute: (progress) => options.save(ids, changes, progress, action),
+      execute: (progress, operationId) => options.save(ids, changes, progress, action, operationId),
     });
     const failed = state.results.filter((result) => !result.databaseUpdated).length;
     const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
-    if (state.error && failed === state.results.length) {
-      options.notify({
-        type: "error",
-        message: `保存元数据失败：${error}`,
-        key: "metadata-save",
-      });
-    } else {
-      options.notify({
-        type: failed > 0 || error ? "warning" : "success",
-        message: saveMessage(state.tracks.length, state.results.length - failed, failed, error),
-        key: failed > 0 || error ? "metadata-save" : undefined,
-      });
-    }
     state.dirty = failed > 0;
     if (!state.dirty && !error) state.open = false;
   }
@@ -211,12 +197,6 @@ export function createTagEditor(options: TagEditorOptions) {
   };
 }
 
-function saveMessage(targetCount: number, succeeded: number, failed: number, error: string) {
-  let message = failed > 0 ? "元数据保存失败。" : "元数据已保存。";
-  if (targetCount > 1) message = `元数据保存：${succeeded} 首成功，${failed} 首失败。`;
-  return error ? `${message}\n${error}` : message;
-}
-
 let sharedEditor: ReturnType<typeof createTagEditor> | null = null;
 export function useTagEditor() {
   if (sharedEditor) return sharedEditor;
@@ -227,14 +207,13 @@ export function useTagEditor() {
   sharedEditor = createTagEditor({
     loadTracks: api.editableTracks,
     loadAlbum: async (album) => (await library.listAlbumTracks(album)).map((track) => track.id),
-    save: (trackIds, changes, progress, lyricsAction) => {
+    save: (trackIds, changes, progress, lyricsAction, operationId) => {
       const onProgress = new Channel<TagSaveResult>();
       onProgress.onmessage = progress;
-      return api.saveMetadata(trackIds, changes, onProgress, lyricsAction);
+      return api.saveMetadata(trackIds, changes, onProgress, lyricsAction, operationId);
     },
     editFiles: session.withMetadataEditing,
     synchronize: synchronize.tracks,
-    notify,
   });
   return sharedEditor;
 }

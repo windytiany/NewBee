@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { describe, expect, it } from "bun:test";
 import { PlaybackQueueCoordinator } from "@/features/playback/queue/coordinator";
 import type { PlaybackQueueSnapshot } from "@/features/playback/queue/coordinator";
@@ -266,9 +267,9 @@ describe("playback queue persistence", () => {
   });
 
   it("keeps the in-memory queue playable when local storage writes fail", async () => {
-    const originalConsoleError = globalThis.console.error;
+    const originalConsoleError = logger.warn;
     let didLogStorageError = false;
-    globalThis.console.error = () => {
+    logger.warn = () => {
       didLogStorageError = true;
     };
     try {
@@ -287,7 +288,7 @@ describe("playback queue persistence", () => {
       expect(coordinator.snapshot.currentRowKey).toBe("playlist-item:11");
       expect(didLogStorageError).toBe(true);
     } finally {
-      globalThis.console.error = originalConsoleError;
+      logger.warn = originalConsoleError;
     }
   });
 
@@ -340,8 +341,8 @@ describe("playback queue persistence", () => {
     expect(parsePlaybackQueueSnapshot({ version: 2, ...snapshot, playbackHistory: [] })).toBeNull();
 
     storage.setItem(STORAGE_KEY, "not-json");
-    const originalConsoleError = globalThis.console.error;
-    globalThis.console.error = () => {};
+    const originalConsoleError = logger.warn;
+    logger.warn = () => {};
     try {
       expect(loadPlaybackQueueSnapshot(() => storage)).toBeNull();
       expect(
@@ -350,7 +351,7 @@ describe("playback queue persistence", () => {
         }),
       ).toBeNull();
     } finally {
-      globalThis.console.error = originalConsoleError;
+      logger.warn = originalConsoleError;
     }
   });
 });

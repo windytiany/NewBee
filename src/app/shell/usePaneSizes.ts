@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { ref, watch } from "vue";
 
 interface SidebarLayout {
@@ -34,7 +35,8 @@ function loadSidebarLayout(): SidebarLayout {
       rightTopHeight: readStoredNumber(layout.rightTopHeight),
     };
   } catch (error) {
-    console.error(
+    logger.warn(
+      "app/shell/usePaneSizes",
       "Could not read or validate the saved sidebar layout; using adaptive defaults.",
       error,
     );
@@ -58,7 +60,7 @@ function saveSidebarLayout() {
       }),
     );
   } catch (error) {
-    console.error("Could not save the sidebar layout.", error);
+    logger.warn("app/shell/usePaneSizes", "Could not save the sidebar layout.", error);
   }
 }
 

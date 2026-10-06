@@ -3,6 +3,13 @@
     aria-label="播放列表浏览"
     class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-white"
   >
+    <p
+      v-if="props.playlistsError || props.tracksError"
+      role="alert"
+      class="px-3 py-3 text-sm text-amber-200"
+    >
+      读取歌单失败 <button type="button" @click="emit('retry')">重试</button>
+    </p>
     <template v-if="props.playlist">
       <header
         class="to-app-base from-app-header via-app-header-middle shrink-0 bg-linear-to-b px-5 py-6 sm:px-8 sm:py-8"
@@ -279,6 +286,7 @@ watch(visibleTrackKeys, (itemKeys) => playlistTrackFocus.syncVisibleItems(itemKe
 });
 
 const emit = defineEmits<{
+  retry: [];
   playTrack: [playlistItemId: number];
   playPlaylist: [];
   addPlaylistItemsToNext: [playlistItemIds: number[]];

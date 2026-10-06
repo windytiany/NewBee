@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
-import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 
 type LibraryDirectory = {
   id: number;
@@ -10,26 +10,21 @@ type LibraryDirectory = {
 };
 
 export function useDirectories() {
+  const directoryError = ref("");
   const directories = ref<LibraryDirectory[]>([]);
   const isLoadingDirectories = ref(false);
   const directoryLoadFailed = ref(false);
-  function errorMessage(error: unknown): string {
-    if (error instanceof Error) return error.message;
-    return typeof error === "string" ? error : "未知错误";
-  }
 
   async function refreshDirectories() {
     isLoadingDirectories.value = true;
     directoryLoadFailed.value = false;
+    directoryError.value = "";
     try {
       directories.value = await invoke<LibraryDirectory[]>("list_music_library_directories");
     } catch (error) {
       directoryLoadFailed.value = true;
-      notify({
-        type: "error",
-        message: `读取已保存目录失败：${errorMessage(error)}`,
-        key: "scan-directories",
-      });
+      logger.warn("library.directories", "read_failed", error);
+      directoryError.value = "读取已保存目录失败，请重试或查看日志";
     } finally {
       isLoadingDirectories.value = false;
     }
@@ -46,13 +41,10 @@ export function useDirectories() {
 
       const added = await invoke<boolean>("add_music_library_directory", { path: selectedPath });
       await refreshDirectories();
-      if (!added) notify({ type: "info", message: "该目录已经保存。" });
+      if (!added) directoryError.value = "目录已添加";
     } catch (error) {
-      notify({
-        type: "error",
-        message: `添加目录失败：${errorMessage(error)}`,
-        key: "scan-directories",
-      });
+      logger.warn("library.directories", "add_failed", error);
+      directoryError.value = "添加目录失败，请重试或查看日志";
     }
   }
 
@@ -61,15 +53,13 @@ export function useDirectories() {
       await invoke("remove_music_library_directory", { id: directory.id });
       directories.value = directories.value.filter((saved) => saved.id !== directory.id);
     } catch (error) {
-      notify({
-        type: "error",
-        message: `移除目录失败：${errorMessage(error)}`,
-        key: "scan-directories",
-      });
+      logger.warn("library.directories", "remove_failed", error);
+      directoryError.value = "移除目录失败，请重试或查看日志";
     }
   }
 
   return {
+    directoryError,
     directories,
     isLoadingDirectories,
     directoryLoadFailed,

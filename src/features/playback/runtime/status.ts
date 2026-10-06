@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { computed, readonly, ref, watch } from "vue";
 import type { ComputedRef, Ref } from "vue";
 import type {
@@ -48,6 +49,7 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
       durationMs: status.durationMs,
     };
   });
+  let statusFailed = false;
   let statusRequestsInFlight = 0;
   let statusRequestVersion = 0;
   const isStatusUpdatePending = ref(false);
@@ -88,6 +90,8 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
       if (status.nowPlaying) options.observePlaybackTransition(status.nowPlaying);
       if (!isStatusForCurrentTrack(status)) return false;
 
+      if (statusFailed) logger.recovered("playback", "status_unavailable");
+      statusFailed = false;
       internalStatus.value = status;
       await observePlaybackStatus(status);
       if (options.playbackError.value.startsWith("Playback status unavailable:")) {
@@ -96,6 +100,8 @@ export function createPlaybackStatusObserver(options: PlaybackStatusObserverOpti
       return true;
     } catch (error) {
       if (requestVersion === statusRequestVersion) {
+        logger.warn("playback", "status_unavailable", error);
+        statusFailed = true;
         const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
         options.playbackError.value = `Playback status unavailable: ${message}`;
       }
