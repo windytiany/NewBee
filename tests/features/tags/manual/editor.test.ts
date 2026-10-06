@@ -387,7 +387,7 @@ describe("metadata editing", () => {
     expect(editor.state.open).toBe(false);
   });
 
-  it("releases audio only for mark targets that have cached lyrics", async () => {
+  it("releases every mark target even without cached lyrics, but not for unmarking", async () => {
     const editing: number[][] = [];
     const { editor } = fixture({
       loadTracks: async (ids) =>
@@ -401,12 +401,12 @@ describe("metadata editing", () => {
     editor.changeLyricsAction("mark");
     editor.prepareSave();
     await settle();
-    expect(editing).toEqual([[1]]);
+    expect(editing).toEqual([[1, 2]]);
     await editor.openTracks([1, 2]);
     editor.changeLyricsAction("unmark");
     editor.prepareSave();
     await settle();
-    expect(editing).toEqual([[1]]);
+    expect(editing).toEqual([[1, 2]]);
   });
 
   it("ignores late reads after the dialog is closed and reopened", async () => {

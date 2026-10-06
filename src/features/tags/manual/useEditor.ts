@@ -160,9 +160,9 @@ export function createTagEditor(options: TagEditorOptions) {
     const targets = state.tracks.flatMap(({ track }) =>
       ids.includes(track.id) ? [{ trackId: track.id, path: track.path }] : [],
     );
-    const writeIds = state.tracks.flatMap(({ track, lyrics }) => {
+    const writeIds = state.tracks.flatMap(({ track }) => {
       if (!ids.includes(track.id)) return [];
-      if (changes.length || (action === "mark" && lyrics !== null)) return [track.id];
+      if (changes.length || action === "mark") return [track.id];
       return [];
     });
     await saving.run({

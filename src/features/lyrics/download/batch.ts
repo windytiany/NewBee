@@ -1,31 +1,25 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { reactive, toRef } from "vue";
 import { createLyricsApi } from "@/features/lyrics/api";
+import { createLyricsBatchCooperation } from "@/features/lyrics/download/cooperation";
+import type { LyricsBatchCooperationOptions } from "@/features/lyrics/download/cooperation";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
-import type { TagSaveResult } from "@/features/tags/types";
 import { createMetadataSave } from "@/features/tags/save";
-import type { MetadataFileEditor } from "@/features/tags/save";
 import { notifications } from "@/shared/notifications/center";
 import { usePlaybackSession } from "@/features/playback/session";
-import type { LyricsContent } from "@/features/lyrics/types";
+import type { LyricsBatchEvent, LyricsBatchOutcome } from "@/features/lyrics/types";
 
 const TASK_KEY = "lyrics-download";
-export type LyricsBatchOptions = {
-  begin: (trackIds: number[]) => Promise<number>;
-  fetch: (batchId: number, trackId: number) => Promise<LyricsContent>;
-  write: (batchId: number, trackId: number, text: string) => Promise<TagSaveResult>;
-  mark: (batchId: number, trackId: number) => Promise<TagSaveResult>;
-  cancel: (batchId: number) => Promise<void>;
-  finish: (batchId: number) => Promise<void>;
-  editFiles: MetadataFileEditor;
-  markWritesFile: (trackId: number) => Promise<boolean>;
+export type LyricsBatchOptions = LyricsBatchCooperationOptions & {
   synchronize: () => void | Promise<void>;
   notifications: Pick<typeof notifications, "notify" | "updateTask" | "removeTask">;
 };
+
 export function createLyricsBatch(options: LyricsBatchOptions) {
-  const saving = createMetadataSave({ ...options, refreshWrittenFiles: true });
+  // Terminal confirmations also refresh files whose commit reply did not reach the frontend.
+  const synchronization = createMetadataSave({ ...options, refreshWrittenFiles: true });
   const state = reactive({
-    synchronizationError: toRef(saving.state, "synchronizationError"),
+    synchronizationError: toRef(synchronization.state, "synchronizationError"),
     running: false,
     cancelling: false,
     completed: 0,
@@ -36,16 +30,12 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
     instrumental: 0,
     failed: 0,
   });
-  let activeBatchId: number | null = null;
-  const cancellation = { pending: Promise.resolve(), error: "" };
+  let requestCancellation: (() => void) | null = null;
+
   function cancel() {
-    if (!state.running || state.cancelling) return;
+    if (!state.running || state.cancelling || requestCancellation === null) return;
     state.cancelling = true;
-    if (activeBatchId !== null) {
-      cancellation.pending = options.cancel(activeBatchId).catch((error) => {
-        cancellation.error = `取消请求失败：${error instanceof Error ? error.message : String(error)}`;
-      });
-    }
+    requestCancellation();
     report();
   }
   function report() {
@@ -58,9 +48,10 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       cancel,
     });
   }
+
   async function run(trackIds: readonly number[]) {
     if (state.running) return;
-    saving.reset();
+    synchronization.reset();
     Object.assign(state, {
       running: true,
       cancelling: false,
@@ -72,89 +63,76 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       instrumental: 0,
       failed: 0,
     });
-    report();
-    let batchId: number | null = null;
     let failure = "";
-    let firstError = "";
-    function recordFailure(error: unknown) {
-      state.failed++;
-      if (!firstError) firstError = error instanceof Error ? error.message : String(error);
+    const outcomes = new Map<number, LyricsBatchOutcome>();
+    function update() {
+      const entries = [...outcomes.values()];
+      Object.assign(state, {
+        completed: entries.length,
+        written: entries.filter((entry) => entry.kind === "available" && entry.result?.fileWritten)
+          .length,
+        updated: entries.filter((entry) => entry.result?.databaseUpdated).length,
+        missing: entries.filter((entry) => entry.kind === "missing").length,
+        instrumental: entries.filter(
+          (entry) => entry.kind === "instrumental" && entry.result?.databaseUpdated,
+        ).length,
+        failed: entries.filter(
+          (entry) => entry.error || (entry.result && !entry.result.databaseUpdated),
+        ).length,
+      });
+      report();
     }
-    cancellation.pending = Promise.resolve();
-    cancellation.error = "";
+    const cooperation = createLyricsBatchCooperation(options, {
+      started: (total) => {
+        state.total = total;
+        report();
+      },
+      outcome: (outcome) => {
+        outcomes.set(outcome.trackId, outcome);
+        update();
+      },
+    });
+    requestCancellation = cooperation.cancel;
+    report();
     try {
       const ids = [...new Set(trackIds)];
-      if (state.cancelling) return;
       if (!ids.length) throw new Error("没有可下载歌词的曲目。");
       state.total = ids.length;
-      report();
-      batchId = await options.begin(ids);
-      activeBatchId = batchId;
-      for (const trackId of ids) {
-        if (state.cancelling) break;
-        try {
-          const content = await options.fetch(batchId, trackId);
-          if (state.cancelling) break;
-          if (content.kind === "missing") state.missing++;
-          else {
-            // Downloads do not hold playback command state; only the actual write releases the file.
-            const writesFile =
-              content.kind === "available" || (await options.markWritesFile(trackId));
-            if (state.cancelling) break;
-            const activeId = batchId;
-            const results = await saving.run({
-              targets: [{ trackId, path: "" }],
-              writeTrackIds: writesFile ? [trackId] : [],
-              deferSynchronization: true,
-              execute: async () => [
-                await (content.kind === "available"
-                  ? options.write(activeId, trackId, content.text)
-                  : options.mark(activeId, trackId)),
-              ],
-            });
-            if (state.cancelling && saving.state.error) break;
-            for (const result of results) {
-              if (content.kind === "available" && result.fileWritten) state.written++;
-              if (result.databaseUpdated) {
-                state.updated++;
-                if (content.kind === "instrumental") state.instrumental++;
-              } else recordFailure(result.error ?? "歌词保存失败。");
-            }
-          }
-        } catch (error) {
-          if (state.cancelling) break;
-          recordFailure(error);
-        }
-        state.completed++;
-        report();
-      }
+      const summary = await cooperation.run(ids);
+      outcomes.clear();
+      for (const outcome of summary.results) outcomes.set(outcome.trackId, outcome);
+      state.cancelling = summary.status === "cancelled";
+      failure = summary.error || (summary.status === "failed" ? "歌词下载批次失败。" : "");
+      update();
     } catch (error) {
       failure = error instanceof Error ? error.message : String(error);
     } finally {
-      await cancellation.pending;
-      if (cancellation.error) failure = cancellation.error;
-      if (batchId !== null) {
-        try {
-          await options.finish(batchId);
-        } catch (error) {
-          failure = `结束歌词任务失败：${error instanceof Error ? error.message : String(error)}`;
-        }
-      }
-      activeBatchId = null;
-      await saving.retrySynchronization();
-      if (state.synchronizationError) {
+      requestCancellation = null;
+      const results = [...outcomes.values()].flatMap((outcome) =>
+        outcome.result ? [outcome.result] : [],
+      );
+      await synchronization.run({
+        targets: results.map(({ trackId, path }) => ({ trackId, path })),
+        writeTrackIds: [],
+        execute: async () => results,
+      });
+      if (state.synchronizationError)
         failure = [failure, state.synchronizationError].filter(Boolean).join("\n");
-      }
+      const firstError = [...outcomes.values()].find(
+        (outcome) => outcome.error || outcome.result?.error,
+      );
+      const detail = firstError?.error || firstError?.result?.error;
       options.notifications.removeTask(TASK_KEY);
       options.notifications.notify({
         type: failure || state.failed ? "warning" : "success",
         message:
           failure ||
-          `歌词更新${state.cancelling ? "已取消" : "完成"}：${state.written} 首已写入，${state.missing} 首未找到，${state.instrumental} 首纯音乐已标记，${state.failed} 首失败。${firstError ? `\n${firstError}` : ""}`,
+          `歌词更新${state.cancelling ? "已取消" : "完成"}：${state.written} 首已写入，${state.missing} 首未找到，${state.instrumental} 首纯音乐已标记，${state.failed} 首失败。${detail ? `\n${detail}` : ""}`,
       });
       state.running = false;
     }
   }
+
   return {
     state,
     cancel,
@@ -163,7 +141,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       if (state.running) return;
       state.running = true;
       try {
-        await saving.retrySynchronization();
+        await synchronization.retrySynchronization();
         options.notifications.notify({
           type: state.synchronizationError ? "warning" : "success",
           message: state.synchronizationError || "歌词界面已刷新。",
@@ -181,17 +159,15 @@ export function useLyricsBatch() {
   const session = usePlaybackSession();
   const api = createLyricsApi(invoke);
   sharedBatch = createLyricsBatch({
-    begin: api.begin,
-    fetch: api.fetch,
-    write: api.write,
-    mark: api.mark,
-    editFiles: session.withMetadataEditing,
-    markWritesFile: async (trackId) => {
-      const [target] = await api.targets([trackId]);
-      return target?.hasLyrics ?? false;
+    run: (ids, receive) => {
+      const onProgress = new Channel<LyricsBatchEvent>();
+      onProgress.onmessage = receive;
+      return api.run(ids, onProgress);
     },
+    commitStep: api.commitStep,
+    completeStep: api.completeStep,
+    editFiles: session.withMetadataEditing,
     cancel: api.cancel,
-    finish: api.finish,
     synchronize: () => {
       globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
     },

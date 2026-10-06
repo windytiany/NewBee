@@ -49,12 +49,10 @@ pub(crate) fn save_track(
         let mut effective_changes = changes.to_vec();
         if action == LyricsMarkAction::Mark {
             effective_changes.retain(|change| change.field != MetadataField::Lyrics);
-            if database.get_lyrics(track_id)?.text.is_some() {
-                effective_changes.push(MetadataChange {
-                    field: MetadataField::Lyrics,
-                    value: None,
-                });
-            }
+            effective_changes.push(MetadataChange {
+                field: MetadataField::Lyrics,
+                value: None,
+            });
         }
         if !effective_changes.is_empty() || cover.is_some() {
             let path = Path::new(track.path());

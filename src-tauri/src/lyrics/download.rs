@@ -1,30 +1,16 @@
 use super::{providers, LyricsCandidate, LyricsContent, LyricsProvider, LyricsSearchResults};
 
 use crate::{
-    database::{
-        write::{WriteGuard, WriteState},
-        Database, TrackDetails,
-    },
-    metadata::{
-        self,
-        model::{
-            normalize_changes, validate_track_ids, LyricsMarkAction, MetadataChange, MetadataField,
-        },
-        MetadataSaveResult,
-    },
+    database::{Database, TrackDetails},
     settings::SettingsState,
 };
 use std::{
-    collections::HashSet,
     path::Path,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Mutex,
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 use tauri::{Manager, State};
 
-fn providers(state: &SettingsState) -> Result<Vec<LyricsProvider>, String> {
+pub(super) fn providers(state: &SettingsState) -> Result<Vec<LyricsProvider>, String> {
     let providers = state.get()?.lyrics_providers;
     if providers.is_empty() {
         return Err("请先在设置中启用歌词来源".to_owned());
@@ -151,7 +137,7 @@ fn match_score(
     Some(score)
 }
 
-fn automatic(
+pub(super) fn automatic(
     track: &TrackDetails,
     enabled: &[LyricsProvider],
     cancelled: &AtomicBool,
@@ -231,152 +217,6 @@ pub(crate) async fn find_track_lyrics(
     })
     .await
     .map_err(|error| format!("自动获取歌词失败：{error}"))?
-}
-
-struct Batch {
-    id: u64,
-    track_ids: HashSet<i64>,
-    providers: Vec<LyricsProvider>,
-    cancelled: Arc<AtomicBool>,
-    _guard: WriteGuard,
-}
-#[derive(Default)]
-pub(crate) struct LyricsDownloadState {
-    batch: Mutex<Option<Batch>>,
-    next_id: AtomicU64,
-}
-impl LyricsDownloadState {
-    fn validate<'a>(
-        &self,
-        batch: &'a Option<Batch>,
-        batch_id: u64,
-        track_id: i64,
-    ) -> Result<&'a Batch, String> {
-        batch
-            .as_ref()
-            .filter(|batch| batch.id == batch_id && batch.track_ids.contains(&track_id))
-            .ok_or_else(|| "歌词下载任务已结束或曲目不属于此任务".to_owned())
-    }
-}
-
-#[tauri::command]
-pub(crate) fn begin_lyrics_download(
-    track_ids: Vec<i64>,
-    state: State<'_, LyricsDownloadState>,
-    write: State<'_, WriteState>,
-    settings: State<'_, SettingsState>,
-) -> Result<u64, String> {
-    let track_ids = validate_track_ids(&track_ids)?;
-    let providers = providers(&settings)?;
-    let mut batch = state.batch.lock().map_err(|error| error.to_string())?;
-    if batch.is_some() {
-        return Err("已有歌词下载任务正在运行".to_owned());
-    }
-    let guard = write.acquire()?;
-    let id = state.next_id.fetch_add(1, Ordering::Relaxed) + 1;
-    *batch = Some(Batch {
-        id,
-        track_ids: track_ids.into_iter().collect(),
-        providers,
-        cancelled: Arc::new(AtomicBool::new(false)),
-        _guard: guard,
-    });
-    Ok(id)
-}
-
-#[tauri::command]
-pub(crate) async fn fetch_batch_lyrics(
-    batch_id: u64,
-    track_id: i64,
-    app: tauri::AppHandle,
-) -> Result<LyricsContent, String> {
-    let (enabled, cancelled) = {
-        let state = app.state::<LyricsDownloadState>();
-        let batch = state.batch.lock().map_err(|error| error.to_string())?;
-        let batch = state.validate(&batch, batch_id, track_id)?;
-        (batch.providers.clone(), Arc::clone(&batch.cancelled))
-    };
-    tauri::async_runtime::spawn_blocking(move || {
-        let track = app
-            .state::<Database>()
-            .get_track(track_id)?
-            .ok_or_else(|| "曲目已不在曲库中".to_owned())?;
-        // Intentionally no file reads or checks for existing lyrics before downloading.
-        automatic(&track, &enabled, &cancelled)
-    })
-    .await
-    .map_err(|error| format!("歌词下载失败：{error}"))?
-}
-
-#[tauri::command]
-pub(crate) async fn write_batch_lyrics(
-    batch_id: u64,
-    track_id: i64,
-    text: Option<String>,
-    app: tauri::AppHandle,
-) -> Result<MetadataSaveResult, String> {
-    let action = if text.is_some() {
-        LyricsMarkAction::Keep
-    } else {
-        LyricsMarkAction::Mark
-    };
-    let mut changes = Vec::new();
-    if let Some(text) = text {
-        if text.trim().is_empty() || text.len() > 1024 * 1024 {
-            return Err("歌词为空或过大，原文件未修改".to_owned());
-        }
-        changes.push(MetadataChange {
-            field: MetadataField::Lyrics,
-            value: Some(text),
-        });
-        normalize_changes(&mut changes)?;
-    }
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<LyricsDownloadState>();
-        let batch = state.batch.lock().map_err(|error| error.to_string())?;
-        if state
-            .validate(&batch, batch_id, track_id)?
-            .cancelled
-            .load(Ordering::Acquire)
-        {
-            return Err("歌词任务已取消".to_owned());
-        }
-        // Keep the batch guard until the atomic file replacement has finished.
-        let database = app.state::<Database>();
-        Ok(metadata::save::save_track(
-            &database, track_id, &changes, action, None,
-        ))
-    })
-    .await
-    .map_err(|error| format!("歌词写入任务失败：{error}"))?
-}
-
-#[tauri::command]
-pub(crate) fn cancel_lyrics_download(
-    batch_id: u64,
-    state: State<'_, LyricsDownloadState>,
-) -> Result<(), String> {
-    let batch = state.batch.lock().map_err(|error| error.to_string())?;
-    let batch = batch
-        .as_ref()
-        .filter(|batch| batch.id == batch_id)
-        .ok_or_else(|| "歌词任务已结束".to_owned())?;
-    batch.cancelled.store(true, Ordering::Release);
-    Ok(())
-}
-
-#[tauri::command]
-pub(crate) fn finish_lyrics_download(
-    batch_id: u64,
-    state: State<'_, LyricsDownloadState>,
-) -> Result<(), String> {
-    let mut batch = state.batch.lock().map_err(|error| error.to_string())?;
-    if batch.as_ref().is_some_and(|batch| batch.id == batch_id) {
-        *batch = None;
-        Ok(())
-    } else {
-        Err("歌词下载任务已结束".to_owned())
-    }
 }
 
 #[cfg(test)]

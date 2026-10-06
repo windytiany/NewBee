@@ -1,3 +1,5 @@
+import type { TagSaveResult } from "@/features/tags/types";
+
 export type LyricLine = {
   startMs: number;
   text: string;
@@ -32,3 +34,27 @@ export type LyricsSearchResults = {
 };
 export type LyricsContent =
   { kind: "available"; text: string } | { kind: "instrumental" } | { kind: "missing" };
+
+export type LyricsBatchOutcome = {
+  trackId: number;
+  kind: "available" | "instrumental" | "missing" | "failed";
+  result: TagSaveResult | null;
+  error: string | null;
+};
+export type LyricsBatchSummary = {
+  batchId: number;
+  status: "completed" | "cancelled" | "failed";
+  results: LyricsBatchOutcome[];
+  error: string | null;
+};
+export type LyricsBatchEvent =
+  | { kind: "started"; batchId: number; total: number }
+  | {
+      kind: "saveRequested";
+      batchId: number;
+      stepId: number;
+      trackId: number;
+      path: string;
+      content: "available" | "instrumental";
+    }
+  | { kind: "trackCompleted"; batchId: number; outcome: LyricsBatchOutcome };

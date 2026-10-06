@@ -11,7 +11,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(playback::PlaybackState::default())
         .manage(database::write::WriteState::default())
-        .manage(lyrics::download::LyricsDownloadState::default())
+        .manage(lyrics::batch::LyricsBatchState::default())
         .setup(|app| {
             use tauri::Manager;
 
@@ -55,11 +55,10 @@ pub fn run() {
             lyrics::download::search_lyrics_candidates,
             lyrics::download::get_candidate_lyrics,
             lyrics::download::find_track_lyrics,
-            lyrics::download::begin_lyrics_download,
-            lyrics::download::fetch_batch_lyrics,
-            lyrics::download::write_batch_lyrics,
-            lyrics::download::cancel_lyrics_download,
-            lyrics::download::finish_lyrics_download,
+            lyrics::batch::run_lyrics_download,
+            lyrics::batch::commit_lyrics_download_step,
+            lyrics::batch::complete_lyrics_download_step,
+            lyrics::batch::cancel_lyrics_download,
             database::commands::list_album_artists,
             database::commands::list_albums,
             database::commands::get_album_artwork,

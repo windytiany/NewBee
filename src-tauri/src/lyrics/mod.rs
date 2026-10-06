@@ -1,3 +1,4 @@
+pub(crate) mod batch;
 pub(crate) mod download;
 pub(crate) mod local;
 mod providers;
