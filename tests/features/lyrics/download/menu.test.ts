@@ -18,12 +18,22 @@ afterEach(() => {
 function mount(properties: { trackIds?: number[]; album?: LibraryAlbumSelection }) {
   const tracks: number[][] = [];
   const albums: LibraryAlbumSelection[] = [];
-  const state = Vue.reactive({ running: false });
+  const state = Vue.reactive({ running: false, synchronizationError: "" });
+  let refreshed = 0;
   const props = Vue.reactive(properties);
   const component = evaluateSource<{ default: Vue.Component }>(
     compileSfc(source, "DownloadMenuItem.vue"),
     {
       vue: Vue,
+      "@/features/lyrics/download/batch": {
+        useLyricsBatch: () => ({
+          state,
+          retrySynchronization: async () => {
+            refreshed++;
+            state.synchronizationError = "";
+          },
+        }),
+      },
       "@/features/lyrics/download/confirmation": {
         useLyricsConfirmation: () => ({
           busy: Vue.computed(() => state.running),
@@ -55,8 +65,25 @@ function mount(properties: { trackIds?: number[]; album?: LibraryAlbumSelection 
   apps.push(app);
   const button = findNode(root, (node) => node.type === "button");
   if (!button) throw new Error("Missing lyrics menu item");
-  return { button, tracks, albums, state, closed: () => closed };
+  return { root, button, tracks, albums, state, closed: () => closed, refreshed: () => refreshed };
 }
+it("offers a synchronization-only retry after a refresh failure", async () => {
+  const result = mount({ trackIds: [1] });
+  result.state.synchronizationError = "reload failed";
+  await Vue.nextTick();
+  const button = findNode(
+    result.root,
+    (node) => node.type === "button" && getTextContent(node).includes("重试歌词界面刷新"),
+  );
+  if (!button) throw new Error("Missing refresh retry");
+  const click = button.props.onClick as (event: { stopPropagation: () => void }) => void;
+  click({ stopPropagation() {} });
+  expect(result.refreshed()).toBe(1);
+  expect(result.closed()).toBe(1);
+  expect(result.tracks).toEqual([]);
+  expect(result.albums).toEqual([]);
+});
+
 it("retains the exact menu name and snapshots selected targets before closing", () => {
   const result = mount({ trackIds: [1, 2] });
   expect(getTextContent(result.button).trim()).toBe("更新缺少的歌词");

@@ -1,0 +1,316 @@
+import { describe, expect, it } from "bun:test";
+import { createMetadataSave } from "@/features/tags/save";
+import { createPlaybackSession } from "@/features/playback/session";
+import type { PlaybackCommandInvoker } from "@/features/playback/types";
+import type { TagSaveResult } from "@/features/tags/types";
+
+function result(trackId: number, success = true): TagSaveResult {
+  return {
+    trackId,
+    path: `/music/${trackId}.mp3`,
+    fileWritten: success,
+    databaseUpdated: success,
+    error: success ? null : "文件只读",
+  };
+}
+function targets(...ids: number[]) {
+  return ids.map((trackId) => ({ trackId, path: `/music/${trackId}.mp3` }));
+}
+function fixture(paused = false, canStop = true) {
+  const calls: string[] = [];
+  const synchronized: number[][] = [];
+  let activeId: number | null = null;
+  let nextId = 0;
+  const invokeCommand: PlaybackCommandInvoker = async <T>(
+    command: string,
+    args?: Record<string, unknown>,
+  ) => {
+    calls.push(command);
+    if (command === "list_skipped_track_ids") return [] as T;
+    if (command === "prepare_next_track") return true as T;
+    if (command === "play_track") {
+      activeId = ++nextId;
+      return {
+        trackId: args?.trackId,
+        playbackId: activeId,
+        title: "Song",
+        artist: "Artist",
+      } as T;
+    }
+    if (command === "stop_playback") {
+      if (canStop) activeId = null;
+      return canStop as T;
+    }
+    if (command === "playback_status") {
+      return {
+        hasAudio: activeId !== null,
+        isPlaying: activeId !== null && !paused,
+        hasEnded: false,
+        playbackId: activeId,
+        positionMs: 0,
+        durationMs: activeId === null ? 0 : 1000,
+      } as T;
+    }
+    throw new Error(`Unexpected command: ${command}`);
+  };
+  const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
+  const save = createMetadataSave({
+    editFiles: session.withMetadataEditing,
+    synchronize: (ids) => {
+      synchronized.push(ids);
+    },
+  });
+  const queue = [1, 2].map((trackId) => ({
+    trackId,
+    rowKey: `row:${trackId}`,
+    title: "Song",
+    album: "Album",
+    durationMs: 1000,
+  }));
+  return { save, session, calls, queue, synchronized };
+}
+
+describe("track metadata save", () => {
+  for (const paused of [false, true]) {
+    it(`releases ${paused ? "paused" : "playing"} audio before writing and synchronizes without restarting`, async () => {
+      const { save, session, queue, calls, synchronized } = fixture(paused);
+      await session.playTracks(queue, "row:1");
+      const saved = await save.run({
+        targets: targets(1),
+        writeTrackIds: [1],
+        execute: async (progress) => {
+          expect(session.state.currentPlaybackId.value).toBeNull();
+          expect(session.state.isPlaybackCommandPending.value).toBe(true);
+          calls.push("write");
+          progress(result(1));
+          return [result(1)];
+        },
+      });
+      expect(saved).toEqual([result(1)]);
+      expect(calls.indexOf("stop_playback")).toBeLessThan(calls.indexOf("write"));
+      expect(calls.filter((command) => command === "play_track")).toHaveLength(1);
+      expect(session.state.currentRowKey.value).toBe("row:1");
+      expect(session.state.displayedTracks.value.map(({ rowKey }) => rowKey)).toEqual([
+        "row:1",
+        "row:2",
+      ]);
+      expect(session.state.isPlaybackCommandPending.value).toBe(false);
+      expect(synchronized).toEqual([[1]]);
+    });
+  }
+
+  it("never writes if releasing the target audio cannot be confirmed", async () => {
+    const { save, session, queue, synchronized } = fixture(false, false);
+    await session.playTracks(queue, "row:1");
+    let written = false;
+    const saved = await save.run({
+      targets: targets(1),
+      writeTrackIds: [1],
+      execute: async () => {
+        written = true;
+        return [result(1)];
+      },
+    });
+    expect(written).toBe(false);
+    expect(saved[0]?.databaseUpdated).toBe(false);
+    expect(saved[0]?.error).toContain("未能确认");
+    expect(session.state.currentPlaybackId.value).toBe(1);
+    expect(save.state.saving).toBe(false);
+    expect(synchronized).toEqual([]);
+  });
+
+  it("keeps playback when writing a different track or a database-only mark", async () => {
+    const { save, session, queue, calls, synchronized } = fixture();
+    await session.playTracks(queue, "row:1");
+    await save.run({
+      targets: targets(2),
+      writeTrackIds: [2],
+      execute: async () => [result(2)],
+    });
+    await save.run({
+      targets: targets(1),
+      writeTrackIds: [],
+      execute: async () => {
+        expect(session.state.isPlaybackCommandPending.value).toBe(false);
+        return [{ ...result(1), fileWritten: false }];
+      },
+    });
+    expect(calls).not.toContain("stop_playback");
+    expect(session.state.currentPlaybackId.value).toBe(1);
+    expect(synchronized).toEqual([[2], [1]]);
+  });
+
+  it("retains partial success after a rejected request and treats every missing result as failed", async () => {
+    const { save, session, queue, synchronized } = fixture();
+    await session.playTracks(queue, "row:1");
+    const saved = await save.run({
+      targets: targets(1, 2),
+      writeTrackIds: [1, 2],
+      execute: async (progress) => {
+        progress(result(1));
+        throw new Error("interrupted");
+      },
+    });
+    expect(saved[0]).toEqual(result(1));
+    expect(saved[1]).toEqual({
+      ...result(2, false),
+      error: "interrupted",
+    });
+    expect(save.state.error).toBe("interrupted");
+    expect(save.state.completed).toBe(2);
+    expect(session.state.isPlaybackCommandPending.value).toBe(false);
+    expect(synchronized).toEqual([[1]]);
+    await save.run({
+      targets: targets(2),
+      writeTrackIds: [2],
+      execute: async () => [result(2)],
+    });
+    expect(save.state.results).toEqual([result(1), result(2)]);
+    expect(save.state.error).toBe("");
+    expect(synchronized).toEqual([[1], [2]]);
+  });
+
+  it("keeps final save results even if playback cleanup rejects afterwards", async () => {
+    const refreshed: number[][] = [];
+    const save = createMetadataSave({
+      editFiles: async (_ids, execute) => {
+        await execute();
+        throw new Error("playback refresh failed");
+      },
+      synchronize: (ids) => {
+        refreshed.push(ids);
+      },
+    });
+    const saved = await save.run({
+      targets: targets(1),
+      writeTrackIds: [1],
+      execute: async () => [result(1)],
+    });
+    expect(saved).toEqual([result(1)]);
+    expect(save.state.error).toBe("playback refresh failed");
+    expect(refreshed).toEqual([[1]]);
+  });
+
+  it("filters foreign results, counts duplicate progress once and ignores progress after completion or reset", async () => {
+    const { save, synchronized } = fixture();
+    let lateProgress: (entry: TagSaveResult) => void = () => {};
+    await save.run({
+      targets: targets(1, 1, 2),
+      writeTrackIds: [],
+      execute: async (progress) => {
+        lateProgress = progress;
+        progress(result(99));
+        progress(result(1, false));
+        progress(result(1, false));
+        expect(save.state.completed).toBe(1);
+        expect(save.state.results).toEqual([result(1, false)]);
+        return [result(1), result(99)];
+      },
+    });
+    expect(save.state.results[0]).toEqual(result(1));
+    expect(save.state.results[1]?.databaseUpdated).toBe(false);
+    expect(save.state.results[1]?.error).toContain("未返回结果");
+    expect(save.state.total).toBe(2);
+    expect(synchronized).toEqual([[1]]);
+    lateProgress(result(2));
+    expect(save.state.results[1]?.databaseUpdated).toBe(false);
+    save.reset();
+    lateProgress(result(1));
+    expect(save.state.results).toEqual([]);
+    expect(save.state.completed).toBe(0);
+  });
+
+  it("retries synchronization without writing again or stopping playback", async () => {
+    const { session, queue, calls } = fixture();
+    let writes = 0;
+    let refreshes = 0;
+    const save = createMetadataSave({
+      editFiles: session.withMetadataEditing,
+      synchronize: async (ids) => {
+        expect(ids).toEqual([2]);
+        refreshes++;
+        if (refreshes === 1) throw new Error("reload failed");
+      },
+    });
+    await session.playTracks(queue, "row:1");
+    await save.run({
+      targets: targets(2),
+      writeTrackIds: [2],
+      execute: async () => {
+        writes++;
+        return [result(2)];
+      },
+    });
+    expect(save.state.results).toEqual([result(2)]);
+    expect(save.state.synchronizationError).toContain("reload failed");
+    expect(save.state.error).toBe("");
+    const commandCount = calls.length;
+    await save.retrySynchronization();
+    expect(save.state.synchronizationError).toBe("");
+    expect(writes).toBe(1);
+    expect(refreshes).toBe(2);
+    expect(calls).toHaveLength(commandCount);
+    await save.retrySynchronization();
+    expect(refreshes).toBe(2);
+  });
+
+  it("defers batch refresh until requested, including file-only partial successes", async () => {
+    const { session } = fixture();
+    const refreshed: number[][] = [];
+    const save = createMetadataSave({
+      editFiles: session.withMetadataEditing,
+      synchronize: (ids) => {
+        refreshed.push(ids);
+      },
+      refreshWrittenFiles: true,
+    });
+    await save.run({
+      targets: targets(1),
+      writeTrackIds: [],
+      deferSynchronization: true,
+      execute: async () => [{ ...result(1, false), fileWritten: true }],
+    });
+    await save.run({
+      targets: targets(2),
+      writeTrackIds: [],
+      deferSynchronization: true,
+      execute: async () => [{ ...result(2), fileWritten: false }],
+    });
+    expect(refreshed).toEqual([]);
+    expect(save.state.results[0]?.databaseUpdated).toBe(false);
+    await save.retrySynchronization();
+    expect(refreshed).toEqual([[1, 2]]);
+  });
+
+  it("rejects overlapping saves and ignores old progress during the next save", async () => {
+    const { save } = fixture();
+    let resolve!: (results: TagSaveResult[]) => void;
+    let lateProgress: (entry: TagSaveResult) => void = () => {};
+    const first = save.run({
+      targets: targets(1),
+      writeTrackIds: [],
+      execute: (progress) => {
+        lateProgress = progress;
+        return new Promise((done) => {
+          resolve = done;
+        });
+      },
+    });
+    const overlap = await save
+      .run({ targets: targets(2), writeTrackIds: [], execute: async () => [result(2)] })
+      .catch((error: unknown) => String(error));
+    expect(overlap).toBe("Error: 元数据保存尚未完成，请稍后重试。");
+    resolve([result(1)]);
+    await first;
+    await save.run({
+      targets: targets(1),
+      writeTrackIds: [],
+      execute: async () => {
+        lateProgress(result(1));
+        expect(save.state.completed).toBe(0);
+        return [];
+      },
+    });
+    expect(save.state.results[0]?.databaseUpdated).toBe(false);
+  });
+});

@@ -55,6 +55,8 @@ function setup(overrides: Partial<LyricsBatchOptions> = {}) {
     synchronize: () => {
       synchronized++;
     },
+    editFiles: (_ids, save) => save(),
+    markWritesFile: async () => false,
     notifications: {
       notify: (input) => {
         messages.push(input);
@@ -83,6 +85,99 @@ function setup(overrides: Partial<LyricsBatchOptions> = {}) {
 }
 
 describe("lyrics batch", () => {
+  it("awaits synchronization before removing progress and ending the batch", async () => {
+    const started = deferred<void>();
+    const refresh = deferred<void>();
+    const result = setup({
+      synchronize: () => {
+        started.resolve();
+        return refresh.promise;
+      },
+    });
+    const running = result.batch.startTracks([1]);
+    await started.promise;
+    expect(result.finished).toEqual([1]);
+    expect(result.batch.state.running).toBe(true);
+    expect(result.tasks.size).toBe(1);
+    refresh.resolve();
+    await running;
+    expect(result.batch.state.running).toBe(false);
+    expect(result.tasks.size).toBe(0);
+  });
+
+  it("does not release or mark a file after cancellation during the mark snapshot read", async () => {
+    const started = deferred<void>();
+    const snapshot = deferred<boolean>();
+    const editing: number[][] = [];
+    const result = setup({
+      fetch: async () => ({ kind: "instrumental" }),
+      markWritesFile: () => {
+        started.resolve();
+        return snapshot.promise;
+      },
+      editFiles: (ids, save) => {
+        editing.push([...ids]);
+        return save();
+      },
+    });
+    const running = result.batch.startTracks([1]);
+    await started.promise;
+    result.batch.cancel();
+    snapshot.resolve(true);
+    await running;
+    expect(editing).toEqual([]);
+    expect(result.marked).toEqual([]);
+    expect(result.cancelled).toEqual([1]);
+    expect(result.finished).toEqual([1]);
+    expect(result.batch.state.running).toBe(false);
+  });
+
+  it("awaits batch synchronization and retries it without downloading or writing again", async () => {
+    let attempts = 0;
+    const result = setup({
+      synchronize: async () => {
+        attempts++;
+        if (attempts === 1) throw new Error("reload failed");
+      },
+    });
+    await result.batch.startTracks([1]);
+    expect(result.batch.state.updated).toBe(1);
+    expect(result.batch.state.failed).toBe(0);
+    expect(result.batch.state.synchronizationError).toContain("reload failed");
+    expect(result.messages[0]?.type).toBe("warning");
+    await result.batch.retrySynchronization();
+    expect(result.batch.state.synchronizationError).toBe("");
+    expect(attempts).toBe(2);
+    expect(result.begun).toEqual([[1]]);
+    expect(result.writes).toEqual([[1, "lyrics 1"]]);
+    expect(result.finished).toEqual([1]);
+  });
+
+  it("keeps downloading outside playback editing and releases files only for actual writes", async () => {
+    const editing: number[][] = [];
+    let fileEditing = false;
+    const result = setup({
+      fetch: async (_batch, id) => {
+        expect(fileEditing).toBe(false);
+        return id === 1 ? { kind: "available", text: "lyrics" } : { kind: "instrumental" };
+      },
+      markWritesFile: async (id) => id === 3,
+      editFiles: async (ids, save) => {
+        editing.push([...ids]);
+        fileEditing = true;
+        try {
+          return await save();
+        } finally {
+          fileEditing = false;
+        }
+      },
+    });
+    await result.batch.startTracks([1, 2, 3]);
+    expect(editing).toEqual([[1], [3]]);
+    expect(result.marked).toEqual([2, 3]);
+    expect(result.synchronized()).toBe(1);
+  });
+
   it("writes distinct lyrics immediately for every selected track without any existing-lyrics reads", async () => {
     const result = setup();
     await result.batch.startTracks([1, 2, 1]);

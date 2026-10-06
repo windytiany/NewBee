@@ -54,6 +54,7 @@ function fixture(overrides: Partial<TagEditorOptions> = {}) {
     synchronize: async (ids) => {
       synchronized.push(ids);
     },
+    editFiles: (_ids, save) => save(),
     notify: () => 1,
     ...overrides,
   });
@@ -337,25 +338,75 @@ describe("metadata editing", () => {
     expect(editor.state.saving).toBe(false);
   });
 
-  it("ignores duplicate and late progress after reopening the editor", async () => {
-    let lateProgress: (entry: TagSaveResult) => void = () => {};
-    const { editor } = fixture({
+  it("preserves reported successes after a request error and retries every other target", async () => {
+    const calls: number[][] = [];
+    const { editor, synchronized } = fixture({
       save: async (ids, _changes, progress) => {
-        lateProgress = progress;
-        const entry = result(ids[0] ?? 1);
-        progress(entry);
-        progress(entry);
-        expect(editor.state.completed).toBe(1);
-        return [entry];
+        calls.push(ids);
+        if (calls.length === 1) {
+          progress(result(1));
+          throw new Error("interrupted");
+        }
+        return ids.map((id) => result(id));
+      },
+    });
+    await editor.openTracks([1, 2]);
+    editor.prepareSave();
+    await settle();
+    expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([
+      true,
+      false,
+    ]);
+    expect(editor.state.dirty).toBe(true);
+    expect(synchronized).toEqual([[1]]);
+    editor.retryFailed();
+    await settle();
+    expect(calls).toEqual([[1, 2], [2]]);
+    expect(synchronized).toEqual([[1], [2]]);
+    expect(editor.state.open).toBe(false);
+  });
+
+  it("retries failed synchronization without saving again or marking successful tracks dirty", async () => {
+    let attempts = 0;
+    const { editor, saves } = fixture({
+      synchronize: async () => {
+        attempts++;
+        if (attempts === 1) throw new Error("reload failed");
       },
     });
     await editor.openTracks([1]);
     editor.prepareSave();
     await settle();
-    await editor.openTracks([2]);
-    lateProgress(result(1));
-    expect(editor.state.results).toHaveLength(0);
-    expect(editor.state.completed).toBe(0);
+    expect(editor.state.open).toBe(true);
+    expect(editor.state.dirty).toBe(false);
+    expect(editor.state.results[0]?.databaseUpdated).toBe(true);
+    expect(editor.state.synchronizationError).toContain("reload failed");
+    await editor.retrySynchronization();
+    expect(attempts).toBe(2);
+    expect(saves).toHaveLength(1);
+    expect(editor.state.open).toBe(false);
+  });
+
+  it("releases audio only for mark targets that have cached lyrics", async () => {
+    const editing: number[][] = [];
+    const { editor } = fixture({
+      loadTracks: async (ids) =>
+        ids.map((id) => ({ ...editable(id), lyrics: id === 1 ? "Old lyrics" : null })),
+      editFiles: (ids, save) => {
+        editing.push([...ids]);
+        return save();
+      },
+    });
+    await editor.openTracks([1, 2]);
+    editor.changeLyricsAction("mark");
+    editor.prepareSave();
+    await settle();
+    expect(editing).toEqual([[1]]);
+    await editor.openTracks([1, 2]);
+    editor.changeLyricsAction("unmark");
+    editor.prepareSave();
+    await settle();
+    expect(editing).toEqual([[1]]);
   });
 
   it("ignores late reads after the dialog is closed and reopened", async () => {

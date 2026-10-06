@@ -248,6 +248,15 @@
         仅重试失败项
       </button>
       <button
+        v-if="state.synchronizationError"
+        type="button"
+        class="focus-visible:outline-app-accent rounded border border-white/20 px-4 py-2 text-sm focus-visible:outline-2 disabled:opacity-50"
+        :disabled="state.saving || state.confirmDiscard"
+        @click="editor.retrySynchronization()"
+      >
+        重试界面刷新
+      </button>
+      <button
         type="submit"
         form="metadata-editor-form"
         class="focus-visible:outline-app-accent bg-app-accent rounded px-5 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
@@ -324,6 +333,7 @@ const failedCount = computed(
 const errors = computed(() => [
   ...new Set([
     ...(state.error ? [state.error] : []),
+    ...(state.synchronizationError ? [state.synchronizationError] : []),
     ...state.tracks.flatMap(({ issue }) => (issue ? [issue] : [])),
     ...state.results.flatMap(({ error }) => (error ? [error] : [])),
   ]),

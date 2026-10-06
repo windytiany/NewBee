@@ -43,6 +43,8 @@ function fixture(overrides: Partial<ReleaseEditorOptions> = {}) {
     synchronize: async (ids) => {
       synchronized.push(ids);
     },
+    editFiles: (_ids, save) => save(),
+    notify: () => 1,
     ...overrides,
   });
   return { editor, saves, searches, synchronized };
@@ -211,20 +213,24 @@ describe("album tag editing", () => {
     expect(synchronized).toEqual([[1], [2]]);
     expect(editor.state.open).toBe(false);
   });
-  it("synchronizes reported partial success even when the save request rejects", async () => {
-    const { editor, synchronized } = await ready({
-      save: async (_patches, _cover, progress) => {
-        progress(result(1));
-        throw new Error("interrupted");
+  it("retries failed synchronization without reapplying patches", async () => {
+    let attempts = 0;
+    const { editor, saves } = await ready({
+      synchronize: async () => {
+        attempts++;
+        if (attempts === 1) throw new Error("reload failed");
       },
     });
     editor.prepareSave();
     await editor.save();
-    expect(synchronized).toEqual([[1]]);
-    expect(editor.state.results.find((entry) => entry.trackId === 2)?.error).toContain(
-      "interrupted",
-    );
-    expect(editor.state.saving).toBe(false);
+    expect(editor.state.open).toBe(true);
+    expect(editor.state.dirty).toBe(false);
+    expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
+    expect(editor.state.synchronizationError).toContain("reload failed");
+    await editor.retrySynchronization();
+    expect(attempts).toBe(2);
+    expect(saves).toHaveLength(1);
+    expect(editor.state.open).toBe(false);
   });
   it("does not allow closing or saving twice during a write", async () => {
     const pending = deferred<TagSaveResult[]>();

@@ -1,4 +1,4 @@
-import { markRaw, reactive } from "vue";
+import { markRaw, reactive, toRefs } from "vue";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import type { EditableTrack, TagSaveResult } from "@/features/tags/types";
@@ -22,6 +22,8 @@ import type {
 import { createLibraryApi } from "@/features/library/api";
 import { createTagsApi } from "@/features/tags/api";
 import { createTagSynchronization } from "@/features/tags/synchronize";
+import { createMetadataSave } from "@/features/tags/save";
+import type { MetadataFileEditor } from "@/features/tags/save";
 import { usePlaybackSession } from "@/features/playback/session";
 import { notify } from "@/shared/notifications/center";
 
@@ -36,21 +38,23 @@ export type ReleaseEditorOptions = {
     cover: CoverData | null,
     progress: (result: TagSaveResult) => void,
   ) => Promise<TagSaveResult[]>;
+  editFiles: MetadataFileEditor;
   synchronize: (ids: number[]) => Promise<void>;
+  notify: typeof notify;
 };
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createReleaseEditor(options: ReleaseEditorOptions) {
+  const saving = createMetadataSave(options);
   const state = reactive({
+    ...toRefs(saving.state),
     open: false,
     loading: false,
     searching: false,
     hasSearched: false,
     loadingRelease: false,
     loadingCover: false,
-    saving: false,
     dirty: false,
-    error: "",
     coverError: "",
     artist: "",
     album: "",
@@ -70,9 +74,6 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     confirmDiscard: false,
     confirmSave: false,
     patches: [] as TrackPatch[],
-    results: [] as TagSaveResult[],
-    completed: 0,
-    total: 0,
   });
   let lifetime = 0;
   let searchGeneration = 0;
@@ -90,6 +91,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
   async function open(album: LibraryAlbumSelection) {
     if (state.open) return;
     const generation = ++lifetime;
+    saving.reset();
     Object.assign(state, {
       open: true,
       loading: true,
@@ -353,66 +355,42 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
   async function save() {
     if (!state.confirmSave || state.saving) return;
     state.confirmSave = false;
-    state.saving = true;
-    state.error = "";
     const patches = state.patches.map((patch) => ({
       ...patch,
       changes: patch.changes.map((change) => ({ ...change })),
     }));
-    const ids = new Set(patches.map((patch) => patch.trackId));
-    const results = new Map(state.results.map((result) => [result.trackId, result]));
-    const completed = new Set<number>();
-    state.completed = 0;
-    state.total = patches.length;
-    let accepting = true;
-    const progress = (result: TagSaveResult) => {
-      if (!accepting || !ids.has(result.trackId)) return;
-      results.set(result.trackId, result);
-      completed.add(result.trackId);
-      state.results = [...results.values()];
-      state.completed = completed.size;
-    };
-    try {
-      for (const result of await options.save(patches, savedCover, progress)) progress(result);
-    } catch (error) {
-      state.error = message(error);
-    } finally {
-      accepting = false;
-      for (const patch of patches) {
-        if (completed.has(patch.trackId)) continue;
-        results.set(patch.trackId, {
-          trackId: patch.trackId,
-          path: state.tracks.find(({ track }) => track.id === patch.trackId)?.track.path ?? "",
-          fileWritten: false,
-          databaseUpdated: false,
-          error: state.error || "保存未返回结果，请重试或重新扫描。",
-        });
+    const targets = patches.map(({ trackId }) => ({
+      trackId,
+      path: state.tracks.find(({ track }) => track.id === trackId)?.track.path ?? "",
+    }));
+    const results = await saving.run({
+      targets,
+      writeTrackIds: patches.map(({ trackId }) => trackId),
+      execute: (progress) => options.save(patches, savedCover, progress),
+    });
+    const updated = new Set(
+      results.flatMap((result) => (result.databaseUpdated ? [result.trackId] : [])),
+    );
+    for (const patch of patches) {
+      if (!updated.has(patch.trackId)) continue;
+      const local = state.tracks.find(({ track }) => track.id === patch.trackId);
+      if (!local) continue;
+      for (const change of patch.changes) {
+        const field = TAG_FIELDS.find(({ key }) => key === change.field);
+        if (!field) continue;
+        const value =
+          change.value !== null && field.type === "number" ? Number(change.value) : change.value;
+        Object.assign(local.track, { [change.field]: value });
       }
-      state.results = [...results.values()];
-      const updated = [...ids].filter((id) => results.get(id)?.databaseUpdated);
-      for (const patch of patches) {
-        if (!updated.includes(patch.trackId)) continue;
-        const local = state.tracks.find(({ track }) => track.id === patch.trackId);
-        if (!local) continue;
-        for (const change of patch.changes) {
-          const field = TAG_FIELDS.find(({ key }) => key === change.field);
-          if (!field) continue;
-          const value =
-            change.value !== null && field.type === "number" ? Number(change.value) : change.value;
-          Object.assign(local.track, { [change.field]: value });
-        }
-      }
-      if (updated.length) {
-        try {
-          await options.synchronize(updated);
-        } catch (error) {
-          state.error = `文件已保存，但界面同步失败：${message(error)}`;
-        }
-      }
-      state.saving = false;
-      state.dirty = state.results.some((result) => !result.databaseUpdated);
-      if (!state.dirty && !state.error) close();
     }
+    const failed = results.filter((result) => !result.databaseUpdated).length;
+    const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
+    options.notify({
+      type: failed || error ? "warning" : "success",
+      message: `专辑标签保存：${results.length - failed} 首成功，${failed} 首失败。${error ? `\n${error}` : ""}`,
+    });
+    state.dirty = state.results.some((result) => !result.databaseUpdated);
+    if (!state.dirty && !error) close();
   }
   return {
     state,
@@ -436,6 +414,10 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     toggleCover,
     prepareSave,
     retryFailed,
+    retrySynchronization: async () => {
+      await saving.retrySynchronization();
+      if (!state.dirty && !state.error && !state.synchronizationError) close();
+    },
     save,
   };
 }
@@ -455,22 +437,14 @@ export function useReleaseEditor() {
     release: api.release,
     covers: api.covers,
     cover: api.cover,
-    save: (patches, cover, progress) =>
-      session.withMetadataEditing(
-        patches.map((patch) => patch.trackId),
-        async () => {
-          const onProgress = new Channel<TagSaveResult>();
-          onProgress.onmessage = progress;
-          const results = await api.saveRelease(patches, cover, onProgress);
-          const failed = results.filter((result) => !result.databaseUpdated).length;
-          notify({
-            type: failed ? "warning" : "success",
-            message: `专辑标签保存：${results.length - failed} 首成功，${failed} 首失败。`,
-          });
-          return results;
-        },
-      ),
+    save: (patches, cover, progress) => {
+      const onProgress = new Channel<TagSaveResult>();
+      onProgress.onmessage = progress;
+      return api.saveRelease(patches, cover, onProgress);
+    },
+    editFiles: session.withMetadataEditing,
     synchronize: synchronize.artwork,
+    notify,
   });
   return shared;
 }

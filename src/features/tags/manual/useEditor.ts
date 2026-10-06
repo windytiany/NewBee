@@ -1,9 +1,11 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { reactive } from "vue";
+import { reactive, toRefs } from "vue";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import { createLibraryApi } from "@/features/library/api";
 import { createTagsApi } from "@/features/tags/api";
 import { createTagSynchronization } from "@/features/tags/synchronize";
+import { createMetadataSave } from "@/features/tags/save";
+import type { MetadataFileEditor } from "@/features/tags/save";
 import { notify } from "@/shared/notifications/center";
 import { usePlaybackSession } from "@/features/playback/session";
 import { buildTagChanges, createTagDraft } from "@/features/tags/draft";
@@ -25,6 +27,7 @@ export type TagEditorOptions = {
     progress: (result: TagSaveResult) => void,
     lyricsAction: LyricsMarkAction,
   ) => Promise<TagSaveResult[]>;
+  editFiles: MetadataFileEditor;
   synchronize: (trackIds: number[]) => Promise<void>;
   notify: typeof notify;
 };
@@ -34,23 +37,19 @@ function errorMessage(error: unknown) {
 }
 
 export function createTagEditor(options: TagEditorOptions) {
+  const saving = createMetadataSave(options);
   const state = reactive({
+    ...toRefs(saving.state),
     open: false,
     mode: "tracks" as EditMode,
     loading: false,
-    saving: false,
     tracks: [] as EditableTrack[],
     draft: [] as DraftField[],
-    error: "",
     dirty: false,
     lyricsAction: "keep" as LyricsMarkAction,
     confirmDiscard: false,
-    results: [] as TagSaveResult[],
-    completed: 0,
-    total: 0,
   });
   let loadGeneration = 0;
-  let saveGeneration = 0;
   let pendingChanges: TagChange[] = [];
   let pendingTrackIds: number[] = [];
   let pendingLyricsAction: LyricsMarkAction = "keep";
@@ -58,6 +57,7 @@ export function createTagEditor(options: TagEditorOptions) {
   async function open(loadIds: () => Promise<number[]>, mode: EditMode) {
     if (state.open) return;
     const generation = ++loadGeneration;
+    saving.reset();
     Object.assign(state, {
       open: true,
       mode,
@@ -155,59 +155,38 @@ export function createTagEditor(options: TagEditorOptions) {
   async function save() {
     if (state.saving || pendingTrackIds.length === 0) return;
     const ids = [...pendingTrackIds];
-    state.saving = true;
-    state.completed = 0;
-    state.total = ids.length;
-    const generation = ++saveGeneration;
-    let acceptingProgress = true;
-    const completedIds = new Set<number>();
-    const previous = new Map(state.results.map((result) => [result.trackId, result]));
-    const progress = (result: TagSaveResult) => {
-      if (!acceptingProgress || generation !== saveGeneration || !ids.includes(result.trackId))
-        return;
-      previous.set(result.trackId, result);
-      completedIds.add(result.trackId);
-      state.results = [...previous.values()];
-      state.completed = completedIds.size;
-    };
-    try {
-      const results = await options.save(ids, pendingChanges, progress, pendingLyricsAction);
-      acceptingProgress = false;
-      for (const result of results) previous.set(result.trackId, result);
-      state.results = [...previous.values()];
-      state.completed = ids.length;
-      const updated = results.flatMap((result) => (result.databaseUpdated ? [result.trackId] : []));
-      if (updated.length > 0) {
-        try {
-          await options.synchronize(updated);
-        } catch (error) {
-          state.error = `元数据已保存，但界面刷新失败：${errorMessage(error)}`;
-        }
-      }
-      const failed = state.results.filter((result) => !result.databaseUpdated).length;
-      options.notify({
-        type: failed > 0 || state.error ? "warning" : "success",
-        message: saveMessage(
-          state.tracks.length,
-          state.results.length - failed,
-          failed,
-          state.error,
-        ),
-        key: failed > 0 ? "metadata-save" : undefined,
-      });
-      state.dirty = failed > 0;
-      if (failed === 0 && !state.error) state.open = false;
-    } catch (error) {
-      state.error = errorMessage(error);
+    const changes = pendingChanges.map((change) => ({ ...change }));
+    const action = pendingLyricsAction;
+    const targets = state.tracks.flatMap(({ track }) =>
+      ids.includes(track.id) ? [{ trackId: track.id, path: track.path }] : [],
+    );
+    const writeIds = state.tracks.flatMap(({ track, lyrics }) => {
+      if (!ids.includes(track.id)) return [];
+      if (changes.length || (action === "mark" && lyrics !== null)) return [track.id];
+      return [];
+    });
+    await saving.run({
+      targets,
+      writeTrackIds: writeIds,
+      execute: (progress) => options.save(ids, changes, progress, action),
+    });
+    const failed = state.results.filter((result) => !result.databaseUpdated).length;
+    const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
+    if (state.error && failed === state.results.length) {
       options.notify({
         type: "error",
-        message: `保存元数据失败：${state.error}`,
+        message: `保存元数据失败：${error}`,
         key: "metadata-save",
       });
-    } finally {
-      acceptingProgress = false;
-      state.saving = false;
+    } else {
+      options.notify({
+        type: failed > 0 || error ? "warning" : "success",
+        message: saveMessage(state.tracks.length, state.results.length - failed, failed, error),
+        key: failed > 0 || error ? "metadata-save" : undefined,
+      });
     }
+    state.dirty = failed > 0;
+    if (!state.dirty && !error) state.open = false;
   }
 
   return {
@@ -220,6 +199,10 @@ export function createTagEditor(options: TagEditorOptions) {
     changeLyricsAction,
     edited,
     save,
+    retrySynchronization: async () => {
+      await saving.retrySynchronization();
+      if (!state.dirty && !state.error && !state.synchronizationError) close();
+    },
     prepareSave: () => prepareTargetSave(state.tracks.map(({ track }) => track.id)),
     retryFailed: () =>
       prepareTargetSave(
@@ -245,23 +228,11 @@ export function useTagEditor() {
     loadTracks: api.editableTracks,
     loadAlbum: async (album) => (await library.listAlbumTracks(album)).map((track) => track.id),
     save: (trackIds, changes, progress, lyricsAction) => {
-      const writeIds =
-        changes.length > 0
-          ? trackIds
-          : trackIds.filter(
-              (id) =>
-                lyricsAction === "mark" &&
-                sharedEditor?.state.tracks.some(
-                  ({ track, lyrics }) => track.id === id && lyrics !== null,
-                ),
-            );
-      const save = () => {
-        const onProgress = new Channel<TagSaveResult>();
-        onProgress.onmessage = progress;
-        return api.saveMetadata(trackIds, changes, onProgress, lyricsAction);
-      };
-      return writeIds.length ? session.withMetadataEditing(writeIds, save) : save();
+      const onProgress = new Channel<TagSaveResult>();
+      onProgress.onmessage = progress;
+      return api.saveMetadata(trackIds, changes, onProgress, lyricsAction);
     },
+    editFiles: session.withMetadataEditing,
     synchronize: synchronize.tracks,
     notify,
   });

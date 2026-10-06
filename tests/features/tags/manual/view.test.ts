@@ -77,7 +77,11 @@ async function settle() {
   await Vue.nextTick();
   await Vue.nextTick();
 }
-function mountDialog(readOnly = false, marked = false) {
+function mountDialog(
+  readOnly = false,
+  marked = false,
+  synchronize: () => Promise<void> = async () => {},
+) {
   const saved: TagChange[][] = [];
   const savedActions: string[] = [];
   const editor = createTagEditor({
@@ -100,7 +104,8 @@ function mountDialog(readOnly = false, marked = false) {
         error: null,
       }));
     },
-    synchronize: async () => {},
+    synchronize,
+    editFiles: (_ids, save) => save(),
     notify: () => 1,
   });
   const component = evaluateSource<{ default: Vue.Component }>(
@@ -131,6 +136,30 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
+  it("shows refresh errors and retries the UI without writing successful tags again", async () => {
+    let refreshes = 0;
+    const { editor, root, saved } = mountDialog(false, false, async () => {
+      refreshes++;
+      if (refreshes === 1) throw new Error("reload failed");
+    });
+    await editor.openTracks([1]);
+    editor.prepareSave();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await settle();
+    expect(getTextContent(root)).toContain("reload failed");
+    const button = findNode(
+      root,
+      (node) => node.type === "button" && getTextContent(node).trim() === "重试界面刷新",
+    );
+    if (!button) throw new Error("Missing refresh retry");
+    (button.props.onClick as () => void)();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await settle();
+    expect(refreshes).toBe(2);
+    expect(saved).toHaveLength(1);
+    expect(editor.state.open).toBe(false);
+  });
+
   it("shows a native modal with database values, allows unchanged saves and does not close on the backdrop", async () => {
     const { editor, root } = mountDialog();
     await editor.openTracks([1]);

@@ -55,6 +55,13 @@ watch(
       <p v-if="state.error" role="alert" class="text-sm whitespace-pre-wrap text-red-200">
         {{ state.error }}
       </p>
+      <p
+        v-if="state.synchronizationError"
+        role="alert"
+        class="text-sm whitespace-pre-wrap text-red-200"
+      >
+        {{ state.synchronizationError }}
+      </p>
       <ReleaseSearch :editor="editor" :disabled="disabled" class="shrink-0" />
       <div
         class="grid shrink-0 grid-cols-[minmax(0,1fr)_80px] gap-[8px] border-y border-white/10 py-[8px]"
@@ -95,6 +102,15 @@ watch(
             @click="editor.retryFailed()"
           >
             仅重试失败项
+          </button>
+          <button
+            v-if="state.synchronizationError"
+            type="button"
+            :disabled="disabled"
+            class="rounded border border-white/20 px-2 py-1 text-xs disabled:opacity-50"
+            @click="editor.retrySynchronization()"
+          >
+            重试界面刷新
           </button>
           <p
             v-if="state.selected && state.selected.summary.trackCount !== state.tracks.length"

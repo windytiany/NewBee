@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { reactive } from "vue";
+import { reactive, toRef } from "vue";
 import { createLyricsApi } from "@/features/lyrics/api";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import type { TagSaveResult } from "@/features/tags/types";
+import { createMetadataSave } from "@/features/tags/save";
+import type { MetadataFileEditor } from "@/features/tags/save";
 import { notifications } from "@/shared/notifications/center";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { LyricsContent } from "@/features/lyrics/types";
@@ -15,11 +17,15 @@ export type LyricsBatchOptions = {
   mark: (batchId: number, trackId: number) => Promise<TagSaveResult>;
   cancel: (batchId: number) => Promise<void>;
   finish: (batchId: number) => Promise<void>;
-  synchronize: () => void;
+  editFiles: MetadataFileEditor;
+  markWritesFile: (trackId: number) => Promise<boolean>;
+  synchronize: () => void | Promise<void>;
   notifications: Pick<typeof notifications, "notify" | "updateTask" | "removeTask">;
 };
 export function createLyricsBatch(options: LyricsBatchOptions) {
+  const saving = createMetadataSave({ ...options, refreshWrittenFiles: true });
   const state = reactive({
+    synchronizationError: toRef(saving.state, "synchronizationError"),
     running: false,
     cancelling: false,
     completed: 0,
@@ -54,6 +60,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
   }
   async function run(trackIds: readonly number[]) {
     if (state.running) return;
+    saving.reset();
     Object.assign(state, {
       running: true,
       cancelling: false,
@@ -88,19 +95,32 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         try {
           const content = await options.fetch(batchId, trackId);
           if (state.cancelling) break;
-          if (content.kind === "available") {
+          if (content.kind === "missing") state.missing++;
+          else {
             // Downloads do not hold playback command state; only the actual write releases the file.
-            const result = await options.write(batchId, trackId, content.text);
-            if (result.fileWritten) state.written++;
-            if (result.databaseUpdated) state.updated++;
-            else recordFailure(result.error ?? "歌词已写入，但数据库同步失败。");
-          } else if (content.kind === "instrumental") {
-            const result = await options.mark(batchId, trackId);
-            if (result.databaseUpdated) {
-              state.instrumental++;
-              state.updated++;
-            } else recordFailure(result.error ?? "无歌词标记保存失败。");
-          } else state.missing++;
+            const writesFile =
+              content.kind === "available" || (await options.markWritesFile(trackId));
+            if (state.cancelling) break;
+            const activeId = batchId;
+            const results = await saving.run({
+              targets: [{ trackId, path: "" }],
+              writeTrackIds: writesFile ? [trackId] : [],
+              deferSynchronization: true,
+              execute: async () => [
+                await (content.kind === "available"
+                  ? options.write(activeId, trackId, content.text)
+                  : options.mark(activeId, trackId)),
+              ],
+            });
+            if (state.cancelling && saving.state.error) break;
+            for (const result of results) {
+              if (content.kind === "available" && result.fileWritten) state.written++;
+              if (result.databaseUpdated) {
+                state.updated++;
+                if (content.kind === "instrumental") state.instrumental++;
+              } else recordFailure(result.error ?? "歌词保存失败。");
+            }
+          }
         } catch (error) {
           if (state.cancelling) break;
           recordFailure(error);
@@ -121,12 +141,9 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         }
       }
       activeBatchId = null;
-      if (state.written > 0 || state.updated > 0) {
-        try {
-          options.synchronize();
-        } catch (error) {
-          failure = `歌词已写入，但界面刷新失败：${error instanceof Error ? error.message : String(error)}`;
-        }
+      await saving.retrySynchronization();
+      if (state.synchronizationError) {
+        failure = [failure, state.synchronizationError].filter(Boolean).join("\n");
       }
       options.notifications.removeTask(TASK_KEY);
       options.notifications.notify({
@@ -142,6 +159,19 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
     state,
     cancel,
     startTracks: run,
+    retrySynchronization: async () => {
+      if (state.running) return;
+      state.running = true;
+      try {
+        await saving.retrySynchronization();
+        options.notifications.notify({
+          type: state.synchronizationError ? "warning" : "success",
+          message: state.synchronizationError || "歌词界面已刷新。",
+        });
+      } finally {
+        state.running = false;
+      }
+    },
   };
 }
 
@@ -153,16 +183,18 @@ export function useLyricsBatch() {
   sharedBatch = createLyricsBatch({
     begin: api.begin,
     fetch: api.fetch,
-    write: (batchId, trackId, text) =>
-      session.withMetadataEditing([trackId], () => api.write(batchId, trackId, text)),
-    mark: async (batchId, trackId) => {
+    write: api.write,
+    mark: api.mark,
+    editFiles: session.withMetadataEditing,
+    markWritesFile: async (trackId) => {
       const [target] = await api.targets([trackId]);
-      const save = () => api.mark(batchId, trackId);
-      return target?.hasLyrics ? session.withMetadataEditing([trackId], save) : save();
+      return target?.hasLyrics ?? false;
     },
     cancel: api.cancel,
     finish: api.finish,
-    synchronize: () => globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT)),
+    synchronize: () => {
+      globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
+    },
     notifications,
   });
   return sharedBatch;

@@ -33,7 +33,7 @@ afterEach(() => {
 const settle = async () => {
   for (let index = 0; index < 5; index++) await Vue.nextTick();
 };
-function fixture() {
+function fixture(synchronize: () => Promise<void> = async () => {}) {
   return createReleaseEditor({
     loadAlbum: async () => [local(1), local(2)],
     search: async () => ({ count: 0, offset: 0, releases: [] }),
@@ -48,7 +48,9 @@ function fixture() {
         databaseUpdated: true,
         error: null,
       })),
-    synchronize: async () => {},
+    synchronize,
+    editFiles: (_ids, save) => save(),
+    notify: () => 1,
   });
 }
 function node(root: HostNode, predicate: (node: HostNode) => boolean) {
@@ -86,7 +88,52 @@ function createDialogNode(type: string, text = ""): DialogNode {
   return node;
 }
 
+function mountDialog(editor: ReturnType<typeof createReleaseEditor>) {
+  const passive = Vue.defineComponent({ setup: () => () => null });
+  const component = evaluateSource<{ default: Vue.Component }>(
+    compileSfc(dialogSource, "ReleaseTagDialog.vue"),
+    {
+      vue: Vue,
+      "@/features/tags/releases/useEditor": { useReleaseEditor: () => editor },
+      "@/features/tags/draft": metadata,
+      "@/features/tags/releases/components/ReleaseSearch.vue": passive,
+      "@/features/tags/releases/components/TagFields.vue": passive,
+      "@/features/tags/releases/components/TrackMapping.vue": passive,
+    },
+  ).default;
+  const root = createDialogNode("root");
+  const app = createHostRenderer(createDialogNode).createApp(component);
+  app.mount(root);
+  apps.push(app);
+  return root;
+}
+
 describe("album tag views", () => {
+  it("offers a refresh-only retry while retaining successful save results", async () => {
+    let refreshes = 0;
+    const editor = fixture(async () => {
+      refreshes++;
+      if (refreshes === 1) throw new Error("reload failed");
+    });
+    const root = mountDialog(editor);
+    await editor.open(album);
+    editor.selectRelease(release().summary.id);
+    await settle();
+    editor.prepareSave();
+    await editor.save();
+    await settle();
+    expect(getTextContent(root)).toContain("reload failed");
+    const button = node(
+      root,
+      (entry) => entry.type === "button" && getTextContent(entry).trim() === "重试界面刷新",
+    );
+    event(button, "onClick");
+    await settle();
+    expect(refreshes).toBe(2);
+    expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
+    expect(editor.state.open).toBe(false);
+  });
+
   it("wires album context-menu selection to the album editor", async () => {
     const editor = fixture();
     let closed = 0;
@@ -359,22 +406,7 @@ describe("album tag views", () => {
   });
   it("uses native modal dialogs, requires save confirmation and handles discard", async () => {
     const editor = fixture();
-    const passive = Vue.defineComponent({ setup: () => () => null });
-    const component = evaluateSource<{ default: Vue.Component }>(
-      compileSfc(dialogSource, "ReleaseTagDialog.vue"),
-      {
-        vue: Vue,
-        "@/features/tags/releases/useEditor": { useReleaseEditor: () => editor },
-        "@/features/tags/draft": metadata,
-        "@/features/tags/releases/components/ReleaseSearch.vue": passive,
-        "@/features/tags/releases/components/TagFields.vue": passive,
-        "@/features/tags/releases/components/TrackMapping.vue": passive,
-      },
-    ).default;
-    const root = createDialogNode("root");
-    const app = createHostRenderer(createDialogNode).createApp(component);
-    app.mount(root);
-    apps.push(app);
+    const root = mountDialog(editor);
     await editor.open(album);
     editor.selectRelease(release().summary.id);
     await settle();
