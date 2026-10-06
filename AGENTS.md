@@ -5,6 +5,13 @@
 - 编写、修改或审查代码前，必须读取并遵循 [CODING_STANDARDS.md](CODING_STANDARDS.md)。
 - 启动应用或查找开发环境、目录入口时，读取 [README.md](README.md)。依赖版本以 package manifest 为准，检查命令以项目脚本和 `.github/workflows/ci.yml` 为准。
 
+## Navigation and file organization
+
+- 首次探索项目时，先列出 `src/`、`src-tauri/src/` 和 `tests/` 的目录结构，排除依赖、构建产物及资源文件。
+- 探索尚未查看的功能时，先列出该功能子树，再搜索文件或内容。当前任务中已查看且未变化的结构不重复列出。
+- 文件路径使用“所属业务 + 具体职责”命名。
+- 多入口共用的业务行为放在其业务归属下，不挂在某个 UI 入口下。发现归属或命名误导时，明确提出调整，而不是通过导航文档补偿。
+
 ## Project constraints
 
 - 使用 Bun 安装 JavaScript 依赖和运行脚本，保留 `bun.lock` 作为锁文件。
