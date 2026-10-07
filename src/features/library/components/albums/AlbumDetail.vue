@@ -128,10 +128,8 @@
         :class="isPlaylistMenuOpen ? 'bg-app-accent text-black' : 'text-white hover:bg-white/10'"
         role="menuitem"
         aria-haspopup="menu"
-        :aria-expanded="isPlaylistMenuOpen && !props.playlistsLoading"
-        :aria-controls="
-          isPlaylistMenuOpen && !props.playlistsLoading ? 'album-track-playlist-menu' : undefined
-        "
+        :aria-expanded="isPlaylistMenuOpen"
+        :aria-controls="isPlaylistMenuOpen ? 'album-track-playlist-menu' : undefined"
         :disabled="props.trackActionPending"
         type="button"
         @mouseenter="openPlaylistMenu()"
@@ -141,7 +139,7 @@
         <ChevronRight aria-hidden="true" class="size-4" />
       </button>
       <div
-        v-if="isPlaylistMenuOpen && !props.playlistsLoading"
+        v-if="isPlaylistMenuOpen"
         id="album-track-playlist-menu"
         ref="playlistMenuElement"
         class="bg-app-interactive fixed z-101 max-h-72 w-56 overflow-y-auto rounded-md p-1 shadow-xl ring-1 ring-white/10"
@@ -149,17 +147,27 @@
         role="menu"
         aria-label="选择目标歌单"
       >
+        <button
+          ref="createPlaylistMenuItemElement"
+          class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+          role="menuitem"
+          :disabled="props.trackActionPending"
+          type="button"
+          @click.stop="createPlaylistWithTracks"
+        >
+          新建播放列表…
+        </button>
+        <div class="my-1 border-t border-white/10" role="separator"></div>
         <p
-          v-if="!props.playlistsError && props.playlists.length === 0"
+          v-if="!props.playlistsLoading && !props.playlistsError && props.playlists.length === 0"
           class="text-app-muted px-2 py-2 text-sm"
         >
           无歌单
         </p>
         <button
           v-for="playlist in props.playlists"
-          v-else-if="!props.playlistsError"
+          v-else-if="!props.playlistsLoading && !props.playlistsError"
           :key="playlist.id"
-          ref="playlistMenuItemElements"
           class="focus-visible:outline-app-accent w-full truncate rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
           role="menuitem"
           :disabled="props.trackActionPending"
@@ -251,6 +259,7 @@ const emit = defineEmits<{
   addTracksToNext: [trackIds: number[]];
   addTracksToQueueEnd: [trackIds: number[]];
   addTracksToPlaylist: [trackIds: number[], playlistId: number];
+  createPlaylistWithTracks: [trackIds: number[]];
   deleteTrack: [trackId: number];
 }>();
 
@@ -295,7 +304,9 @@ const playlistMenuTriggerElement = ref<InstanceType<typeof globalThis.HTMLButton
   null,
 );
 const playlistMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
-const playlistMenuItemElements = ref<InstanceType<typeof globalThis.HTMLButtonElement>[]>([]);
+const createPlaylistMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(
+  null,
+);
 const {
   request: contextMenu,
   position: menuPosition,
@@ -371,7 +382,7 @@ function openPlaylistMenu(focusFirst = false) {
 
   void nextTick(() => {
     positionPlaylistMenu();
-    if (focusFirst) playlistMenuItemElements.value[0]?.focus();
+    if (focusFirst) createPlaylistMenuItemElement.value?.focus();
   });
 }
 
@@ -402,6 +413,14 @@ function addTracksToPlaylist(playlistId: number) {
   if (!targetTrackIds?.length) return;
   closeTrackContextMenu(true);
   emit("addTracksToPlaylist", targetTrackIds, playlistId);
+}
+
+function createPlaylistWithTracks() {
+  const targetTrackIds = contextMenu.value?.payload.targetTrackIds;
+  if (!targetTrackIds?.length || props.trackActionPending) return;
+  const trackIds = [...targetTrackIds];
+  closeTrackContextMenu(false);
+  emit("createPlaylistWithTracks", trackIds);
 }
 
 function requestTrackDeletion() {

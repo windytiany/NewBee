@@ -77,6 +77,7 @@
               @add-tracks-to-next="emit('addTracksToNext', $event)"
               @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
               @add-tracks-to-playlist="addTracksToPlaylist"
+              @create-playlist-with-tracks="createPlaylistWithTracks"
               @delete-track="emit('deleteTrack', $event)"
             />
           </div>
@@ -96,8 +97,10 @@
       @add-to-next="emit('addAlbumToNext', $event)"
       @add-to-queue-end="emit('addAlbumToQueueEnd', $event)"
       @add-to-playlist="(album, playlistId) => emit('addAlbumToPlaylist', album, playlistId)"
+      @create-playlist-with-album="createPlaylistWithAlbum"
       @delete-album="emit('deleteAlbum', $event)"
     />
+    <CreatePlaylistDialog ref="createPlaylistDialog" @created="emit('refreshPlaylists')" />
   </section>
 </template>
 
@@ -117,6 +120,8 @@ import type { PlaylistSummary } from "@/features/playlist/types";
 import AlbumDetail from "@/features/library/components/albums/AlbumDetail.vue";
 import AlbumCard from "@/features/library/components/albums/AlbumCard.vue";
 import AlbumContextMenu from "@/features/library/components/albums/AlbumContextMenu.vue";
+import { createLibraryApi } from "@/features/library/api";
+import CreatePlaylistDialog from "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue";
 
 type AlbumBrowserRow = {
   id: string;
@@ -244,6 +249,24 @@ function toggleAlbum(album: AlbumSummary) {
 function closeAlbum(album: AlbumSummary) {
   albumFocus.focusItem(getAlbumKey(album));
   emit("selectAlbum", null);
+}
+
+const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
+const libraryApi = createLibraryApi();
+
+function createPlaylistWithTracks(trackIds: number[]) {
+  if (props.trackActionPending) return;
+  const ids = [...trackIds];
+  createPlaylistDialog.value?.show(async () => ids);
+}
+
+function createPlaylistWithAlbum(album: LibraryAlbumSelection) {
+  if (props.trackActionPending) return;
+  const selection = { ...album };
+  createPlaylistDialog.value?.show(async () => {
+    const tracks = await libraryApi.listAlbumTracks(selection);
+    return tracks.map((track) => track.id);
+  });
 }
 
 function addTracksToPlaylist(trackIds: number[], playlistId: number) {

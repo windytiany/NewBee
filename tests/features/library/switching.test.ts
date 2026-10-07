@@ -71,6 +71,10 @@ function mountBrowser() {
       __esModule: true,
       default: placeholder,
     },
+    "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": {
+      __esModule: true,
+      default: placeholder,
+    },
   };
   const artwork = evaluateSource<{ useAlbumArtwork: typeof useAlbumArtwork }>(
     transpileScript(artworkSource),

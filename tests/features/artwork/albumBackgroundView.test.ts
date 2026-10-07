@@ -77,6 +77,10 @@ const dependencies: Record<string, unknown> = {
   "@/features/lyrics/components/DownloadMenuItem.vue": passiveComponent,
   "@/features/playback/queue/components/SkipMenuItem.vue": passiveComponent,
   "@/features/library/components/albums/AlbumContextMenu.vue": passiveComponent,
+  "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": passiveComponent,
+  "@/features/library/api": {
+    createLibraryApi: () => ({ listAlbumTracks: async () => [] }),
+  },
 };
 await loadSourceModules(
   [

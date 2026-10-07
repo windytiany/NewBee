@@ -65,6 +65,7 @@ let itemSelection: ItemFocusManager;
 let documentListeners: Map<string, EventListener[]>;
 let addToNextCalls: number[][];
 let deleteTrackCalls: number[];
+let createPlaylistCalls: number[][];
 
 function createDocumentTarget() {
   documentListeners = new Map();
@@ -244,6 +245,7 @@ function mountAlbumDetail(sourceTracks = tracks) {
         playlistsError: "",
         trackActionPending: false,
         onAddTracksToNext: (trackIds: number[]) => addToNextCalls.push(trackIds),
+        onCreatePlaylistWithTracks: (trackIds: number[]) => createPlaylistCalls.push(trackIds),
         onDeleteTrack: (trackId: number) => deleteTrackCalls.push(trackId),
       }),
   });
@@ -302,6 +304,7 @@ beforeEach(() => {
   itemSelection = createItemSelection();
   addToNextCalls = [];
   deleteTrackCalls = [];
+  createPlaylistCalls = [];
   Object.defineProperty(globalThis, "document", {
     configurable: true,
     value: createDocumentTarget(),
@@ -396,6 +399,30 @@ describe("专辑曲目上下文菜单目标", () => {
     await settle();
     expect(addToNextCalls).toEqual([[1, 3]]);
     expect(itemSelection.selection.value?.selectedItemKeys).toEqual(["1", "3"]);
+  });
+
+  it("没有现有歌单时可以为右键多选曲目创建播放列表，保留曲目顺序", async () => {
+    const root = mountAlbumDetail();
+    clickNode(findTrackButton(root, 1)!);
+    clickNode(findTrackButton(root, 3)!, { ctrlKey: true, shiftKey: false });
+    openContextMenu(findTrackButton(root, 3)!);
+    await settle();
+    clickNode(findMenuItem(root, "添加到播放列表")!);
+    await settle();
+    clickNode(findMenuItem(root, "新建播放列表")!);
+    await settle();
+    expect(createPlaylistCalls).toEqual([[1, 3]]);
+    expect(findMenuItem(root, "新建播放列表")).toBeNull();
+  });
+
+  it("键盘右键菜单可以为单首歌曲创建播放列表", async () => {
+    const root = mountAlbumDetail();
+    openContextMenu(findTrackButton(root, 2)!, true);
+    await settle();
+    clickNode(findMenuItem(root, "添加到播放列表")!);
+    await settle();
+    clickNode(findMenuItem(root, "新建播放列表")!);
+    expect(createPlaylistCalls).toEqual([[2]]);
   });
 
   it("未选中行及键盘菜单按目标行更新焦点和选择，单首删除保持可用", async () => {

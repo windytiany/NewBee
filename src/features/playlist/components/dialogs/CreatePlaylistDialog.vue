@@ -1,7 +1,7 @@
 <template>
   <dialog
     ref="dialogElement"
-    aria-labelledby="create-playlist-dialog-title"
+    :aria-labelledby="`${dialogId}-title`"
     class="bg-app-surface m-auto w-[min(28rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
     @click.self="closeDialog"
     @cancel.prevent="closeDialog"
@@ -10,20 +10,20 @@
   >
     <form @submit.prevent="createPlaylist">
       <header class="border-b border-white/10 px-5 py-4">
-        <h2 id="create-playlist-dialog-title" class="text-lg font-semibold">新建歌单</h2>
+        <h2 :id="`${dialogId}-title`" class="text-lg font-semibold">新建歌单</h2>
       </header>
 
       <div class="px-5 py-4">
-        <label for="create-playlist-name" class="text-sm font-medium text-white/90">
+        <label :for="`${dialogId}-name`" class="text-sm font-medium text-white/90">
           歌单名称
         </label>
         <input
-          id="create-playlist-name"
+          :id="`${dialogId}-name`"
           ref="nameInput"
           v-model="name"
           autofocus
           class="focus-visible:outline-app-accent mt-2 w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/40 focus-visible:outline-2"
-          :disabled="isCreating"
+          :disabled="isCreating || creation.playlistId.value !== null"
           :aria-invalid="invalidName || undefined"
           type="text"
           autocomplete="off"
@@ -56,10 +56,13 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { createPlaylistApi } from "@/features/playlist/api";
-import { ref } from "vue";
+import { ref, useId } from "vue";
 import { logger } from "@/shared/logging/logger";
+import { usePlaylistCreation } from "@/features/playlist/composables/useCreation";
 
-const api = createPlaylistApi(invoke);
+const dialogId = `create-playlist-${useId()}`;
+const creation = usePlaylistCreation(createPlaylistApi(invoke));
+let loadTrackIds: () => Promise<readonly number[]> = async () => [];
 
 const emit = defineEmits<{
   created: [playlistId: number];
@@ -72,9 +75,11 @@ const error = ref("");
 const invalidName = ref(false);
 const isCreating = ref(false);
 
-function show() {
-  if (dialogElement.value?.open) return;
+function show(loadTracks: () => Promise<readonly number[]> = async () => []) {
+  if (dialogElement.value?.open || isCreating.value) return;
 
+  creation.reset();
+  loadTrackIds = loadTracks;
   name.value = "";
   invalidName.value = false;
   error.value = "";
@@ -108,12 +113,17 @@ async function createPlaylist() {
   invalidName.value = false;
   error.value = "";
   try {
-    const playlistId = await api.create(trimmedName);
+    const playlistId = await creation.create(trimmedName, loadTrackIds);
     dialogElement.value?.close();
     emit("created", playlistId);
   } catch (cause) {
     logger.error("playlist", "create_failed", cause);
-    error.value = "创建歌单失败，请重试或查看日志";
+    if (creation.playlistId.value === null) {
+      error.value = "创建歌单失败，请重试或查看日志";
+    } else {
+      emit("created", creation.playlistId.value);
+      error.value = `歌单已创建，已添加 ${creation.addedCount.value} 首，剩余歌曲添加失败，请重试或查看日志`;
+    }
   } finally {
     isCreating.value = false;
   }

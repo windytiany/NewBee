@@ -54,6 +54,17 @@
       role="menu"
       aria-label="选择目标歌单"
     >
+      <button
+        ref="createPlaylistMenuItemElement"
+        class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+        role="menuitem"
+        :disabled="pending"
+        type="button"
+        @click.stop="createPlaylistWithAlbum"
+      >
+        新建播放列表…
+      </button>
+      <div class="my-1 border-t border-white/10" role="separator"></div>
       <p
         v-if="!playlistsLoading && !playlistsError && playlists.length === 0"
         class="text-app-muted px-2 py-2 text-sm"
@@ -64,7 +75,6 @@
         v-for="playlist in playlists"
         v-else-if="!playlistsLoading && !playlistsError"
         :key="playlist.id"
-        ref="playlistItemElements"
         class="focus-visible:outline-app-accent w-full truncate rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
         role="menuitem"
         :disabled="pending"
@@ -113,6 +123,7 @@ const emit = defineEmits<{
   addToNext: [album: LibraryAlbumSelection];
   addToQueueEnd: [album: LibraryAlbumSelection];
   addToPlaylist: [album: LibraryAlbumSelection, playlistId: number];
+  createPlaylistWithAlbum: [album: LibraryAlbumSelection];
   deleteAlbum: [album: LibraryAlbumSelection];
 }>();
 type MenuElement = InstanceType<typeof globalThis.HTMLElement>;
@@ -121,7 +132,7 @@ const firstMenuItemElement = ref<MenuElement | null>(null);
 const fallbackFocusElement = ref<MenuElement | null>(null);
 const playlistTriggerElement = ref<MenuElement | null>(null);
 const playlistMenuElement = ref<MenuElement | null>(null);
-const playlistItemElements = ref<MenuElement[]>([]);
+const createPlaylistMenuItemElement = ref<MenuElement | null>(null);
 const {
   request: contextMenu,
   position,
@@ -168,8 +179,16 @@ function openPlaylistMenu(focusFirst = false) {
   if (!wasOpen) emit("refreshPlaylists");
   void nextTick(() => {
     positionPlaylistMenu();
-    if (focusFirst) playlistItemElements.value[0]?.focus();
+    if (focusFirst) createPlaylistMenuItemElement.value?.focus();
   });
+}
+
+function createPlaylistWithAlbum() {
+  const album = contextMenu.value?.payload;
+  if (!album || props.pending) return;
+  const selection = { ...album };
+  close();
+  emit("createPlaylistWithAlbum", selection);
 }
 
 function runAction(action: "next" | "end" | "playlist" | "delete", playlistId?: number) {

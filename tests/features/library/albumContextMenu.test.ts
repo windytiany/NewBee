@@ -98,6 +98,7 @@ function mountMenu() {
         onAddToNext: (...args: unknown[]) => calls.push({ name: "next", args }),
         onAddToQueueEnd: (...args: unknown[]) => calls.push({ name: "end", args }),
         onAddToPlaylist: (...args: unknown[]) => calls.push({ name: "playlist", args }),
+        onCreatePlaylistWithAlbum: (...args: unknown[]) => calls.push({ name: "create", args }),
         onDeleteAlbum: (...args: unknown[]) => calls.push({ name: "delete", args }),
       }),
   });
@@ -174,6 +175,18 @@ describe("album context menu", () => {
     await Vue.nextTick();
     menu.click("Favorites");
     expect(menu.calls).toEqual([{ name: "playlist", args: [album, 3] }]);
+  });
+
+  it("can create a playlist for the target album without any existing playlists", async () => {
+    const menu = mountMenu();
+    menu.props.playlists = [];
+    await menu.open();
+    menu.click("添加到播放列表");
+    await Vue.nextTick();
+    menu.click("新建播放列表");
+    await Vue.nextTick();
+    expect(menu.calls).toEqual([{ name: "create", args: [album] }]);
+    expect(findNodes(menu.root, (node) => node.props.role === "menu")).toHaveLength(0);
   });
 
   it("does not render progress text or an empty state while playlists are loading", async () => {
