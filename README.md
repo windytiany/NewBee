@@ -41,6 +41,14 @@ bun run tauri build
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
+## 提交检查与 CI
+
+`bun install` 会通过 Husky 安装 pre-commit hook。提交时，lint-staged 只对匹配的暂存文件运行 ESLint 自动修复和 Prettier 格式化；它不运行完整测试、类型检查或 Rust 检查。
+
+CI 在 push 和 pull request 时对完整 checkout 运行前端和 Rust 检查，不自动修改代码。pre-commit 提供快速本地反馈，CI 验证最终提交，两者互补；跳过或未安装 hook 不会跳过 CI。
+
+仓库通过 `.gitattributes` 统一文本文件 checkout 为 LF，与 Prettier 默认换行符一致，避免 Windows 的 `core.autocrlf` 导致本地与 CI 结果不同。
+
 ## 项目结构
 
 - `src/app/`：应用启动、页面切换、窗口壳与全局主题样式。
