@@ -1,5 +1,5 @@
 <template>
-  <li :aria-current="isCurrentTrack ? 'true' : undefined">
+  <li ref="rowElement" :aria-current="isCurrentTrack ? 'true' : undefined">
     <button
       data-item-interaction
       class="focus-visible:bg-app-track flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors outline-none"
@@ -22,14 +22,9 @@
           :src="artworkUrl"
           alt=""
           class="size-full object-cover transition-opacity"
-          :class="artworkStatus === 'available' ? 'opacity-100' : 'opacity-0'"
-          @load="onArtworkLoad"
-          @error="onArtworkError"
+          :class="artworkStatus === 'ready' ? 'opacity-100' : 'opacity-0'"
         />
-        <Disc3
-          v-else-if="artworkStatus === 'missing' || artworkStatus === 'failed'"
-          class="size-5 text-sky-200/80"
-        />
+        <Disc3 v-else-if="artworkStatus === 'fallback'" class="size-5 text-sky-200/80" />
       </span>
       <AudioLines
         v-if="isCurrentTrack"
@@ -60,11 +55,10 @@
 </template>
 
 <script setup lang="ts">
-import { invoke } from "@tauri-apps/api/core";
 import { AudioLines, Disc3, SkipForward } from "@lucide/vue";
-import { onBeforeUnmount, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
-import type { TrackArtwork } from "@/features/artwork/types";
+import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
 
 const props = withDefaults(
   defineProps<{
@@ -145,63 +139,24 @@ function handleContextMenuKeydown(event: InstanceType<typeof globalThis.Keyboard
   });
 }
 
-const artworkUrl = ref<string | null>(null);
-const artworkStatus = ref<"loading" | "available" | "missing" | "failed">("loading");
-let artworkRequestGeneration = 0;
+const rowElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const visible = ref(false);
+const { url: artworkUrl, status: artworkStatus } = useTrackArtwork(
+  () => (visible.value ? props.trackId : null),
+  "thumbnail",
+);
+let observer: InstanceType<typeof globalThis.IntersectionObserver> | null = null;
 
-function revokeArtworkUrl() {
-  const url = artworkUrl.value;
-  if (url) globalThis.URL.revokeObjectURL(url);
-  artworkUrl.value = null;
-}
-
-async function loadArtwork(trackId: number) {
-  const generation = ++artworkRequestGeneration;
-  revokeArtworkUrl();
-  artworkStatus.value = "loading";
-
-  try {
-    const artwork = await invoke<TrackArtwork | null>("get_track_artwork", { trackId });
-    if (generation !== artworkRequestGeneration || props.trackId !== trackId) return;
-
-    if (!artwork || artwork.status !== "available") {
-      artworkStatus.value = "missing";
-      return;
-    }
-
-    const imageBlob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
-      type: artwork.mimeType,
-    });
-    artworkUrl.value = globalThis.URL.createObjectURL(imageBlob);
-  } catch {
-    if (generation !== artworkRequestGeneration || props.trackId !== trackId) return;
-    artworkStatus.value = "failed";
+onMounted(() => {
+  if (!globalThis.IntersectionObserver) {
+    visible.value = true;
+    return;
   }
-}
-
-function onArtworkLoad(event: globalThis.Event) {
-  const image = event.currentTarget;
-  if (
-    image instanceof globalThis.HTMLImageElement &&
-    image.src === artworkUrl.value &&
-    image.complete
-  ) {
-    artworkStatus.value = "available";
-  }
-}
-
-function onArtworkError(event: globalThis.Event) {
-  const image = event.currentTarget;
-  if (!(image instanceof globalThis.HTMLImageElement) || image.src !== artworkUrl.value) return;
-
-  revokeArtworkUrl();
-  artworkStatus.value = "failed";
-}
-
-watch(() => props.trackId, loadArtwork, { immediate: true, flush: "sync" });
-
-onBeforeUnmount(() => {
-  ++artworkRequestGeneration;
-  revokeArtworkUrl();
+  observer = new globalThis.IntersectionObserver((entries) => {
+    visible.value = entries.some((entry) => entry.isIntersecting);
+  });
+  if (rowElement.value) observer.observe(rowElement.value);
 });
+
+onBeforeUnmount(() => observer?.disconnect());
 </script>

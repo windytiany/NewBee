@@ -15,6 +15,8 @@ type ArtworkSnapshot = {
 type ArtworkSubscriber = (snapshot: ArtworkSnapshot) => void;
 
 type SharedArtwork = {
+  key: string;
+  purpose: "original" | "thumbnail";
   trackId: number;
   status: TrackArtworkStatus;
   url: string | null;
@@ -27,9 +29,16 @@ type SharedArtwork = {
   retainedUrls: Map<string, number>;
 };
 
-const sharedArtworkByTrackId = new Map<number, SharedArtwork>();
+const sharedArtworkByKey = new Map<string, SharedArtwork>();
 
-export function useTrackArtwork(trackId: MaybeRefOrGetter<number | null>): {
+const thumbnailLoads: Array<() => void> = [];
+const THUMBNAIL_CONCURRENCY = 2;
+let activeThumbnailLoads = 0;
+
+export function useTrackArtwork(
+  trackId: MaybeRefOrGetter<number | null>,
+  purpose: "original" | "thumbnail" = "original",
+): {
   status: Readonly<Ref<TrackArtworkStatus>>;
   url: Readonly<Ref<string | null>>;
   error: Readonly<Ref<string>>;
@@ -55,7 +64,7 @@ export function useTrackArtwork(trackId: MaybeRefOrGetter<number | null>): {
       }
 
       status.value = "loading";
-      unsubscribe = subscribeToTrackArtwork(nextTrackId, (snapshot) => {
+      unsubscribe = subscribeToTrackArtwork(nextTrackId, purpose, (snapshot) => {
         if (currentTrackId !== nextTrackId) return;
         status.value = snapshot.status;
         url.value = snapshot.url;
@@ -77,8 +86,8 @@ export function useTrackArtwork(trackId: MaybeRefOrGetter<number | null>): {
 
 /** Keeps the decoded URL alive until a displayed artwork's leave transition finishes. */
 export function retainTrackArtwork(trackId: number): () => void {
-  const unsubscribe = subscribeToTrackArtwork(trackId, () => {});
-  const entry = sharedArtworkByTrackId.get(trackId);
+  const unsubscribe = subscribeToTrackArtwork(trackId, "original", () => {});
+  const entry = sharedArtworkByKey.get(`original:${trackId}`);
   if (!entry) return unsubscribe;
   const url = entry.url;
   if (url) entry.retainedUrls.set(url, (entry.retainedUrls.get(url) ?? 0) + 1);
@@ -102,18 +111,25 @@ export function retainTrackArtwork(trackId: number): () => void {
 /** Reloads subscribed artwork, optionally restricted to changed tracks. */
 export function invalidateTrackArtworkCache(trackIds?: readonly number[]) {
   const changedIds = trackIds === undefined ? null : new Set(trackIds);
-  for (const entry of [...sharedArtworkByTrackId.values()]) {
+  for (const entry of [...sharedArtworkByKey.values()]) {
     if (entry.subscribers.size > 0 && (changedIds === null || changedIds.has(entry.trackId))) {
       startArtworkLoad(entry);
     }
   }
 }
 
-function subscribeToTrackArtwork(trackId: number, subscriber: ArtworkSubscriber) {
-  let entry = sharedArtworkByTrackId.get(trackId);
+function subscribeToTrackArtwork(
+  trackId: number,
+  purpose: "original" | "thumbnail",
+  subscriber: ArtworkSubscriber,
+) {
+  const key = `${purpose}:${trackId}`;
+  let entry = sharedArtworkByKey.get(key);
   const isNewEntry = entry === undefined;
   if (!entry) {
     entry = {
+      key,
+      purpose,
       trackId,
       status: "loading",
       url: null,
@@ -125,7 +141,7 @@ function subscribeToTrackArtwork(trackId: number, subscriber: ArtworkSubscriber)
       retiredUrls: new Set(),
       retainedUrls: new Map(),
     };
-    sharedArtworkByTrackId.set(trackId, entry);
+    sharedArtworkByKey.set(key, entry);
   }
 
   entry.subscribers.add(subscriber);
@@ -155,24 +171,41 @@ function startArtworkLoad(entry: SharedArtwork) {
   for (const previousUrl of previousUrls) retireUrl(entry, previousUrl);
   publish(entry);
 
-  if (isCurrent(entry, generation)) void loadArtwork(entry, generation);
+  if (entry.purpose === "original") {
+    if (isCurrent(entry, generation)) void loadArtwork(entry, generation);
+    return;
+  }
+  thumbnailLoads.push(() => {
+    if (!isCurrent(entry, generation)) return;
+    activeThumbnailLoads++;
+    void loadArtwork(entry, generation).finally(() => {
+      activeThumbnailLoads--;
+      drainThumbnailLoads();
+    });
+  });
+  drainThumbnailLoads();
+}
+
+function drainThumbnailLoads() {
+  while (activeThumbnailLoads < THUMBNAIL_CONCURRENCY && thumbnailLoads.length > 0) {
+    thumbnailLoads.shift()?.();
+  }
 }
 
 async function loadArtwork(entry: SharedArtwork, generation: number) {
   try {
-    const artwork = await invoke<TrackArtwork | null>("get_track_artwork", {
+    const artwork = await invoke<TrackArtwork>("get_track_artwork", {
       trackId: entry.trackId,
+      thumbnail: entry.purpose === "thumbnail",
     });
     if (!isCurrent(entry, generation)) return;
 
-    if (!artwork || artwork.status !== "available") {
+    if (artwork.byteLength === 0) {
       showFallback(entry);
       return;
     }
 
-    const imageBlob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
-      type: artwork.mimeType,
-    });
+    const imageBlob = new globalThis.Blob([artwork]);
     const imageUrl = globalThis.URL.createObjectURL(imageBlob);
     entry.pendingUrl = imageUrl;
     const decoder = new globalThis.Image();
@@ -216,7 +249,7 @@ function publish(entry: SharedArtwork) {
 
 function isCurrent(entry: SharedArtwork, generation: number) {
   return (
-    sharedArtworkByTrackId.get(entry.trackId) === entry &&
+    sharedArtworkByKey.get(entry.key) === entry &&
     entry.generation === generation &&
     entry.subscribers.size > 0
   );
@@ -240,8 +273,8 @@ function detachDecoder(entry: SharedArtwork) {
 }
 
 function releaseEntry(entry: SharedArtwork) {
-  if (sharedArtworkByTrackId.get(entry.trackId) === entry) {
-    sharedArtworkByTrackId.delete(entry.trackId);
+  if (sharedArtworkByKey.get(entry.key) === entry) {
+    sharedArtworkByKey.delete(entry.key);
   }
   ++entry.generation;
   entry.subscribers.clear();

@@ -1,3 +1,4 @@
+mod artwork;
 mod database;
 mod import;
 mod logging;
@@ -75,7 +76,7 @@ pub fn run() {
             lyrics::batch::cancel_lyrics_download,
             database::commands::list_album_artists,
             database::commands::list_albums,
-            database::commands::get_album_artwork,
+            artwork::get_album_artwork,
             database::commands::list_album_tracks,
             database::commands::remove_track_from_library,
             database::commands::create_playlist,
@@ -89,7 +90,7 @@ pub fn run() {
             database::commands::list_skipped_track_ids,
             database::commands::set_tracks_skipped,
             database::commands::get_track,
-            database::commands::get_track_artwork,
+            artwork::get_track_artwork,
             metadata::get_editable_tracks,
             metadata::save_track_metadata,
             metadata::releases::search_album_releases,

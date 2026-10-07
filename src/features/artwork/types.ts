@@ -1,2 +1,2 @@
-export type TrackArtwork =
-  { status: "available"; mimeType: string; data: number[] } | { status: "noArtwork" };
+/** Raw encoded image bytes from Tauri; an empty response means no artwork. */
+export type TrackArtwork = ArrayBuffer;

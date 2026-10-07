@@ -20,7 +20,7 @@ const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document")
 const originalCreateUrl = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
 const originalRevokeUrl = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
 const scopes: Vue.EffectScope[] = [];
-const requests: Array<ReturnType<typeof deferred<TrackArtwork | null>>> = [];
+const requests: Array<ReturnType<typeof deferred<TrackArtwork>>> = [];
 let invokedSelections: AlbumArtworkSelection[];
 let revokedUrls: string[];
 let createdUrls: number;
@@ -49,7 +49,7 @@ const dependencies: Record<string, unknown> = {
     invoke(command: string, selection: AlbumArtworkSelection) {
       expect(command).toBe("get_album_artwork");
       invokedSelections.push(selection);
-      const request = deferred<TrackArtwork | null>();
+      const request = deferred<TrackArtwork>();
       requests.push(request);
       return request.promise;
     },
@@ -59,7 +59,7 @@ await loadSourceModules(["features/artwork/useAlbumArtwork.ts"], dependencies);
 const { useAlbumArtwork, invalidateAlbumArtworkCache } = dependencies[
   "@/features/artwork/useAlbumArtwork"
 ] as typeof import("@/features/artwork/useAlbumArtwork");
-const available: TrackArtwork = { status: "available", mimeType: "image/png", data: [1, 2, 3] };
+const available: TrackArtwork = new Uint8Array([1, 2, 3]).buffer;
 const album = { albumArtist: "Artist", album: "Album" };
 
 function subscribe(
@@ -196,7 +196,7 @@ describe("共享专辑封面和背景", () => {
 
   it("无封面时正常回退，不创建 URL 或画布", async () => {
     const { artwork } = subscribe(album, "background");
-    requestAt(0).resolve({ status: "noArtwork" });
+    requestAt(0).resolve(new ArrayBuffer(0));
     await settle();
     expect(artwork.status.value).toBe("fallback");
     expect(artwork.background.value).toBeNull();

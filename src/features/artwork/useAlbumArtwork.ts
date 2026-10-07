@@ -130,15 +130,13 @@ async function loadArtwork(
   generation: number,
 ) {
   try {
-    const artwork = await invoke<TrackArtwork | null>("get_album_artwork", selection);
+    const artwork = await invoke<TrackArtwork>("get_album_artwork", selection);
     if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
-    if (!artwork || artwork.status !== "available") {
+    if (artwork.byteLength === 0) {
       publish(entry, fallback);
       return;
     }
-    const blob = new globalThis.Blob([Uint8Array.from(artwork.data)], {
-      type: artwork.mimeType,
-    });
+    const blob = new globalThis.Blob([artwork]);
     const url = globalThis.URL.createObjectURL(blob);
     entry.objectUrl = url;
     const decoder = new globalThis.Image();

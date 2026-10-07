@@ -27,10 +27,12 @@ function deferred<Value>(): Deferred<Value> {
   return { promise, resolve, reject };
 }
 
-let artworkRequest: (trackId: number) => Promise<TrackArtwork | null>;
+let artworkRequest: (trackId: number) => Promise<TrackArtwork>;
 let detailsRequest: (trackId: number) => Promise<TrackDetails | null>;
 let decodeImage: (image: TestImage) => Promise<void>;
 let invokedTrackIds: number[];
+let invokedArtworkRequests: Array<{ trackId: number; thumbnail: boolean }>;
+let imageBlobs: Blob[];
 let revokedUrls: string[];
 let nextObjectUrl: number;
 let decodeCount: number;
@@ -79,10 +81,11 @@ const dependencies: Record<string, unknown> = {
   "@/shared/notifications/useNotification": { useNotification },
 };
 dependencies["@tauri-apps/api/core"] = {
-  invoke: (command: string, args?: { trackId: number }) => {
+  invoke: (command: string, args?: { trackId: number; thumbnail: boolean }) => {
     if (!args) throw new Error("Track request is missing its track ID.");
     if (command === "get_track") return detailsRequest(args.trackId);
     invokedTrackIds.push(args.trackId);
+    invokedArtworkRequests.push(args);
     return artworkRequest(args.trackId);
   },
 };
@@ -230,17 +233,22 @@ function findArtworkNode(root: ArtworkHostNode, type: string): ArtworkHostNode |
 
 beforeEach(() => {
   invokedTrackIds = [];
+  invokedArtworkRequests = [];
+  imageBlobs = [];
   revokedUrls = [];
   nextObjectUrl = 0;
   decodeCount = 0;
   imageInstances = [];
-  artworkRequest = async () => ({ status: "available", mimeType: "image/png", data: [1, 2, 3] });
+  artworkRequest = async () => new Uint8Array([1, 2, 3]).buffer;
   detailsRequest = async (trackId) => createDetails(trackId);
   decodeImage = async () => {};
   Object.defineProperty(globalThis, "Image", { configurable: true, value: TestImage });
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
-    value: () => `blob:artwork-${++nextObjectUrl}`,
+    value: (blob: Blob) => {
+      imageBlobs.push(blob);
+      return `blob:artwork-${++nextObjectUrl}`;
+    },
   });
   Object.defineProperty(URL, "revokeObjectURL", {
     configurable: true,
@@ -357,12 +365,10 @@ describe("播放封面与元数据同步过渡", () => {
   });
 
   it("切歌保留旧图，解码成功后切换，退出动画完成才释放旧 URL", async () => {
-    const request = deferred<TrackArtwork | null>();
+    const request = deferred<TrackArtwork>();
     const decoding = deferred<void>();
     artworkRequest = (trackId) =>
-      trackId === 103
-        ? request.promise
-        : Promise.resolve({ status: "available", mimeType: "image/png", data: [1] });
+      trackId === 103 ? request.promise : Promise.resolve(new Uint8Array([1]).buffer);
     decodeImage = () => (++decodeCount === 2 ? decoding.promise : Promise.resolve());
     const source = ref<number | null>(102);
     const root = mountArtworkComponent(source, transitionArtworkComponent);
@@ -376,7 +382,7 @@ describe("播放封面与元数据同步过渡", () => {
     expect(findArtworkNode(root, "span")).toBeNull();
     expect(revokedUrls).toEqual([]);
 
-    request.resolve({ status: "available", mimeType: "image/png", data: [2] });
+    request.resolve(new Uint8Array([2]).buffer);
     await settleArtwork();
     expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
     expect(findArtworkNode(root, "span")).toBeNull();
@@ -395,11 +401,9 @@ describe("播放封面与元数据同步过渡", () => {
   });
 
   it("确认无封面后才从旧封面切换到默认图", async () => {
-    const request = deferred<TrackArtwork | null>();
+    const request = deferred<TrackArtwork>();
     artworkRequest = (trackId) =>
-      trackId === 105
-        ? request.promise
-        : Promise.resolve({ status: "available", mimeType: "image/png", data: [1] });
+      trackId === 105 ? request.promise : Promise.resolve(new Uint8Array([1]).buffer);
     const source = ref<number | null>(104);
     const root = mountArtworkComponent(source, transitionArtworkComponent);
     await settleArtwork();
@@ -408,7 +412,7 @@ describe("播放封面与元数据同步过渡", () => {
     expect(findArtworkNode(root, "span")).toBeNull();
     expect(findArtworkNode(root, "img")).not.toBeNull();
 
-    request.resolve({ status: "noArtwork" });
+    request.resolve(new ArrayBuffer(0));
     await settleArtwork();
     expect(findArtworkNode(root, "span")).not.toBeNull();
     for (const finish of pendingLeaves.splice(0)) finish();
@@ -493,7 +497,7 @@ describe("曲目封面加载", () => {
   });
 
   it("来源未改变时不重复请求，且请求和解码期间不显示 fallback", async () => {
-    const request = deferred<TrackArtwork | null>();
+    const request = deferred<TrackArtwork>();
     const decoding = deferred<void>();
     artworkRequest = () => request.promise;
     decodeImage = () => decoding.promise;
@@ -509,7 +513,7 @@ describe("曲目封面加载", () => {
     await nextTick();
     expect(invokedTrackIds).toEqual([72]);
 
-    request.resolve({ status: "available", mimeType: "image/png", data: [4, 5, 6] });
+    request.resolve(new Uint8Array([4, 5, 6]).buffer);
     await settleArtwork();
     expect(imageInstances).toHaveLength(1);
     expect(artwork.status.value).toBe("loading");
@@ -527,9 +531,9 @@ describe("曲目封面加载", () => {
 
   it("无封面、请求失败和解码失败时进入 fallback", async () => {
     artworkRequest = async (trackId) => {
-      if (trackId === 73) return null;
+      if (trackId === 73) return new ArrayBuffer(0);
       if (trackId === 74) throw new Error("database unavailable");
-      return { status: "available", mimeType: "image/png", data: [7, 8, 9] };
+      return new Uint8Array([7, 8, 9]).buffer;
     };
     decodeImage = async () => {
       throw new Error("image decode failed");
@@ -558,16 +562,10 @@ describe("曲目封面加载", () => {
   });
 
   it("迟到的旧请求和旧解码结果不能覆盖新来源", async () => {
-    const oldRequest = deferred<TrackArtwork | null>();
+    const oldRequest = deferred<TrackArtwork>();
     const oldDecode = deferred<void>();
     artworkRequest = (trackId) =>
-      trackId === 76
-        ? oldRequest.promise
-        : Promise.resolve({
-            status: "available",
-            mimeType: "image/png",
-            data: [1],
-          });
+      trackId === 76 ? oldRequest.promise : Promise.resolve(new Uint8Array([1]).buffer);
     decodeImage = () => (++decodeCount === 2 ? oldDecode.promise : Promise.resolve());
     const source = ref<number | null>(76);
     const { artwork } = mountArtwork(source);
@@ -577,7 +575,7 @@ describe("曲目封面加载", () => {
     expect(artwork.status.value).toBe("ready");
     expect(artwork.url.value).toBe("blob:artwork-1");
 
-    oldRequest.resolve({ status: "available", mimeType: "image/png", data: [9] });
+    oldRequest.resolve(new Uint8Array([9]).buffer);
     await settleArtwork();
     expect(invokedTrackIds).toEqual([76, 77]);
     expect(artwork.url.value).toBe("blob:artwork-1");
@@ -597,4 +595,52 @@ describe("曲目封面加载", () => {
     expect(oldDecoderArtwork.artwork.status.value).toBe("ready");
     expect(oldDecoderArtwork.artwork.url.value).toBe(currentUrl);
   });
+});
+
+describe("大队列封面调度", () => {
+  it("40 条缩略图订阅最多启动两项，当前曲目原图无需等待它们", async () => {
+    const pending = deferred<TrackArtwork>();
+    artworkRequest = (trackId) =>
+      trackId === 900 ? Promise.resolve(new Uint8Array([9]).buffer) : pending.promise;
+    for (let trackId = 800; trackId < 840; trackId++) {
+      const scope = effectScope();
+      mountedScopes.push(scope);
+      scope.run(() => useTrackArtwork(trackId, "thumbnail"));
+    }
+    expect(invokedTrackIds).toEqual([800, 801]);
+    const current = mountArtwork(900);
+    expect(invokedTrackIds).toEqual([800, 801, 900]);
+    expect(invokedArtworkRequests).toEqual([
+      { trackId: 800, thumbnail: true },
+      { trackId: 801, thumbnail: true },
+      { trackId: 900, thumbnail: false },
+    ]);
+    await settleArtwork();
+    expect(current.artwork.status.value).toBe("ready");
+    current.dispose();
+    for (const scope of mountedScopes.splice(0)) scope.stop();
+    pending.resolve(new ArrayBuffer(0));
+    await settleArtwork();
+    expect(invokedTrackIds).toEqual([800, 801, 900]);
+  });
+});
+
+it("同曲目缩略图与原图分别共享，失效时两种用途都刷新并保留二进制内容", async () => {
+  mountArtwork(950);
+  const scope = effectScope();
+  mountedScopes.push(scope);
+  scope.run(() => {
+    useTrackArtwork(950, "thumbnail");
+    useTrackArtwork(950, "thumbnail");
+  });
+  await settleArtwork();
+  expect(invokedArtworkRequests).toEqual([
+    { trackId: 950, thumbnail: false },
+    { trackId: 950, thumbnail: true },
+  ]);
+  expect(new Uint8Array(await imageBlobs[0]!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  invalidateTrackArtworkCache([950]);
+  await settleArtwork();
+  expect(invokedArtworkRequests).toHaveLength(4);
+  expect(new Set(revokedUrls)).toEqual(new Set(["blob:artwork-1", "blob:artwork-2"]));
 });

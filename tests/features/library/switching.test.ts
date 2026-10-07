@@ -52,7 +52,7 @@ function mountBrowser() {
           case "list_albums":
             return availableAlbums;
           case "get_album_artwork":
-            return null;
+            return new ArrayBuffer(0);
           default:
             throw new Error(`Unexpected command: ${command}`);
         }

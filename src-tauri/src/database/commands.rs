@@ -1,6 +1,6 @@
 use super::{
     AlbumArtistSummary, AlbumSummary, Database, MusicLibraryDirectory, PlaylistReorderError,
-    PlaylistSummary, PlaylistTrackSummary, TrackArtwork, TrackDetails, TrackSummary,
+    PlaylistSummary, PlaylistTrackSummary, TrackDetails, TrackSummary,
 };
 use std::path::Path;
 
@@ -62,15 +62,6 @@ pub fn list_albums(
         settings.album_sort_by,
         settings.album_sort_order,
     )
-}
-
-#[tauri::command]
-pub fn get_album_artwork(
-    album_artist: Option<String>,
-    album: Option<String>,
-    state: tauri::State<'_, Database>,
-) -> Result<Option<TrackArtwork>, String> {
-    state.get_album_artwork(album_artist, album)
 }
 
 #[tauri::command]
@@ -169,12 +160,4 @@ pub fn get_track(
     state: tauri::State<'_, Database>,
 ) -> Result<Option<TrackDetails>, String> {
     state.get_track(track_id)
-}
-
-#[tauri::command]
-pub fn get_track_artwork(
-    track_id: i64,
-    state: tauri::State<'_, Database>,
-) -> Result<Option<TrackArtwork>, String> {
-    state.get_track_artwork(track_id)
 }
