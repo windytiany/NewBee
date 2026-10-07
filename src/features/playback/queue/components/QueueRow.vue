@@ -140,20 +140,22 @@ function handleContextMenuKeydown(event: InstanceType<typeof globalThis.Keyboard
 }
 
 const rowElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
-const visible = ref(false);
+const artworkActivated = ref(false);
 const { url: artworkUrl, status: artworkStatus } = useTrackArtwork(
-  () => (visible.value ? props.trackId : null),
+  () => (artworkActivated.value ? props.trackId : null),
   "thumbnail",
 );
 let observer: InstanceType<typeof globalThis.IntersectionObserver> | null = null;
 
 onMounted(() => {
   if (!globalThis.IntersectionObserver) {
-    visible.value = true;
+    artworkActivated.value = true;
     return;
   }
   observer = new globalThis.IntersectionObserver((entries) => {
-    visible.value = entries.some((entry) => entry.isIntersecting);
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    artworkActivated.value = true;
+    observer?.disconnect();
   });
   if (rowElement.value) observer.observe(rowElement.value);
 });
