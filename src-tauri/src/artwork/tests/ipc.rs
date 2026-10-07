@@ -1,3 +1,4 @@
+use super::super::{get_album_artwork, get_track_artwork};
 use crate::database::{Database, EmbeddedArtwork, TrackWriteInput};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::io::Cursor;
@@ -80,8 +81,8 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     let app = tauri::test::mock_builder()
         .manage(database)
         .invoke_handler(tauri::generate_handler![
-            super::get_track_artwork,
-            super::get_album_artwork
+            get_track_artwork,
+            get_album_artwork
         ])
         .build(tauri::generate_context!())
         .unwrap();
@@ -186,7 +187,7 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
         * 40;
     let app = tauri::test::mock_builder()
         .manage(database)
-        .invoke_handler(tauri::generate_handler![super::get_track_artwork])
+        .invoke_handler(tauri::generate_handler![get_track_artwork])
         .build(tauri::generate_context!())
         .unwrap();
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
