@@ -177,7 +177,9 @@ defineExpose({ show });
                 <p>托盘菜单中的“退出”始终会退出软件。</p>
               </template>
               <template v-else-if="selectedCategory === 'appearance'">
-                <p>启用专辑封面背景后，展开专辑时使用封面生成的模糊背景；关闭后使用默认背景。</p>
+                <p>
+                  启用专辑封面背景后，专辑详情和播放页使用封面生成的模糊背景；关闭后使用默认背景。
+                </p>
                 <p>保存后立即生效，下次启动时自动恢复。</p>
               </template>
               <template v-else-if="selectedCategory === 'lyrics'">
