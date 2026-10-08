@@ -1,13 +1,13 @@
 import { logger } from "@/shared/logging/logger";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
-import { restoreTheme } from "@/features/settings/theme";
+import { restoreAppearance } from "@/features/settings/appearance";
 
 export async function showMainWindow() {
   if (!isTauri()) return;
 
   try {
-    await restoreTheme();
+    await restoreAppearance();
     await nextTick();
     // nextTick flushes DOM updates; the second frame runs after the first paint.
     await new Promise<void>((resolve) => {

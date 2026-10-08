@@ -3,6 +3,9 @@
 @import "@fontsource-variable/noto-sans-jp";
 @import "./themes.css";
 
+@custom-variant motion-reduce (&:where([data-reduced-motion="true"], [data-reduced-motion="true"] *));
+@custom-variant motion-safe (&:where(:root:not([data-reduced-motion="true"]), :root:not([data-reduced-motion="true"]) *));
+
 @theme inline {
   --font-sans: "Noto Sans SC Variable", "Noto Sans JP Variable", sans-serif;
   --color-app-base: var(--app-base);
@@ -55,4 +58,18 @@
 .sidebar-scrollbars::-webkit-scrollbar-thumb:hover,
 .sidebar-scrollbars *::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--app-text) 26%, transparent);
+}
+
+:root[data-reduced-motion="true"],
+:root[data-reduced-motion="true"] *,
+:root[data-reduced-motion="true"] *::before,
+:root[data-reduced-motion="true"] *::after,
+:root[data-reduced-motion="true"]::before,
+:root[data-reduced-motion="true"]::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
 }

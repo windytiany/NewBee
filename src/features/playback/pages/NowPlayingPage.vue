@@ -2,14 +2,25 @@
   <section
     aria-label="Now playing"
     class="relative isolate grid h-full min-h-0 w-full min-w-0 place-items-center"
-    :class="background ? '[--app-muted:#e5e7eb] [--app-text:#fff]' : ''"
+    :class="displayedBackground ? '[--app-muted:#e5e7eb] [--app-text:#fff]' : ''"
   >
-    <div
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-0 bg-cover transition-opacity duration-200 motion-reduce:transition-none"
-      :class="background ? 'opacity-100' : 'opacity-0'"
-      :style="backgroundStyle"
-    ></div>
+    <!-- The outgoing layer stays opaque until the incoming background covers it. -->
+    <Transition
+      enter-active-class="transition-opacity duration-300 ease-out motion-reduce:transition-none"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-opacity duration-300 ease-out motion-reduce:transition-none"
+      leave-from-class="opacity-100"
+      :leave-to-class="displayedBackground ? 'opacity-100' : 'opacity-0'"
+    >
+      <div
+        v-if="displayedBackground"
+        :key="displayedBackground.imageUrl"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 bg-cover"
+        :style="backgroundStyle"
+      ></div>
+    </Transition>
     <div
       class="relative flex w-full flex-col items-center justify-center gap-8"
       :class="[
@@ -68,11 +79,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, shallowRef, watch } from "vue";
 import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
+import type { AlbumBackground } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LyricsView from "@/features/lyrics/components/LyricsView.vue";
@@ -88,10 +100,10 @@ const { presentation } = useDisplayMode();
 const session = usePlaybackSession();
 const { currentTrack, playbackStatus, isSeeking } = session.state;
 const playingCoverBackground = useCoverBackground("playingCoverBackground");
-const { currentTrackDetails } = useTrackDetails(() =>
+const { currentTrackDetails, isLoading: backgroundDetailsLoading } = useTrackDetails(() =>
   playingCoverBackground.value ? (currentTrack.value?.trackId ?? null) : null,
 );
-const { background } = useAlbumArtwork(
+const { background, status: backgroundStatus } = useAlbumArtwork(
   () => {
     const details = currentTrackDetails.value;
     if (!playingCoverBackground.value || !details || details.id !== currentTrack.value?.trackId)
@@ -101,9 +113,29 @@ const { background } = useAlbumArtwork(
   "background",
   ALBUM_BACKGROUND_SAMPLE_SIZE,
 );
+const displayedBackground = shallowRef<AlbumBackground | null>(null);
+watch(
+  [
+    background,
+    backgroundDetailsLoading,
+    backgroundStatus,
+    playingCoverBackground,
+    () => currentTrack.value?.trackId ?? null,
+  ],
+  ([nextBackground, detailsLoading, artworkStatus, enabled, trackId]) => {
+    if (!enabled || trackId === null) {
+      displayedBackground.value = null;
+      return;
+    }
+    // Keep the previous layer until both the next selection and its background are ready.
+    if (detailsLoading || artworkStatus === "loading") return;
+    displayedBackground.value = nextBackground;
+  },
+  { immediate: true },
+);
 const backgroundStyle = computed(() => ({
-  backgroundImage: background.value
-    ? `linear-gradient(to bottom, ${background.value.color}, transparent 48px), url("${background.value.imageUrl}")`
+  backgroundImage: displayedBackground.value
+    ? `linear-gradient(to bottom, ${displayedBackground.value.color}, transparent 48px), url("${displayedBackground.value.imageUrl}")`
     : undefined,
 }));
 const {

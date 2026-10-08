@@ -9,6 +9,7 @@ export type TrackArtworkStatus = "loading" | "ready" | "fallback";
 type ArtworkSnapshot = {
   status: TrackArtworkStatus;
   url: string | null;
+  content: TrackArtwork | null;
   error: string;
 };
 
@@ -20,6 +21,7 @@ type SharedArtwork = {
   trackId: number;
   status: TrackArtworkStatus;
   url: string | null;
+  content: TrackArtwork | null;
   error: string;
   pendingUrl: string | null;
   decoder: HTMLImageElement | null;
@@ -41,10 +43,12 @@ export function useTrackArtwork(
 ): {
   status: Readonly<Ref<TrackArtworkStatus>>;
   url: Readonly<Ref<string | null>>;
+  content: Readonly<Ref<TrackArtwork | null>>;
   error: Readonly<Ref<string>>;
 } {
   const status = ref<TrackArtworkStatus>("fallback");
   const url = ref<string | null>(null);
+  const content = ref<TrackArtwork | null>(null);
   const error = ref("");
   let currentTrackId: number | null = null;
   let unsubscribe: (() => void) | null = null;
@@ -56,6 +60,7 @@ export function useTrackArtwork(
       unsubscribe?.();
       unsubscribe = null;
       url.value = null;
+      content.value = null;
       error.value = "";
 
       if (nextTrackId === null) {
@@ -69,6 +74,7 @@ export function useTrackArtwork(
         if (currentTrackId !== nextTrackId) return;
         status.value = snapshot.status;
         url.value = snapshot.url;
+        content.value = snapshot.content;
         error.value = snapshot.error;
       });
     },
@@ -82,7 +88,24 @@ export function useTrackArtwork(
     stop();
   });
 
-  return { status: readonly(status), url: readonly(url), error: readonly(error) };
+  return {
+    status: readonly(status),
+    url: readonly(url),
+    content: readonly(content),
+    error: readonly(error),
+  };
+}
+
+/** Blob URLs and track IDs differ even when their encoded artwork is identical. */
+export function isSameTrackArtwork(left: TrackArtwork | null, right: TrackArtwork | null) {
+  if (left === right) return true;
+  if (left === null || right === null || left.byteLength !== right.byteLength) return false;
+  const leftBytes = new Uint8Array(left);
+  const rightBytes = new Uint8Array(right);
+  for (let index = 0; index < leftBytes.length; index++) {
+    if (leftBytes[index] !== rightBytes[index]) return false;
+  }
+  return true;
 }
 
 /** Keeps the decoded URL alive until a displayed artwork's leave transition finishes. */
@@ -134,6 +157,7 @@ function subscribeToTrackArtwork(
       trackId,
       status: "loading",
       url: null,
+      content: null,
       error: "",
       pendingUrl: null,
       decoder: null,
@@ -149,7 +173,12 @@ function subscribeToTrackArtwork(
   if (isNewEntry) {
     startArtworkLoad(entry);
   } else {
-    subscriber({ status: entry.status, url: entry.url, error: entry.error });
+    subscriber({
+      status: entry.status,
+      url: entry.url,
+      content: entry.content,
+      error: entry.error,
+    });
   }
 
   return () => {
@@ -164,6 +193,7 @@ function startArtworkLoad(entry: SharedArtwork) {
     [entry.url, entry.pendingUrl].filter((url): url is string => url !== null),
   );
   entry.url = null;
+  entry.content = null;
   entry.pendingUrl = null;
   detachDecoder(entry);
   entry.status = "loading";
@@ -218,6 +248,7 @@ async function loadArtwork(entry: SharedArtwork, generation: number) {
 
     entry.pendingUrl = null;
     entry.url = imageUrl;
+    entry.content = artwork;
     entry.status = "ready";
     publish(entry);
   } catch (error) {
@@ -234,6 +265,7 @@ function showFallback(entry: SharedArtwork) {
     [entry.url, entry.pendingUrl].filter((url): url is string => url !== null),
   );
   entry.url = null;
+  entry.content = null;
   entry.pendingUrl = null;
   detachDecoder(entry);
   for (const currentUrl of currentUrls) globalThis.URL.revokeObjectURL(currentUrl);
@@ -242,7 +274,12 @@ function showFallback(entry: SharedArtwork) {
 }
 
 function publish(entry: SharedArtwork) {
-  const snapshot = { status: entry.status, url: entry.url, error: entry.error };
+  const snapshot = {
+    status: entry.status,
+    url: entry.url,
+    content: entry.content,
+    error: entry.error,
+  };
   for (const subscriber of [...entry.subscribers]) {
     if (entry.subscribers.has(subscriber)) subscriber(snapshot);
   }
@@ -287,6 +324,7 @@ function releaseEntry(entry: SharedArtwork) {
     ),
   );
   entry.url = null;
+  entry.content = null;
   entry.pendingUrl = null;
   entry.retiredUrls.clear();
   entry.retainedUrls.clear();

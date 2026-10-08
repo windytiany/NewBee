@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Mutex};
-use tauri::State;
+use tauri::{Manager, State};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +39,7 @@ pub enum Theme {
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
     pub theme: Theme,
+    pub reduced_motion: bool,
     pub album_cover_background: bool,
     pub playing_cover_background: bool,
     pub close_behavior: CloseBehavior,
@@ -54,6 +55,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: Theme::default(),
+            reduced_motion: false,
             album_cover_background: false,
             playing_cover_background: false,
             close_behavior: CloseBehavior::default(),
@@ -90,6 +92,27 @@ impl SettingsState {
             .map_err(|error| format!("Could not read settings: {error}"))
     }
 
+    fn save(&self, settings: Settings) -> Result<(), String> {
+        let mut providers = std::collections::HashSet::new();
+        if settings
+            .lyrics_providers
+            .iter()
+            .any(|provider| !providers.insert(*provider))
+        {
+            return Err("歌词来源不能重复".to_owned());
+        }
+        let mut current = self
+            .settings
+            .lock()
+            .map_err(|error| format!("Could not update settings: {error}"))?;
+        let data = serde_json::to_vec_pretty(&settings)
+            .map_err(|error| format!("Could not serialize settings: {error}"))?;
+        std::fs::write(&self.path, data)
+            .map_err(|error| format!("Could not save settings: {error}"))?;
+        *current = settings;
+        Ok(())
+    }
+
     pub fn close_behavior(&self) -> CloseBehavior {
         match self.settings.lock() {
             Ok(settings) => settings.close_behavior,
@@ -107,25 +130,13 @@ pub fn get_settings(state: State<'_, SettingsState>) -> Result<Settings, String>
 }
 
 #[tauri::command]
-pub fn save_settings(state: State<'_, SettingsState>, settings: Settings) -> Result<(), String> {
-    let mut providers = std::collections::HashSet::new();
-    if settings
-        .lyrics_providers
-        .iter()
-        .any(|provider| !providers.insert(*provider))
-    {
-        return Err("歌词来源不能重复".to_owned());
-    }
-    let mut current = state
-        .settings
-        .lock()
-        .map_err(|error| format!("Could not update settings: {error}"))?;
-    let data = serde_json::to_vec_pretty(&settings)
-        .map_err(|error| format!("Could not serialize settings: {error}"))?;
-    std::fs::write(&state.path, data)
-        .map_err(|error| format!("Could not save settings: {error}"))?;
-    *current = settings;
-    Ok(())
+pub async fn save_settings<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    settings: Settings,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<SettingsState>().save(settings))
+        .await
+        .map_err(|error| format!("Could not save settings: {error}"))?
 }
 
 #[cfg(test)]

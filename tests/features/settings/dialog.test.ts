@@ -25,6 +25,7 @@ type DialogBindings = {
   neteaseLyricsMode: Vue.Ref<Settings["neteaseLyricsMode"]>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   theme: Vue.Ref<Settings["theme"]>;
+  reducedMotion: Vue.Ref<boolean>;
   albumCoverBackground: Vue.Ref<boolean>;
   playingCoverBackground: Vue.Ref<boolean>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
@@ -38,6 +39,7 @@ type DialogBindings = {
 };
 const defaults: Settings = {
   theme: "spotify",
+  reducedMotion: false,
   albumCoverBackground: false,
   playingCoverBackground: false,
   closeBehavior: "tray",
@@ -61,6 +63,7 @@ afterEach(() => {
 function createDialog(invoke: (command: string, args?: unknown) => Promise<unknown>) {
   const events: string[] = [];
   const appliedThemes: Settings["theme"][] = [];
+  const appliedMotion: boolean[] = [];
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: { dispatchEvent: (event: Event) => events.push(event.type) },
@@ -70,9 +73,12 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     "@/shared/components/HelpDialog.vue": HelpDialog,
     "@tauri-apps/api/core": { invoke, isTauri: () => true },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
-    "@/features/settings/theme": {
-      THEMES,
-      applyTheme: (theme: Settings["theme"]) => appliedThemes.push(theme),
+    "@/features/settings/theme": { THEMES },
+    "@/features/settings/appearance": {
+      applyAppearance: (settings: Settings) => {
+        appliedThemes.push(settings.theme);
+        appliedMotion.push(settings.reducedMotion);
+      },
     },
   };
   const component = evaluateSource<{
@@ -89,7 +95,7 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     },
   };
   bindings.dialogElement.value = element;
-  return { bindings, element, events, appliedThemes };
+  return { bindings, element, events, appliedThemes, appliedMotion };
 }
 
 function deferred<Value>() {
@@ -148,7 +154,8 @@ describe("settings dialog", () => {
       "@/shared/components/HelpDialog.vue": HelpDialog,
       "@tauri-apps/api/core": { invoke: async () => defaults, isTauri: () => true },
       "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
-      "@/features/settings/theme": { THEMES, applyTheme: () => {} },
+      "@/features/settings/theme": { THEMES },
+      "@/features/settings/appearance": { applyAppearance: () => {} },
     };
     const component = evaluateSource<{ default: Vue.Component }>(
       compileSfc(source, filename),
@@ -238,6 +245,10 @@ describe("settings dialog", () => {
         await Vue.nextTick();
         expect(getTextContent(panel)).not.toContain(explanation);
         if (category === "外观") {
+          expect(getTextContent(panel)).toContain("减少动态效果");
+          expect(findNode(panel, (node) => node.props.name === "reduced-motion")?.props.type).toBe(
+            "checkbox",
+          );
           expect(getTextContent(panel)).toContain("专辑详情封面背景");
           expect(getTextContent(panel)).toContain("播放页封面背景");
           expect(
@@ -286,6 +297,7 @@ describe("settings dialog", () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
       theme: "tokyoNight",
+      reducedMotion: false,
       albumCoverBackground: true,
       playingCoverBackground: true,
       closeBehavior: "exit",
@@ -384,6 +396,7 @@ describe("settings dialog", () => {
       {
         settings: {
           theme: "tokyoNight",
+          reducedMotion: false,
           albumCoverBackground: true,
           playingCoverBackground: false,
           closeBehavior: "exit",
@@ -416,6 +429,28 @@ describe("settings dialog", () => {
         expect(saved).toEqual([{ settings: loaded }]);
       });
     }
+  }
+
+  for (const enabled of [false, true]) {
+    it(`persists reduced motion ${enabled} and applies only after successful saving`, async () => {
+      const saved: unknown[] = [];
+      let fail = true;
+      const { bindings, appliedMotion } = createDialog(async (command, args) => {
+        if (command === "get_settings") return { ...defaults, reducedMotion: !enabled };
+        if (fail) throw new Error("Disk unavailable");
+        saved.push(args);
+      });
+      await bindings.show();
+      expect(bindings.reducedMotion.value).toBe(!enabled);
+      bindings.reducedMotion.value = enabled;
+      expect(appliedMotion).toEqual([]);
+      await bindings.save();
+      expect(appliedMotion).toEqual([]);
+      fail = false;
+      await bindings.save();
+      expect(saved).toEqual([{ settings: { ...defaults, reducedMotion: enabled } }]);
+      expect(appliedMotion).toEqual([enabled]);
+    });
   }
 
   it("persists disabled lyric providers", async () => {
@@ -468,6 +503,7 @@ describe("settings dialog", () => {
     const secondShow = bindings.show();
     first.resolve({
       theme: "tokyoNight",
+      reducedMotion: false,
       albumCoverBackground: true,
       playingCoverBackground: true,
       closeBehavior: "exit",

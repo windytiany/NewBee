@@ -4,7 +4,7 @@ import type { NowPlayingTrack } from "@/features/playback/types";
 import type { TrackDetails } from "@/features/library/types";
 import type { AlbumArtworkSelection } from "@/features/artwork/useAlbumArtwork";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
-import { createHostRenderer, findNode } from "../../support/hostRenderer";
+import { createHostRenderer, findNode, visit } from "../../support/hostRenderer";
 import type { HostTree } from "../../support/hostRenderer";
 
 interface HostNode extends HostTree<HostNode> {
@@ -20,9 +20,29 @@ const source = await Bun.file(
   new URL("../../../src/features/playback/pages/NowPlayingPage.vue", import.meta.url),
 ).text();
 const apps: Vue.App[] = [];
+const pendingLeaves: Array<() => void> = [];
+const transition = Vue.defineComponent({
+  inheritAttrs: false,
+  setup:
+    (_props, { attrs, slots }) =>
+    () =>
+      Vue.h(
+        Vue.BaseTransition,
+        {
+          ...attrs,
+          onLeave: (_element: unknown, done: () => void) => pendingLeaves.push(done),
+        },
+        slots,
+      ),
+});
 afterEach(() => {
+  finishLeaves();
   for (const app of apps.splice(0)) app.unmount();
 });
+
+function finishLeaves() {
+  for (const finish of pendingLeaves.splice(0)) finish();
+}
 
 function details(id: number, album: string, albumArtist = "Album artist"): TrackDetails {
   return {
@@ -56,12 +76,13 @@ function mountPage(enabled = false) {
   const requests: Array<{ trackId: number; resolve: (value: TrackDetails | null) => void }> = [];
   const selections: Array<AlbumArtworkSelection | null> = [];
   const missingArtwork = Vue.ref(false);
+  const artworkLoading = Vue.ref(false);
   const presentation = Vue.ref("track");
   const placeholder = Vue.defineComponent(() => () => Vue.h("div"));
   const { default: Page } = evaluateSource<{ default: Vue.Component }>(
     compileSfc(source, "src/features/playback/pages/NowPlayingPage.vue"),
     {
-      vue: Vue,
+      vue: { ...Vue, Transition: transition },
       "@lucide/vue": { Columns2: placeholder, DiscAlbum: placeholder, ListMusic: placeholder },
       "@tauri-apps/api/core": {
         invoke: (command: string, args: { trackId: number }) => {
@@ -87,9 +108,16 @@ function mountPage(enabled = false) {
           expect(purpose).toBe("background");
           Vue.watch(selection, (value) => selections.push(value), { immediate: true });
           return {
+            status: Vue.computed(() =>
+              selection() && artworkLoading.value
+                ? "loading"
+                : selection() && !missingArtwork.value
+                  ? "ready"
+                  : "fallback",
+            ),
             background: Vue.computed(() => {
               const album = selection();
-              return album && !missingArtwork.value
+              return album && !missingArtwork.value && !artworkLoading.value
                 ? { imageUrl: `data:image/png;base64,${album.album}`, color: "rgb(10, 20, 30)" }
                 : null;
             }),
@@ -118,16 +146,24 @@ function mountPage(enabled = false) {
   app.mount(root);
   apps.push(app);
   const page = findNode(root, (node) => node.props["aria-label"] === "Now playing");
-  const layer = findNode(root, (node) => node.props["aria-hidden"] === "true");
-  if (!page || !layer) throw new Error("Missing playing background layer");
+  if (!page) throw new Error("Missing playing page");
+  function layers() {
+    const result: HostNode[] = [];
+    visit(root, (node) => {
+      if (node.props["aria-hidden"] === "true" && String(node.props.class).includes("bg-cover"))
+        result.push(node);
+    });
+    return result;
+  }
   return {
     page,
-    layer,
+    layers,
     preference,
     currentTrack,
     requests,
     selections,
     missingArtwork,
+    artworkLoading,
     presentation,
   };
 }
@@ -137,21 +173,25 @@ async function settle() {
   await Vue.nextTick();
 }
 
+function backgroundImages(page: ReturnType<typeof mountPage>) {
+  return page.layers().map((layer) => layer.props.style);
+}
+
 describe("播放页专辑封面背景", () => {
   it("设置关闭时使用默认背景，不请求用于背景的曲目详情", async () => {
     const page = mountPage();
     await settle();
     expect(page.requests).toEqual([]);
     expect(page.selections).toEqual([null]);
-    expect(page.layer.props.style).toEqual({ backgroundImage: undefined });
-    expect(page.layer.props.class).toContain("opacity-0");
+    expect(page.layers()).toEqual([]);
   });
 
-  it("打开设置后使用专辑艺术家和专辑加载背景，三种布局均显示背景", async () => {
+  it("首次背景加载期间不显示背景，三种布局均使用生成的专辑背景", async () => {
     const page = mountPage();
     page.preference.value = true;
     await settle();
     expect(page.requests.map(({ trackId }) => trackId)).toEqual([1]);
+    expect(page.layers()).toEqual([]);
     page.requests[0]!.resolve(details(1, "First album"));
     await settle();
     expect(page.selections[page.selections.length - 1]).toEqual({
@@ -161,67 +201,131 @@ describe("播放页专辑封面背景", () => {
     for (const mode of ["track", "lyrics", "both"]) {
       page.presentation.value = mode;
       await settle();
-      expect(page.layer.props.style).toEqual({
-        backgroundImage:
-          'linear-gradient(to bottom, rgb(10, 20, 30), transparent 48px), url("data:image/png;base64,First album")',
-      });
-      expect(page.layer.props.class).toContain("opacity-100");
-      expect(page.layer.props.class).toContain("pointer-events-none");
+      expect(backgroundImages(page)).toEqual([
+        {
+          backgroundImage:
+            'linear-gradient(to bottom, rgb(10, 20, 30), transparent 48px), url("data:image/png;base64,First album")',
+        },
+      ]);
+      expect(page.layers()[0]?.props.class).toContain("pointer-events-none");
       expect(page.page.props.class).toContain("h-full");
       expect(page.page.props.class).toContain("w-full");
       expect(page.page.props.class).toContain("[--app-muted:#e5e7eb]");
     }
   });
 
-  it("切歌立即清除旧背景，迟到的旧详情不会覆盖新专辑", async () => {
+  it("切歌时保留旧背景，等待详情与新背景完成后两层同时过渡", async () => {
     const page = mountPage(true);
-    page.currentTrack.value = { trackId: 2, title: "New song", artist: null, playbackId: 2 };
-    await settle();
-    expect(page.requests.map(({ trackId }) => trackId)).toEqual([1, 2]);
-    page.requests[1]!.resolve(details(2, "Second album"));
-    await settle();
     page.requests[0]!.resolve(details(1, "First album"));
     await settle();
-    expect(page.selections[page.selections.length - 1]?.album).toBe("Second album");
-    expect(JSON.stringify(page.layer.props.style)).toContain("Second album");
-    page.currentTrack.value = { trackId: 3, title: "Third song", artist: null, playbackId: 3 };
+    const oldLayer = page.layers()[0];
+    page.currentTrack.value = { trackId: 2, title: "New song", artist: null, playbackId: 2 };
     await settle();
-    expect(page.layer.props.style).toEqual({ backgroundImage: undefined });
+    expect(page.layers()).toEqual([oldLayer]);
+    expect(JSON.stringify(backgroundImages(page))).toContain("First album");
+    expect(page.page.props.class).toContain("[--app-muted:#e5e7eb]");
+    expect(pendingLeaves).toHaveLength(0);
+
+    page.artworkLoading.value = true;
+    page.requests[1]!.resolve(details(2, "Second album"));
+    await settle();
+    expect(page.layers()).toEqual([oldLayer]);
+    expect(pendingLeaves).toHaveLength(0);
+
+    page.artworkLoading.value = false;
+    await settle();
+    expect(page.layers()).toHaveLength(2);
+    expect(JSON.stringify(backgroundImages(page))).toContain("First album");
+    expect(JSON.stringify(backgroundImages(page))).toContain("Second album");
+    expect(pendingLeaves).toHaveLength(1);
+    // Hold the old layer fully opaque while the next layer fades over it.
+    expect(source).toContain('enter-from-class="opacity-0"');
+    expect(source).toContain(
+      ":leave-to-class=\"displayedBackground ? 'opacity-100' : 'opacity-0'\"",
+    );
+
+    finishLeaves();
+    await settle();
+    expect(page.layers()).toHaveLength(1);
+    expect(JSON.stringify(backgroundImages(page))).toContain("Second album");
+    expect(JSON.stringify(backgroundImages(page))).not.toContain("First album");
   });
 
-  it("关闭设置立即移除背景，未完成的查询不会重新显示背景", async () => {
+  it("同专辑切歌不移除背景或启动重复过渡", async () => {
     const page = mountPage(true);
     page.requests[0]!.resolve(details(1, "Album"));
     await settle();
+    const layer = page.layers()[0];
+    page.currentTrack.value = { trackId: 2, title: "New song", artist: null, playbackId: 2 };
+    await settle();
+    page.requests[1]!.resolve(details(2, "Album"));
+    await settle();
+    expect(page.layers()).toEqual([layer]);
+    expect(pendingLeaves).toHaveLength(0);
+  });
+
+  it("连续切歌保留当前背景，迟到的旧详情不会切回中间专辑", async () => {
+    const page = mountPage(true);
+    page.requests[0]!.resolve(details(1, "First album"));
+    await settle();
+    page.currentTrack.value = { trackId: 2, title: null, artist: null, playbackId: 2 };
+    await settle();
+    page.currentTrack.value = { trackId: 3, title: null, artist: null, playbackId: 3 };
+    await settle();
+    page.requests[1]!.resolve(details(2, "Second album"));
+    await settle();
+    expect(JSON.stringify(backgroundImages(page))).toContain("First album");
+    expect(JSON.stringify(backgroundImages(page))).not.toContain("Second album");
+    page.requests[2]!.resolve(details(3, "Third album"));
+    await settle();
+    expect(JSON.stringify(backgroundImages(page))).toContain("Third album");
+    finishLeaves();
+    await settle();
+    expect(page.layers()).toHaveLength(1);
+    expect(JSON.stringify(backgroundImages(page))).toContain("Third album");
+  });
+
+  it("关闭设置后淡出背景，未完成的请求不会重新显示背景", async () => {
+    const page = mountPage(true);
+    page.requests[0]!.resolve(details(1, "Album"));
+    await settle();
+    page.currentTrack.value = { trackId: 2, title: null, artist: null, playbackId: 2 };
+    await settle();
     page.preference.value = false;
     await settle();
-    expect(page.layer.props.style).toEqual({ backgroundImage: undefined });
+    expect(pendingLeaves).toHaveLength(1);
     expect(page.page.props.class).not.toContain("[--app-muted:");
-    page.preference.value = true;
+    page.requests[1]!.resolve(details(2, "New album"));
     await settle();
-    page.preference.value = false;
-    page.requests[1]!.resolve(details(1, "Album"));
+    finishLeaves();
     await settle();
-    expect(page.layer.props.style).toEqual({ backgroundImage: undefined });
+    expect(page.layers()).toEqual([]);
     expect(page.selections[page.selections.length - 1]).toBeNull();
   });
 
-  it("无封面、无详情或无当前歌曲时回退到默认背景", async () => {
+  it("确认无封面、无详情或无当前歌曲时回退到默认背景", async () => {
     const page = mountPage(true);
     page.requests[0]!.resolve(details(1, "Album"));
     await settle();
     page.missingArtwork.value = true;
     await settle();
-    expect(page.layer.props.style).toEqual({ backgroundImage: undefined });
+    finishLeaves();
+    await settle();
+    expect(page.layers()).toEqual([]);
     page.missingArtwork.value = false;
+    await settle();
+    expect(page.layers()).toHaveLength(1);
     page.currentTrack.value = { trackId: 2, title: null, artist: null, playbackId: 2 };
     await settle();
+    expect(page.layers()).toHaveLength(1);
     page.requests[1]!.resolve(null);
     await settle();
-    expect(page.layer.props.style).toEqual({ backgroundImage: undefined });
+    finishLeaves();
+    await settle();
+    expect(page.layers()).toEqual([]);
     page.currentTrack.value = null;
     await settle();
     expect(page.selections[page.selections.length - 1]).toBeNull();
-    expect(page.layer.props.style).toEqual({ backgroundImage: undefined });
+    expect(page.layers()).toEqual([]);
   });
 });

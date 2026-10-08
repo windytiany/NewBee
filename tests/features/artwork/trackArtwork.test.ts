@@ -124,6 +124,7 @@ function createTrackArtworkComponent(
     },
     "@lucide/vue": {
       DiscAlbum: () => Vue.h("span", { "data-test": "fallback" }, "fallback"),
+      Disc3: () => Vue.h("span", { "data-test": "fallback" }, "fallback"),
     },
     "@/features/playback/composables/useTrackDetails": trackInfoModule,
   };
@@ -154,6 +155,16 @@ const presentationArtworkComponent = createTrackArtworkComponent(
     ),
   ).text(),
   "src/features/playback/components/current-track/TrackPresentation.vue",
+);
+
+const infoArtworkComponent = createTrackArtworkComponent(
+  await Bun.file(
+    new URL(
+      "../../../src/features/playback/components/current-track/TrackInfoPanel.vue",
+      import.meta.url,
+    ),
+  ).text(),
+  "src/features/playback/components/current-track/TrackInfoPanel.vue",
 );
 
 function createDetails(trackId: number): TrackDetails {
@@ -269,7 +280,8 @@ beforeEach(() => {
   nextObjectUrl = 0;
   decodeCount = 0;
   imageInstances = [];
-  artworkRequest = async () => new Uint8Array([1, 2, 3]).buffer;
+  artworkRequest = async (trackId) =>
+    new Uint8Array([trackId & 0xff, (trackId >>> 8) & 0xff]).buffer;
   detailsRequest = async (trackId) => createDetails(trackId);
   decodeImage = async () => {};
   Object.defineProperty(globalThis, "Image", { configurable: true, value: TestImage });
@@ -301,6 +313,91 @@ afterEach(() => {
 });
 
 describe("播放封面与元数据同步过渡", () => {
+  it("相同封面切歌原位更新信息，不重播过渡或替换正在显示的图片", async () => {
+    artworkRequest = async () => new Uint8Array([4, 5, 6]).buffer;
+    const source = ref<number | null>(121);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+    const image = findArtworkNode(root, "img");
+    const title = findArtworkNode(root, "h1");
+
+    source.value = 122;
+    await settleArtwork();
+    expect(pendingLeaves).toHaveLength(0);
+    expect(findArtworkNode(root, "img")).toBe(image);
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    expect(findArtworkNode(root, "h1")).toBe(title);
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 122");
+    expect(revokedUrls).not.toContain("blob:artwork-1");
+
+    artworkRequest = async () => new Uint8Array([7, 8, 9]).buffer;
+    source.value = 123;
+    await settleArtwork();
+    expect(pendingLeaves).toHaveLength(1);
+    expect(revokedUrls).not.toContain("blob:artwork-1");
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-3");
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 123");
+    expect(revokedUrls).toContain("blob:artwork-1");
+  });
+
+  for (const [name, component] of [
+    ["播放页", presentationArtworkComponent],
+    ["TrackInfo", infoArtworkComponent],
+  ] as const) {
+    it(`${name}同封面切歌复用图片与文字节点`, async () => {
+      artworkRequest = async () => new Uint8Array([4, 5, 6]).buffer;
+      playingTrack.value = { trackId: 126, title: "Queue 126", artist: "Artist 126" };
+      const root = mountArtworkComponent(ref(126), component);
+      await settleArtwork();
+      const image = findArtworkNode(root, "img");
+      const title = findArtworkNode(root, "h1");
+      expect(image).not.toBeNull();
+      expect(title?.text).toBe("Title 126");
+
+      playingTrack.value = { trackId: 127, title: "Queue 127", artist: "Artist 127" };
+      await settleArtwork();
+      expect(pendingLeaves).toHaveLength(0);
+      expect(findArtworkNode(root, "img")).toBe(image);
+      expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+      expect(findArtworkNode(root, "h1")).toBe(title);
+      expect(findArtworkNode(root, "h1")?.text).toBe("Title 127");
+    });
+  }
+
+  it("同曲目刷新后封面内容没变也不重播动画，卸载释放所有图片", async () => {
+    artworkRequest = async () => new Uint8Array([4, 5, 6]).buffer;
+    const root = mountArtworkComponent(ref(128), transitionArtworkComponent);
+    await settleArtwork();
+    const image = findArtworkNode(root, "img");
+
+    invalidateTrackArtworkCache([128]);
+    await settleArtwork();
+    expect(pendingLeaves).toHaveLength(0);
+    expect(findArtworkNode(root, "img")).toBe(image);
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    expect(revokedUrls).toEqual([]);
+
+    mountedApps.pop()?.unmount();
+    expect(new Set(revokedUrls)).toEqual(new Set(["blob:artwork-1", "blob:artwork-2"]));
+  });
+
+  it("相同占位封面切歌只更新信息，不重复过渡", async () => {
+    artworkRequest = async () => new ArrayBuffer(0);
+    const source = ref<number | null>(124);
+    const root = mountArtworkComponent(source, transitionArtworkComponent);
+    await settleArtwork();
+    const fallback = findArtworkNode(root, "span");
+    expect(fallback).not.toBeNull();
+
+    source.value = 125;
+    await settleArtwork();
+    expect(pendingLeaves).toHaveLength(0);
+    expect(findArtworkNode(root, "span")).toBe(fallback);
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 125");
+  });
+
   it("进入播放页等待尺寸和请求时保留空封面，确认无封面才显示 icon", async () => {
     measuredArtworkSize.value = 0;
     playingTrack.value = { trackId: 119, title: "Title 119", artist: "Artist 119" };
@@ -698,6 +795,7 @@ describe("大队列封面调度", () => {
 });
 
 it("同曲目缩略图与原图分别共享，失效时两种用途都刷新并保留二进制内容", async () => {
+  artworkRequest = async () => new Uint8Array([1, 2, 3]).buffer;
   mountArtwork(950);
   const scope = effectScope();
   mountedScopes.push(scope);

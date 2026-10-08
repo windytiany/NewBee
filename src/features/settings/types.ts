@@ -5,6 +5,7 @@ export type NeteaseLyricsMode = "original" | "translated" | "bilingual";
 
 export type Settings = {
   theme: Theme;
+  reducedMotion: boolean;
   albumCoverBackground: boolean;
   playingCoverBackground: boolean;
   closeBehavior: "tray" | "exit";

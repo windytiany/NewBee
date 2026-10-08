@@ -1,53 +1,23 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { transpileScript, evaluateSource } from "../../support/moduleLoader";
+import { applyTheme, THEMES } from "@/features/settings/theme";
 
-import { THEMES, type Theme } from "@/features/settings/theme";
-
-const output = transpileScript(
-  await Bun.file(new URL("../../../src/features/settings/theme.ts", import.meta.url)).text(),
-);
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
 afterEach(() => {
   if (originalDocument) Object.defineProperty(globalThis, "document", originalDocument);
   else Reflect.deleteProperty(globalThis, "document");
 });
 
-function createTheme(isTauriApp: boolean, invoke: () => Promise<unknown>) {
-  const dataset: { theme?: string } = {};
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: { documentElement: { dataset } },
-  });
-  const theme = evaluateSource<{
-    applyTheme: (theme: Theme) => void;
-    restoreTheme: () => Promise<void>;
-  }>(output, { "@tauri-apps/api/core": { invoke, isTauri: () => isTauriApp } });
-  return { ...theme, dataset };
-}
-
 describe("application theme", () => {
-  for (const option of THEMES) {
-    it(`restores ${option.value} from desktop settings`, async () => {
-      const theme = createTheme(true, async () => ({ theme: option.value }));
-      await theme.restoreTheme();
-      expect(theme.dataset.theme).toBe(option.value);
+  it("applies all themes to the root, including dialogs outside the app", () => {
+    const dataset: { theme?: string } = {};
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: { documentElement: { dataset } },
     });
-  }
-
-  it("applies changes to the root, including dialogs outside the app", () => {
-    const theme = createTheme(false, async () => undefined);
-    theme.applyTheme("catppuccin");
-    expect(theme.dataset.theme).toBe("catppuccin");
-    theme.applyTheme("spotify");
-    expect(theme.dataset.theme).toBe("spotify");
-  });
-
-  it("does not read desktop settings in browser preview", async () => {
-    let calls = 0;
-    const theme = createTheme(false, async () => calls++);
-    await theme.restoreTheme();
-    expect(calls).toBe(0);
-    expect(theme.dataset.theme).toBeUndefined();
+    for (const option of THEMES) {
+      applyTheme(option.value);
+      expect(dataset.theme).toBe(option.value);
+    }
   });
 });
 

@@ -5,7 +5,8 @@ import { createSettingsApi } from "@/features/settings/api";
 import { ref } from "vue";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
-import { applyTheme, THEMES } from "@/features/settings/theme";
+import { THEMES } from "@/features/settings/theme";
+import { applyAppearance } from "@/features/settings/appearance";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
 
 const api = createSettingsApi(invoke);
@@ -46,6 +47,7 @@ const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
 const theme = ref<Settings["theme"]>("spotify");
+const reducedMotion = ref(false);
 const albumCoverBackground = ref(false);
 const playingCoverBackground = ref(false);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
@@ -77,6 +79,7 @@ async function show() {
     if (requestId !== loadRequestSequence) return;
     closeBehavior.value = settings.closeBehavior;
     theme.value = settings.theme;
+    reducedMotion.value = settings.reducedMotion;
     albumCoverBackground.value = settings.albumCoverBackground;
     playingCoverBackground.value = settings.playingCoverBackground;
     albumSortBy.value = settings.albumSortBy;
@@ -107,6 +110,7 @@ async function save() {
     await api.save({
       closeBehavior: closeBehavior.value,
       theme: theme.value,
+      reducedMotion: reducedMotion.value,
       albumCoverBackground: albumCoverBackground.value,
       playingCoverBackground: playingCoverBackground.value,
       albumSortBy: albumSortBy.value,
@@ -114,7 +118,7 @@ async function save() {
       lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
       neteaseLyricsMode: neteaseLyricsMode.value,
     });
-    applyTheme(theme.value);
+    applyAppearance({ theme: theme.value, reducedMotion: reducedMotion.value });
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
   } catch (reason) {
@@ -183,6 +187,7 @@ defineExpose({ show });
                 <p>
                   专辑详情和播放页的封面背景可分别开关；启用后使用封面生成的模糊背景，关闭后使用默认背景。
                 </p>
+                <p>减少动态效果仅由应用设置控制，不跟随系统设置。</p>
                 <p>保存后立即生效，下次启动时自动恢复。</p>
               </template>
               <template v-else-if="selectedCategory === 'lyrics'">
@@ -216,6 +221,17 @@ defineExpose({ show });
                   {{ option.label }}
                 </option>
               </select>
+            </label>
+            <label
+              class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
+            >
+              <input
+                v-model="reducedMotion"
+                class="accent-app-accent mt-1"
+                name="reduced-motion"
+                type="checkbox"
+              />
+              <span class="text-sm font-semibold">减少动态效果</span>
             </label>
             <label
               class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"

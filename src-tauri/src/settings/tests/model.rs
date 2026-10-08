@@ -157,3 +157,57 @@ fn netease_lyrics_mode_defaults_to_original_and_round_trips() {
 fn rejects_unknown_close_behavior() {
     assert!(serde_json::from_str::<Settings>(r#"{"closeBehavior":"invalid"}"#).is_err());
 }
+
+#[test]
+fn reduced_motion_defaults_off_and_round_trips() {
+    assert!(!Settings::default().reduced_motion);
+    assert!(
+        !serde_json::from_str::<Settings>("{}")
+            .unwrap()
+            .reduced_motion
+    );
+    for reduced_motion in [false, true] {
+        let settings = Settings {
+            reduced_motion,
+            ..Settings::default()
+        };
+        let data = serde_json::to_value(&settings).unwrap();
+        assert_eq!(data["reducedMotion"], reduced_motion);
+        assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+    }
+    for value in [
+        serde_json::json!("true"),
+        serde_json::json!(1),
+        serde_json::json!(null),
+    ] {
+        assert!(
+            serde_json::from_value::<Settings>(serde_json::json!({"reducedMotion": value}))
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn reduced_motion_persists_and_loads_from_disk() {
+    let path = std::env::temp_dir().join(format!("newbee-motion-{}.json", std::process::id()));
+    let state = SettingsState::load(path.clone()).unwrap();
+    assert!(!state.get().unwrap().reduced_motion);
+    let app = tauri::test::mock_builder()
+        .manage(state)
+        .build(tauri::generate_context!())
+        .unwrap();
+    for reduced_motion in [true, false] {
+        let settings = Settings {
+            reduced_motion,
+            ..Settings::default()
+        };
+        tauri::async_runtime::block_on(save_settings(app.handle().clone(), settings.clone()))
+            .unwrap();
+        assert_eq!(app.state::<SettingsState>().get().unwrap(), settings);
+        assert_eq!(
+            SettingsState::load(path.clone()).unwrap().get().unwrap(),
+            settings
+        );
+    }
+    std::fs::remove_file(path).unwrap();
+}

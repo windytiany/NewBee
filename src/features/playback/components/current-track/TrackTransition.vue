@@ -35,7 +35,12 @@
 
 <script setup lang="ts">
 import { onScopeDispose, shallowRef, watch } from "vue";
-import { retainTrackArtwork, useTrackArtwork } from "@/features/artwork/useTrackArtwork";
+import {
+  isSameTrackArtwork,
+  retainTrackArtwork,
+  useTrackArtwork,
+} from "@/features/artwork/useTrackArtwork";
+import type { TrackArtwork } from "@/features/artwork/types";
 import type { TrackArtworkStatus } from "@/features/artwork/useTrackArtwork";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
 import type { NowPlayingTrack } from "@/features/playback/types";
@@ -48,6 +53,7 @@ type DisplayedTrack = {
   details: TrackDetails | null;
   artworkUrl: string | null;
   artworkStatus: TrackArtworkStatus;
+  artworkContent: TrackArtwork | null;
   detailsError: string;
   artworkError: string;
 };
@@ -60,7 +66,7 @@ const props = defineProps<{
 const { currentTrackDetails, isLoading, currentTrackDetailsError, retry } = useTrackDetails(
   () => props.track?.trackId ?? null,
 );
-const { status, url, error } = useTrackArtwork(
+const { status, url, content, error } = useTrackArtwork(
   () => props.track?.trackId ?? null,
   () => props.artworkSize ?? null,
 );
@@ -75,21 +81,48 @@ function releaseArtwork(element: { getAttribute: (name: string) => string | null
 }
 
 watch(
-  [() => props.track, currentTrackDetails, isLoading, status, url, currentTrackDetailsError, error],
-  ([track, details, detailsLoading, artworkStatus, artworkUrl, detailsError, artworkError]) => {
+  [
+    () => props.track,
+    currentTrackDetails,
+    isLoading,
+    status,
+    url,
+    content,
+    currentTrackDetailsError,
+    error,
+  ],
+  ([
+    track,
+    details,
+    detailsLoading,
+    artworkStatus,
+    artworkUrl,
+    artworkContent,
+    detailsError,
+    artworkError,
+  ]) => {
     const loading = !!track && (detailsLoading || artworkStatus === "loading");
     if (loading && displayed.value && displayed.value.artworkStatus !== "loading") return;
 
-    const key = displayed.value?.artworkStatus === "loading" ? displayed.value.key : ++nextKey;
-    // Keep each snapshot's image alive through its DOM leave animation.
-    if (!loading && track && artworkUrl)
+    const previous = displayed.value;
+    const sameArtwork =
+      !loading &&
+      previous !== null &&
+      previous.artworkStatus === artworkStatus &&
+      isSameTrackArtwork(previous.artworkContent, artworkContent);
+    const key =
+      previous && (previous.artworkStatus === "loading" || sameArtwork) ? previous.key : ++nextKey;
+    // Reuse the displayed URL and its retention when only the track information changes.
+    // Different artwork stays alive through its DOM leave animation.
+    if (!loading && !sameArtwork && track && artworkUrl)
       retainedArtwork.set(key, retainTrackArtwork(track.trackId, props.artworkSize ?? null));
     displayed.value = {
       key,
       track: track ? { trackId: track.trackId, title: track.title, artist: track.artist } : null,
       details,
-      artworkUrl: loading ? null : artworkUrl,
+      artworkUrl: loading ? null : sameArtwork ? previous.artworkUrl : artworkUrl,
       artworkStatus: loading ? "loading" : artworkStatus,
+      artworkContent: loading ? null : artworkContent,
       detailsError,
       artworkError,
     };

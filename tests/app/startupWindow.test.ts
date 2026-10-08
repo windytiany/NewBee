@@ -44,7 +44,9 @@ function start(isTauriApp = true) {
     "@/app/logging": { installErrorLogging: () => {} },
     "@/app/App.vue": { default: {} },
     "@/app/styles/main.css": {},
-    "@/features/settings/theme": { restoreTheme: async () => events.push("restore-theme") },
+    "@/features/settings/appearance": {
+      restoreAppearance: async () => events.push("restore-appearance"),
+    },
     "@tauri-apps/api/core": {
       isTauri: () => isTauriApp,
       invoke: async (command: string) => {
@@ -68,19 +70,19 @@ describe("startup window visibility", () => {
 
   it("restores and shows only after DOM updates and the first painted frame", async () => {
     const startup = start();
-    expect(startup.events).toEqual(["mount", "restore-theme"]);
+    expect(startup.events).toEqual(["mount", "restore-appearance"]);
     expect(startup.frames).toHaveLength(0);
     startup.finishRendering();
     await settle();
-    expect(startup.events).toEqual(["mount", "restore-theme"]);
+    expect(startup.events).toEqual(["mount", "restore-appearance"]);
     expect(startup.frames).toHaveLength(1);
     startup.frames.shift()?.();
     await settle();
-    expect(startup.events).toEqual(["mount", "restore-theme"]);
+    expect(startup.events).toEqual(["mount", "restore-appearance"]);
     expect(startup.frames).toHaveLength(1);
     startup.frames.shift()?.();
     await settle();
-    expect(startup.events).toEqual(["mount", "restore-theme", "show_main_window"]);
+    expect(startup.events).toEqual(["mount", "restore-appearance", "show_main_window"]);
   });
 
   it("does not request another restore on subsequent paint frames", async () => {
@@ -91,7 +93,7 @@ describe("startup window visibility", () => {
     startup.frames.shift()?.();
     await settle();
     expect(startup.frames).toHaveLength(0);
-    expect(startup.events).toEqual(["mount", "restore-theme", "show_main_window"]);
+    expect(startup.events).toEqual(["mount", "restore-appearance", "show_main_window"]);
   });
 
   it("keeps browser preview independent of desktop window APIs", async () => {

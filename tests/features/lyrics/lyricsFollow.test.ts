@@ -1,4 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import * as Vue from "vue";
+import { evaluateSource, transpileScript } from "../../support/moduleLoader";
+import { afterEach, describe, expect, it } from "bun:test";
 import {
   calculateLyricsEdgePadding,
   calculateLyricsScrollTop,
@@ -85,7 +87,7 @@ function createTestAdapter() {
         resizeCallback = null;
       };
     },
-    prefersReducedMotion() {
+    isReducedMotionEnabled() {
       return reducedMotion;
     },
     onReducedMotionChange(callback) {
@@ -487,4 +489,122 @@ describe("歌词跟随定位", () => {
     expect(isLyricsScrollKey(" ", "Space", true)).toBe(false);
     expect(isLyricsScrollKey(" ", "Space", false)).toBe(true);
   });
+});
+
+const domOutput = transpileScript(
+  await Bun.file(
+    new URL("../../../src/features/lyrics/composables/useFollow.ts", import.meta.url),
+  ).text(),
+);
+const motionOutput = transpileScript(
+  await Bun.file(new URL("../../../src/features/settings/motion.ts", import.meta.url)).text(),
+);
+const originalGlobals = new Map(
+  ["document", "window", "requestAnimationFrame", "cancelAnimationFrame"].map((name) => [
+    name,
+    Object.getOwnPropertyDescriptor(globalThis, name),
+  ]),
+);
+afterEach(() => {
+  for (const [name, descriptor] of originalGlobals) {
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+    else Reflect.deleteProperty(globalThis, name);
+  }
+});
+
+it("DOM lyrics follow ignores the system setting and responds to application motion changes", () => {
+  const frames = new Map<number, () => void>();
+  let nextHandle = 0;
+  let mount = () => {};
+  let dispose = () => {};
+  const globals = {
+    document: { documentElement: { dataset: {} } },
+    window: {
+      matchMedia: () => {
+        throw new Error("System motion must not be read");
+      },
+    },
+    requestAnimationFrame: (callback: () => void) => {
+      const handle = ++nextHandle;
+      frames.set(handle, callback);
+      return handle;
+    },
+    cancelAnimationFrame: (handle: number) => frames.delete(handle),
+  };
+  for (const [name, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, name, { configurable: true, value });
+  }
+  const motion = evaluateSource<typeof import("@/features/settings/motion")>(motionOutput, {
+    vue: Vue,
+  });
+  const follow = evaluateSource<{ useLyricsFollow: (options: object) => void }>(domOutput, {
+    vue: {
+      ...Vue,
+      onMounted: (callback: () => void) => {
+        mount = callback;
+      },
+      onScopeDispose: (callback: () => void) => {
+        dispose = callback;
+      },
+    },
+    "@/features/settings/motion": motion,
+  });
+  const activeIndex = Vue.ref(0);
+  const smoothCalls: number[] = [];
+  let instantCalls = 0;
+  let scrollTop = 0;
+  const container = {
+    clientHeight: 200,
+    scrollHeight: 800,
+    get scrollTop() {
+      return scrollTop;
+    },
+    set scrollTop(value: number) {
+      scrollTop = value;
+      instantCalls++;
+    },
+    getBoundingClientRect: () => ({ top: 100 }),
+    scrollTo: ({ top }: { top: number }) => {
+      smoothCalls.push(top);
+    },
+  };
+  const flush = () => {
+    const callbacks = [...frames.values()];
+    frames.clear();
+    for (const callback of callbacks) callback();
+  };
+  follow.useLyricsFollow({
+    trackId: () => 1,
+    visible: () => true,
+    compact: () => false,
+    isSeeking: () => false,
+    activeGroupStartIndex: () => activeIndex.value,
+    activeIndex: () => activeIndex.value,
+    lineCount: () => 4,
+    container: () => container,
+    content: () => null,
+    line: (index: number) => ({
+      getBoundingClientRect: () => ({ top: 180 + index * 60, height: 40 }),
+    }),
+    setEdgePadding: () => {},
+  });
+  mount();
+  flush();
+  activeIndex.value = 1;
+  flush();
+  expect(smoothCalls).toHaveLength(1);
+  const previousInstantCalls = instantCalls;
+  motion.applyReducedMotion(true);
+  flush();
+  expect(instantCalls).toBeGreaterThan(previousInstantCalls);
+  activeIndex.value = 2;
+  flush();
+  expect(smoothCalls).toHaveLength(1);
+  motion.applyReducedMotion(false);
+  activeIndex.value = 3;
+  flush();
+  expect(smoothCalls).toHaveLength(2);
+  dispose();
+  motion.applyReducedMotion(true);
+  expect(frames.size).toBe(0);
 });

@@ -1,3 +1,4 @@
+import { isReducedMotionEnabled, onReducedMotionChange } from "@/features/settings/motion";
 import { onMounted, onScopeDispose, readonly, ref, watch } from "vue";
 import type { Ref } from "vue";
 
@@ -40,7 +41,7 @@ export type LyricsFollowAdapter = {
   setEdgePadding(top: number, bottom: number): void;
   cancelScroll(): void;
   observeResize(callback: () => void): () => void;
-  prefersReducedMotion(): boolean;
+  isReducedMotionEnabled(): boolean;
   onReducedMotionChange(callback: () => void): () => void;
 };
 
@@ -149,7 +150,7 @@ export function createLyricsFollowCoordinator(
   }
 
   const stopReducedMotionListener = adapter.onReducedMotionChange(() => {
-    if (!adapter.prefersReducedMotion() || !motionInProgress) return;
+    if (!adapter.isReducedMotionEnabled() || !motionInProgress) return;
     cancelWork(true);
     if (canLocate()) schedulePosition("instant");
   });
@@ -222,7 +223,7 @@ export function createLyricsFollowCoordinator(
       }
 
       const behavior: LyricsScrollBehavior =
-        requestedBehavior === "smooth" && !adapter.prefersReducedMotion() ? "smooth" : "instant";
+        requestedBehavior === "smooth" && !adapter.isReducedMotionEnabled() ? "smooth" : "instant";
       container.scrollTo(targetTop, behavior);
       motionInProgress = behavior === "smooth";
     });
@@ -367,11 +368,6 @@ type LyricsFollowSources = {
 };
 
 function createDomAdapter(sources: LyricsFollowSources): LyricsFollowAdapter {
-  const mediaQuery =
-    globalThis.window === undefined
-      ? null
-      : globalThis.window.matchMedia("(prefers-reduced-motion: reduce)");
-
   return {
     schedule: (callback) => globalThis.requestAnimationFrame(callback),
     cancelScheduled: (handle) => globalThis.cancelAnimationFrame(handle),
@@ -431,12 +427,8 @@ function createDomAdapter(sources: LyricsFollowSources): LyricsFollowAdapter {
       if (content !== null) observer.observe(content);
       return () => observer.disconnect();
     },
-    prefersReducedMotion: () => mediaQuery?.matches ?? false,
-    onReducedMotionChange: (callback) => {
-      if (mediaQuery === null) return () => {};
-      mediaQuery.addEventListener("change", callback);
-      return () => mediaQuery.removeEventListener("change", callback);
-    },
+    isReducedMotionEnabled,
+    onReducedMotionChange,
   };
 }
 
