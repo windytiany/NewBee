@@ -208,6 +208,10 @@ fn every_scan_reparses_audio_without_sidecar_reads_and_clears_confirmed_removals
         .unwrap()
         .set_times(std::fs::FileTimes::new().set_modified(previous.modified().unwrap()))
         .unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().modified().unwrap(),
+        previous.modified().unwrap()
+    );
     files::access::take(&fixture.0);
     assert_eq!(serde_json::to_value(scan()).unwrap()["updated"], 1);
     assert_eq!(
