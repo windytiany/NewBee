@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use tauri::State;
 
 #[tauri::command]
-pub async fn scan_music_library(
+pub async fn scan_music_library<R: tauri::Runtime>(
     operation_id: Option<String>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<ImportResult, String> {
     let guard = write.acquire()?;
@@ -33,16 +33,29 @@ pub(super) fn run_scan(database: &Database) -> Result<ImportResult, String> {
     let mut visited_directories = HashSet::new();
     let mut visited_files = HashSet::new();
 
-    for directory in directories {
+    for directory in &directories {
         scan_directory(
             database,
-            &directory,
+            directory,
             &mut visited_directories,
             &mut visited_files,
             &mut result,
         );
     }
 
+    for path in database.track_paths()? {
+        let path = PathBuf::from(path);
+        if directories.iter().any(|root| path.starts_with(&root.path))
+            && !visited_files.contains(&path)
+        {
+            record_failure(
+                database,
+                &mut result,
+                &path,
+                "previously scanned audio is unavailable",
+            );
+        }
+    }
     Ok(result)
 }
 
@@ -58,6 +71,7 @@ fn scan_directory(
         Ok(root) if root == configured_path => root,
         Ok(_) => {
             record_failure(
+                database,
                 result,
                 &configured_path,
                 "saved directory now resolves through a link",
@@ -65,13 +79,13 @@ fn scan_directory(
             return;
         }
         Err(error) => {
-            record_failure(result, &configured_path, &error.to_string());
+            record_failure(database, result, &configured_path, &error.to_string());
             return;
         }
     };
 
     if !root.is_dir() {
-        record_failure(result, &root, "saved path is not a directory");
+        record_failure(database, result, &root, "saved path is not a directory");
         return;
     }
 
@@ -86,7 +100,7 @@ fn scan_directory(
                 continue;
             }
             Err(error) => {
-                record_failure(result, &path, &error.to_string());
+                record_failure(database, result, &path, &error.to_string());
                 continue;
             }
         };
@@ -97,7 +111,7 @@ fn scan_directory(
         let entries = match fs::read_dir(&canonical_path) {
             Ok(entries) => entries,
             Err(error) => {
-                record_failure(result, &path, &error.to_string());
+                record_failure(database, result, &path, &error.to_string());
                 continue;
             }
         };
@@ -106,7 +120,7 @@ fn scan_directory(
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(error) => {
-                    record_failure(result, &path, &error.to_string());
+                    record_failure(database, result, &path, &error.to_string());
                     continue;
                 }
             };
@@ -114,7 +128,7 @@ fn scan_directory(
             let file_type = match entry.file_type() {
                 Ok(file_type) => file_type,
                 Err(error) => {
-                    record_failure(result, &entry_path, &error.to_string());
+                    record_failure(database, result, &entry_path, &error.to_string());
                     continue;
                 }
             };
@@ -139,7 +153,7 @@ fn scan_directory(
                         continue;
                     }
                     Err(error) => {
-                        record_failure(result, &entry_path, &error.to_string());
+                        record_failure(database, result, &entry_path, &error.to_string());
                         continue;
                     }
                 };

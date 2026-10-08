@@ -71,6 +71,8 @@ fn assert_released(state: &LyricsBatchState, write: &WriteState, batch_id: u64) 
 #[test]
 fn runs_real_saves_marks_and_missing_results_and_releases_the_guard() {
     let fixture = Fixture::new();
+    let sidecar = fixture.track(1).with_extension("lrc");
+    fs::write(&sidecar, "[00:01.00]sidecar must remain untouched").unwrap();
     let database = fixture.library();
     let state = LyricsBatchState::default();
     let write = WriteState::default();
@@ -133,6 +135,19 @@ fn runs_real_saves_marks_and_missing_results_and_releases_the_guard() {
         database.get_lyrics(1).unwrap().text.as_deref(),
         Some("New lyrics")
     );
+    assert_eq!(
+        embedded_lyrics_text(&lofty::read_from_path(fixture.track(1)).unwrap()),
+        Some("New lyrics")
+    );
+    assert_eq!(
+        fs::read_to_string(&sidecar).unwrap(),
+        "[00:01.00]sidecar must remain untouched"
+    );
+    assert!(database
+        .get_editing_snapshot(1)
+        .unwrap()
+        .writable_fields
+        .contains(&MetadataField::Lyrics));
     let marked = database.get_lyrics(2).unwrap();
     assert!(marked.text.is_none() && marked.no_lyrics);
     assert!(embedded_lyrics_text(&lofty::read_from_path(fixture.track(2)).unwrap()).is_none());

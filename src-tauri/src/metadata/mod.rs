@@ -10,7 +10,6 @@ use model::{
     normalize_changes, validate_track_ids, LyricsMarkAction, MetadataChange, MetadataField,
 };
 use serde::Serialize;
-use std::path::Path;
 use tauri::{ipc::Channel, Manager, State};
 
 #[derive(Serialize)]
@@ -34,9 +33,9 @@ pub(crate) struct MetadataSaveResult {
 }
 
 #[tauri::command]
-pub(crate) async fn get_editable_tracks(
+pub(crate) async fn get_editable_tracks<R: tauri::Runtime>(
     track_ids: Vec<i64>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<Vec<EditableTrack>, String> {
     let track_ids = validate_track_ids(&track_ids)?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -48,11 +47,9 @@ pub(crate) async fn get_editable_tracks(
                     .get_track(id)?
                     .ok_or_else(|| format!("曲目 {id} 已不在数据库中"))?;
                 let snapshot = database.get_lyrics(id)?;
-                let metadata = files::inspect_file(Path::new(track.path()));
-                let (writable_fields, issue) = match metadata {
-                    Ok(metadata) => (metadata.writable_fields, metadata.issue),
-                    Err(error) => (Vec::new(), Some(error)),
-                };
+                let metadata = database.get_editing_snapshot(id)?;
+                let writable_fields = metadata.writable_fields;
+                let issue = metadata.issue;
                 Ok(EditableTrack {
                     track,
                     lyrics: snapshot.text,
@@ -68,13 +65,13 @@ pub(crate) async fn get_editable_tracks(
 }
 
 #[tauri::command]
-pub(crate) async fn save_track_metadata(
+pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
     track_ids: Vec<i64>,
     mut changes: Vec<MetadataChange>,
     lyrics_action: LyricsMarkAction,
     on_progress: Channel<MetadataSaveResult>,
     operation_id: Option<String>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
     let track_ids = validate_track_ids(&track_ids)?;
@@ -93,16 +90,6 @@ pub(crate) async fn save_track_metadata(
         crate::logging::with_operation(operation_id.clone(), || {
             let _guard = guard;
             let database = app.state::<Database>();
-            // Validate combinations for every readable target before modifying the first file.
-            // Missing/unreadable files are reported individually, not used to block other targets.
-            for id in track_ids.iter().filter(|_| !changes.is_empty()) {
-                if let Some(track) = database.get_track(*id)? {
-                    if files::inspect_file(Path::new(track.path())).is_ok() {
-                        files::validate_file(Path::new(track.path()), &changes)
-                            .map_err(|error| format!("{}：{error}", track.path()))?;
-                    }
-                }
-            }
             let results = track_ids
                 .into_iter()
                 .map(|id| {

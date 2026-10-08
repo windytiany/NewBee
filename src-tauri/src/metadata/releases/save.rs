@@ -49,12 +49,12 @@ fn validate_patches(patches: &mut [TrackPatch], cover: Option<&CoverData>) -> Re
 }
 
 #[tauri::command]
-pub(crate) async fn save_album_tags(
+pub(crate) async fn save_album_tags<R: tauri::Runtime>(
     mut patches: Vec<TrackPatch>,
     cover: Option<CoverData>,
     on_progress: Channel<MetadataSaveResult>,
     operation_id: Option<String>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
     validate_patches(&mut patches, cover.as_ref())?;

@@ -6,6 +6,18 @@ use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use rusqlite::{params, OptionalExtension};
 
 impl Database {
+    pub(crate) fn track_paths(&self) -> Result<Vec<String>, String> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare("SELECT path FROM tracks")
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| row.get(0))
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
     pub fn list_music_library_directories(&self) -> Result<Vec<MusicLibraryDirectory>, String> {
         let connection = self.connection()?;
         let mut statement = connection
@@ -51,99 +63,13 @@ impl Database {
     pub fn upsert_track(&self, track: &TrackWriteInput) -> Result<TrackWriteOutcome, String> {
         let mut connection = self.connection()?;
         let transaction = connection
-            .transaction()
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|error| format!("Failed to start track update: {error}"))?;
-        let existing_id = transaction
-            .query_row(
-                "SELECT id FROM tracks WHERE path = ?1",
-                [&track.path],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()
-            .map_err(|error| format!("Failed to check existing track: {error}"))?;
-
-        transaction
-            .execute(
-                "INSERT INTO tracks (
-                    path, title, artist, album, album_artist, release_date,
-                    disc_number, track_number, duration_ms, codec, sample_rate_hz,
-                    bitrate_kbps, channels, disc_total, track_total
-                 ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
-                 )
-                 ON CONFLICT(path) DO UPDATE SET
-                    title = excluded.title,
-                    artist = excluded.artist,
-                    album = excluded.album,
-                    album_artist = excluded.album_artist,
-                    release_date = excluded.release_date,
-                    disc_number = excluded.disc_number,
-                    track_number = excluded.track_number,
-                    duration_ms = excluded.duration_ms,
-                    codec = excluded.codec,
-                    sample_rate_hz = excluded.sample_rate_hz,
-                    bitrate_kbps = excluded.bitrate_kbps,
-                    channels = excluded.channels,
-                    disc_total = excluded.disc_total,
-                    track_total = excluded.track_total",
-                params![
-                    &track.path,
-                    &track.title,
-                    &track.artist,
-                    &track.album,
-                    &track.album_artist,
-                    &track.release_date,
-                    track.disc_number,
-                    track.track_number,
-                    track.duration_ms,
-                    &track.codec,
-                    track.sample_rate_hz,
-                    track.bitrate_kbps,
-                    track.channels,
-                    track.disc_total,
-                    track.track_total,
-                ],
-            )
-            .map_err(|error| format!("Failed to write track metadata: {error}"))?;
-
-        let track_id = existing_id.unwrap_or_else(|| transaction.last_insert_rowid());
-        if let Some(artwork) = track.artwork.as_ref() {
-            transaction
-                .execute(
-                    "INSERT INTO track_artwork (track_id, mime_type, image)
-                     VALUES (?1, ?2, ?3)
-                     ON CONFLICT(track_id) DO UPDATE SET
-                        mime_type = excluded.mime_type,
-                        image = excluded.image",
-                    params![track_id, &artwork.mime_type, &artwork.image],
-                )
-                .map_err(|error| format!("Failed to write track artwork: {error}"))?;
-        } else {
-            transaction
-                .execute("DELETE FROM track_artwork WHERE track_id = ?1", [track_id])
-                .map_err(|error| format!("Failed to remove missing track artwork: {error}"))?;
-        }
-
-        let lyrics = track
-            .lyrics
-            .as_deref()
-            .filter(|text| !text.trim().is_empty());
-        transaction.execute(
-            "INSERT INTO track_lyrics (track_id, text) VALUES (?1, ?2)
-             ON CONFLICT(track_id) DO UPDATE SET
-                text = excluded.text,
-                no_lyrics = CASE WHEN excluded.text IS NOT NULL THEN 0 ELSE track_lyrics.no_lyrics END",
-            params![track_id, lyrics],
-        ).map_err(|error| format!("Failed to write track lyrics: {error}"))?;
-
+        let outcome = persist_track(&transaction, track)?;
         transaction
             .commit()
             .map_err(|error| format!("Failed to finish track update: {error}"))?;
-        Ok(if existing_id.is_some() {
-            TrackWriteOutcome::Updated
-        } else {
-            TrackWriteOutcome::Added
-        })
+        Ok(outcome)
     }
 
     pub fn list_album_artists(&self) -> Result<Vec<AlbumArtistSummary>, String> {
@@ -404,4 +330,106 @@ fn display_directory_path(path: &str) -> String {
         }
     }
     path.to_owned()
+}
+
+pub(super) fn persist_track(
+    transaction: &rusqlite::Transaction<'_>,
+    track: &TrackWriteInput,
+) -> Result<TrackWriteOutcome, String> {
+    let existing_id = transaction
+        .query_row(
+            "SELECT id FROM tracks WHERE path = ?1",
+            [&track.path],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to check existing track: {error}"))?;
+
+    transaction
+        .execute(
+            "INSERT INTO tracks (
+                    path, title, artist, album, album_artist, release_date,
+                    disc_number, track_number, duration_ms, codec, sample_rate_hz,
+                    bitrate_kbps, channels, disc_total, track_total
+                 ) VALUES (
+                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
+                 )
+                 ON CONFLICT(path) DO UPDATE SET
+                    title = excluded.title,
+                    artist = excluded.artist,
+                    album = excluded.album,
+                    album_artist = excluded.album_artist,
+                    release_date = excluded.release_date,
+                    disc_number = excluded.disc_number,
+                    track_number = excluded.track_number,
+                    duration_ms = excluded.duration_ms,
+                    codec = excluded.codec,
+                    sample_rate_hz = excluded.sample_rate_hz,
+                    bitrate_kbps = excluded.bitrate_kbps,
+                    channels = excluded.channels,
+                    disc_total = excluded.disc_total,
+                    track_total = excluded.track_total",
+            params![
+                &track.path,
+                &track.title,
+                &track.artist,
+                &track.album,
+                &track.album_artist,
+                &track.release_date,
+                track.disc_number,
+                track.track_number,
+                track.duration_ms,
+                &track.codec,
+                track.sample_rate_hz,
+                track.bitrate_kbps,
+                track.channels,
+                track.disc_total,
+                track.track_total,
+            ],
+        )
+        .map_err(|error| format!("Failed to write track metadata: {error}"))?;
+
+    let track_id = existing_id.unwrap_or_else(|| transaction.last_insert_rowid());
+    if let Some(artwork) = track.artwork.as_ref() {
+        transaction
+            .execute(
+                "INSERT INTO track_artwork (track_id, mime_type, image)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(track_id) DO UPDATE SET
+                        mime_type = excluded.mime_type,
+                        image = excluded.image",
+                params![track_id, &artwork.mime_type, &artwork.image],
+            )
+            .map_err(|error| format!("Failed to write track artwork: {error}"))?;
+    } else {
+        transaction
+            .execute("DELETE FROM track_artwork WHERE track_id = ?1", [track_id])
+            .map_err(|error| format!("Failed to remove missing track artwork: {error}"))?;
+    }
+
+    if let Some(editing) = &track.editing {
+        transaction.execute(
+                "INSERT INTO track_editing (track_id, snapshot) VALUES (?1, ?2)
+                 ON CONFLICT(track_id) DO UPDATE SET snapshot = excluded.snapshot, scan_issue = NULL",
+                params![track_id, editing],
+            ).map_err(|error| format!("Failed to save editing snapshot: {error}"))?;
+    }
+
+    let lyrics = track
+        .lyrics
+        .as_deref()
+        .filter(|text| !text.trim().is_empty());
+    transaction.execute(
+            "INSERT INTO track_lyrics (track_id, text) VALUES (?1, ?2)
+             ON CONFLICT(track_id) DO UPDATE SET
+                text = excluded.text,
+                no_lyrics = CASE WHEN excluded.text IS NOT NULL THEN 0 ELSE track_lyrics.no_lyrics END",
+            params![track_id, lyrics],
+        ).map_err(|error| format!("Failed to write track lyrics: {error}"))?;
+
+    Ok(if existing_id.is_some() {
+        TrackWriteOutcome::Updated
+    } else {
+        TrackWriteOutcome::Added
+    })
 }

@@ -138,7 +138,7 @@ export function createTagEditor(options: TagEditorOptions) {
     try {
       pendingLyricsAction = state.lyricsAction;
       pendingChanges = buildTagChanges(state.draft, state.tracks, {
-        changedOnly: pendingLyricsAction !== "keep",
+        changedOnly: true,
         allowEmpty: pendingLyricsAction !== "keep",
       });
       if (pendingLyricsAction === "mark")

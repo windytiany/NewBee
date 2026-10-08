@@ -23,6 +23,7 @@ fn track() -> TrackDetails {
             bitrate_kbps: None,
             channels: None,
             artwork: None,
+            editing: None,
             lyrics: None,
         })
         .unwrap();

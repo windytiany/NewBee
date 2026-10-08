@@ -75,9 +75,9 @@ describe("metadata editing", () => {
     expect(editor.state.dirty).toBe(true);
     editor.prepareSave();
     await settle();
-    expect(saves[0]?.changes.find(({ field }) => field === "lyrics")?.value).toBe(
-      "  [00:01.00]Edited lyrics\n\n",
-    );
+    expect(saves[0]?.changes).toEqual([
+      { field: "lyrics", value: "  [00:01.00]Edited lyrics\n\n" },
+    ]);
   });
 
   it("can clear lyrics and never includes lyrics in batch or album drafts", async () => {
@@ -95,17 +95,15 @@ describe("metadata editing", () => {
     expect(createTagDraft([editable(1)], "album").some(({ key }) => key === "lyrics")).toBe(false);
   });
 
-  it("saves all writable single-track database values without requiring changes", async () => {
+  it("does not rewrite the cached snapshot without an edited field", async () => {
     const { editor, saves, synchronized } = fixture();
     await editor.openTracks([1]);
-    expect(editor.state.dirty).toBe(false);
     editor.prepareSave();
     await settle();
-    expect(saves).toHaveLength(1);
-    expect(saves[0]?.changes).toHaveLength(9);
-    expect(saves[0]?.changes.find(({ field }) => field === "title")?.value).toBe("Track 1");
-    expect(synchronized).toEqual([[1]]);
-    expect(editor.state.open).toBe(false);
+    expect(saves).toEqual([]);
+    expect(synchronized).toEqual([]);
+    expect(editor.state.error).toBe("没有可写入的字段。");
+    expect(editor.state.open).toBe(true);
   });
 
   it("deduplicates targets and leaves mixed batch values unapplied", async () => {
@@ -121,12 +119,12 @@ describe("metadata editing", () => {
     expect(saves).toHaveLength(1);
     await settle();
     expect(saves[0]?.ids).toEqual([1, 2]);
-    expect(saves[0]?.changes).toHaveLength(8);
+    expect(saves[0]?.changes).toEqual([{ field: "title", value: "Unified" }]);
     expect(saves[0]?.changes.find(({ field }) => field === "title")?.value).toBe("Unified");
     expect(saves[0]?.changes.some(({ field }) => field === "trackNumber")).toBe(false);
   });
 
-  it("saves unchanged common values and removes labels emptied by typing", async () => {
+  it("leaves unchanged common values unselected and removes labels emptied by typing", async () => {
     const { editor, saves } = fixture();
     await editor.openTracks([1, 2]);
     const date = editor.state.draft.find(({ key }) => key === "releaseDate");
@@ -134,7 +132,7 @@ describe("metadata editing", () => {
     editor.changeField(date, "");
     editor.prepareSave();
     await settle();
-    expect(saves[0]?.changes.find(({ field }) => field === "artist")?.value).toBe("Artist");
+    expect(saves[0]?.changes.some(({ field }) => field === "artist")).toBe(false);
     expect(saves[0]?.changes.find(({ field }) => field === "releaseDate")?.value).toBeNull();
   });
 
@@ -330,6 +328,9 @@ describe("metadata editing", () => {
       },
     });
     await editor.openTracks([1]);
+    const album = editor.state.draft.find(({ key }) => key === "album");
+    if (!album) throw new Error("Missing album");
+    editor.changeField(album, "New Album");
     editor.prepareSave();
     await settle();
     expect(editor.state.open).toBe(true);
@@ -350,6 +351,9 @@ describe("metadata editing", () => {
       },
     });
     await editor.openTracks([1, 2]);
+    const album = editor.state.draft.find(({ key }) => key === "album");
+    if (!album) throw new Error("Missing album");
+    editor.changeField(album, "New Album");
     editor.prepareSave();
     await settle();
     expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([
@@ -374,6 +378,9 @@ describe("metadata editing", () => {
       },
     });
     await editor.openTracks([1]);
+    const album = editor.state.draft.find(({ key }) => key === "album");
+    if (!album) throw new Error("Missing album");
+    editor.changeField(album, "New Album");
     editor.prepareSave();
     await settle();
     expect(editor.state.open).toBe(true);

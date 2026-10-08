@@ -1,3 +1,4 @@
+mod snapshot;
 use super::model::{MetadataChange, MetadataField};
 use lofty::config::{ParseOptions, WriteOptions};
 use lofty::file::{FileType, TaggedFile, TaggedFileExt};
@@ -6,6 +7,7 @@ use lofty::picture::{Picture, PictureType};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::{ItemKey, MergeTag, SplitTag, Tag, TagItem, TagType};
+pub(crate) use snapshot::read_track;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Seek};
 use std::path::{Path, PathBuf};
@@ -15,6 +17,8 @@ pub(crate) const MAX_COVER_BYTES: usize = 20 * 1024 * 1024;
 static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 
 fn read_file(path: &Path) -> Result<TaggedFile, String> {
+    #[cfg(test)]
+    access::record(path, "parse");
     Probe::open(path)
         .map_err(|error| format!("读取文件标签失败：{error}"))?
         .guess_file_type()
@@ -52,22 +56,31 @@ fn writable_fields(file: &TaggedFile, tag: &Tag) -> Vec<MetadataField> {
         .collect()
 }
 
-pub(super) struct FileMetadata {
-    pub(super) writable_fields: Vec<MetadataField>,
-    pub(super) issue: Option<String>,
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditingSnapshot {
+    pub(crate) file_type: String,
+    pub(crate) tag_types: Vec<String>,
+    pub(crate) writable_fields: Vec<MetadataField>,
+    pub(crate) issue: Option<String>,
 }
 
-pub(super) fn inspect_file(path: &Path) -> Result<FileMetadata, String> {
-    let readonly = fs::metadata(path)
+#[cfg(test)]
+pub(super) fn inspect_file(path: &Path) -> Result<EditingSnapshot, String> {
+    let readonly = file_metadata(path)
         .map_err(|error| error.to_string())?
         .permissions()
         .readonly();
     let file = read_file(path)?;
-    let tag = editing_tag(&file);
+    Ok(metadata_from_file(&file, readonly))
+}
+
+fn metadata_from_file(file: &TaggedFile, readonly: bool) -> EditingSnapshot {
+    let tag = editing_tag(file);
     let writable_fields = if readonly {
         Vec::new()
     } else {
-        writable_fields(&file, &tag)
+        writable_fields(file, &tag)
     };
     let issue = if readonly {
         Some("文件为只读".to_owned())
@@ -76,10 +89,16 @@ pub(super) fn inspect_file(path: &Path) -> Result<FileMetadata, String> {
     } else {
         None
     };
-    Ok(FileMetadata {
+    EditingSnapshot {
+        file_type: format!("{:?}", file.file_type()),
+        tag_types: file
+            .tags()
+            .iter()
+            .map(|tag| format!("{:?}", tag.tag_type()))
+            .collect(),
         writable_fields,
         issue,
-    })
+    }
 }
 
 fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String> {
@@ -155,12 +174,6 @@ fn validate_totals(tag: &Tag, changes: &[MetadataChange]) -> Result<(), String> 
         }
     }
     Ok(())
-}
-
-pub(super) fn validate_file(path: &Path, changes: &[MetadataChange]) -> Result<(), String> {
-    let file = read_file(path)?;
-    let tag = editing_tag(&file);
-    validate_totals(&tag, changes)
 }
 
 fn same_item(expected: &TagItem, actual: &TagItem) -> bool {
@@ -304,7 +317,7 @@ pub(crate) fn write_file_with_cover(
     changes: &[MetadataChange],
     cover: Option<&Picture>,
 ) -> Result<(), String> {
-    let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
+    let metadata = file_metadata(path).map_err(|error| error.to_string())?;
     if metadata.permissions().readonly() {
         return Err("文件为只读".to_owned());
     }
@@ -464,3 +477,35 @@ impl Drop for TemporaryFile {
 #[cfg(test)]
 #[path = "tests/verify.rs"]
 mod tests;
+
+fn file_metadata(path: &Path) -> std::io::Result<std::fs::Metadata> {
+    #[cfg(test)]
+    access::record(path, "metadata");
+    fs::metadata(path)
+}
+
+#[cfg(test)]
+pub(crate) mod access {
+    use std::{
+        path::{Path, PathBuf},
+        sync::Mutex,
+    };
+    static ACCESSES: Mutex<Vec<(PathBuf, &'static str)>> = Mutex::new(Vec::new());
+    pub(super) fn record(path: &Path, kind: &'static str) {
+        ACCESSES.lock().unwrap().push((path.to_owned(), kind));
+    }
+    pub(crate) fn take(root: &Path) -> Vec<(PathBuf, &'static str)> {
+        let canonical_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_owned());
+        let mut all = ACCESSES.lock().unwrap();
+        let mut selected = Vec::new();
+        all.retain(|(path, kind)| {
+            if path.starts_with(root) || path.starts_with(&canonical_root) {
+                selected.push((path.clone(), *kind));
+                false
+            } else {
+                true
+            }
+        });
+        selected
+    }
+}

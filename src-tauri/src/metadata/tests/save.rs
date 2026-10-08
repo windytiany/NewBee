@@ -11,9 +11,19 @@ use lofty::{file::TaggedFileExt, prelude::*};
 use std::fs;
 
 #[test]
-fn writes_file_before_updating_only_requested_database_fields() {
+fn writes_selected_fields_and_updates_the_confirmed_database_snapshot() {
     let fixture = Fixture::new();
     let path = fixture.wav();
+    files::write_file(
+        &path,
+        &[
+            change(MetadataField::Title, Some("old")),
+            change(MetadataField::Artist, Some("artist")),
+            change(MetadataField::Album, Some("album")),
+            change(MetadataField::AlbumArtist, Some("group")),
+        ],
+    )
+    .unwrap();
     let database = Database::open(":memory:").unwrap();
     database
         .upsert_track(&TrackWriteInput {
@@ -33,6 +43,7 @@ fn writes_file_before_updating_only_requested_database_fields() {
             bitrate_kbps: None,
             channels: Some(1),
             artwork: None,
+            editing: None,
             lyrics: None,
         })
         .unwrap();
@@ -131,6 +142,7 @@ fn saves_cover_only_and_preserves_it_when_later_changes_fail_and_retry() {
     let fixture = Fixture::new();
     let path = fixture.0.join("track.flac");
     fs::write(&path, include_bytes!("../../../fixtures/silence.flac")).unwrap();
+    files::write_file(&path, &[change(MetadataField::Title, Some("old"))]).unwrap();
     let database_path = fixture.0.join("library.sqlite3");
     let database = Database::open(&database_path).unwrap();
     let connection = rusqlite::Connection::open(&database_path).unwrap();

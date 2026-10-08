@@ -142,6 +142,9 @@ describe("metadata editor views", () => {
       if (refreshes === 1) throw new Error("reload failed");
     });
     await editor.openTracks([1]);
+    const title = editor.state.draft.find(({ key }) => key === "title");
+    if (!title) throw new Error("Missing title");
+    editor.changeField(title, "Edited title");
     editor.prepareSave();
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     await settle();
@@ -159,7 +162,7 @@ describe("metadata editor views", () => {
     expect(editor.state.open).toBe(false);
   });
 
-  it("shows a native modal with database values, allows unchanged saves and does not close on the backdrop", async () => {
+  it("shows a native modal with database values and does not close on the backdrop", async () => {
     const { editor, root } = mountDialog();
     await editor.openTracks([1]);
     await settle();

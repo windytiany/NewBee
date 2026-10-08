@@ -57,3 +57,9 @@ CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist_position
     ON playlist_items(playlist_id, position, id);
 CREATE INDEX IF NOT EXISTS idx_playlist_items_track
     ON playlist_items(track_id);
+
+CREATE TABLE IF NOT EXISTS track_editing (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    snapshot TEXT NOT NULL,
+    scan_issue TEXT
+);

@@ -26,6 +26,7 @@ fn track(path: &str, image: Vec<u8>) -> TrackWriteInput {
             mime_type: "image/png".into(),
             image,
         }),
+        editing: None,
         lyrics: None,
     }
 }

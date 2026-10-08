@@ -142,6 +142,7 @@ pub struct TrackWriteInput {
     pub bitrate_kbps: Option<i64>,
     pub channels: Option<i64>,
     pub artwork: Option<EmbeddedArtwork>,
+    pub editing: Option<String>,
     pub lyrics: Option<String>,
 }
 
