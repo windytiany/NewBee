@@ -11,7 +11,7 @@
     "
   >
     <TrackTransition
-      v-slot="{ track, details, artworkUrl }"
+      v-slot="{ track, details, artworkUrl, artworkStatus }"
       :track="currentTrack"
       :artwork-size="artworkSize"
       :class="{ 'md:h-full md:min-h-0': props.compact && !props.horizontal }"
@@ -37,8 +37,8 @@
           ref="coverElement"
           class="from-app-interactive to-app-surface via-app-highlight grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-linear-to-br shadow-2xl"
           :class="{ 'md:w-[min(100cqw,100cqh)]': props.compact && !props.horizontal }"
-          :aria-label="artworkUrl ? undefined : '专辑封面占位图'"
-          :role="artworkUrl ? undefined : 'img'"
+          :aria-label="artworkStatus === 'fallback' ? '专辑封面占位图' : undefined"
+          :role="artworkStatus === 'fallback' ? 'img' : undefined"
         >
           <img
             v-if="artworkUrl"
@@ -47,7 +47,7 @@
             class="h-full w-full object-cover"
           />
           <DiscAlbum
-            v-else
+            v-else-if="artworkStatus === 'fallback'"
             aria-hidden="true"
             class="text-app-muted/80"
             :class="props.horizontal ? 'size-32 sm:size-40' : 'size-24'"

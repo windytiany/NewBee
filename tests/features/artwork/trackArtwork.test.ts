@@ -101,6 +101,8 @@ const trackInfoModule = dependencies[
   "@/features/playback/composables/useTrackDetails"
 ] as typeof import("@/features/playback/composables/useTrackDetails");
 const { useTrackArtwork, invalidateTrackArtworkCache, retainTrackArtwork } = artworkModule;
+const measuredArtworkSize = ref<number | null>(null);
+const playingTrack = ref<{ trackId: number; title: string; artist: string } | null>(null);
 
 function createTrackArtworkComponent(
   source: string,
@@ -110,7 +112,19 @@ function createTrackArtworkComponent(
   const modules: Record<string, unknown> = {
     vue: { ...Vue, Transition: testTransition },
     "@/features/artwork/useTrackArtwork": artworkModule,
-    "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(null) },
+    "@/features/artwork/useArtworkSize": { useArtworkSize: () => measuredArtworkSize },
+    "@/features/playback/session": {
+      usePlaybackSession: () => ({ state: { currentTrack: playingTrack } }),
+    },
+    "@/features/playback/components/current-track/TrackTransition.vue": {
+      __esModule: true,
+      get default() {
+        return transitionArtworkComponent;
+      },
+    },
+    "@lucide/vue": {
+      DiscAlbum: () => Vue.h("span", { "data-test": "fallback" }, "fallback"),
+    },
     "@/features/playback/composables/useTrackDetails": trackInfoModule,
   };
   return evaluateSource<{ default: Vue.Component }>(output, modules).default;
@@ -130,6 +144,16 @@ const transitionArtworkComponent = createTrackArtworkComponent(
     ),
   ).text(),
   "src/features/playback/components/current-track/TrackTransition.vue",
+);
+
+const presentationArtworkComponent = createTrackArtworkComponent(
+  await Bun.file(
+    new URL(
+      "../../../src/features/playback/components/current-track/TrackPresentation.vue",
+      import.meta.url,
+    ),
+  ).text(),
+  "src/features/playback/components/current-track/TrackPresentation.vue",
 );
 
 function createDetails(trackId: number): TrackDetails {
@@ -206,6 +230,7 @@ function mountArtworkComponent(
                 track: { title: string | null } | null;
                 details: TrackDetails | null;
                 artworkUrl: string | null;
+                artworkStatus: string;
                 detailsError: string;
               }) => [
                 Vue.h("h1", snapshot.details?.title ?? snapshot.track?.title ?? ""),
@@ -213,7 +238,9 @@ function mountArtworkComponent(
                 Vue.h("div", { "data-test": "details-error" }, snapshot.detailsError),
                 snapshot.artworkUrl
                   ? Vue.h("img", { src: snapshot.artworkUrl })
-                  : Vue.h("span", { "data-test": "fallback" }, "fallback"),
+                  : snapshot.artworkStatus === "fallback"
+                    ? Vue.h("span", { "data-test": "fallback" }, "fallback")
+                    : null,
               ],
             },
       ),
@@ -233,6 +260,8 @@ function findArtworkNode(root: ArtworkHostNode, type: string): ArtworkHostNode |
 }
 
 beforeEach(() => {
+  measuredArtworkSize.value = null;
+  playingTrack.value = null;
   invokedTrackIds = [];
   invokedArtworkRequests = [];
   imageBlobs = [];
@@ -272,6 +301,48 @@ afterEach(() => {
 });
 
 describe("播放封面与元数据同步过渡", () => {
+  it("进入播放页等待尺寸和请求时保留空封面，确认无封面才显示 icon", async () => {
+    measuredArtworkSize.value = 0;
+    playingTrack.value = { trackId: 119, title: "Title 119", artist: "Artist 119" };
+    const request = deferred<TrackArtwork>();
+    artworkRequest = () => request.promise;
+    const root = mountArtworkComponent(ref(119), presentationArtworkComponent);
+    await settleArtwork();
+    expect(findArtworkNode(root, "span")).toBeNull();
+    expect(findArtworkNode(root, "img")).toBeNull();
+    expect(findArtworkNode(root, "h1")?.text).toBe("Title 119");
+    expect(invokedArtworkRequests).toEqual([]);
+
+    measuredArtworkSize.value = 128;
+    await settleArtwork();
+    expect(invokedArtworkRequests).toEqual([{ trackId: 119, size: 128 }]);
+    expect(findArtworkNode(root, "span")).toBeNull();
+    expect(findArtworkNode(root, "img")).toBeNull();
+
+    request.resolve(new ArrayBuffer(0));
+    await settleArtwork();
+    for (const finish of pendingLeaves.splice(0)) finish();
+    await settleArtwork();
+    expect(findArtworkNode(root, "span")).not.toBeNull();
+  });
+
+  it("播放页封面解码期间留空，成功后显示图片", async () => {
+    measuredArtworkSize.value = 128;
+    playingTrack.value = { trackId: 120, title: "Title 120", artist: "Artist 120" };
+    const decoding = deferred<void>();
+    decodeImage = () => decoding.promise;
+    const root = mountArtworkComponent(ref(120), presentationArtworkComponent);
+    await settleArtwork();
+    expect(imageInstances).toHaveLength(1);
+    expect(findArtworkNode(root, "span")).toBeNull();
+    expect(findArtworkNode(root, "img")).toBeNull();
+
+    decoding.resolve();
+    await settleArtwork();
+    expect(findArtworkNode(root, "img")?.props.src).toBe("blob:artwork-1");
+    expect(findArtworkNode(root, "span")).toBeNull();
+  });
+
   it("封面先就绪时也保留整份旧展示，直到元数据完成", async () => {
     const request = deferred<TrackDetails | null>();
     detailsRequest = (trackId) =>
@@ -652,6 +723,7 @@ it("实际尺寸就绪后才请求，尺寸变化不复用旧 URL，更新只刷
   mountedScopes.push(scope);
   const artwork = scope.run(() => useTrackArtwork(701, size));
   expect(invokedArtworkRequests).toEqual([]);
+  expect(artwork?.status.value).toBe("loading");
   size.value = 40;
   await settleArtwork();
   expect(invokedArtworkRequests).toEqual([{ trackId: 701, size: 40 }]);

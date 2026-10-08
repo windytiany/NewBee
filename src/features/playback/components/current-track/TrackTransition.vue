@@ -24,6 +24,7 @@
           :track="displayed.track"
           :details="displayed.details"
           :artwork-url="displayed.artworkUrl"
+          :artwork-status="displayed.artworkStatus"
           :details-error="displayed.detailsError"
           :artwork-error="displayed.artworkError"
         />
@@ -35,6 +36,7 @@
 <script setup lang="ts">
 import { onScopeDispose, shallowRef, watch } from "vue";
 import { retainTrackArtwork, useTrackArtwork } from "@/features/artwork/useTrackArtwork";
+import type { TrackArtworkStatus } from "@/features/artwork/useTrackArtwork";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
 import type { NowPlayingTrack } from "@/features/playback/types";
 import type { TrackDetails } from "@/features/library/types";
@@ -45,6 +47,7 @@ type DisplayedTrack = {
   track: PresentationTrack | null;
   details: TrackDetails | null;
   artworkUrl: string | null;
+  artworkStatus: TrackArtworkStatus;
   detailsError: string;
   artworkError: string;
 };
@@ -74,17 +77,19 @@ function releaseArtwork(element: { getAttribute: (name: string) => string | null
 watch(
   [() => props.track, currentTrackDetails, isLoading, status, url, currentTrackDetailsError, error],
   ([track, details, detailsLoading, artworkStatus, artworkUrl, detailsError, artworkError]) => {
-    if (track && (detailsLoading || artworkStatus === "loading")) return;
+    const loading = !!track && (detailsLoading || artworkStatus === "loading");
+    if (loading && displayed.value && displayed.value.artworkStatus !== "loading") return;
 
-    const key = ++nextKey;
+    const key = displayed.value?.artworkStatus === "loading" ? displayed.value.key : ++nextKey;
     // Keep each snapshot's image alive through its DOM leave animation.
-    if (track && artworkUrl)
+    if (!loading && track && artworkUrl)
       retainedArtwork.set(key, retainTrackArtwork(track.trackId, props.artworkSize ?? null));
     displayed.value = {
       key,
       track: track ? { trackId: track.trackId, title: track.title, artist: track.artist } : null,
       details,
-      artworkUrl,
+      artworkUrl: loading ? null : artworkUrl,
+      artworkStatus: loading ? "loading" : artworkStatus,
       detailsError,
       artworkError,
     };

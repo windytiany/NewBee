@@ -58,12 +58,13 @@ export function useTrackArtwork(
       url.value = null;
       error.value = "";
 
-      if (nextTrackId === null || nextSize === 0) {
+      if (nextTrackId === null) {
         status.value = "fallback";
         return;
       }
 
       status.value = "loading";
+      if (nextSize === 0) return;
       unsubscribe = subscribeToTrackArtwork(nextTrackId, nextSize, (snapshot) => {
         if (currentTrackId !== nextTrackId) return;
         status.value = snapshot.status;
