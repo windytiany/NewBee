@@ -47,6 +47,7 @@ const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | nu
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
 const theme = ref<Settings["theme"]>("spotify");
 const albumCoverBackground = ref(false);
+const playingCoverBackground = ref(false);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const neteaseEnabled = ref(true);
@@ -77,6 +78,7 @@ async function show() {
     closeBehavior.value = settings.closeBehavior;
     theme.value = settings.theme;
     albumCoverBackground.value = settings.albumCoverBackground;
+    playingCoverBackground.value = settings.playingCoverBackground;
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
     neteaseEnabled.value = settings.lyricsProviders.includes("netease");
@@ -106,6 +108,7 @@ async function save() {
       closeBehavior: closeBehavior.value,
       theme: theme.value,
       albumCoverBackground: albumCoverBackground.value,
+      playingCoverBackground: playingCoverBackground.value,
       albumSortBy: albumSortBy.value,
       albumSortOrder: albumSortOrder.value,
       lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
@@ -178,7 +181,7 @@ defineExpose({ show });
               </template>
               <template v-else-if="selectedCategory === 'appearance'">
                 <p>
-                  启用专辑封面背景后，专辑详情和播放页使用封面生成的模糊背景；关闭后使用默认背景。
+                  专辑详情和播放页的封面背景可分别开关；启用后使用封面生成的模糊背景，关闭后使用默认背景。
                 </p>
                 <p>保存后立即生效，下次启动时自动恢复。</p>
               </template>
@@ -223,7 +226,18 @@ defineExpose({ show });
                 name="album-cover-background"
                 type="checkbox"
               />
-              <span class="text-sm font-semibold">专辑封面背景</span>
+              <span class="text-sm font-semibold">专辑详情封面背景</span>
+            </label>
+            <label
+              class="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
+            >
+              <input
+                v-model="playingCoverBackground"
+                class="accent-app-accent mt-1"
+                name="playing-cover-background"
+                type="checkbox"
+              />
+              <span class="text-sm font-semibold">播放页封面背景</span>
             </label>
           </fieldset>
           <fieldset

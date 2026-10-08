@@ -17,8 +17,11 @@ const passiveComponent = { __esModule: true, default: icon };
 const dependencies: Record<string, unknown> = {
   vue: Vue,
   "@lucide/vue": { ChevronRight: icon, Play: icon, X: icon, DiscAlbum: icon },
-  "@/features/settings/composables/useAlbumBackground": {
-    useAlbumBackground: () => backgroundEnabled,
+  "@/features/settings/composables/useCoverBackground": {
+    useCoverBackground: (setting: string) => {
+      expect(setting).toBe("albumCoverBackground");
+      return backgroundEnabled;
+    },
   },
   "@/features/artwork/useAlbumArtwork": {
     useAlbumArtwork(

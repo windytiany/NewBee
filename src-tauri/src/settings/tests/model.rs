@@ -66,20 +66,54 @@ fn theme_defaults_and_round_trips() {
 }
 
 #[test]
-fn album_cover_background_defaults_off_and_round_trips() {
-    assert!(!Settings::default().album_cover_background);
-    let settings: Settings = serde_json::from_str(r#"{"theme":"spotify"}"#).unwrap();
-    assert!(!settings.album_cover_background);
-    for enabled in [false, true] {
-        let settings = Settings {
-            album_cover_background: enabled,
-            ..Settings::default()
-        };
-        let data = serde_json::to_value(&settings).unwrap();
-        assert_eq!(data["albumCoverBackground"], enabled);
-        assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+fn cover_backgrounds_default_off() {
+    for settings in [
+        Settings::default(),
+        serde_json::from_str::<Settings>("{}").unwrap(),
+    ] {
+        assert!(!settings.album_cover_background);
+        assert!(!settings.playing_cover_background);
     }
-    assert!(serde_json::from_str::<Settings>(r#"{"albumCoverBackground":"true"}"#).is_err());
+}
+
+#[test]
+fn cover_backgrounds_round_trip_independently() {
+    for album_cover_background in [false, true] {
+        for playing_cover_background in [false, true] {
+            let settings = Settings {
+                album_cover_background,
+                playing_cover_background,
+                ..Settings::default()
+            };
+            let data = serde_json::to_value(&settings).unwrap();
+            assert_eq!(data["albumCoverBackground"], album_cover_background);
+            assert_eq!(data["playingCoverBackground"], playing_cover_background);
+            assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+        }
+    }
+    let album_only: Settings = serde_json::from_str(r#"{"albumCoverBackground":true}"#).unwrap();
+    assert!(album_only.album_cover_background);
+    assert!(!album_only.playing_cover_background);
+    let playing_only: Settings =
+        serde_json::from_str(r#"{"playingCoverBackground":true}"#).unwrap();
+    assert!(!playing_only.album_cover_background);
+    assert!(playing_only.playing_cover_background);
+}
+
+#[test]
+fn cover_backgrounds_reject_non_boolean_values() {
+    for field in ["albumCoverBackground", "playingCoverBackground"] {
+        for value in [
+            serde_json::json!("true"),
+            serde_json::json!(1),
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+        ] {
+            let data = serde_json::json!({field: value});
+            assert!(serde_json::from_value::<Settings>(data).is_err());
+        }
+    }
 }
 
 #[test]

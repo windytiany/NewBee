@@ -73,7 +73,7 @@ import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
-import { useAlbumBackground } from "@/features/settings/composables/useAlbumBackground";
+import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LyricsView from "@/features/lyrics/components/LyricsView.vue";
 import TrackPresentation from "@/features/playback/components/current-track/TrackPresentation.vue";
 import { canSeekLyrics, seekToLyric } from "@/features/lyrics/seek";
@@ -86,13 +86,13 @@ import {
 const { presentation } = useDisplayMode();
 const session = usePlaybackSession();
 const { currentTrack, playbackStatus, isSeeking } = session.state;
-const albumCoverBackground = useAlbumBackground();
+const playingCoverBackground = useCoverBackground("playingCoverBackground");
 const { currentTrackDetails } = useTrackDetails(() =>
-  albumCoverBackground.value ? (currentTrack.value?.trackId ?? null) : null,
+  playingCoverBackground.value ? (currentTrack.value?.trackId ?? null) : null,
 );
 const { background } = useAlbumArtwork(() => {
   const details = currentTrackDetails.value;
-  if (!albumCoverBackground.value || !details || details.id !== currentTrack.value?.trackId)
+  if (!playingCoverBackground.value || !details || details.id !== currentTrack.value?.trackId)
     return null;
   return { albumArtist: details.albumArtist, album: details.album };
 }, "background");

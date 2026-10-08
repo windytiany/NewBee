@@ -3,9 +3,15 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
 import { onMounted, onScopeDispose, readonly, ref } from "vue";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
+import type { Settings } from "@/features/settings/types";
+
+type CoverBackgroundSetting = keyof Pick<
+  Settings,
+  "albumCoverBackground" | "playingCoverBackground"
+>;
 
 /** Restores the saved preference and refreshes it only after a successful settings save. */
-export function useAlbumBackground() {
+export function useCoverBackground(setting: CoverBackgroundSetting) {
   const enabled = ref(false);
   const api = createSettingsApi(invoke);
   let requestSequence = 0;
@@ -14,12 +20,12 @@ export function useAlbumBackground() {
     const sequence = ++requestSequence;
     try {
       const settings = await api.get();
-      if (sequence === requestSequence) enabled.value = settings.albumCoverBackground;
+      if (sequence === requestSequence) enabled.value = settings[setting];
     } catch (error) {
       if (sequence === requestSequence) {
         logger.warn(
-          "features/settings/composables/useAlbumBackground",
-          "Could not restore the album cover background setting.",
+          "features/settings/composables/useCoverBackground",
+          `Could not restore the ${setting} setting.`,
           error,
         );
       }

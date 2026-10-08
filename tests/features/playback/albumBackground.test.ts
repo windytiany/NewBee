@@ -76,8 +76,11 @@ function mountPage(enabled = false) {
           state: { currentTrack, playbackStatus: Vue.ref(null), isSeeking: Vue.ref(false) },
         }),
       },
-      "@/features/settings/composables/useAlbumBackground": {
-        useAlbumBackground: () => Vue.readonly(preference),
+      "@/features/settings/composables/useCoverBackground": {
+        useCoverBackground: (setting: string) => {
+          expect(setting).toBe("playingCoverBackground");
+          return Vue.readonly(preference);
+        },
       },
       "@/features/artwork/useAlbumArtwork": {
         useAlbumArtwork(selection: () => AlbumArtworkSelection | null, purpose: string) {

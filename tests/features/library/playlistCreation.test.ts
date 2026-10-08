@@ -50,8 +50,8 @@ function mountBrowser() {
       "@/features/artwork/useAlbumArtwork": {
         useAlbumArtwork: () => ({ background: Vue.ref(null), error: Vue.ref("") }),
       },
-      "@/features/settings/composables/useAlbumBackground": {
-        useAlbumBackground: () => Vue.ref(false),
+      "@/features/settings/composables/useCoverBackground": {
+        useCoverBackground: () => Vue.ref(false),
       },
       "@/features/library/components/albums/AlbumCard.vue": placeholder,
       "@/features/library/components/albums/AlbumDetail.vue": Vue.defineComponent({

@@ -108,7 +108,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
-import { useAlbumBackground } from "@/features/settings/composables/useAlbumBackground";
+import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import type {
   LibraryAlbumSelection,
   AlbumArtistSummary,
@@ -165,7 +165,7 @@ const emit = defineEmits<{
   deleteAlbum: [album: LibraryAlbumSelection];
 }>();
 
-const albumCoverBackground = useAlbumBackground();
+const albumCoverBackground = useCoverBackground("albumCoverBackground");
 const selectedArtwork = useAlbumArtwork(
   () => (albumCoverBackground.value ? props.selectedAlbum : null),
   "background",

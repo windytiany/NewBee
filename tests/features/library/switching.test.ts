@@ -60,8 +60,8 @@ function mountBrowser() {
     },
     "@lucide/vue": { DiscAlbum: placeholder },
     "@/features/library/composables/useActions": { useLibraryActions: () => ({}) },
-    "@/features/settings/composables/useAlbumBackground": {
-      useAlbumBackground: () => Vue.ref(false),
+    "@/features/settings/composables/useCoverBackground": {
+      useCoverBackground: () => Vue.ref(false),
     },
     "@/features/library/components/albums/AlbumDetail.vue": {
       __esModule: true,
