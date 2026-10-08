@@ -491,7 +491,7 @@ pub(crate) mod access {
         sync::Mutex,
     };
     static ACCESSES: Mutex<Vec<(PathBuf, &'static str)>> = Mutex::new(Vec::new());
-    pub(super) fn record(path: &Path, kind: &'static str) {
+    pub(crate) fn record(path: &Path, kind: &'static str) {
         ACCESSES.lock().unwrap().push((path.to_owned(), kind));
     }
     pub(crate) fn take(root: &Path) -> Vec<(PathBuf, &'static str)> {

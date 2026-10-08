@@ -164,7 +164,8 @@ fn keeps_metadata_artwork_playlist_items_and_scan_directories() {
         connection.execute_batch(
             "INSERT INTO playlists (id, name) VALUES (1, 'playlist');
              INSERT INTO playlist_items (playlist_id, track_id, position) VALUES (1, 1, 0);
-             INSERT INTO track_artwork (track_id, mime_type, image) VALUES (1, 'image/png', X'0102');
+             INSERT INTO artwork_images (mime_type, image) VALUES ('image/png', X'0102');
+             INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) VALUES (1, 1, 'embedded', '/old/song.flac');
              INSERT INTO music_library_directories (path) VALUES ('/old');",
         ).unwrap();
     }

@@ -1,4 +1,4 @@
-use crate::database::{EmbeddedArtwork, TrackWriteInput};
+use crate::database::{ArtworkContent, TrackWriteInput};
 use lofty::{
     file::FileType,
     picture::PictureType,
@@ -98,7 +98,7 @@ fn tag_number(tag: &Tag, key: &ItemKey) -> Option<i64> {
     tag_text(tag, key)?.split('/').next()?.trim().parse().ok()
 }
 
-fn read_artwork(tag: &Tag) -> Result<Option<EmbeddedArtwork>, String> {
+fn read_artwork(tag: &Tag) -> Result<Option<ArtworkContent>, String> {
     let picture = tag
         .pictures()
         .iter()
@@ -112,7 +112,7 @@ fn read_artwork(tag: &Tag) -> Result<Option<EmbeddedArtwork>, String> {
         .map(ToString::to_string)
         .ok_or_else(|| "embedded artwork has no recognized MIME type".to_owned())?;
 
-    Ok(Some(EmbeddedArtwork {
+    Ok(Some(ArtworkContent {
         mime_type,
         image: picture.data().to_vec(),
     }))

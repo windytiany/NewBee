@@ -60,15 +60,17 @@ impl Database {
         Ok(())
     }
 
-    pub fn upsert_track(&self, track: &TrackWriteInput) -> Result<TrackWriteOutcome, String> {
+    pub(crate) fn upsert_track(
+        &self,
+        track: &TrackWriteInput,
+        update: super::ArtworkUpdate,
+    ) -> Result<TrackWriteOutcome, String> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(|error| format!("Failed to start track update: {error}"))?;
-        let outcome = persist_track(&transaction, track)?;
-        transaction
-            .commit()
-            .map_err(|error| format!("Failed to finish track update: {error}"))?;
+            .map_err(|error| error.to_string())?;
+        let outcome = persist_track(&transaction, track, &update)?;
+        transaction.commit().map_err(|error| error.to_string())?;
         Ok(outcome)
     }
 
@@ -160,9 +162,10 @@ impl Database {
         let connection = self.connection()?;
         connection
             .query_row(
-                "SELECT ta.mime_type, ta.image
+                "SELECT ai.mime_type, ai.image
                  FROM tracks t
                  INNER JOIN track_artwork ta ON ta.track_id = t.id
+                 INNER JOIN artwork_images ai ON ai.id = ta.image_id
                  WHERE t.album_artist IS ?1 AND t.album IS ?2
                  ORDER BY t.disc_number IS NULL, t.disc_number,
                           t.track_number IS NULL, t.track_number, t.id
@@ -283,9 +286,10 @@ impl Database {
         let connection = self.connection()?;
         let artwork = connection
             .query_row(
-                "SELECT ta.mime_type, ta.image
+                "SELECT ai.mime_type, ai.image
                  FROM tracks t
                  LEFT JOIN track_artwork ta ON ta.track_id = t.id
+                 LEFT JOIN artwork_images ai ON ai.id = ta.image_id
                  WHERE t.id = ?1",
                 [track_id],
                 |row| {
@@ -335,6 +339,7 @@ fn display_directory_path(path: &str) -> String {
 pub(super) fn persist_track(
     transaction: &rusqlite::Transaction<'_>,
     track: &TrackWriteInput,
+    artwork_update: &super::ArtworkUpdate,
 ) -> Result<TrackWriteOutcome, String> {
     let existing_id = transaction
         .query_row(
@@ -390,22 +395,13 @@ pub(super) fn persist_track(
         .map_err(|error| format!("Failed to write track metadata: {error}"))?;
 
     let track_id = existing_id.unwrap_or_else(|| transaction.last_insert_rowid());
-    if let Some(artwork) = track.artwork.as_ref() {
-        transaction
-            .execute(
-                "INSERT INTO track_artwork (track_id, mime_type, image)
-                     VALUES (?1, ?2, ?3)
-                     ON CONFLICT(track_id) DO UPDATE SET
-                        mime_type = excluded.mime_type,
-                        image = excluded.image",
-                params![track_id, &artwork.mime_type, &artwork.image],
-            )
-            .map_err(|error| format!("Failed to write track artwork: {error}"))?;
-    } else {
-        transaction
-            .execute("DELETE FROM track_artwork WHERE track_id = ?1", [track_id])
-            .map_err(|error| format!("Failed to remove missing track artwork: {error}"))?;
-    }
+    super::artwork::persist_artwork(
+        transaction,
+        track_id,
+        track.artwork.as_ref(),
+        artwork_update,
+        &track.path,
+    )?;
 
     if let Some(editing) = &track.editing {
         transaction.execute(

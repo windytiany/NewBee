@@ -6,26 +6,29 @@ use std::cell::RefCell;
 fn track() -> TrackDetails {
     let database = Database::open(":memory:").unwrap();
     database
-        .upsert_track(&TrackWriteInput {
-            path: "/nonexistent/song.mp3".into(),
-            title: Some("Song".into()),
-            artist: Some("Artist".into()),
-            album: Some("Album".into()),
-            album_artist: None,
-            release_date: None,
-            disc_number: None,
-            track_number: None,
-            disc_total: None,
-            track_total: None,
-            duration_ms: Some(200_000),
-            codec: None,
-            sample_rate_hz: None,
-            bitrate_kbps: None,
-            channels: None,
-            artwork: None,
-            editing: None,
-            lyrics: None,
-        })
+        .upsert_track(
+            &TrackWriteInput {
+                path: "/nonexistent/song.mp3".into(),
+                title: Some("Song".into()),
+                artist: Some("Artist".into()),
+                album: Some("Album".into()),
+                album_artist: None,
+                release_date: None,
+                disc_number: None,
+                track_number: None,
+                disc_total: None,
+                track_total: None,
+                duration_ms: Some(200_000),
+                codec: None,
+                sample_rate_hz: None,
+                bitrate_kbps: None,
+                channels: None,
+                artwork: None,
+                editing: None,
+                lyrics: None,
+            },
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     database.get_track(1).unwrap().unwrap()
 }

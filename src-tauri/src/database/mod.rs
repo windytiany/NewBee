@@ -4,7 +4,9 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
+mod artwork;
 pub(crate) mod commands;
+pub(crate) use artwork::ArtworkUpdate;
 mod library;
 pub(crate) mod lyrics;
 mod metadata;
@@ -141,12 +143,12 @@ pub struct TrackWriteInput {
     pub sample_rate_hz: Option<i64>,
     pub bitrate_kbps: Option<i64>,
     pub channels: Option<i64>,
-    pub artwork: Option<EmbeddedArtwork>,
+    pub artwork: Option<ArtworkContent>,
     pub editing: Option<String>,
     pub lyrics: Option<String>,
 }
 
-pub struct EmbeddedArtwork {
+pub struct ArtworkContent {
     pub mime_type: String,
     pub image: Vec<u8>,
 }

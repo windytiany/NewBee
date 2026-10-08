@@ -1,5 +1,5 @@
 use super::super::{get_album_artwork, get_track_artwork};
-use crate::database::{Database, EmbeddedArtwork, TrackWriteInput};
+use crate::database::{ArtworkContent, Database, TrackWriteInput};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::io::Cursor;
 use tauri::ipc::{InvokeBody, InvokeResponseBody};
@@ -22,7 +22,7 @@ fn track(path: &str, image: Vec<u8>) -> TrackWriteInput {
         sample_rate_hz: None,
         bitrate_kbps: None,
         channels: None,
-        artwork: Some(EmbeddedArtwork {
+        artwork: Some(ArtworkContent {
             mime_type: "image/png".into(),
             image,
         }),
@@ -68,16 +68,27 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     let red = fixture(Rgba([255, 0, 0, 255]));
     let blue = fixture(Rgba([0, 0, 255, 255]));
     database
-        .upsert_track(&track("/fixture/one.mp3", red.clone()))
+        .upsert_track(
+            &track("/fixture/one.mp3", red.clone()),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     database
-        .upsert_track(&track("/fixture/two.mp3", blue))
+        .upsert_track(
+            &track("/fixture/two.mp3", blue),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     let mut missing = track("/fixture/missing.mp3", Vec::new());
     missing.artwork = None;
-    database.upsert_track(&missing).unwrap();
     database
-        .upsert_track(&track("/fixture/corrupt.mp3", vec![1, 2, 3]))
+        .upsert_track(&missing, crate::database::ArtworkUpdate::Embedded)
+        .unwrap();
+    database
+        .upsert_track(
+            &track("/fixture/corrupt.mp3", vec![1, 2, 3]),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     let app = tauri::test::mock_builder()
         .manage(database)
@@ -132,7 +143,10 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     )
     .is_err());
     app.state::<Database>()
-        .upsert_track(&track("/fixture/one.mp3", fixture(Rgba([0, 255, 0, 255]))))
+        .upsert_track(
+            &track("/fixture/one.mp3", fixture(Rgba([0, 255, 0, 255]))),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     let updated = invoke(
         &webview,
@@ -179,7 +193,10 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
     let database = Database::open(":memory:").unwrap();
     for index in 0..40 {
         database
-            .upsert_track(&track(&format!("/fixture/{index}.mp3"), original.clone()))
+            .upsert_track(
+                &track(&format!("/fixture/{index}.mp3"), original.clone()),
+                crate::database::ArtworkUpdate::Embedded,
+            )
             .unwrap();
     }
     let previous_json_bytes = serde_json::to_vec(&database.get_track_artwork(1).unwrap())

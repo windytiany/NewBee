@@ -26,26 +26,29 @@ fn writes_selected_fields_and_updates_the_confirmed_database_snapshot() {
     .unwrap();
     let database = Database::open(":memory:").unwrap();
     database
-        .upsert_track(&TrackWriteInput {
-            path: path.to_string_lossy().into_owned(),
-            title: Some("old".into()),
-            artist: Some("artist".into()),
-            album: Some("album".into()),
-            album_artist: Some("group".into()),
-            release_date: None,
-            disc_number: None,
-            track_number: None,
-            disc_total: None,
-            track_total: None,
-            duration_ms: Some(1000),
-            codec: None,
-            sample_rate_hz: Some(8000),
-            bitrate_kbps: None,
-            channels: Some(1),
-            artwork: None,
-            editing: None,
-            lyrics: None,
-        })
+        .upsert_track(
+            &TrackWriteInput {
+                path: path.to_string_lossy().into_owned(),
+                title: Some("old".into()),
+                artist: Some("artist".into()),
+                album: Some("album".into()),
+                album_artist: Some("group".into()),
+                release_date: None,
+                disc_number: None,
+                track_number: None,
+                disc_total: None,
+                track_total: None,
+                duration_ms: Some(1000),
+                codec: None,
+                sample_rate_hz: Some(8000),
+                bitrate_kbps: None,
+                channels: Some(1),
+                artwork: None,
+                editing: None,
+                lyrics: None,
+            },
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     let result = save_track(
         &database,

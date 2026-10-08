@@ -31,9 +31,10 @@ fn editors_keep_scanned_capabilities_when_the_music_disk_is_offline() {
         accesses.iter().filter(|(_, kind)| *kind == "parse").count(),
         1
     );
-    assert!(accesses
-        .iter()
-        .all(|(accessed, _)| accessed == &std::fs::canonicalize(&path).unwrap()));
+    assert!(accesses.iter().all(|(accessed, kind)| accessed
+        == &std::fs::canonicalize(&path).unwrap()
+        || (*kind == "directory artwork lookup"
+            && accessed == &std::fs::canonicalize(&fixture.0).unwrap())));
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();
@@ -125,7 +126,10 @@ fn saving_one_field_preserves_external_fields_and_refreshes_the_confirmed_snapsh
     .unwrap();
     let database = Database::open(":memory:").unwrap();
     database
-        .upsert_track(&files::read_track(&path).unwrap().unwrap())
+        .upsert_track(
+            &files::read_track(&path).unwrap().unwrap(),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     files::write_file(&path, &[change(MetadataField::Artist, Some("external"))]).unwrap();
     let saved = save_track(

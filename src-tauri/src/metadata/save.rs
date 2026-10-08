@@ -3,18 +3,18 @@ use super::{
     model::{LyricsMarkAction, MetadataChange, MetadataField},
     MetadataSaveResult,
 };
-use crate::database::{Database, EmbeddedArtwork};
+use crate::database::{ArtworkContent, Database};
 use lofty::picture::Picture;
 use std::path::Path;
 
 pub(crate) struct CoverUpdate {
     picture: Picture,
-    artwork: EmbeddedArtwork,
+    artwork: ArtworkContent,
 }
 
 impl CoverUpdate {
     pub(crate) fn new(picture: Picture) -> Self {
-        let artwork = EmbeddedArtwork {
+        let artwork = ArtworkContent {
             mime_type: picture
                 .mime_type()
                 .map(ToString::to_string)

@@ -28,10 +28,17 @@ CREATE TABLE IF NOT EXISTS skipped_tracks (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS artwork_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mime_type TEXT NOT NULL,
+    image BLOB NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS track_artwork (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-    mime_type TEXT NOT NULL,
-    image BLOB NOT NULL
+    image_id INTEGER NOT NULL REFERENCES artwork_images(id),
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('embedded', 'directory')),
+    source_path TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS music_library_directories (
@@ -63,3 +70,18 @@ CREATE TABLE IF NOT EXISTS track_editing (
     snapshot TEXT NOT NULL,
     scan_issue TEXT
 );
+
+CREATE TRIGGER IF NOT EXISTS remove_unreferenced_artwork_after_delete
+AFTER DELETE ON track_artwork
+BEGIN
+    DELETE FROM artwork_images WHERE id = OLD.image_id
+        AND NOT EXISTS (SELECT 1 FROM track_artwork WHERE image_id = OLD.image_id);
+END;
+
+CREATE TRIGGER IF NOT EXISTS remove_unreferenced_artwork_after_replace
+AFTER UPDATE OF image_id ON track_artwork
+WHEN OLD.image_id != NEW.image_id
+BEGIN
+    DELETE FROM artwork_images WHERE id = OLD.image_id
+        AND NOT EXISTS (SELECT 1 FROM track_artwork WHERE image_id = OLD.image_id);
+END;

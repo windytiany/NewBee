@@ -4,10 +4,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
-pub(super) struct TestFiles(pub(super) PathBuf);
+pub(crate) struct TestFiles(pub(crate) PathBuf);
 
 impl TestFiles {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let directory = std::env::temp_dir().join(format!(
             "newbee-library-import-{}-{}",
             std::process::id(),
@@ -17,7 +17,7 @@ impl TestFiles {
         Self(directory)
     }
 
-    pub(super) fn wav(&self, name: &str) -> String {
+    pub(crate) fn wav(&self, name: &str) -> String {
         // One second of unsigned 8-bit mono PCM at 8 kHz.
         let mut bytes = Vec::new();
         bytes.extend_from_slice(b"RIFF");
@@ -36,7 +36,7 @@ impl TestFiles {
         self.write(name, &bytes)
     }
 
-    pub(super) fn write(&self, name: &str, bytes: &[u8]) -> String {
+    pub(crate) fn write(&self, name: &str, bytes: &[u8]) -> String {
         let path = self.0.join(name);
         fs::write(&path, bytes).unwrap();
         path.to_string_lossy().into_owned()
