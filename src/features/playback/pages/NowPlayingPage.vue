@@ -106,7 +106,7 @@ const {
   state: lyricsState,
   activeIndex,
   activeGroupStartIndex,
-} = useLyrics({ currentTrack, playbackStatus });
+} = useLyrics({ currentTrack, playbackStatus, sidecarLyrics: session.state.sidecarLyrics });
 const canSeek = computed(() => canSeekLyrics(session, lyricsState.value));
 const trackLyrics = computed(() =>
   lyricsState.value.status === "ready" ? lyricsState.value.lyrics : { kind: "none" as const },

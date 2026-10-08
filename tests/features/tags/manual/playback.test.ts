@@ -29,6 +29,7 @@ function fixture(paused = false, canStop = true) {
     args?: Record<string, unknown>,
   ) => {
     calls.push(command);
+    if (command === "get_playback_sidecar_lyrics") return null as T;
     if (command === "list_skipped_track_ids") return [] as T;
     if (command === "prepare_next_track") return true as T;
     if (command === "play_track") {

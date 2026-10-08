@@ -149,6 +149,7 @@ function setupPlayback() {
   let deferNextStatus = false;
   let activeStatus = status(null);
   const handler = (command: string, args?: Record<string, unknown>) => {
+    if (command === "get_playback_sidecar_lyrics") return null;
     if (command === "playback_status") {
       return deferNextStatus && activeStatus.playbackId === 2 ? nextStatus.promise : activeStatus;
     }

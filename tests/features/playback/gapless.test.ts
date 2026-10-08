@@ -51,6 +51,7 @@ function harness(failedTrackIds: number[] = []) {
     command: string,
     args?: Record<string, unknown>,
   ) => {
+    if (command === "get_playback_sidecar_lyrics") return null as T;
     if (command === "list_skipped_track_ids") return [...skipped] as T;
     if (command === "set_tracks_skipped") {
       for (const id of args?.trackIds as number[]) {

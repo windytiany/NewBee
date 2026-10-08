@@ -2,6 +2,7 @@ pub(crate) mod batch;
 pub(crate) mod download;
 pub(crate) mod local;
 mod providers;
+pub(crate) mod sidecar;
 pub(crate) use providers::NeteaseLyricsMode;
 
 pub use local::{parse_embedded_lyrics, LyricLine, TrackLyrics};
@@ -48,3 +49,7 @@ pub(crate) enum LyricsContent {
     Instrumental,
     Missing,
 }
+
+#[cfg(test)]
+#[path = "tests/sidecar.rs"]
+mod sidecar_tests;
