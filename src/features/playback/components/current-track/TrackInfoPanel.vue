@@ -8,6 +8,7 @@
     <TrackTransition
       v-slot="{ track, details, artworkUrl }"
       :track="currentTrack"
+      :artwork-size="artworkSize"
       content-class="px-1 pb-3"
     >
       <div v-if="track" class="text-sm">
@@ -31,6 +32,7 @@
 
       <div
         v-if="track"
+        ref="coverElement"
         :aria-label="artworkUrl ? undefined : '专辑封面占位图'"
         :role="artworkUrl ? undefined : 'img'"
         class="from-app-header via-app-header-middle to-app-surface text-app-accent/70 mt-3 grid aspect-square w-full place-items-center overflow-hidden bg-linear-to-br"
@@ -48,10 +50,14 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from "vue";
+import { useArtworkSize } from "@/features/artwork/useArtworkSize";
 import { Disc3 } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
 import TrackTransition from "@/features/playback/components/current-track/TrackTransition.vue";
 import { formatAudioSummary } from "@/features/library/format";
 
+const coverElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const artworkSize = useArtworkSize(coverElement);
 const { currentTrack } = usePlaybackSession().state;
 </script>

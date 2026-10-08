@@ -31,7 +31,7 @@ let artworkRequest: (trackId: number) => Promise<TrackArtwork>;
 let detailsRequest: (trackId: number) => Promise<TrackDetails | null>;
 let decodeImage: (image: TestImage) => Promise<void>;
 let invokedTrackIds: number[];
-let invokedArtworkRequests: Array<{ trackId: number; thumbnail: boolean }>;
+let invokedArtworkRequests: Array<{ trackId: number; size: number | null }>;
 let imageBlobs: Blob[];
 let revokedUrls: string[];
 let nextObjectUrl: number;
@@ -81,7 +81,7 @@ const dependencies: Record<string, unknown> = {
   "@/shared/notifications/useNotification": { useNotification },
 };
 dependencies["@tauri-apps/api/core"] = {
-  invoke: (command: string, args?: { trackId: number; thumbnail: boolean }) => {
+  invoke: (command: string, args?: { trackId: number; size: number | null }) => {
     if (!args) throw new Error("Track request is missing its track ID.");
     if (command === "get_track") return detailsRequest(args.trackId);
     invokedTrackIds.push(args.trackId);
@@ -110,6 +110,7 @@ function createTrackArtworkComponent(
   const modules: Record<string, unknown> = {
     vue: { ...Vue, Transition: testTransition },
     "@/features/artwork/useTrackArtwork": artworkModule,
+    "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(null) },
     "@/features/playback/composables/useTrackDetails": trackInfoModule,
   };
   return evaluateSource<{ default: Vue.Component }>(output, modules).default;
@@ -605,15 +606,15 @@ describe("大队列封面调度", () => {
     for (let trackId = 800; trackId < 840; trackId++) {
       const scope = effectScope();
       mountedScopes.push(scope);
-      scope.run(() => useTrackArtwork(trackId, "thumbnail"));
+      scope.run(() => useTrackArtwork(trackId, 80));
     }
     expect(invokedTrackIds).toEqual([800, 801]);
     const current = mountArtwork(900);
     expect(invokedTrackIds).toEqual([800, 801, 900]);
     expect(invokedArtworkRequests).toEqual([
-      { trackId: 800, thumbnail: true },
-      { trackId: 801, thumbnail: true },
-      { trackId: 900, thumbnail: false },
+      { trackId: 800, size: 80 },
+      { trackId: 801, size: 80 },
+      { trackId: 900, size: null },
     ]);
     await settleArtwork();
     expect(current.artwork.status.value).toBe("ready");
@@ -630,17 +631,65 @@ it("同曲目缩略图与原图分别共享，失效时两种用途都刷新并�
   const scope = effectScope();
   mountedScopes.push(scope);
   scope.run(() => {
-    useTrackArtwork(950, "thumbnail");
-    useTrackArtwork(950, "thumbnail");
+    useTrackArtwork(950, 80);
+    useTrackArtwork(950, 80);
   });
   await settleArtwork();
   expect(invokedArtworkRequests).toEqual([
-    { trackId: 950, thumbnail: false },
-    { trackId: 950, thumbnail: true },
+    { trackId: 950, size: null },
+    { trackId: 950, size: 80 },
   ]);
   expect(new Uint8Array(await imageBlobs[0]!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
   invalidateTrackArtworkCache([950]);
   await settleArtwork();
   expect(invokedArtworkRequests).toHaveLength(4);
   expect(new Set(revokedUrls)).toEqual(new Set(["blob:artwork-1", "blob:artwork-2"]));
+});
+
+it("实际尺寸就绪后才请求，尺寸变化不复用旧 URL，更新只刷新仍订阅的尺寸", async () => {
+  const size = ref(0);
+  const scope = effectScope();
+  mountedScopes.push(scope);
+  const artwork = scope.run(() => useTrackArtwork(701, size));
+  expect(invokedArtworkRequests).toEqual([]);
+  size.value = 40;
+  await settleArtwork();
+  expect(invokedArtworkRequests).toEqual([{ trackId: 701, size: 40 }]);
+  const oldUrl = artwork?.url.value;
+  size.value = 120;
+  await settleArtwork();
+  expect(invokedArtworkRequests[invokedArtworkRequests.length - 1]).toEqual({
+    trackId: 701,
+    size: 120,
+  });
+  expect(artwork?.url.value).not.toBe(oldUrl);
+  invalidateTrackArtworkCache([701]);
+  await settleArtwork();
+  expect(invokedArtworkRequests.map((request) => request.size)).toEqual([40, 120, 120]);
+});
+
+it("尺寸缩略图离场保留只订阅同尺寸，不额外请求原图", async () => {
+  const scope = effectScope();
+  mountedScopes.push(scope);
+  const artwork = scope.run(() => useTrackArtwork(702, 128));
+  await settleArtwork();
+  const url = artwork?.url.value;
+  if (!url) throw new Error("Missing thumbnail URL");
+  const release = retainTrackArtwork(702, 128);
+  scope.stop();
+  expect(invokedArtworkRequests).toEqual([{ trackId: 702, size: 128 }]);
+  expect(revokedUrls).not.toContain(url);
+  release();
+  expect(revokedUrls).toContain(url);
+});
+
+it("同曲目和尺寸的元数据对象更新不重读封面", async () => {
+  const track = ref({ id: 703, title: "old" });
+  const scope = effectScope();
+  mountedScopes.push(scope);
+  scope.run(() => useTrackArtwork(() => track.value.id, 96));
+  await settleArtwork();
+  track.value = { id: 703, title: "new" };
+  await settleArtwork();
+  expect(invokedArtworkRequests).toEqual([{ trackId: 703, size: 96 }]);
 });

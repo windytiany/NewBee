@@ -38,6 +38,9 @@ function createImport({
   const events: string[] = [];
   const effects: string[] = [];
   const changes = evaluateSource<typeof LibraryChanges>(changesOutput, {
+    "@/features/artwork/useAlbumArtwork": {
+      invalidateAlbumArtworkCache: () => effects.push("albums"),
+    },
     "@/features/artwork/useTrackArtwork": {
       invalidateTrackArtworkCache: () => effects.push("artwork"),
     },
@@ -123,7 +126,7 @@ describe("audio file import", () => {
       message: "导入完成：新增 2 首，更新 1 首",
     });
     expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
-    expect(importer.effects).toEqual(["artwork", "refresh"]);
+    expect(importer.effects).toEqual(["artwork", "albums", "refresh"]);
     expect(importer.isImporting.value).toBe(false);
   });
 

@@ -72,6 +72,7 @@ import { computed } from "vue";
 import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
+import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LyricsView from "@/features/lyrics/components/LyricsView.vue";
@@ -90,12 +91,16 @@ const playingCoverBackground = useCoverBackground("playingCoverBackground");
 const { currentTrackDetails } = useTrackDetails(() =>
   playingCoverBackground.value ? (currentTrack.value?.trackId ?? null) : null,
 );
-const { background } = useAlbumArtwork(() => {
-  const details = currentTrackDetails.value;
-  if (!playingCoverBackground.value || !details || details.id !== currentTrack.value?.trackId)
-    return null;
-  return { albumArtist: details.albumArtist, album: details.album };
-}, "background");
+const { background } = useAlbumArtwork(
+  () => {
+    const details = currentTrackDetails.value;
+    if (!playingCoverBackground.value || !details || details.id !== currentTrack.value?.trackId)
+      return null;
+    return { albumArtist: details.albumArtist, album: details.album };
+  },
+  "background",
+  ALBUM_BACKGROUND_SAMPLE_SIZE,
+);
 const backgroundStyle = computed(() => ({
   backgroundImage: background.value
     ? `linear-gradient(to bottom, ${background.value.color}, transparent 48px), url("${background.value.imageUrl}")`

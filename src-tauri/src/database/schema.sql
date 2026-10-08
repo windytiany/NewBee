@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS artwork_images (
     image BLOB NOT NULL UNIQUE
 );
 
+CREATE TABLE IF NOT EXISTS artwork_thumbnails (
+    image_id INTEGER NOT NULL REFERENCES artwork_images(id) ON DELETE CASCADE,
+    size INTEGER NOT NULL CHECK (size BETWEEN 1 AND 4096),
+    image BLOB NOT NULL,
+    PRIMARY KEY (image_id, size)
+);
+
 CREATE TABLE IF NOT EXISTS track_artwork (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
     image_id INTEGER NOT NULL REFERENCES artwork_images(id),

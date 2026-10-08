@@ -53,3 +53,93 @@ pub(super) fn persist_artwork(
     ).map_err(|error| error.to_string())?;
     Ok(())
 }
+
+impl super::Database {
+    pub(crate) fn track_artwork_bytes(
+        &self,
+        track_id: i64,
+        size: Option<u32>,
+        derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
+    ) -> Result<Vec<u8>, String> {
+        use rusqlite::OptionalExtension;
+        let connection = self.connection()?;
+        let image_id = connection
+            .query_row(
+                "SELECT image_id FROM track_artwork WHERE track_id = ?1",
+                [track_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        artwork_bytes(&connection, image_id, size, derive)
+    }
+
+    pub(crate) fn album_artwork_bytes(
+        &self,
+        album_artist: Option<String>,
+        album: Option<String>,
+        size: Option<u32>,
+        derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
+    ) -> Result<Vec<u8>, String> {
+        use rusqlite::OptionalExtension;
+        let connection = self.connection()?;
+        let image_id = connection
+            .query_row(
+                "SELECT ta.image_id FROM tracks t
+             INNER JOIN track_artwork ta ON ta.track_id = t.id
+             WHERE t.album_artist IS ?1 AND t.album IS ?2
+             ORDER BY t.disc_number IS NULL, t.disc_number,
+                      t.track_number IS NULL, t.track_number, t.id LIMIT 1",
+                params![album_artist, album],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        artwork_bytes(&connection, image_id, size, derive)
+    }
+}
+
+// Hold the connection lock through derivation: concurrent requests share one result,
+// and association replacement cannot race with publication of an old thumbnail.
+fn artwork_bytes(
+    connection: &rusqlite::Connection,
+    image_id: Option<i64>,
+    size: Option<u32>,
+    derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    use rusqlite::OptionalExtension;
+    let Some(image_id) = image_id else {
+        return Ok(Vec::new());
+    };
+    if let Some(size) = size {
+        if let Some(bytes) = connection
+            .query_row(
+                "SELECT image FROM artwork_thumbnails WHERE image_id = ?1 AND size = ?2",
+                params![image_id, size],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+        {
+            return Ok(bytes);
+        }
+    }
+    let original = connection
+        .query_row(
+            "SELECT image FROM artwork_images WHERE id = ?1",
+            [image_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    let Some(size) = size else {
+        return Ok(original);
+    };
+    let bytes = derive(original, size)?;
+    connection
+        .execute(
+            "INSERT INTO artwork_thumbnails (image_id, size, image) VALUES (?1, ?2, ?3)",
+            params![image_id, size, bytes],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(bytes)
+}

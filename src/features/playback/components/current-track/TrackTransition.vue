@@ -49,11 +49,18 @@ type DisplayedTrack = {
   artworkError: string;
 };
 
-const props = defineProps<{ track: PresentationTrack | null; contentClass?: string }>();
+const props = defineProps<{
+  track: PresentationTrack | null;
+  contentClass?: string;
+  artworkSize?: number | null;
+}>();
 const { currentTrackDetails, isLoading, currentTrackDetailsError, retry } = useTrackDetails(
   () => props.track?.trackId ?? null,
 );
-const { status, url, error } = useTrackArtwork(() => props.track?.trackId ?? null);
+const { status, url, error } = useTrackArtwork(
+  () => props.track?.trackId ?? null,
+  () => props.artworkSize ?? null,
+);
 const displayed = shallowRef<DisplayedTrack | null>(null);
 const retainedArtwork = new Map<number, () => void>();
 let nextKey = 0;
@@ -71,7 +78,8 @@ watch(
 
     const key = ++nextKey;
     // Keep each snapshot's image alive through its DOM leave animation.
-    if (track && artworkUrl) retainedArtwork.set(key, retainTrackArtwork(track.trackId));
+    if (track && artworkUrl)
+      retainedArtwork.set(key, retainTrackArtwork(track.trackId, props.artworkSize ?? null));
     displayed.value = {
       key,
       track: track ? { trackId: track.trackId, title: track.title, artist: track.artist } : null,

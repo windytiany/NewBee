@@ -23,6 +23,8 @@ const dependencies: Record<string, unknown> = {
       return backgroundEnabled;
     },
   },
+  "@/features/artwork/background": { ALBUM_BACKGROUND_SAMPLE_SIZE: 32 },
+  "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
   "@/features/artwork/useAlbumArtwork": {
     useAlbumArtwork(
       selection: Vue.MaybeRefOrGetter<AlbumArtworkSelection | null>,

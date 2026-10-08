@@ -74,13 +74,13 @@ async function createQueueArtworkFixture(decode: () => Promise<void> = async () 
   ] as const) {
     Object.defineProperty(target, key, { configurable: true, value });
   }
-  const requests: Array<{ trackId: number; thumbnail: boolean }> = [];
+  const requests: Array<{ trackId: number; size: number | null }> = [];
   const icon = Vue.defineComponent({ render: () => null });
   const dependencies: Record<string, unknown> = {
     vue: Vue,
     "@lucide/vue": { AudioLines: icon, Disc3: icon, SkipForward: icon },
     "@tauri-apps/api/core": {
-      invoke: async (_command: string, args: { trackId: number; thumbnail: boolean }) => {
+      invoke: async (_command: string, args: { trackId: number; size: number | null }) => {
         requests.push(args);
         return new Uint8Array([1, 2, 3]).buffer;
       },
@@ -140,7 +140,7 @@ it("40 行队列首次可见才加载，滚动保留图片，移除和卸载释�
   const firstImage = findNode(root, (node) => node.type === "img");
   expect(firstImage).not.toBeNull();
   const firstUrl = imageUrl(root);
-  expect(fixture.requests).toEqual([{ trackId: 100, thumbnail: true }]);
+  expect(fixture.requests).toEqual([{ trackId: 100, size: 40 }]);
   for (let index = 0; index < 3; index++) {
     fixture.observers[0]!.show(false);
     await settleArtwork();
@@ -157,12 +157,12 @@ it("40 行队列首次可见才加载，滚动保留图片，移除和卸载释�
   fixture.observers[0]!.show(false);
   trackId.value = 200;
   await settleArtwork();
-  expect(fixture.requests[1]).toEqual({ trackId: 200, thumbnail: true });
+  expect(fixture.requests[1]).toEqual({ trackId: 200, size: 40 });
   expect(fixture.revokedUrls).toEqual([firstUrl]);
   const changedUrl = imageUrl(root);
   fixture.invalidate([200]);
   await settleArtwork();
-  expect(fixture.requests[2]).toEqual({ trackId: 200, thumbnail: true });
+  expect(fixture.requests[2]).toEqual({ trackId: 200, size: 40 });
   expect(fixture.revokedUrls).toEqual([firstUrl, changedUrl]);
   const refreshedUrl = imageUrl(root);
 
@@ -172,7 +172,7 @@ it("40 行队列首次可见才加载，滚动保留图片，移除和卸载释�
   expect(fixture.observers[0]!.disconnected).toBe(true);
   fixture.observers[1]!.show(true);
   await settleArtwork();
-  expect(fixture.requests[3]).toEqual({ trackId: 101, thumbnail: true });
+  expect(fixture.requests[3]).toEqual({ trackId: 101, size: 40 });
   const secondUrl = imageUrl(root);
   app.unmount();
   expect(fixture.revokedUrls).toEqual([firstUrl, changedUrl, refreshedUrl, secondUrl]);

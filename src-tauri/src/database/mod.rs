@@ -24,6 +24,8 @@ const SCHEMA: &str = include_str!("schema.sql");
 
 pub struct Database {
     connection: Mutex<Connection>,
+    #[cfg(test)]
+    artwork_decodes: std::sync::atomic::AtomicUsize,
     skipped_tracks: Arc<RwLock<HashSet<i64>>>,
 }
 
@@ -182,8 +184,31 @@ impl Database {
         };
         Ok(Self {
             connection: Mutex::new(connection),
+            #[cfg(test)]
+            artwork_decodes: std::sync::atomic::AtomicUsize::new(0),
             skipped_tracks: Arc::new(RwLock::new(skipped_tracks)),
         })
+    }
+
+    // Tauri's mock runtime retains managed state after its window/app is dropped.
+    // Explicitly close the file connection so restart tests exercise a cold database.
+    #[cfg(test)]
+    pub(crate) fn close_test_connection(&self) {
+        let mut connection = self.connection().unwrap();
+        let previous = std::mem::replace(&mut *connection, Connection::open_in_memory().unwrap());
+        previous.close().unwrap();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn artwork_decode_count(&self) -> usize {
+        self.artwork_decodes
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn observe_artwork_decode(&self) {
+        self.artwork_decodes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn connection(&self) -> Result<MutexGuard<'_, Connection>, String> {

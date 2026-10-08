@@ -22,6 +22,7 @@ type ArtworkSnapshot = {
 
 type SharedArtwork = {
   selection: AlbumArtworkSelection;
+  size: number | null;
   generation: number;
   snapshot: ArtworkSnapshot;
   subscribers: Set<(snapshot: ArtworkSnapshot) => void>;
@@ -43,13 +44,16 @@ const sharedArtwork = new Map<string, SharedArtwork>();
 export function useAlbumArtwork(
   selection: MaybeRefOrGetter<AlbumArtworkSelection | null>,
   purpose: "cover" | "background" = "cover",
+  size: MaybeRefOrGetter<number | null> = null,
 ) {
   const snapshot = shallowRef(fallback);
   let unsubscribe: (() => void) | null = null;
   const stop = watch(
     () => {
       const album = toValue(selection);
-      return album === null ? null : JSON.stringify([album.albumArtist, album.album]);
+      return album === null || toValue(size) === 0
+        ? null
+        : JSON.stringify([album.albumArtist, album.album, toValue(size)]);
     },
     (key) => {
       unsubscribe?.();
@@ -63,6 +67,7 @@ export function useAlbumArtwork(
       if (!entry) {
         entry = {
           selection: { ...album },
+          size: toValue(size),
           generation: 0,
           snapshot: { ...fallback, status: "loading" },
           subscribers: new Set(),
@@ -130,7 +135,10 @@ async function loadArtwork(
   generation: number,
 ) {
   try {
-    const artwork = await invoke<TrackArtwork>("get_album_artwork", selection);
+    const artwork = await invoke<TrackArtwork>("get_album_artwork", {
+      ...selection,
+      size: entry.size,
+    });
     if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
     if (artwork.byteLength === 0) {
       publish(entry, fallback);

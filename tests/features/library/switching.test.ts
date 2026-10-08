@@ -43,6 +43,7 @@ function mountBrowser() {
   const placeholder = Vue.defineComponent({ render: () => null });
   const dependencies: Record<string, unknown> = {
     vue: Vue,
+    "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
     "@tauri-apps/api/core": {
       invoke: async (command: string) => {
         requests.push(command);
@@ -80,14 +81,14 @@ function mountBrowser() {
     transpileScript(artworkSource),
     dependencies,
   );
-  const observeArtwork: typeof useAlbumArtwork = (selection, purpose = "cover") => {
+  const observeArtwork: typeof useAlbumArtwork = (selection, purpose = "cover", size = null) => {
     if (purpose === "cover") {
       covers.subscriptions += 1;
       Vue.onScopeDispose(() => {
         covers.unsubscriptions += 1;
       });
     }
-    return artwork.useAlbumArtwork(selection, purpose);
+    return artwork.useAlbumArtwork(selection, purpose, size);
   };
   dependencies["@/features/artwork/useAlbumArtwork"] = { useAlbumArtwork: observeArtwork };
   const { useLibraryBrowser: createBrowser } = evaluateSource<{

@@ -58,14 +58,14 @@ pub(crate) async fn save_album_tags<R: tauri::Runtime>(
     write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
     validate_patches(&mut patches, cover.as_ref())?;
-    let cover = cover
-        .as_ref()
-        .map(|cover| files::cover_picture(&cover.data).map(CoverUpdate::new))
-        .transpose()?;
     let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::logging::with_operation(operation_id.clone(), || {
             let _guard = guard;
+            let cover = cover
+                .as_ref()
+                .map(|cover| files::cover_picture(&cover.data).map(CoverUpdate::new))
+                .transpose()?;
             let database = app.state::<Database>();
             let results = patches
                 .iter()

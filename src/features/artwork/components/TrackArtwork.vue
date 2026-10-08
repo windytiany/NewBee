@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="coverElement"
     class="relative overflow-hidden"
     :class="{ 'shadow-md': !props.pending && status !== 'loading' }"
   >
@@ -14,7 +15,8 @@
 </template>
 
 <script setup lang="ts">
-import { toRef } from "vue";
+import { ref, toRef } from "vue";
+import { useArtworkSize } from "@/features/artwork/useArtworkSize";
 import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
 
 const props = withDefaults(
@@ -29,5 +31,7 @@ const props = withDefaults(
   },
 );
 
-const { status, url } = useTrackArtwork(toRef(props, "trackId"));
+const coverElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const size = useArtworkSize(coverElement);
+const { status, url } = useTrackArtwork(toRef(props, "trackId"), size);
 </script>

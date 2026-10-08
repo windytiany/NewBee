@@ -143,7 +143,7 @@ const rowElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null)
 const artworkActivated = ref(false);
 const { url: artworkUrl, status: artworkStatus } = useTrackArtwork(
   () => (artworkActivated.value ? props.trackId : null),
-  "thumbnail",
+  () => Math.ceil(40 * (globalThis.devicePixelRatio || 1)),
 );
 let observer: InstanceType<typeof globalThis.IntersectionObserver> | null = null;
 

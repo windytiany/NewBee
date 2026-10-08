@@ -60,7 +60,13 @@ describe("tag save synchronization", () => {
   it("publishes the catalog change before reloading tracks and updates only existing tracks", async () => {
     const harness = fixture();
     await harness.synchronize.tracks([1, 2]);
-    expect(harness.events).toEqual(["catalog-changed", "get_track:1", "get_track:2"]);
+    expect(harness.events).toEqual([
+      "track-artwork:1,2",
+      "album-artwork",
+      "catalog-changed",
+      "get_track:1",
+      "get_track:2",
+    ]);
     expect(harness.updates).toEqual([[harness.track]]);
   });
 
@@ -80,7 +86,12 @@ describe("tag save synchronization", () => {
     const harness = fixture();
     harness.fail();
     await expect(harness.synchronize.tracks([1])).rejects.toThrow("database unavailable");
-    expect(harness.events).toEqual(["catalog-changed", "get_track:1"]);
+    expect(harness.events).toEqual([
+      "track-artwork:1",
+      "album-artwork",
+      "catalog-changed",
+      "get_track:1",
+    ]);
     expect(harness.updates).toEqual([]);
   });
 });

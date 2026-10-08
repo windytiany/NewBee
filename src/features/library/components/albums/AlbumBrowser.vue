@@ -107,6 +107,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import type {
@@ -169,6 +170,7 @@ const albumCoverBackground = useCoverBackground("albumCoverBackground");
 const selectedArtwork = useAlbumArtwork(
   () => (albumCoverBackground.value ? props.selectedAlbum : null),
   "background",
+  ALBUM_BACKGROUND_SAMPLE_SIZE,
 );
 const albumMenu = ref<InstanceType<typeof AlbumContextMenu> | null>(null);
 

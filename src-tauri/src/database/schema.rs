@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 pub(super) fn initialize_schema(connection: &mut Connection) -> rusqlite::Result<()> {
     let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;

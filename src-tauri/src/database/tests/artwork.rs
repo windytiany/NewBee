@@ -26,7 +26,7 @@ fn artwork(webview: &tauri::WebviewWindow<tauri::test::MockRuntime>, id: i64) ->
     match invoke(
         webview,
         "get_track_artwork",
-        serde_json::json!({"trackId":id,"thumbnail":false}),
+        serde_json::json!({"trackId":id,"size":null}),
     ) {
         tauri::ipc::InvokeResponseBody::Raw(bytes) => bytes,
         _ => panic!("Expected binary artwork"),
@@ -82,7 +82,7 @@ fn scanned_directory_cover_is_available_for_tracks_albums_and_playlists_offline(
     let thumbnail = invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 1, "thumbnail": true}),
+        serde_json::json!({"trackId": 1, "size": 80}),
     );
     let tauri::ipc::InvokeResponseBody::Raw(thumbnail) = thumbnail else {
         panic!("Expected binary thumbnail");

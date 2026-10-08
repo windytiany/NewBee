@@ -1,3 +1,4 @@
+import { invalidateAlbumArtworkCache } from "@/features/artwork/useAlbumArtwork";
 import { invalidateTrackArtworkCache } from "@/features/artwork/useTrackArtwork";
 
 export const LIBRARY_CHANGED_EVENT = "newbee:library-changed";
@@ -6,6 +7,7 @@ export const LIBRARY_CHANGED_EVENT = "newbee:library-changed";
 export function reportLibraryImport(result: { added: number; updated: number }) {
   if (result.added + result.updated === 0) return;
   invalidateTrackArtworkCache();
+  invalidateAlbumArtworkCache();
   globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
 }
 
@@ -13,5 +15,6 @@ export function reportLibraryImport(result: { added: number; updated: number }) 
 export function reportLibraryRemoval(trackIds: readonly number[]) {
   if (trackIds.length === 0) return;
   invalidateTrackArtworkCache(trackIds);
+  invalidateAlbumArtworkCache();
   globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
 }
