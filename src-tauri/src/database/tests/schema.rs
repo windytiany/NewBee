@@ -25,3 +25,31 @@ fn rejects_old_schema_without_modifying_it() {
         "song.mp3"
     );
 }
+
+#[test]
+fn thumbnail_schema_enforces_the_artwork_request_size_range() {
+    let mut connection = Connection::open_in_memory().unwrap();
+    initialize_schema(&mut connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO artwork_images (id, mime_type, image) VALUES (1, 'image/png', X'00')",
+            [],
+        )
+        .unwrap();
+    for size in [1, crate::artwork::MAX_ARTWORK_SIZE] {
+        connection
+            .execute(
+                "INSERT INTO artwork_thumbnails (image_id, size, image) VALUES (1, ?1, X'00')",
+                [size],
+            )
+            .unwrap();
+    }
+    for size in [0, crate::artwork::MAX_ARTWORK_SIZE + 1] {
+        assert!(connection
+            .execute(
+                "INSERT INTO artwork_thumbnails (image_id, size, image) VALUES (1, ?1, X'00')",
+                [size]
+            )
+            .is_err());
+    }
+}

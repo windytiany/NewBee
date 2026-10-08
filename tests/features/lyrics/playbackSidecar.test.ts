@@ -35,6 +35,7 @@ for (const validSidecar of [true, false]) {
     writeFileSync(join(directory, "2.lrc"), "[00:02]sidecar changed");
     const reads: number[] = [];
     const preparations: number[] = [];
+    const seeks: unknown[] = [];
     let embedded: TrackLyrics = { kind: "instrumental" };
     let playbackId = 0;
     let isPlaying = true;
@@ -79,7 +80,10 @@ for (const validSidecar of [true, false]) {
         isPlaying = true;
         return undefined as T;
       }
-      if (command === "seek_to") return undefined as T;
+      if (command === "seek_to") {
+        seeks.push(args?.positionMs);
+        return undefined as T;
+      }
       if (command === "stop_playback") return true as T;
       if (command === "get_track_lyrics") return embedded as T;
       if (command === "get_playback_sidecar_lyrics") {
@@ -120,7 +124,13 @@ for (const validSidecar of [true, false]) {
       writeFileSync(path, "[00:02]sidecar changed");
       await session.togglePlayback(async () => true);
       await session.togglePlayback(async () => true);
-      await session.seekTo(3000);
+      session.beginSeeking();
+      expect(await session.seekTo(3000)).toBe(true);
+      expect(seeks).toEqual([3000]);
+      expect(lyrics.state.value).toEqual({
+        status: "ready",
+        lyrics: validSidecar ? original : { kind: "instrumental" },
+      });
       expect(reads).toEqual([1]);
       await session.withMetadataEditing([1], async () => {
         embedded = { kind: "plain", text: "saved embedded" };

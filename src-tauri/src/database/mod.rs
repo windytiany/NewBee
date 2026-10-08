@@ -20,7 +20,12 @@ pub(crate) mod write;
 
 pub use playlist::PlaylistReorderError;
 
-const SCHEMA: &str = include_str!("schema.sql");
+fn schema_sql() -> String {
+    include_str!("schema.sql").replace(
+        "__MAX_ARTWORK_SIZE__",
+        &crate::artwork::MAX_ARTWORK_SIZE.to_string(),
+    )
+}
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -146,7 +151,7 @@ pub struct TrackWriteInput {
     pub bitrate_kbps: Option<i64>,
     pub channels: Option<i64>,
     pub artwork: Option<ArtworkContent>,
-    pub editing: Option<String>,
+    pub(crate) editing: Option<crate::metadata::model::EditingSnapshot>,
     pub lyrics: Option<String>,
 }
 

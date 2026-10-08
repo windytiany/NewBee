@@ -15,7 +15,7 @@ pub(super) fn initialize_schema(connection: &mut Connection) -> rusqlite::Result
         return Err(rusqlite::Error::InvalidQuery);
     }
     let transaction = connection.transaction()?;
-    transaction.execute_batch(super::SCHEMA)?;
+    transaction.execute_batch(&super::schema_sql())?;
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()
 }

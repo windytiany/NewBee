@@ -14,7 +14,7 @@ impl Database {
     pub(crate) fn get_editing_snapshot(
         &self,
         track_id: i64,
-    ) -> Result<crate::metadata::files::EditingSnapshot, String> {
+    ) -> Result<crate::metadata::model::EditingSnapshot, String> {
         let (snapshot, scan_issue): (String, Option<String>) = self
             .connection()?
             .query_row(
@@ -23,7 +23,7 @@ impl Database {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .map_err(|error| format!("读取编辑能力失败：{error}"))?;
-        let mut metadata: crate::metadata::files::EditingSnapshot = serde_json::from_str(&snapshot)
+        let mut metadata: crate::metadata::model::EditingSnapshot = serde_json::from_str(&snapshot)
             .map_err(|error| format!("无效编辑能力快照：{error}"))?;
         if scan_issue.is_some() {
             metadata.issue = scan_issue;

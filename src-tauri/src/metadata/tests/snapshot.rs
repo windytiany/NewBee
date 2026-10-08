@@ -516,3 +516,43 @@ fn release_command_and_lyrics_editor_write_only_selected_embedded_content() {
     assert!(!results[0].file_written && results[0].database_updated);
     assert!(crate::metadata::files::access::take(&fixture.0).is_empty());
 }
+
+#[test]
+fn typed_editing_capabilities_survive_database_reopen_and_confirmed_rescan_clears_issues() {
+    use crate::metadata::{files, model::MetadataField};
+    let fixture = Fixture::new();
+    let path = fixture.wav();
+    let database_path = fixture.0.join("snapshot.sqlite3");
+    let input = files::read_track(&path).unwrap().unwrap();
+    let expected = input.editing.as_ref().unwrap();
+    assert!(expected.writable_fields.contains(&MetadataField::Title));
+    {
+        let database = Database::open(&database_path).unwrap();
+        database
+            .upsert_track(&input, crate::database::ArtworkUpdate::Embedded)
+            .unwrap();
+        database
+            .record_scan_issue(&input.path, "读取文件标签失败：音频离线")
+            .unwrap();
+    }
+    let database = Database::open(&database_path).unwrap();
+    let cached = database.get_editing_snapshot(1).unwrap();
+    assert_eq!(cached.file_type, expected.file_type);
+    assert_eq!(cached.tag_types, expected.tag_types);
+    assert_eq!(cached.writable_fields, expected.writable_fields);
+    assert_eq!(cached.issue.as_deref(), Some("读取文件标签失败：音频离线"));
+    database
+        .upsert_track(&input, crate::database::ArtworkUpdate::Embedded)
+        .unwrap();
+    assert_eq!(
+        database.get_editing_snapshot(1).unwrap().issue,
+        expected.issue
+    );
+    drop(database);
+    std::fs::remove_file(path).unwrap();
+    let reopened = Database::open(&database_path).unwrap();
+    assert_eq!(
+        reopened.get_editing_snapshot(1).unwrap().writable_fields,
+        expected.writable_fields
+    );
+}

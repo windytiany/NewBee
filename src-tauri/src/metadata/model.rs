@@ -2,6 +2,15 @@ use lofty::tag::{ItemKey, TagType};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditingSnapshot {
+    pub(crate) file_type: String,
+    pub(crate) tag_types: Vec<String>,
+    pub(crate) writable_fields: Vec<MetadataField>,
+    pub(crate) issue: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum MetadataField {

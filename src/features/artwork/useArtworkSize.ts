@@ -1,6 +1,9 @@
 import { onScopeDispose, readonly, ref, watch } from "vue";
 import type { Ref } from "vue";
 
+// Must match artwork::MAX_ARTWORK_SIZE; checked by artworkSizeContract.test.ts.
+export const MAX_ARTWORK_SIZE = 4096;
+
 /** No image request until the visible cover has an actual layout size. */
 export function useArtworkSize(element: Ref<HTMLElement | null>) {
   const size = ref(0);
@@ -21,7 +24,7 @@ export function useArtworkSize(element: Ref<HTMLElement | null>) {
         const pixels = Math.ceil(
           Math.max(bounds.width, bounds.height) * (globalThis.devicePixelRatio || 1),
         );
-        size.value = Math.min(4096, Math.max(0, pixels));
+        size.value = Math.min(MAX_ARTWORK_SIZE, Math.max(0, pixels));
       });
       observer.observe(target);
     },

@@ -75,3 +75,22 @@
 - 额外执行 `cargo test --locked --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture`，通过 3 项原本忽略的测试：NetEase 实时查询、MusicBrainz/封面实时查询及本机真实音乐文件回读。设置 `NEWBEE_LYRICS_REPRO_FILE` 指向原目录音频；该测试只编辑其临时副本，并验证原文件字节不变。
 
 实际应用验证不等于全部人工验收：保留原音量 0，未做听音确认；快速切歌、真正自动连续切换、歌词下载期间的全部竞争组合和实际发行版编辑器保存由自动化测试覆盖，未逐项做人工 UI 操作。新库没有通过正式安装包再次启动。没有把这些项目报告为人工验证完成，也没有运行完整 Tauri 安装包构建。
+
+## 最终双轴审查修复验证
+
+基于 `0a1c5df`，关联规格 #1。本轮仅修改代码和自动化测试，没有操作 GitHub，没有再次重置本机数据库、启动真实音乐编辑或修改实际音乐文件。
+
+- 封面上限以 TypeScript/Rust 的 `MAX_ARTWORK_SIZE` 命名。SQL 模板由 Rust 常量注入，不再独立维护 4096；Bun 跨语言契约测试验证前后端一致，布局测试验证超限钳制，Rust command 和真实 SQLite 约束测试验证上下边界。
+- 支持音频格式判断合并到文件适配入口，导入筛选和写入能力保留各自职责。现有真实音频写入、扫描及能力测试通过。
+- `EditingSnapshot` 归属 metadata model，以类型化值从文件读取传入数据库写入接口，仅在数据库边界序列化/反序列化。不增加旧 schema 兼容。新增类型化输入的持久化重开测试，验证能力、扫描失败诊断及成功确认后清除诊断；原有无效快照反序列化错误上下文保留。
+- 旁挂 session 测试先增加 seek 成功断言，确认原测试因缺少 `beginSeeking()` 返回 `false`；补齐调用后，断言成功和 `seek_to(3000)` 实际执行，再验证旁挂读取次数与显示内容不变，覆盖有效旁挂和内嵌回退两种情况。
+
+最终完整检查均通过：
+
+- `bun run lint`、`bun run format:check`、`bun test`（617 项通过）、`bun run build`。
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`。
+- `cargo check --locked --manifest-path src-tauri/Cargo.toml`。
+- `cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`。
+- `cargo test --locked --manifest-path src-tauri/Cargo.toml`（204 项通过、3 项既有默认忽略）。
+
+本轮没有重跑 3 项依赖网络或本机音乐路径的默认忽略测试；上节额外执行结果属于此前验收，不代表本轮重新执行。真实 WebView/安装包验收也未重跑。

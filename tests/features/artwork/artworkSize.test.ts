@@ -35,12 +35,14 @@ it("封面布局确定后按设备像素请求尺寸，隐藏时暂停，卸载�
     await Vue.nextTick();
     resize([{ contentRect: { width: 128.25, height: 128.25 } }]);
     expect(size?.value).toBe(257);
+    resize([{ contentRect: { width: 3000, height: 3000 } }]);
+    expect(size?.value).toBe(4096);
     const previousResize = resize;
     element.value = {} as HTMLElement;
     await Vue.nextTick();
-    expect(size?.value).toBe(257);
+    expect(size?.value).toBe(4096);
     previousResize([{ contentRect: { width: 10, height: 10 } }]);
-    expect(size?.value).toBe(257);
+    expect(size?.value).toBe(4096);
     resize([{ contentRect: { width: 0, height: 0 } }]);
     expect(size?.value).toBe(0);
     scope.stop();

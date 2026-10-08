@@ -346,3 +346,38 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
     drop(app);
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn artwork_commands_accept_only_sizes_in_the_shared_range() {
+    let app = tauri::test::mock_builder()
+        .manage(Database::open(":memory:").unwrap())
+        .invoke_handler(tauri::generate_handler![
+            get_track_artwork,
+            get_album_artwork
+        ])
+        .build(tauri::generate_context!())
+        .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    for command in ["get_track_artwork", "get_album_artwork"] {
+        for size in [1, super::super::MAX_ARTWORK_SIZE] {
+            assert!(invoke(
+                &webview,
+                command,
+                serde_json::json!({"trackId": 999, "size": size})
+            )
+            .unwrap()
+            .is_empty());
+        }
+        for size in [0, super::super::MAX_ARTWORK_SIZE + 1] {
+            let error = invoke(
+                &webview,
+                command,
+                serde_json::json!({"trackId": 999, "size": size}),
+            )
+            .unwrap_err();
+            assert_eq!(error, "封面尺寸必须在 1 到 4096 之间");
+        }
+    }
+}

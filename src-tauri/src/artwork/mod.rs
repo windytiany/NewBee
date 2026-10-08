@@ -2,6 +2,9 @@ use crate::database::{Database, TrackArtwork};
 use std::io::Cursor;
 use tauri::{ipc::Response, Manager};
 
+// Shared with frontend artwork requests and the SQL thumbnail constraint.
+pub(crate) const MAX_ARTWORK_SIZE: u32 = 4096;
+
 #[tauri::command]
 pub(crate) async fn get_track_artwork<R: tauri::Runtime>(
     track_id: i64,
@@ -49,8 +52,8 @@ pub(crate) async fn get_album_artwork<R: tauri::Runtime>(
 }
 
 fn validate_size(size: Option<u32>) -> Result<(), String> {
-    if size.is_some_and(|size| size == 0 || size > 4096) {
-        return Err("封面尺寸必须在 1 到 4096 之间".into());
+    if size.is_some_and(|size| size == 0 || size > MAX_ARTWORK_SIZE) {
+        return Err(format!("封面尺寸必须在 1 到 {MAX_ARTWORK_SIZE} 之间"));
     }
     Ok(())
 }

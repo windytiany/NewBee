@@ -404,6 +404,8 @@ pub(super) fn persist_track(
     )?;
 
     if let Some(editing) = &track.editing {
+        let editing = serde_json::to_string(editing)
+            .map_err(|error| format!("Failed to serialize editing snapshot: {error}"))?;
         transaction.execute(
                 "INSERT INTO track_editing (track_id, snapshot) VALUES (?1, ?2)
                  ON CONFLICT(track_id) DO UPDATE SET snapshot = excluded.snapshot, scan_issue = NULL",

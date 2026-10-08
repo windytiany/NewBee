@@ -1,5 +1,5 @@
 mod snapshot;
-use super::model::{MetadataChange, MetadataField};
+use super::model::{EditingSnapshot, MetadataChange, MetadataField};
 use lofty::config::{ParseOptions, WriteOptions};
 use lofty::file::{FileType, TaggedFile, TaggedFileExt};
 use lofty::ogg::{tag::VorbisComments, OggPictureStorage};
@@ -34,16 +34,20 @@ fn editing_tag(file: &TaggedFile) -> Tag {
         .unwrap_or_else(|| Tag::new(file.primary_tag_type()))
 }
 
-fn writable_fields(file: &TaggedFile, tag: &Tag) -> Vec<MetadataField> {
-    if !matches!(
-        file.file_type(),
+fn is_supported_file_type(file_type: FileType) -> bool {
+    matches!(
+        file_type,
         FileType::Mpeg
             | FileType::Aac
             | FileType::Mp4
             | FileType::Vorbis
             | FileType::Flac
             | FileType::Wav
-    ) {
+    )
+}
+
+fn writable_fields(file: &TaggedFile, tag: &Tag) -> Vec<MetadataField> {
+    if !is_supported_file_type(file.file_type()) {
         return Vec::new();
     }
     MetadataField::ALL
@@ -54,15 +58,6 @@ fn writable_fields(file: &TaggedFile, tag: &Tag) -> Vec<MetadataField> {
                 && Tag::new(tag.tag_type()).insert_text(field.key(tag.tag_type()), "1".to_owned())
         })
         .collect()
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct EditingSnapshot {
-    pub(crate) file_type: String,
-    pub(crate) tag_types: Vec<String>,
-    pub(crate) writable_fields: Vec<MetadataField>,
-    pub(crate) issue: Option<String>,
 }
 
 #[cfg(test)]

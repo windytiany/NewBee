@@ -15,7 +15,7 @@ pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String>
         .readonly();
     let editing = super::metadata_from_file(&tagged_file, readonly);
     let file_type = tagged_file.file_type();
-    if !is_supported_file_type(file_type) {
+    if !super::is_supported_file_type(file_type) {
         return Ok(None);
     }
 
@@ -60,21 +60,9 @@ pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String>
         bitrate_kbps: properties.audio_bitrate().map(i64::from),
         channels: properties.channels().map(i64::from),
         artwork,
-        editing: Some(serde_json::to_string(&editing).map_err(|error| error.to_string())?),
+        editing: Some(editing),
         lyrics: crate::lyrics::local::embedded_lyrics_text(&tagged_file).map(str::to_owned),
     }))
-}
-
-fn is_supported_file_type(file_type: FileType) -> bool {
-    matches!(
-        file_type,
-        FileType::Mpeg
-            | FileType::Aac
-            | FileType::Mp4
-            | FileType::Vorbis
-            | FileType::Flac
-            | FileType::Wav
-    )
 }
 
 fn codec_for_file_type(file_type: FileType) -> Option<&'static str> {

@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS artwork_images (
 
 CREATE TABLE IF NOT EXISTS artwork_thumbnails (
     image_id INTEGER NOT NULL REFERENCES artwork_images(id) ON DELETE CASCADE,
-    size INTEGER NOT NULL CHECK (size BETWEEN 1 AND 4096),
+    size INTEGER NOT NULL CHECK (size BETWEEN 1 AND __MAX_ARTWORK_SIZE__),
     image BLOB NOT NULL,
     PRIMARY KEY (image_id, size)
 );
