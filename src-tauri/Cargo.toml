@@ -44,5 +44,15 @@ opt-level = 3
 panic = "abort"
 strip = true
 
+# Large cover decoding and thumbnail generation must stay responsive in tauri dev.
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
 [target."cfg(windows)".dependencies]
 windows = { version = "0.61.3", features = ["Foundation", "Media", "Storage_Streams", "Win32_System_WinRT"] }

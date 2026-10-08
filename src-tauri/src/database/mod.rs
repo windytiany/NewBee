@@ -29,6 +29,7 @@ fn schema_sql() -> String {
 
 pub struct Database {
     connection: Mutex<Connection>,
+    artwork_derivation: Mutex<()>,
     #[cfg(test)]
     artwork_decodes: std::sync::atomic::AtomicUsize,
     skipped_tracks: Arc<RwLock<HashSet<i64>>>,
@@ -189,6 +190,7 @@ impl Database {
         };
         Ok(Self {
             connection: Mutex::new(connection),
+            artwork_derivation: Mutex::new(()),
             #[cfg(test)]
             artwork_decodes: std::sync::atomic::AtomicUsize::new(0),
             skipped_tracks: Arc::new(RwLock::new(skipped_tracks)),
