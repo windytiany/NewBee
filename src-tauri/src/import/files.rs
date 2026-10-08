@@ -6,10 +6,10 @@ use std::path::Path;
 use tauri::State;
 
 #[tauri::command]
-pub async fn import_music_files(
+pub async fn import_music_files<R: tauri::Runtime>(
     paths: Vec<String>,
     operation_id: Option<String>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<ImportResult, String> {
     let guard = write.acquire()?;
@@ -40,11 +40,11 @@ pub(super) fn run_import(database: &Database, paths: &[String]) -> ImportResult 
         let canonical = match fs::canonicalize(path) {
             Ok(canonical) if canonical.is_file() => canonical,
             Ok(_) => {
-                record_failure(&mut result, path, "selected path is not a file");
+                record_failure(database, &mut result, path, "selected path is not a file");
                 continue;
             }
             Err(error) => {
-                record_failure(&mut result, path, &error.to_string());
+                record_failure(database, &mut result, path, &error.to_string());
                 continue;
             }
         };

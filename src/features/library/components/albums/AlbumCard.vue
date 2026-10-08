@@ -15,6 +15,7 @@
       @keydown="handleContextMenuKeydown"
     >
       <span
+        ref="coverElement"
         aria-hidden="true"
         class="mb-3 grid aspect-square w-full place-items-center overflow-hidden rounded-md"
         :class="[
@@ -40,9 +41,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { DiscAlbum } from "@lucide/vue";
 import type { AlbumSummary } from "@/features/library/types";
+import { useArtworkSize } from "@/features/artwork/useArtworkSize";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 
 const props = defineProps<{
@@ -80,10 +82,16 @@ function handleContextMenuKeydown(event: InstanceType<typeof globalThis.Keyboard
   emit("contextMenu", { x: bounds.left, y: bounds.bottom, trigger });
 }
 
-const artwork = useAlbumArtwork(() => ({
-  albumArtist: props.albumArtist,
-  album: props.album.album,
-}));
+const coverElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const size = useArtworkSize(coverElement);
+const artwork = useAlbumArtwork(
+  () => ({
+    albumArtist: props.albumArtist,
+    album: props.album.album,
+  }),
+  "cover",
+  size,
+);
 const artworkUrl = artwork.url;
 const artworkLoadFailed = computed(
   () => artwork.status.value === "fallback" && artwork.error.value !== "",

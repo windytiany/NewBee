@@ -30,7 +30,7 @@ type Lifetime = {
   reasons: Set<PauseReason>;
 };
 
-const AUTO_DISMISS_MS = 4_000;
+const AUTO_DISMISS_MS = 2_000;
 const MAX_VISIBLE = 3;
 const systemClock: Clock = {
   now: () => performance.now(),

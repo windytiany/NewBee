@@ -4,7 +4,9 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
+mod artwork;
 pub(crate) mod commands;
+pub(crate) use artwork::ArtworkUpdate;
 mod library;
 pub(crate) mod lyrics;
 mod metadata;
@@ -18,10 +20,17 @@ pub(crate) mod write;
 
 pub use playlist::PlaylistReorderError;
 
-const SCHEMA: &str = include_str!("schema.sql");
+fn schema_sql() -> String {
+    include_str!("schema.sql").replace(
+        "__MAX_ARTWORK_SIZE__",
+        &crate::artwork::MAX_ARTWORK_SIZE.to_string(),
+    )
+}
 
 pub struct Database {
     connection: Mutex<Connection>,
+    #[cfg(test)]
+    artwork_decodes: std::sync::atomic::AtomicUsize,
     skipped_tracks: Arc<RwLock<HashSet<i64>>>,
 }
 
@@ -141,11 +150,12 @@ pub struct TrackWriteInput {
     pub sample_rate_hz: Option<i64>,
     pub bitrate_kbps: Option<i64>,
     pub channels: Option<i64>,
-    pub artwork: Option<EmbeddedArtwork>,
+    pub artwork: Option<ArtworkContent>,
+    pub(crate) editing: Option<crate::metadata::model::EditingSnapshot>,
     pub lyrics: Option<String>,
 }
 
-pub struct EmbeddedArtwork {
+pub struct ArtworkContent {
     pub mime_type: String,
     pub image: Vec<u8>,
 }
@@ -179,8 +189,31 @@ impl Database {
         };
         Ok(Self {
             connection: Mutex::new(connection),
+            #[cfg(test)]
+            artwork_decodes: std::sync::atomic::AtomicUsize::new(0),
             skipped_tracks: Arc::new(RwLock::new(skipped_tracks)),
         })
+    }
+
+    // Tauri's mock runtime retains managed state after its window/app is dropped.
+    // Explicitly close the file connection so restart tests exercise a cold database.
+    #[cfg(test)]
+    pub(crate) fn close_test_connection(&self) {
+        let mut connection = self.connection().unwrap();
+        let previous = std::mem::replace(&mut *connection, Connection::open_in_memory().unwrap());
+        previous.close().unwrap();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn artwork_decode_count(&self) -> usize {
+        self.artwork_decodes
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn observe_artwork_decode(&self) {
+        self.artwork_decodes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn connection(&self) -> Result<MutexGuard<'_, Connection>, String> {

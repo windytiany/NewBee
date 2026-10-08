@@ -252,11 +252,11 @@ fn removing_track_cascades_playlist_items_without_deleting_the_file() {
         .connection()
         .unwrap()
         .execute(
-            "INSERT INTO track_artwork (track_id, mime_type, image)
-             VALUES (1, 'image/png', X'0102')",
+            "INSERT INTO artwork_images (mime_type, image) VALUES ('image/png', X'0102')",
             [],
         )
         .unwrap();
+    database.connection().unwrap().execute("INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) VALUES (1, 1, 'embedded', ?1)", [&path_string]).unwrap();
     database.add_track_to_playlist(playlist_id, 1).unwrap();
     database.add_track_to_playlist(playlist_id, 1).unwrap();
 

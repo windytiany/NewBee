@@ -23,6 +23,7 @@ export type LyricsOptions = {
   currentTrack: Readonly<Ref<Readonly<{ trackId: number }> | null>>;
   playbackStatus: Readonly<Ref<PlaybackStatus>>;
   invokeCommand?: PlaybackCommandInvoker;
+  sidecarLyrics?: Readonly<Ref<TrackLyrics | null>>;
 };
 
 export function getActiveLyricIndices(
@@ -46,8 +47,12 @@ export function getActiveLyricIndices(
 export function useLyrics(options: LyricsOptions) {
   const api = createLyricsApi(options.invokeCommand ?? invoke);
   const lyricsState = ref<LyricsState>({ status: "idle" });
+  const displayState = computed<LyricsState>(() => {
+    const sidecar = options.sidecarLyrics?.value;
+    return sidecar ? { status: "ready", lyrics: sidecar } : lyricsState.value;
+  });
   const syncedLines = computed<readonly LyricLine[] | null>(() => {
-    const state = lyricsState.value;
+    const state = displayState.value;
     return state.status === "ready" && state.lyrics.kind === "synced" ? state.lyrics.lines : null;
   });
   const activeIndices = computed(() => {
@@ -119,7 +124,7 @@ export function useLyrics(options: LyricsOptions) {
 
   return Object.freeze({
     retry: reloadCurrentLyrics,
-    state: readonly(lyricsState),
+    state: readonly(displayState),
     activeIndex: computed(() => activeIndices.value.activeIndex),
     activeGroupStartIndex: computed(() => activeIndices.value.activeGroupStartIndex),
     activeLine,

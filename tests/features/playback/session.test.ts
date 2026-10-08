@@ -36,10 +36,12 @@ function deferred<T>() {
 
 function asPlaybackInvoker(
   handler: (command: string, args?: Record<string, unknown>) => Promise<unknown> | unknown,
+  readsSidecar = false,
 ): PlaybackCommandInvoker {
   return async <T>(command: string, args?: Record<string, unknown>) => {
     if (command === "list_skipped_track_ids") return [] as T;
     if (command === "prepare_next_track") return true as T;
+    if (command === "get_playback_sidecar_lyrics" && !readsSidecar) return null as T;
     return (await handler(command, args)) as T;
   };
 }
@@ -501,4 +503,37 @@ describe("playback session", () => {
     expect(session.state.shuffleEnabled.value).toBe(true);
     expect(session.state.repeatOneEnabled.value).toBe(true);
   });
+});
+
+it("retains sidecar lyrics for controls and ignores stale session results", async () => {
+  const first = deferred<unknown>();
+  let playbackId = 0;
+  const reads: number[] = [];
+  const session = createPlaybackSession({
+    restoredQueueSnapshot: null,
+    invokeCommand: asPlaybackInvoker((command, args) => {
+      if (command === "play_track") return trackStarted(args?.trackId as number, ++playbackId);
+      if (command === "playback_status") return playingStatus(playbackId);
+      if (command === "get_playback_sidecar_lyrics") {
+        reads.push(args?.trackId as number);
+        return reads.length === 1
+          ? first.promise
+          : { kind: "synced", lines: [{ startMs: 1000, text: "second" }] };
+      }
+      if (["pause", "resume", "seek_to"].includes(command)) return;
+      throw new Error(`Unexpected command ${command}`);
+    }, true),
+  });
+  await session.playTracks(tracks(["one", 1], ["two", 2]), "one");
+  await session.playQueueItem("two");
+  await settlePendingCallbacks();
+  first.resolve({ kind: "synced", lines: [{ startMs: 1000, text: "stale" }] });
+  await settlePendingCallbacks();
+  expect(session.state.sidecarLyrics.value).toEqual({
+    kind: "synced",
+    lines: [{ startMs: 1000, text: "second" }],
+  });
+  await session.togglePlayback(async () => true);
+  await session.seekTo(20);
+  expect(reads).toEqual([1, 2]);
 });

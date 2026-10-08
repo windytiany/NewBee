@@ -25,12 +25,7 @@ pub(super) fn insert_track(
         .unwrap();
 
     if let Some(image) = artwork {
-        connection
-            .execute(
-                "INSERT INTO track_artwork (track_id, mime_type, image)
-                 VALUES (?1, 'image/png', ?2)",
-                params![id, image],
-            )
-            .unwrap();
+        connection.execute("INSERT INTO artwork_images (mime_type, image) VALUES ('image/png', ?1) ON CONFLICT(image) DO NOTHING", [image]).unwrap();
+        connection.execute("INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) SELECT ?1, id, 'embedded', ?2 FROM artwork_images WHERE image = ?3", params![id, format!("track-{id}.mp3"), image]).unwrap();
     }
 }

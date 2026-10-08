@@ -16,7 +16,7 @@ type ArtworkSubscriber = (snapshot: ArtworkSnapshot) => void;
 
 type SharedArtwork = {
   key: string;
-  purpose: "original" | "thumbnail";
+  size: number | null;
   trackId: number;
   status: TrackArtworkStatus;
   url: string | null;
@@ -37,7 +37,7 @@ let activeThumbnailLoads = 0;
 
 export function useTrackArtwork(
   trackId: MaybeRefOrGetter<number | null>,
-  purpose: "original" | "thumbnail" = "original",
+  size: MaybeRefOrGetter<number | null> = null,
 ): {
   status: Readonly<Ref<TrackArtworkStatus>>;
   url: Readonly<Ref<string | null>>;
@@ -50,21 +50,21 @@ export function useTrackArtwork(
   let unsubscribe: (() => void) | null = null;
 
   const stop = watch(
-    () => toValue(trackId),
-    (nextTrackId) => {
+    [() => toValue(trackId), () => toValue(size)],
+    ([nextTrackId, nextSize]) => {
       currentTrackId = nextTrackId;
       unsubscribe?.();
       unsubscribe = null;
       url.value = null;
       error.value = "";
 
-      if (nextTrackId === null) {
+      if (nextTrackId === null || nextSize === 0) {
         status.value = "fallback";
         return;
       }
 
       status.value = "loading";
-      unsubscribe = subscribeToTrackArtwork(nextTrackId, purpose, (snapshot) => {
+      unsubscribe = subscribeToTrackArtwork(nextTrackId, nextSize, (snapshot) => {
         if (currentTrackId !== nextTrackId) return;
         status.value = snapshot.status;
         url.value = snapshot.url;
@@ -85,9 +85,9 @@ export function useTrackArtwork(
 }
 
 /** Keeps the decoded URL alive until a displayed artwork's leave transition finishes. */
-export function retainTrackArtwork(trackId: number): () => void {
-  const unsubscribe = subscribeToTrackArtwork(trackId, "original", () => {});
-  const entry = sharedArtworkByKey.get(`original:${trackId}`);
+export function retainTrackArtwork(trackId: number, size: number | null = null): () => void {
+  const unsubscribe = subscribeToTrackArtwork(trackId, size, () => {});
+  const entry = sharedArtworkByKey.get(`${size === null ? "original" : size}:${trackId}`);
   if (!entry) return unsubscribe;
   const url = entry.url;
   if (url) entry.retainedUrls.set(url, (entry.retainedUrls.get(url) ?? 0) + 1);
@@ -120,16 +120,16 @@ export function invalidateTrackArtworkCache(trackIds?: readonly number[]) {
 
 function subscribeToTrackArtwork(
   trackId: number,
-  purpose: "original" | "thumbnail",
+  size: number | null,
   subscriber: ArtworkSubscriber,
 ) {
-  const key = `${purpose}:${trackId}`;
+  const key = `${size === null ? "original" : size}:${trackId}`;
   let entry = sharedArtworkByKey.get(key);
   const isNewEntry = entry === undefined;
   if (!entry) {
     entry = {
       key,
-      purpose,
+      size,
       trackId,
       status: "loading",
       url: null,
@@ -171,7 +171,7 @@ function startArtworkLoad(entry: SharedArtwork) {
   for (const previousUrl of previousUrls) retireUrl(entry, previousUrl);
   publish(entry);
 
-  if (entry.purpose === "original") {
+  if (entry.size === null) {
     if (isCurrent(entry, generation)) void loadArtwork(entry, generation);
     return;
   }
@@ -196,7 +196,7 @@ async function loadArtwork(entry: SharedArtwork, generation: number) {
   try {
     const artwork = await invoke<TrackArtwork>("get_track_artwork", {
       trackId: entry.trackId,
-      thumbnail: entry.purpose === "thumbnail",
+      size: entry.size,
     });
     if (!isCurrent(entry, generation)) return;
 

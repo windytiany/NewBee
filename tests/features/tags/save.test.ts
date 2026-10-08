@@ -26,6 +26,7 @@ function fixture(paused = false, canStop = true) {
     args?: Record<string, unknown>,
   ) => {
     calls.push(command);
+    if (command === "get_playback_sidecar_lyrics") return null as T;
     if (command === "list_skipped_track_ids") return [] as T;
     if (command === "prepare_next_track") return true as T;
     if (command === "play_track") {
@@ -313,4 +314,39 @@ describe("track metadata save", () => {
     });
     expect(save.state.results[0]?.databaseUpdated).toBe(false);
   });
+});
+
+it("preserves partial file/database outcomes when both the request and UI refresh fail", async () => {
+  const { session, queue } = fixture();
+  await session.playTracks(queue, "row:1");
+  const fileOnly = {
+    ...result(2, false),
+    fileWritten: true,
+    error: "文件已写入，数据库同步失败",
+  };
+  const save = createMetadataSave({
+    editFiles: session.withMetadataEditing,
+    synchronize: async () => {
+      throw new Error("UI unavailable");
+    },
+  });
+  const saved = await save.run({
+    targets: targets(1, 2, 3),
+    writeTrackIds: [1, 2, 3],
+    execute: async (progress) => {
+      progress(result(1));
+      progress(fileOnly);
+      throw new Error("connection lost");
+    },
+  });
+  expect(saved).toEqual([result(1), fileOnly, { ...result(3, false), error: "connection lost" }]);
+  expect(save.state.results).toEqual(saved);
+  expect(save.state.completed).toBe(3);
+  expect(save.state.saving).toBe(false);
+  expect(save.state.error).toBe("connection lost");
+  expect(save.state.synchronizationError).toContain("UI unavailable");
+  expect(session.state.currentPlaybackId.value).toBeNull();
+  await save.retrySynchronization();
+  expect(save.state.results).toEqual(saved);
+  expect(save.state.synchronizationError).toContain("UI unavailable");
 });

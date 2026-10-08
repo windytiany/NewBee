@@ -21,7 +21,7 @@ const originalCreateUrl = Object.getOwnPropertyDescriptor(URL, "createObjectURL"
 const originalRevokeUrl = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
 const scopes: Vue.EffectScope[] = [];
 const requests: Array<ReturnType<typeof deferred<TrackArtwork>>> = [];
-let invokedSelections: AlbumArtworkSelection[];
+let invokedSelections: Array<AlbumArtworkSelection & { size: number | null }>;
 let revokedUrls: string[];
 let createdUrls: number;
 let canvasCount: number;
@@ -46,7 +46,7 @@ const dependencies: Record<string, unknown> = {
   vue: Vue,
   "@/features/artwork/background": backgroundModule,
   "@tauri-apps/api/core": {
-    invoke(command: string, selection: AlbumArtworkSelection) {
+    invoke(command: string, selection: AlbumArtworkSelection & { size: number | null }) {
       expect(command).toBe("get_album_artwork");
       invokedSelections.push(selection);
       const request = deferred<TrackArtwork>();
@@ -148,7 +148,7 @@ describe("共享专辑封面和背景", () => {
   it("卡片与展开区共享请求、解码和背景，只在最后订阅释放时撤销 URL", async () => {
     const card = subscribe();
     const detail = subscribe(album, "background");
-    expect(invokedSelections).toEqual([album]);
+    expect(invokedSelections).toEqual([{ ...album, size: null }]);
     requestAt(0).resolve(available);
     await settle();
     expect(card.artwork.status.value).toBe("ready");
@@ -297,4 +297,28 @@ describe("共享专辑封面和背景", () => {
     subscribe({ albumArtist: "null", album: "null" });
     expect(invokedSelections).toHaveLength(4);
   });
+});
+
+it("专辑封面按实际尺寸隔离订阅并在原图变更后刷新全部活跃尺寸", async () => {
+  const size = Vue.ref(0);
+  const scope = Vue.effectScope();
+  scopes.push(scope);
+  const artwork = scope.run(() => useAlbumArtwork(album, "cover", size));
+  expect(invokedSelections).toEqual([]);
+  size.value = 64;
+  expect(invokedSelections).toEqual([{ ...album, size: 64 }]);
+  requestAt(0).resolve(available);
+  await settle();
+  const smallUrl = artwork?.url.value;
+  size.value = 192;
+  expect(invokedSelections[invokedSelections.length - 1]).toEqual({ ...album, size: 192 });
+  requestAt(1).resolve(available);
+  await settle();
+  expect(artwork?.url.value).not.toBe(smallUrl);
+  invalidateAlbumArtworkCache();
+  expect(invokedSelections[invokedSelections.length - 1]).toEqual({ ...album, size: 192 });
+  expect(invokedSelections).toHaveLength(3);
+  requestAt(2).resolve(new ArrayBuffer(0));
+  await settle();
+  expect(artwork?.status.value).toBe("fallback");
 });

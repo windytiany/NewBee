@@ -43,6 +43,7 @@ function mountBrowser() {
   const placeholder = Vue.defineComponent({ render: () => null });
   const dependencies: Record<string, unknown> = {
     vue: Vue,
+    "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
     "@tauri-apps/api/core": {
       invoke: async (command: string) => {
         requests.push(command);
@@ -60,8 +61,8 @@ function mountBrowser() {
     },
     "@lucide/vue": { DiscAlbum: placeholder },
     "@/features/library/composables/useActions": { useLibraryActions: () => ({}) },
-    "@/features/settings/composables/useAlbumBackground": {
-      useAlbumBackground: () => Vue.ref(false),
+    "@/features/settings/composables/useCoverBackground": {
+      useCoverBackground: () => Vue.ref(false),
     },
     "@/features/library/components/albums/AlbumDetail.vue": {
       __esModule: true,
@@ -71,19 +72,23 @@ function mountBrowser() {
       __esModule: true,
       default: placeholder,
     },
+    "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": {
+      __esModule: true,
+      default: placeholder,
+    },
   };
   const artwork = evaluateSource<{ useAlbumArtwork: typeof useAlbumArtwork }>(
     transpileScript(artworkSource),
     dependencies,
   );
-  const observeArtwork: typeof useAlbumArtwork = (selection, purpose = "cover") => {
+  const observeArtwork: typeof useAlbumArtwork = (selection, purpose = "cover", size = null) => {
     if (purpose === "cover") {
       covers.subscriptions += 1;
       Vue.onScopeDispose(() => {
         covers.unsubscriptions += 1;
       });
     }
-    return artwork.useAlbumArtwork(selection, purpose);
+    return artwork.useAlbumArtwork(selection, purpose, size);
   };
   dependencies["@/features/artwork/useAlbumArtwork"] = { useAlbumArtwork: observeArtwork };
   const { useLibraryBrowser: createBrowser } = evaluateSource<{

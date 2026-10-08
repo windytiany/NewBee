@@ -26,6 +26,7 @@ type DialogBindings = {
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   theme: Vue.Ref<Settings["theme"]>;
   albumCoverBackground: Vue.Ref<boolean>;
+  playingCoverBackground: Vue.Ref<boolean>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
   error: Vue.Ref<string>;
@@ -38,6 +39,7 @@ type DialogBindings = {
 const defaults: Settings = {
   theme: "spotify",
   albumCoverBackground: false,
+  playingCoverBackground: false,
   closeBehavior: "tray",
   albumSortBy: "name",
   albumSortOrder: "ascending",
@@ -236,7 +238,11 @@ describe("settings dialog", () => {
         await Vue.nextTick();
         expect(getTextContent(panel)).not.toContain(explanation);
         if (category === "外观") {
-          expect(getTextContent(panel)).toContain("专辑封面背景");
+          expect(getTextContent(panel)).toContain("专辑详情封面背景");
+          expect(getTextContent(panel)).toContain("播放页封面背景");
+          expect(
+            findNode(panel, (node) => node.props.name === "playing-cover-background")?.props.type,
+          ).toBe("checkbox");
           expect(
             findNode(panel, (node) => node.props.name === "album-cover-background")?.props.type,
           ).toBe("checkbox");
@@ -281,6 +287,7 @@ describe("settings dialog", () => {
     const loaded: Settings = {
       theme: "tokyoNight",
       albumCoverBackground: true,
+      playingCoverBackground: true,
       closeBehavior: "exit",
       albumSortBy: "year",
       albumSortOrder: "descending",
@@ -295,6 +302,7 @@ describe("settings dialog", () => {
     expect(bindings.closeBehavior.value).toBe("exit");
     expect(bindings.theme.value).toBe("tokyoNight");
     expect(bindings.albumCoverBackground.value).toBe(true);
+    expect(bindings.playingCoverBackground.value).toBe(true);
     expect(bindings.albumSortBy.value).toBe("year");
     expect(bindings.albumSortOrder.value).toBe("descending");
     expect(bindings.neteaseLyricsMode.value).toBe("translated");
@@ -302,6 +310,7 @@ describe("settings dialog", () => {
     expect(events).toEqual([]);
     bindings.theme.value = "spotify";
     bindings.albumCoverBackground.value = false;
+    bindings.playingCoverBackground.value = false;
     bindings.closeBehavior.value = "tray";
     bindings.albumSortBy.value = "name";
     bindings.albumSortOrder.value = "ascending";
@@ -327,6 +336,7 @@ describe("settings dialog", () => {
     bindings.albumSortOrder.value = "descending";
     bindings.theme.value = "catppuccin";
     bindings.albumCoverBackground.value = true;
+    bindings.playingCoverBackground.value = true;
     bindings.neteaseLyricsMode.value = "translated";
     bindings.selectedCategory.value = "appearance";
     bindings.close();
@@ -336,6 +346,7 @@ describe("settings dialog", () => {
     );
     expect<Settings["theme"]>(bindings.theme.value).toBe("spotify");
     expect(bindings.albumCoverBackground.value).toBe(false);
+    expect(bindings.playingCoverBackground.value).toBe(false);
     expect<Settings["neteaseLyricsMode"]>(bindings.neteaseLyricsMode.value).toBe("original");
     expect(appliedThemes).toEqual([]);
     expect<Settings["closeBehavior"]>(bindings.closeBehavior.value).toBe("tray");
@@ -374,6 +385,7 @@ describe("settings dialog", () => {
         settings: {
           theme: "tokyoNight",
           albumCoverBackground: true,
+          playingCoverBackground: false,
           closeBehavior: "exit",
           albumSortBy: "year",
           albumSortOrder: "descending",
@@ -383,6 +395,28 @@ describe("settings dialog", () => {
       },
     ]);
   });
+
+  for (const albumEnabled of [false, true]) {
+    for (const playingEnabled of [false, true]) {
+      it(`saves album background ${albumEnabled} and playing background ${playingEnabled} independently`, async () => {
+        const saved: unknown[] = [];
+        const loaded = {
+          ...defaults,
+          albumCoverBackground: albumEnabled,
+          playingCoverBackground: playingEnabled,
+        };
+        const { bindings } = createDialog(async (command, args) => {
+          if (command === "get_settings") return loaded;
+          saved.push(args);
+        });
+        await bindings.show();
+        expect(bindings.albumCoverBackground.value).toBe(albumEnabled);
+        expect(bindings.playingCoverBackground.value).toBe(playingEnabled);
+        await bindings.save();
+        expect(saved).toEqual([{ settings: loaded }]);
+      });
+    }
+  }
 
   it("persists disabled lyric providers", async () => {
     const saved: unknown[] = [];
@@ -435,6 +469,7 @@ describe("settings dialog", () => {
     first.resolve({
       theme: "tokyoNight",
       albumCoverBackground: true,
+      playingCoverBackground: true,
       closeBehavior: "exit",
       albumSortBy: "year",
       albumSortOrder: "descending",

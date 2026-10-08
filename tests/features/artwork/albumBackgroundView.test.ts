@@ -17,9 +17,14 @@ const passiveComponent = { __esModule: true, default: icon };
 const dependencies: Record<string, unknown> = {
   vue: Vue,
   "@lucide/vue": { ChevronRight: icon, Play: icon, X: icon, DiscAlbum: icon },
-  "@/features/settings/composables/useAlbumBackground": {
-    useAlbumBackground: () => backgroundEnabled,
+  "@/features/settings/composables/useCoverBackground": {
+    useCoverBackground: (setting: string) => {
+      expect(setting).toBe("albumCoverBackground");
+      return backgroundEnabled;
+    },
   },
+  "@/features/artwork/background": { ALBUM_BACKGROUND_SAMPLE_SIZE: 32 },
+  "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
   "@/features/artwork/useAlbumArtwork": {
     useAlbumArtwork(
       selection: Vue.MaybeRefOrGetter<AlbumArtworkSelection | null>,
@@ -77,6 +82,10 @@ const dependencies: Record<string, unknown> = {
   "@/features/lyrics/components/DownloadMenuItem.vue": passiveComponent,
   "@/features/playback/queue/components/SkipMenuItem.vue": passiveComponent,
   "@/features/library/components/albums/AlbumContextMenu.vue": passiveComponent,
+  "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": passiveComponent,
+  "@/features/library/api": {
+    createLibraryApi: () => ({ listAlbumTracks: async () => [] }),
+  },
 };
 await loadSourceModules(
   [

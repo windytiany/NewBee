@@ -6,6 +6,7 @@ export type NeteaseLyricsMode = "original" | "translated" | "bilingual";
 export type Settings = {
   theme: Theme;
   albumCoverBackground: boolean;
+  playingCoverBackground: boolean;
   closeBehavior: "tray" | "exit";
   albumSortBy: "name" | "year";
   albumSortOrder: "ascending" | "descending";

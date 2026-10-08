@@ -77,7 +77,7 @@ describe("notification center", () => {
       message: "partially saved",
     });
     const error = center.notify({ type: "error", persistent: true, message: "failed" });
-    advance(3_999);
+    advance(1_999);
     expect(center.items.value).toHaveLength(4);
     advance(1);
     expect(center.visible.value.map(({ id }) => id)).toEqual([warning, error]);
@@ -100,7 +100,7 @@ describe("notification center", () => {
     expect(center.items.value).toHaveLength(4);
     center.dismiss(errors[0]);
     expect(center.visible.value.map(({ id }) => id)).toEqual([errors[1], errors[2], queued]);
-    advance(3_999);
+    advance(1_999);
     expect(center.items.value).toHaveLength(3);
     advance(1);
     expect(center.items.value).toHaveLength(2);
@@ -111,7 +111,7 @@ describe("notification center", () => {
     const { clock, advance } = createClock();
     const center = createNotificationCenter(clock);
     const id = center.notify({ type: "success", message: "saved" });
-    advance(2_000);
+    advance(1_000);
     center.pause(id, "hover", true);
     center.pause(id, "focus", true);
     advance(10_000);
@@ -119,7 +119,7 @@ describe("notification center", () => {
     advance(10_000);
     expect(center.items.value).toHaveLength(1);
     center.pause(id, "focus", false);
-    advance(1_999);
+    advance(999);
     expect(center.items.value).toHaveLength(1);
     advance(1);
     expect(center.items.value).toEqual([]);
@@ -142,9 +142,9 @@ describe("notification center", () => {
     const { clock, advance, tasks } = createClock();
     const center = createNotificationCenter(clock);
     const id = center.notify({ type: "info", message: "saved", key: "directory" });
-    advance(3_000);
+    advance(1_000);
     center.notify({ type: "info", message: "saved", key: "directory" });
-    advance(3_999);
+    advance(1_999);
     expect(center.items.value).toHaveLength(1);
     center.dismiss(id);
     expect(tasks.size).toBe(0);
@@ -170,7 +170,7 @@ describe("notification center", () => {
     advance(60_000);
     expect(center.items.value).toHaveLength(1);
     center.pause(id, "focus", false);
-    advance(4_000);
+    advance(2_000);
     expect(center.items.value).toEqual([]);
   });
 

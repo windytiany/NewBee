@@ -40,6 +40,7 @@ pub enum Theme {
 pub struct Settings {
     pub theme: Theme,
     pub album_cover_background: bool,
+    pub playing_cover_background: bool,
     pub close_behavior: CloseBehavior,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
@@ -54,6 +55,7 @@ impl Default for Settings {
         Self {
             theme: Theme::default(),
             album_cover_background: false,
+            playing_cover_background: false,
             close_behavior: CloseBehavior::default(),
             album_sort_by: AlbumSortBy::default(),
             album_sort_order: AlbumSortOrder::default(),

@@ -1,5 +1,5 @@
 use super::super::{get_album_artwork, get_track_artwork};
-use crate::database::{Database, EmbeddedArtwork, TrackWriteInput};
+use crate::database::{ArtworkContent, Database, TrackWriteInput};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::io::Cursor;
 use tauri::ipc::{InvokeBody, InvokeResponseBody};
@@ -22,15 +22,16 @@ fn track(path: &str, image: Vec<u8>) -> TrackWriteInput {
         sample_rate_hz: None,
         bitrate_kbps: None,
         channels: None,
-        artwork: Some(EmbeddedArtwork {
+        artwork: Some(ArtworkContent {
             mime_type: "image/png".into(),
             image,
         }),
+        editing: None,
         lyrics: None,
     }
 }
 
-fn fixture(color: Rgba<u8>) -> Vec<u8> {
+pub(super) fn fixture(color: Rgba<u8>) -> Vec<u8> {
     let mut output = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(RgbaImage::from_pixel(1200, 600, color))
         .write_to(&mut output, ImageFormat::Png)
@@ -38,7 +39,7 @@ fn fixture(color: Rgba<u8>) -> Vec<u8> {
     output.into_inner()
 }
 
-fn invoke(
+pub(super) fn invoke(
     webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
     command: &str,
     args: serde_json::Value,
@@ -67,16 +68,27 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     let red = fixture(Rgba([255, 0, 0, 255]));
     let blue = fixture(Rgba([0, 0, 255, 255]));
     database
-        .upsert_track(&track("/fixture/one.mp3", red.clone()))
+        .upsert_track(
+            &track("/fixture/one.mp3", red.clone()),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     database
-        .upsert_track(&track("/fixture/two.mp3", blue))
+        .upsert_track(
+            &track("/fixture/two.mp3", blue),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     let mut missing = track("/fixture/missing.mp3", Vec::new());
     missing.artwork = None;
-    database.upsert_track(&missing).unwrap();
     database
-        .upsert_track(&track("/fixture/corrupt.mp3", vec![1, 2, 3]))
+        .upsert_track(&missing, crate::database::ArtworkUpdate::Embedded)
+        .unwrap();
+    database
+        .upsert_track(
+            &track("/fixture/corrupt.mp3", vec![1, 2, 3]),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     let app = tauri::test::mock_builder()
         .manage(database)
@@ -92,7 +104,7 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     let original = invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 1, "thumbnail": false}),
+        serde_json::json!({"trackId": 1, "size": null}),
     )
     .unwrap();
     assert_eq!(original, red);
@@ -100,7 +112,7 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
         let bytes = invoke(
             &webview,
             "get_track_artwork",
-            serde_json::json!({"trackId": id, "thumbnail": true}),
+            serde_json::json!({"trackId": id, "size": 80}),
         )
         .unwrap();
         let image = image::load_from_memory(&bytes).unwrap().to_rgba8();
@@ -115,11 +127,11 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     )
     .unwrap();
     assert_eq!(album, red);
-    for thumbnail in [false, true] {
+    for size in [None, Some(80)] {
         assert!(invoke(
             &webview,
             "get_track_artwork",
-            serde_json::json!({"trackId": 3, "thumbnail": thumbnail})
+            serde_json::json!({"trackId": 3, "size": size})
         )
         .unwrap()
         .is_empty());
@@ -127,16 +139,19 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     assert!(invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 4, "thumbnail": true})
+        serde_json::json!({"trackId": 4, "size": 80})
     )
     .is_err());
     app.state::<Database>()
-        .upsert_track(&track("/fixture/one.mp3", fixture(Rgba([0, 255, 0, 255]))))
+        .upsert_track(
+            &track("/fixture/one.mp3", fixture(Rgba([0, 255, 0, 255]))),
+            crate::database::ArtworkUpdate::Embedded,
+        )
         .unwrap();
     let updated = invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 1, "thumbnail": true}),
+        serde_json::json!({"trackId": 1, "size": 80}),
     )
     .unwrap();
     assert_eq!(
@@ -150,7 +165,7 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     assert!(invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 999, "thumbnail": false})
+        serde_json::json!({"trackId": 999, "size": null})
     )
     .unwrap()
     .is_empty());
@@ -178,7 +193,10 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
     let database = Database::open(":memory:").unwrap();
     for index in 0..40 {
         database
-            .upsert_track(&track(&format!("/fixture/{index}.mp3"), original.clone()))
+            .upsert_track(
+                &track(&format!("/fixture/{index}.mp3"), original.clone()),
+                crate::database::ArtworkUpdate::Embedded,
+            )
             .unwrap();
     }
     let previous_json_bytes = serde_json::to_vec(&database.get_track_artwork(1).unwrap())
@@ -198,7 +216,7 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
         let bytes = invoke(
             &webview,
             "get_track_artwork",
-            serde_json::json!({"trackId": id, "thumbnail": true}),
+            serde_json::json!({"trackId": id, "size": 80}),
         )
         .unwrap();
         assert_eq!(
@@ -210,6 +228,156 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
         );
         thumbnail_bytes += bytes.len();
     }
+    assert_eq!(app.state::<Database>().artwork_decode_count(), 1);
     assert!(thumbnail_bytes < 1_000_000);
     assert!(thumbnail_bytes < previous_json_bytes);
+}
+
+#[test]
+fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding() {
+    let path = std::env::temp_dir().join(format!("newbee-thumbnail-{}.sqlite", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let database = Database::open(&path).unwrap();
+    let red = fixture(Rgba([255, 0, 0, 255]));
+    for (name, update) in [
+        ("one", crate::database::ArtworkUpdate::Embedded),
+        (
+            "two",
+            crate::database::ArtworkUpdate::Directory("/offline/cover.png".into()),
+        ),
+    ] {
+        database
+            .upsert_track(&track(&format!("/offline/{name}.mp3"), red.clone()), update)
+            .unwrap();
+    }
+    let app = tauri::test::mock_builder()
+        .manage(database)
+        .invoke_handler(tauri::generate_handler![
+            get_track_artwork,
+            get_album_artwork
+        ])
+        .build(tauri::generate_context!())
+        .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    assert_eq!(app.state::<Database>().artwork_decode_count(), 0);
+    let first = invoke(
+        &webview,
+        "get_track_artwork",
+        serde_json::json!({"trackId":1,"size":40}),
+    )
+    .unwrap();
+    assert_eq!(
+        image::load_from_memory(&first)
+            .unwrap()
+            .to_rgba8()
+            .dimensions(),
+        (40, 20)
+    );
+    assert_eq!(app.state::<Database>().artwork_decode_count(), 1);
+    let shared = invoke(
+        &webview,
+        "get_track_artwork",
+        serde_json::json!({"trackId":2,"size":40}),
+    )
+    .unwrap();
+    assert_eq!(first, shared);
+    let album = invoke(
+        &webview,
+        "get_album_artwork",
+        serde_json::json!({"albumArtist":"Artist","album":"Album","size":40}),
+    )
+    .unwrap();
+    assert_eq!(first, album);
+    assert_eq!(app.state::<Database>().artwork_decode_count(), 1);
+    let large = invoke(
+        &webview,
+        "get_track_artwork",
+        serde_json::json!({"trackId":1,"size":160}),
+    )
+    .unwrap();
+    assert_eq!(
+        image::load_from_memory(&large)
+            .unwrap()
+            .to_rgba8()
+            .dimensions(),
+        (160, 80)
+    );
+    assert_eq!(app.state::<Database>().artwork_decode_count(), 2);
+    drop(webview);
+    app.state::<Database>().close_test_connection();
+    drop(app);
+    let database = Database::open(&path).unwrap();
+    let app = tauri::test::mock_builder()
+        .manage(database)
+        .invoke_handler(tauri::generate_handler![
+            get_track_artwork,
+            get_album_artwork
+        ])
+        .build(tauri::generate_context!())
+        .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    for id in [1, 2] {
+        assert_eq!(
+            invoke(
+                &webview,
+                "get_track_artwork",
+                serde_json::json!({"trackId":id,"size":40})
+            )
+            .unwrap(),
+            first
+        );
+    }
+    assert_eq!(
+        invoke(
+            &webview,
+            "get_track_artwork",
+            serde_json::json!({"trackId":1,"size":160})
+        )
+        .unwrap(),
+        large
+    );
+    assert_eq!(app.state::<Database>().artwork_decode_count(), 0);
+    drop(webview);
+    app.state::<Database>().close_test_connection();
+    drop(app);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn artwork_commands_accept_only_sizes_in_the_shared_range() {
+    let app = tauri::test::mock_builder()
+        .manage(Database::open(":memory:").unwrap())
+        .invoke_handler(tauri::generate_handler![
+            get_track_artwork,
+            get_album_artwork
+        ])
+        .build(tauri::generate_context!())
+        .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    for command in ["get_track_artwork", "get_album_artwork"] {
+        for size in [1, super::super::MAX_ARTWORK_SIZE] {
+            assert!(invoke(
+                &webview,
+                command,
+                serde_json::json!({"trackId": 999, "size": size})
+            )
+            .unwrap()
+            .is_empty());
+        }
+        for size in [0, super::super::MAX_ARTWORK_SIZE + 1] {
+            let error = invoke(
+                &webview,
+                command,
+                serde_json::json!({"trackId": 999, "size": size}),
+            )
+            .unwrap_err();
+            assert_eq!(error, "封面尺寸必须在 1 到 4096 之间");
+        }
+    }
 }

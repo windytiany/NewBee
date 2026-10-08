@@ -1,21 +1,57 @@
-use super::{Database, EmbeddedArtwork};
+use super::{ArtworkContent, Database};
 use crate::metadata::model::{LyricsMarkAction, MetadataChange, MetadataField};
 use rusqlite::params;
 
 impl Database {
-    /// Update requested metadata, cover and lyrics in one transaction.
-    /// Preserve technical properties, IDs, skipped state and playlist references.
+    pub(crate) fn record_scan_issue(&self, path: &str, issue: &str) -> Result<(), String> {
+        self.connection()?.execute(
+            "UPDATE track_editing SET scan_issue = ?2 WHERE track_id = (SELECT id FROM tracks WHERE path = ?1)",
+            params![path, issue],
+        ).map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub(crate) fn get_editing_snapshot(
+        &self,
+        track_id: i64,
+    ) -> Result<crate::metadata::model::EditingSnapshot, String> {
+        let (snapshot, scan_issue): (String, Option<String>) = self
+            .connection()?
+            .query_row(
+                "SELECT snapshot, scan_issue FROM track_editing WHERE track_id = ?1",
+                [track_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|error| format!("读取编辑能力失败：{error}"))?;
+        let mut metadata: crate::metadata::model::EditingSnapshot = serde_json::from_str(&snapshot)
+            .map_err(|error| format!("无效编辑能力快照：{error}"))?;
+        if scan_issue.is_some() {
+            metadata.issue = scan_issue;
+        }
+        Ok(metadata)
+    }
+
+    /// Synchronize confirmed file content and requested database actions atomically.
+    /// Preserve IDs, skipped state and playlist references.
     pub(crate) fn update_metadata_cover_and_lyrics(
         &self,
         track_id: i64,
         changes: &[MetadataChange],
-        cover: Option<&EmbeddedArtwork>,
+        cover: Option<&ArtworkContent>,
         action: LyricsMarkAction,
+        confirmed: Option<&super::TrackWriteInput>,
     ) -> Result<(), String> {
         let mut connection = self.connection()?;
         let transaction = connection
-            .transaction()
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
+        if let Some(confirmed) = confirmed {
+            super::library::persist_track(
+                &transaction,
+                confirmed,
+                &super::ArtworkUpdate::PreserveDirectory,
+            )?;
+        }
         for change in changes {
             if change.field == MetadataField::Lyrics {
                 transaction.execute(
@@ -48,11 +84,18 @@ impl Database {
                 .map_err(|error| format!("更新无歌词标记失败：{error}"))?;
         }
         if let Some(cover) = cover {
-            transaction.execute(
-                "INSERT INTO track_artwork (track_id, mime_type, image) VALUES (?1, ?2, ?3)
-                 ON CONFLICT(track_id) DO UPDATE SET mime_type = excluded.mime_type, image = excluded.image",
-                params![track_id, &cover.mime_type, &cover.image],
-            ).map_err(|error| format!("更新封面失败：{error}"))?;
+            let path: String = transaction
+                .query_row("SELECT path FROM tracks WHERE id = ?1", [track_id], |row| {
+                    row.get(0)
+                })
+                .map_err(|error| error.to_string())?;
+            super::artwork::persist_artwork(
+                &transaction,
+                track_id,
+                Some(cover),
+                &super::ArtworkUpdate::Embedded,
+                &path,
+            )?;
         }
         transaction
             .commit()

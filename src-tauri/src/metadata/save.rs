@@ -3,18 +3,18 @@ use super::{
     model::{LyricsMarkAction, MetadataChange, MetadataField},
     MetadataSaveResult,
 };
-use crate::database::{Database, EmbeddedArtwork};
+use crate::database::{ArtworkContent, Database};
 use lofty::picture::Picture;
 use std::path::Path;
 
 pub(crate) struct CoverUpdate {
     picture: Picture,
-    artwork: EmbeddedArtwork,
+    artwork: ArtworkContent,
 }
 
 impl CoverUpdate {
     pub(crate) fn new(picture: Picture) -> Self {
-        let artwork = EmbeddedArtwork {
+        let artwork = ArtworkContent {
             mime_type: picture
                 .mime_type()
                 .map(ToString::to_string)
@@ -63,20 +63,30 @@ pub(crate) fn save_track(
             }
             result.file_written = true;
         }
-        database
-            .update_metadata_cover_and_lyrics(
+        let synchronize = (|| {
+            let confirmed = if result.file_written {
+                Some(
+                    files::read_track(Path::new(track.path()))?
+                        .ok_or_else(|| "写后文件格式不支持快照".to_owned())?,
+                )
+            } else {
+                None
+            };
+            database.update_metadata_cover_and_lyrics(
                 track_id,
                 &effective_changes,
                 cover.map(|cover| &cover.artwork),
                 action,
+                confirmed.as_ref(),
             )
-            .map_err(|error| {
-                if result.file_written {
-                    format!("文件已写入，但数据库同步失败。请再次保存或重新扫描：{error}")
-                } else {
-                    format!("数据库更新失败：{error}")
-                }
-            })?;
+        })();
+        synchronize.map_err(|error| {
+            if result.file_written {
+                format!("文件已写入，但数据库同步失败。请再次保存或重新扫描：{error}")
+            } else {
+                format!("数据库更新失败：{error}")
+            }
+        })?;
         result.database_updated = true;
         Ok::<_, String>(())
     })();

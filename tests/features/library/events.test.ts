@@ -30,7 +30,7 @@ afterEach(() => {
 function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   Object.defineProperty(globalThis, "window", { configurable: true, value: new EventTarget() });
   const calls: string[] = [];
-  const effects: Array<readonly number[] | "all" | "refresh"> = [];
+  const effects: Array<readonly number[] | "all" | "albums" | "refresh"> = [];
   const notices: NotificationInput[] = [];
   const artist = { albumArtist: "Artist", albumCount: 1 };
   const album = { album: "Album", year: 2024 };
@@ -78,6 +78,9 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     },
     "@/features/artwork/useTrackArtwork": {
       invalidateTrackArtworkCache: (ids?: readonly number[]) => effects.push(ids ?? "all"),
+    },
+    "@/features/artwork/useAlbumArtwork": {
+      invalidateAlbumArtworkCache: () => effects.push("albums"),
     },
     "@/shared/notifications/center": {
       notify: (notice: NotificationInput) => notices.push(notice),
@@ -185,7 +188,7 @@ describe("媒体库变更", () => {
       harness.setScanResult({ added: 0, updated: 1, skipped: 0, failed: 1 });
       await harness.scan.scanMusicLibrary();
       await settle();
-      expect(harness.effects).toEqual(["all", "refresh"]);
+      expect(harness.effects).toEqual(["all", "albums", "refresh"]);
       expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(1);
       expect(harness.calls.filter((command) => command === "list_playlist_tracks")).toHaveLength(1);
       expect(harness.calls.includes("list_album_artists")).toBe(mode === "Library");
@@ -219,7 +222,7 @@ describe("媒体库变更", () => {
     await settle();
     expect(result.deletedCount).toBe(1);
     expect(result.completed).toBe(false);
-    expect(harness.effects).toEqual([[41], "refresh"]);
+    expect(harness.effects).toEqual([[41], "albums", "refresh"]);
     expect(harness.calls.filter((command) => command === "list_album_artists")).toHaveLength(1);
     expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(1);
     expect(harness.playlist.playlists.value[0]?.trackCount).toBe(1);
@@ -237,7 +240,7 @@ describe("媒体库变更", () => {
       "deleted-queue-sync-failed",
     );
     await settle();
-    expect(harness.effects).toEqual([[41], "refresh"]);
+    expect(harness.effects).toEqual([[41], "albums", "refresh"]);
     expect(harness.playlist.playlists.value[0]?.trackCount).toBe(1);
   });
 

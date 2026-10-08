@@ -12,14 +12,12 @@ export function createTagSynchronization(
 ) {
   const library = createLibraryApi(invokeCommand);
   async function tracks(trackIds: number[]) {
+    // Any confirmed write can change the artwork snapshot or album association.
+    invalidateTrackArtworkCache(trackIds);
+    invalidateAlbumArtworkCache();
     globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
     const updated = await Promise.all(trackIds.map(library.getTrack));
     session.updateTrackMetadata(updated.filter((track): track is TrackDetails => track !== null));
   }
-  async function artwork(trackIds: number[]) {
-    invalidateTrackArtworkCache(trackIds);
-    invalidateAlbumArtworkCache();
-    await tracks(trackIds);
-  }
-  return { tracks, artwork };
+  return { tracks, artwork: tracks };
 }

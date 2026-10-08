@@ -24,6 +24,8 @@ import type {
   TrackMetadataUpdate,
 } from "@/features/playback/types";
 
+import type { TrackLyrics } from "@/features/lyrics/types";
+
 export type { PlaybackStatus } from "@/features/playback/types";
 
 export const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
@@ -45,6 +47,27 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   const trackSkip = createTrackSkipState(invokeCommand);
   const playbackState = createPlaybackState(invokeCommand);
   const currentTrack = playbackState.currentTrack;
+  const sidecarLyrics = ref<TrackLyrics | null>(null);
+  let sidecarRequest = 0;
+  watch(
+    () => [currentTrack.value?.trackId ?? null, currentTrack.value?.playbackId ?? null] as const,
+    ([trackId, playbackId], previous) => {
+      if (trackId === previous?.[0] && playbackId === previous?.[1]) return;
+      // File editing detaches the audio instance, but keeps the listening session.
+      if (trackId !== null && trackId === previous?.[0] && playbackId === null) return;
+      const request = ++sidecarRequest;
+      sidecarLyrics.value = null;
+      if (trackId === null || playbackId === null) return;
+      void invokeCommand<TrackLyrics | null>("get_playback_sidecar_lyrics", { trackId })
+        .then((lyrics) => {
+          if (request === sidecarRequest) sidecarLyrics.value = lyrics ?? null;
+        })
+        .catch((error: unknown) => {
+          logger.warn("lyrics", "sidecar_read_failed", error, { trackId });
+        });
+    },
+    { flush: "sync", immediate: true },
+  );
   const playbackError = ref("");
   const isSeeking = ref(false);
   const isSessionCommandPending = ref(false);
@@ -297,6 +320,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   );
 
   const state = Object.freeze({
+    sidecarLyrics: readonly(sidecarLyrics),
     playbackStatus: statusObserver.status,
     isPlaybackStatusSettled: statusObserver.isSettled,
     playbackError: readonly(playbackError),
