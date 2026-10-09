@@ -16,7 +16,7 @@ const icon = Vue.defineComponent(() => () => null);
 const passiveComponent = { __esModule: true, default: icon };
 const dependencies: Record<string, unknown> = {
   vue: Vue,
-  "@lucide/vue": { ChevronRight: icon, Play: icon, X: icon, DiscAlbum: icon },
+  "@lucide/vue": { ChevronRight: icon, Play: icon, Pause: icon, X: icon, DiscAlbum: icon },
   "@/features/settings/composables/useCoverBackground": {
     useCoverBackground: (setting: string) => {
       expect(setting).toBe("albumCoverBackground");
@@ -117,6 +117,8 @@ function mountBrowser() {
         selectedAlbum: selectedAlbum.value,
         tracks: [{ id: 1, title: "Song" }],
         currentTrackId: null,
+        isPlaying: false,
+        playbackCommandPending: false,
         albumsLoading: false,
         albumsError: "",
         tracksLoading: false,

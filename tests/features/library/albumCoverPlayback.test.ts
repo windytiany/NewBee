@@ -2,13 +2,21 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { loadSourceModules } from "../../support/moduleLoader";
 import { createHostNode, createHostRenderer, findNode } from "../../support/hostRenderer";
-import type { LibraryAlbumSelection } from "@/features/library/types";
+import type { LibraryAlbumSelection, TrackSummary } from "@/features/library/types";
 
 const icon = Vue.defineComponent(() => () => null);
+const playbackIcon = (name: string) =>
+  Vue.defineComponent(() => () => Vue.h("svg", { "data-icon": name }));
 const passive = { __esModule: true, default: icon };
 const modules: Record<string, unknown> = {
   vue: Vue,
-  "@lucide/vue": { DiscAlbum: icon },
+  "@lucide/vue": {
+    DiscAlbum: icon,
+    ChevronRight: icon,
+    X: icon,
+    Play: playbackIcon("Play"),
+    Pause: playbackIcon("Pause"),
+  },
   "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
   "@/features/artwork/useAlbumArtwork": {
     useAlbumArtwork: () => ({
@@ -23,16 +31,34 @@ const modules: Record<string, unknown> = {
     useCoverBackground: () => Vue.ref(false),
   },
   "@/shared/interaction/useItemSelection": {
-    useItemSelection: () => ({ syncVisibleItems() {}, isFocused: () => false, focusItem() {} }),
+    useItemSelection: () => ({
+      syncVisibleItems() {},
+      isFocused: () => false,
+      isSelected: () => false,
+      focusItem() {},
+    }),
   },
   "@/features/library/api": { createLibraryApi: () => ({}) },
-  "@/features/library/components/albums/AlbumDetail.vue": passive,
+  "@/shared/interaction/useContextMenu": {
+    useContextMenu: () => ({
+      request: Vue.ref(null),
+      position: Vue.ref({ x: 0, y: 0 }),
+      open() {},
+      close() {},
+    }),
+  },
+  "@/features/library/composables/useTrackColumns": { useTrackColumns: () => Vue.ref(2) },
+  "@/features/library/components/albums/AlbumTrack.vue": passive,
+  "@/features/tags/manual/components/EditMenuItem.vue": passive,
+  "@/features/lyrics/components/DownloadMenuItem.vue": passive,
+  "@/features/playback/queue/components/SkipMenuItem.vue": passive,
   "@/features/library/components/albums/AlbumContextMenu.vue": passive,
   "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": passive,
 };
 await loadSourceModules(
   [
     "features/library/components/albums/AlbumCard.vue",
+    "features/library/components/albums/AlbumDetail.vue",
     "features/library/components/albums/AlbumBrowser.vue",
   ],
   modules,
@@ -43,14 +69,53 @@ const AlbumBrowser = (
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
 
-function mountBrowser(selected = false) {
+const albumTracks: TrackSummary[] = [
+  {
+    id: 1,
+    title: "First",
+    artist: "Artist",
+    album: "Album",
+    durationMs: 100,
+    discNumber: 1,
+    trackNumber: 1,
+  },
+  {
+    id: 2,
+    title: "Second",
+    artist: "Artist",
+    album: "Album",
+    durationMs: 100,
+    discNumber: 1,
+    trackNumber: 2,
+  },
+];
+type PlaybackState = {
+  tracks: TrackSummary[];
+  currentTrackId: number | null;
+  isPlaying: boolean;
+  playbackCommandPending: boolean;
+  tracksLoading: boolean;
+  trackActionPending: boolean;
+};
+
+function mountBrowser(selected = false, initialState: Partial<PlaybackState> = {}) {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: { innerWidth: 1024, addEventListener() {}, removeEventListener() {} },
   });
   const selection = { albumArtist: "Artist", album: "Album" };
   const selectedAlbum = Vue.ref<LibraryAlbumSelection | null>(selected ? selection : null);
+  const state = Vue.reactive<PlaybackState>({
+    tracks: [],
+    currentTrackId: null,
+    isPlaying: false,
+    playbackCommandPending: false,
+    tracksLoading: true,
+    trackActionPending: false,
+    ...initialState,
+  });
   const plays: LibraryAlbumSelection[] = [];
+  const toggles: unknown[] = [];
   const selections: unknown[] = [];
   const root = createHostNode("root");
   const app = createHostRenderer(createHostNode).createApp({
@@ -59,16 +124,14 @@ function mountBrowser(selected = false) {
         artist: { albumArtist: "Artist", albumCount: 1 },
         albums: [{ album: "Album", year: 2024 }],
         selectedAlbum: selectedAlbum.value,
-        tracks: [],
-        currentTrackId: null,
+        ...state,
         albumsLoading: false,
         albumsError: "",
-        tracksLoading: true,
         tracksError: "",
         playlists: [],
         playlistsLoading: false,
         playlistsError: "",
-        trackActionPending: false,
+        onTogglePlayback: () => toggles.push("togglePlayback"),
         onPlayAlbum: (album: LibraryAlbumSelection) => plays.push(album),
         onSelectAlbum: (album: { album: string | null } | null) => {
           selections.push(album);
@@ -85,7 +148,28 @@ function mountBrowser(selected = false) {
     if (typeof handler !== "function") throw new Error(`Missing ${name}`);
     handler({ detail, stopPropagation() {} });
   }
-  return { app, plays, selections, selectedAlbum, dispatch };
+  function playbackButton() {
+    const header = findNode(root, (node) => node.type === "h2")?.parent;
+    const button = header && findNode(header, (node) => node.type === "button");
+    if (!button) throw new Error("Missing album playback button");
+    return button;
+  }
+  function clickPlayback() {
+    const handler = playbackButton().props.onClick;
+    if (typeof handler !== "function") throw new Error("Missing playback handler");
+    handler();
+  }
+  return {
+    app,
+    plays,
+    toggles,
+    state,
+    selections,
+    selectedAlbum,
+    dispatch,
+    playbackButton,
+    clickPlayback,
+  };
 }
 
 const waitForSingleClick = () => new Promise((resolve) => setTimeout(resolve, 350));
@@ -107,6 +191,7 @@ describe("library album cover playback", () => {
       browser.dispatch("onDblclick", 2);
       await waitForSingleClick();
       expect(browser.plays).toEqual([{ albumArtist: "Artist", album: "Album" }]);
+      expect(browser.toggles).toEqual([]);
       expect(browser.selections).toEqual(selected ? [] : [{ album: "Album", year: 2024 }]);
       expect(browser.selectedAlbum.value?.album).toBe("Album");
     });
@@ -136,4 +221,132 @@ describe("library album cover playback", () => {
     expect(browser.selections).toEqual([]);
     expect(browser.plays).toEqual([]);
   });
+});
+
+describe("album detail playback button", () => {
+  for (const currentTrackId of [null, 99, 1, 2]) {
+    for (const isPlaying of [false, true]) {
+      it(`uses album membership for track ${currentTrackId} while playing=${isPlaying}`, () => {
+        const browser = mountBrowser(true, {
+          tracks: albumTracks,
+          tracksLoading: false,
+          currentTrackId,
+          isPlaying,
+        });
+        const isCurrentAlbum = currentTrackId === 1 || currentTrackId === 2;
+        const label = isCurrentAlbum
+          ? isPlaying
+            ? "暂停当前曲目"
+            : "继续播放当前曲目"
+          : "播放专辑";
+        const button = browser.playbackButton();
+        expect(button.props["aria-label"]).toBe(label);
+        expect(button.props.title).toBe(label);
+        expect(button.props.disabled).toBe(false);
+        expect(findNode(button, (node) => !!node.props["data-icon"])?.props["data-icon"]).toBe(
+          isCurrentAlbum && isPlaying ? "Pause" : "Play",
+        );
+        browser.clickPlayback();
+        expect(browser.toggles).toEqual(isCurrentAlbum ? ["togglePlayback"] : []);
+        expect(browser.plays).toEqual(
+          isCurrentAlbum ? [] : [{ albumArtist: "Artist", album: "Album" }],
+        );
+      });
+    }
+  }
+
+  it("updates the same button as playback state, current track and album tracks change", async () => {
+    const browser = mountBrowser(true, {
+      tracks: albumTracks,
+      tracksLoading: false,
+      currentTrackId: 1,
+      isPlaying: true,
+    });
+    const button = browser.playbackButton();
+    const expectButton = (label: string, icon: string) => {
+      expect(browser.playbackButton()).toBe(button);
+      expect(button.props["aria-label"]).toBe(label);
+      expect(button.props.title).toBe(label);
+      expect(findNode(button, (node) => !!node.props["data-icon"])?.props["data-icon"]).toBe(icon);
+    };
+    expectButton("暂停当前曲目", "Pause");
+    browser.state.isPlaying = false;
+    await Vue.nextTick();
+    expectButton("继续播放当前曲目", "Play");
+    browser.clickPlayback();
+    browser.state.currentTrackId = 99;
+    browser.state.isPlaying = true;
+    await Vue.nextTick();
+    expectButton("播放专辑", "Play");
+    browser.clickPlayback();
+    browser.state.currentTrackId = 2;
+    await Vue.nextTick();
+    expectButton("暂停当前曲目", "Pause");
+    browser.state.tracks = [albumTracks[0]!];
+    await Vue.nextTick();
+    expectButton("播放专辑", "Play");
+    browser.clickPlayback();
+    browser.state.tracks = [...albumTracks];
+    await Vue.nextTick();
+    expectButton("暂停当前曲目", "Pause");
+    browser.clickPlayback();
+    expect(browser.toggles).toEqual(["togglePlayback", "togglePlayback"]);
+    expect(browser.plays).toEqual([
+      { albumArtist: "Artist", album: "Album" },
+      { albumArtist: "Artist", album: "Album" },
+    ]);
+  });
+
+  for (const blocked of [
+    "playbackCommandPending",
+    "trackActionPending",
+    "tracksLoading",
+    "emptyTracks",
+  ] as const) {
+    for (const currentTrackId of [1, 99]) {
+      it(`disables playback for ${blocked} with current track ${currentTrackId}`, async () => {
+        const browser = mountBrowser(true, {
+          tracks: albumTracks,
+          tracksLoading: false,
+          currentTrackId,
+          isPlaying: true,
+        });
+        if (blocked === "emptyTracks") browser.state.tracks = [];
+        else browser.state[blocked] = true;
+        await Vue.nextTick();
+        expect(browser.playbackButton().props.disabled).toBe(true);
+        // Invoke the handler directly to verify its guard, not just the DOM attribute.
+        browser.clickPlayback();
+        expect(browser.toggles).toEqual([]);
+        expect(browser.plays).toEqual([]);
+        if (blocked === "emptyTracks") browser.state.tracks = [...albumTracks];
+        else browser.state[blocked] = false;
+        await Vue.nextTick();
+        expect(browser.playbackButton().props.disabled).toBe(false);
+        browser.clickPlayback();
+        expect(browser.toggles).toEqual(currentTrackId === 1 ? ["togglePlayback"] : []);
+        expect(browser.plays).toEqual(
+          currentTrackId === 1 ? [] : [{ albumArtist: "Artist", album: "Album" }],
+        );
+      });
+    }
+  }
+
+  for (const isPlaying of [false, true]) {
+    it(`double-clicking the current album cover always plays the album while playing=${isPlaying}`, async () => {
+      const browser = mountBrowser(true, {
+        tracks: albumTracks,
+        tracksLoading: false,
+        currentTrackId: 1,
+        isPlaying,
+      });
+      browser.dispatch("onClick", 1);
+      browser.dispatch("onClick", 2);
+      browser.dispatch("onDblclick", 2);
+      await waitForSingleClick();
+      expect(browser.plays).toEqual([{ albumArtist: "Artist", album: "Album" }]);
+      expect(browser.toggles).toEqual([]);
+      expect(browser.selectedAlbum.value).toEqual({ albumArtist: "Artist", album: "Album" });
+    });
+  }
 });

@@ -35,7 +35,8 @@ export function useLibraryActions(
     queueSyncFailed: boolean;
   } | null>(null);
   const playbackSession = usePlaybackSession();
-  const { currentTrack, activeQueueRowKey } = playbackSession.state;
+  const { currentTrack, activeQueueRowKey, playbackStatus, isPlaybackCommandPending } =
+    playbackSession.state;
   const {
     playTracks,
     addTracksToNext: enqueueTracksToNext,
@@ -112,6 +113,18 @@ export function useLibraryActions(
         false,
       );
     });
+  }
+
+  function toggleCurrentAlbumPlayback() {
+    if (
+      isLoadingTracks.value ||
+      isPlaybackCommandPending.value ||
+      !tracks.value.some((track) => track.id === currentTrack.value?.trackId)
+    ) {
+      return Promise.resolve(false);
+    }
+    // The current track already uses the session's synchronized volume.
+    return runTrackAction("切换播放状态", () => playbackSession.togglePlayback(async () => true));
   }
 
   function findLibraryTracks(trackIds: readonly number[]) {
@@ -406,6 +419,9 @@ export function useLibraryActions(
     trackActionRemoval,
     currentTrack,
     activeQueueRowKey,
+    playbackStatus,
+    isPlaybackCommandPending,
+    toggleCurrentAlbumPlayback,
     playTrackFromLibrary,
     playAlbumFromLibrary,
     addTracksToNext,

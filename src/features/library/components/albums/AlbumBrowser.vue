@@ -64,6 +64,8 @@
               :album-artist="props.artist.albumArtist"
               :tracks="props.tracks"
               :current-track-id="props.currentTrackId"
+              :is-playing="props.isPlaying"
+              :playback-command-pending="props.playbackCommandPending"
               :tracks-loading="props.tracksLoading"
               :tracks-error="props.tracksError"
               :playlists="props.playlists"
@@ -74,6 +76,7 @@
               @close="closeAlbum(row.selectedAlbum)"
               @play-track="emit('playTrack', $event)"
               @play-album="playAlbum(row.selectedAlbum)"
+              @toggle-playback="emit('togglePlayback')"
               @refresh-playlists="emit('refreshPlaylists')"
               @add-tracks-to-next="emit('addTracksToNext', $event)"
               @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
@@ -141,6 +144,8 @@ const props = defineProps<{
   selectedAlbum: LibraryAlbumSelection | null;
   tracks: TrackSummary[];
   currentTrackId: number | null;
+  isPlaying: boolean;
+  playbackCommandPending: boolean;
   albumsLoading: boolean;
   albumsError: string;
   tracksLoading: boolean;
@@ -156,6 +161,7 @@ const emit = defineEmits<{
   selectAlbum: [album: AlbumSummary | null];
   playTrack: [trackId: number];
   playAlbum: [album: LibraryAlbumSelection];
+  togglePlayback: [];
   refreshPlaylists: [];
   addTracksToNext: [trackIds: number[]];
   addTracksToQueueEnd: [trackIds: number[]];

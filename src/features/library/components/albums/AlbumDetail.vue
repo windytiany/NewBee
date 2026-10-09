@@ -20,19 +20,24 @@
             {{ props.album.album ?? "未知专辑" }}
           </h2>
           <button
-            aria-label="播放专辑"
+            :aria-label="playbackButtonLabel"
             class="focus-visible:outline-app-accent bg-app-accent grid size-9 shrink-0 place-items-center rounded-full text-black focus-visible:outline-2"
             :class="
-              props.tracksLoading || props.tracks.length === 0
+              playbackButtonDisabled
                 ? 'cursor-not-allowed opacity-50'
                 : 'hover:scale-105 active:scale-95'
             "
-            :disabled="props.tracksLoading || props.tracks.length === 0"
-            title="播放专辑"
+            :disabled="playbackButtonDisabled"
+            :title="playbackButtonLabel"
             type="button"
-            @click="emit('playAlbum')"
+            @click="activatePlayback"
           >
-            <Play aria-hidden="true" class="ml-0.5 size-4 fill-current" />
+            <Pause
+              v-if="isCurrentAlbum && props.isPlaying"
+              aria-hidden="true"
+              class="size-4 fill-current"
+            />
+            <Play v-else aria-hidden="true" class="ml-0.5 size-4 fill-current" />
           </button>
         </div>
         <p class="text-app-muted mt-1 truncate text-base">
@@ -211,7 +216,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { ChevronRight, Play, X } from "@lucide/vue";
+import { ChevronRight, Pause, Play, X } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
@@ -242,6 +247,8 @@ const props = defineProps<{
   albumArtist: string | null;
   tracks: TrackSummary[];
   currentTrackId: number | null;
+  isPlaying: boolean;
+  playbackCommandPending: boolean;
   tracksLoading: boolean;
   tracksError: string;
   playlists: readonly PlaylistSummary[];
@@ -255,6 +262,7 @@ const emit = defineEmits<{
   close: [];
   playTrack: [trackId: number];
   playAlbum: [];
+  togglePlayback: [];
   refreshPlaylists: [];
   addTracksToNext: [trackIds: number[]];
   addTracksToQueueEnd: [trackIds: number[]];
@@ -262,6 +270,26 @@ const emit = defineEmits<{
   createPlaylistWithTracks: [trackIds: number[]];
   deleteTrack: [trackId: number];
 }>();
+
+const isCurrentAlbum = computed(() =>
+  props.tracks.some((track) => track.id === props.currentTrackId),
+);
+const playbackButtonLabel = computed(() =>
+  isCurrentAlbum.value ? (props.isPlaying ? "暂停当前曲目" : "继续播放当前曲目") : "播放专辑",
+);
+const playbackButtonDisabled = computed(
+  () =>
+    props.trackActionPending ||
+    props.playbackCommandPending ||
+    props.tracksLoading ||
+    props.tracks.length === 0,
+);
+
+function activatePlayback() {
+  if (playbackButtonDisabled.value) return;
+  if (isCurrentAlbum.value) emit("togglePlayback");
+  else emit("playAlbum");
+}
 
 const backgroundStyle = computed(() => ({
   backgroundImage: props.background

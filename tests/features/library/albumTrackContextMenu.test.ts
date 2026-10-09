@@ -163,7 +163,7 @@ function createComponent(source: string) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@lucide/vue": { ChevronRight: icon, Play: icon, X: icon },
+    "@lucide/vue": { ChevronRight: icon, Play: icon, Pause: icon, X: icon },
     "@/shared/interaction/useContextMenu": contextMenuModule,
     "@/shared/interaction/useItemSelection": { useItemSelection: useTestItemFocusList },
     "@/features/library/components/albums/AlbumTrack.vue": {
@@ -238,6 +238,8 @@ function mountAlbumDetail(sourceTracks = tracks) {
         albumArtist: "Artist",
         tracks: sourceTracks,
         currentTrackId: null,
+        isPlaying: false,
+        playbackCommandPending: false,
         tracksLoading: false,
         tracksError: "",
         playlists: [],

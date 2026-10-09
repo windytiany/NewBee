@@ -40,6 +40,7 @@ let availableTracks = [track];
 let playlistAddCalls: number[] = [];
 let playlistAddFailures = new Map<number, Error>();
 let albumPlaybackCalls: { trackIds: number[]; rowKey: string; preserveQueue: boolean }[] = [];
+let togglePlaybackCalls = 0;
 let queueNextBatchCalls: number[][] = [];
 let queueEndBatchCalls: number[][] = [];
 let albumTrackRequests: Record<string, unknown>[] = [];
@@ -162,7 +163,10 @@ dependencies["@/features/playback/session"] = {
     setShuffleEnabled: () => {},
     playPreviousTrack: async () => false,
     playNextTrack: async () => false,
-    togglePlayback: async () => false,
+    togglePlayback: async () => {
+      togglePlaybackCalls++;
+      return true;
+    },
     removeTrackFromQueue: async (trackId: number) => {
       queueRemovalCalls.push(trackId);
       if (queueRemovalError) throw queueRemovalError;
@@ -245,6 +249,49 @@ describe("album playback by selection", () => {
   });
 });
 
+describe("current album playback controls", () => {
+  it("toggles the current track without replacing the queue or loading the album again", async () => {
+    const page = mountLibraryPage();
+    await loadTrack(page);
+    mockedCurrentTrack.value = { trackId: track.id, title: track.title, artist: track.artist };
+    const requestCount = albumTrackRequests.length;
+    expect(await page.toggleCurrentAlbumPlayback()).toBe(true);
+    expect(togglePlaybackCalls).toBe(1);
+    expect(albumPlaybackCalls).toEqual([]);
+    expect(albumTrackRequests).toHaveLength(requestCount);
+  });
+
+  it("always restarts the album even when its current track can be toggled", async () => {
+    const page = mountLibraryPage();
+    await loadTrack(page);
+    mockedCurrentTrack.value = { trackId: track.id, title: track.title, artist: track.artist };
+    availableTracks = [track, secondTrack];
+    expect(await page.playAlbumFromLibrary({ albumArtist: "Artist", album: "Album" })).toBe(true);
+    expect(togglePlaybackCalls).toBe(0);
+    expect(albumPlaybackCalls).toEqual([
+      { trackIds: [41, 42], rowKey: "album-track:41", preserveQueue: false },
+    ]);
+  });
+
+  it("does not toggle another album's track or act while loading or pending", async () => {
+    const page = mountLibraryPage();
+    await loadTrack(page);
+    mockedCurrentTrack.value = { trackId: 999, title: track.title, artist: track.artist };
+    expect(await page.toggleCurrentAlbumPlayback()).toBe(false);
+    mockedCurrentTrack.value = { trackId: track.id, title: track.title, artist: track.artist };
+    page.isLoadingTracks.value = true;
+    expect(await page.toggleCurrentAlbumPlayback()).toBe(false);
+    page.isLoadingTracks.value = false;
+    mockedPlaybackCommandPending.value = true;
+    expect(await page.toggleCurrentAlbumPlayback()).toBe(false);
+    mockedPlaybackCommandPending.value = false;
+    page.isTrackActionPending.value = true;
+    expect(await page.toggleCurrentAlbumPlayback()).toBe(false);
+    expect(togglePlaybackCalls).toBe(0);
+    expect(albumPlaybackCalls).toEqual([]);
+  });
+});
+
 async function loadTrack(page: ReturnType<typeof useLibraryBrowser>) {
   await settleRequests();
   page.selectArtist(artist);
@@ -261,6 +308,7 @@ beforeEach(() => {
   playlistAddCalls = [];
   playlistAddFailures = new Map();
   albumPlaybackCalls = [];
+  togglePlaybackCalls = 0;
   queueNextBatchCalls = [];
   queueEndBatchCalls = [];
   albumTrackRequests = [];

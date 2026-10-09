@@ -61,7 +61,7 @@ function mountBrowser() {
         }
       },
     },
-    "@lucide/vue": { DiscAlbum: placeholder },
+    "@lucide/vue": { DiscAlbum: placeholder, Pause: placeholder },
     "@/features/library/composables/useActions": { useLibraryActions: () => ({}) },
     "@/features/settings/composables/useCoverBackground": {
       useCoverBackground: () => Vue.ref(false),
@@ -116,6 +116,8 @@ function mountBrowser() {
             selectedAlbum: page.selectedAlbum.value,
             tracks: page.tracks.value,
             currentTrackId: null,
+            isPlaying: false,
+            playbackCommandPending: false,
             albumsLoading: page.isLoadingAlbums.value,
             albumsError: page.albumsError.value,
             tracksLoading: page.isLoadingTracks.value,

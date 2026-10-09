@@ -84,6 +84,8 @@ function mountBrowser() {
     selectedAlbum: { albumArtist: "Expanded artist", album: "Expanded album" },
     tracks: [],
     currentTrackId: null,
+    isPlaying: false,
+    playbackCommandPending: false,
     albumsLoading: false,
     albumsError: "",
     tracksLoading: false,
