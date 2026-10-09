@@ -29,7 +29,7 @@
           props.horizontal
             ? 'max-w-md justify-self-center'
             : props.compact
-              ? 'md:[container-type:size] md:h-full md:min-h-0'
+              ? 'md:@container-size md:h-full md:min-h-0'
               : ''
         "
       >

@@ -27,7 +27,7 @@
         presentation === 'lyrics'
           ? 'max-w-none px-0 py-8'
           : presentation === 'both'
-            ? 'max-w-[88rem] px-6 py-12 md:grid md:h-full md:min-h-0 md:w-[88%] md:grid-cols-2 md:grid-rows-[minmax(0,1fr)] md:gap-[clamp(3rem,6vw,7rem)] md:px-0'
+            ? 'max-w-352 px-6 py-12 md:grid md:h-full md:min-h-0 md:w-[88%] md:grid-cols-2 md:grid-rows-[minmax(0,1fr)] md:gap-[clamp(3rem,6vw,7rem)] md:px-0'
             : 'max-w-6xl px-6 py-8',
       ]"
     >
