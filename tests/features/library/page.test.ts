@@ -39,6 +39,7 @@ let availableAlbums = [album];
 let availableTracks = [track];
 let playlistAddCalls: number[] = [];
 let playlistAddFailures = new Map<number, Error>();
+let albumPlaybackCalls: { trackIds: number[]; rowKey: string; preserveQueue: boolean }[] = [];
 let queueNextBatchCalls: number[][] = [];
 let queueEndBatchCalls: number[][] = [];
 let albumTrackRequests: Record<string, unknown>[] = [];
@@ -136,7 +137,14 @@ dependencies["@/features/playback/session"] = {
       isPlaybackCommandPending: mockedPlaybackCommandPending,
       playbackStatus: mockedPlaybackStatus,
     },
-    playTracks: async () => true,
+    playTracks: async (tracks: { trackId: number }[], rowKey: string, preserveQueue: boolean) => {
+      albumPlaybackCalls.push({
+        trackIds: tracks.map((track) => track.trackId),
+        rowKey,
+        preserveQueue,
+      });
+      return true;
+    },
     addTracksToNext: async (tracksToAdd: { trackId: number }[]) => {
       queueNextBatchCalls.push(tracksToAdd.map(({ trackId }) => trackId));
       return true;
@@ -208,6 +216,35 @@ async function settleRequests() {
   await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
 }
 
+describe("album playback by selection", () => {
+  it("loads the target album without requiring its detail to be selected", async () => {
+    const page = mountLibraryPage();
+    await settleRequests();
+    availableTracks = [track, secondTrack, thirdTrack];
+    const target = { albumArtist: "Other Artist", album: "Other Album" };
+    expect(await page.playAlbumFromLibrary(target)).toBe(true);
+    expect(albumTrackRequests).toEqual([target]);
+    expect(albumPlaybackCalls).toEqual([
+      { trackIds: [41, 42, 43], rowKey: "album-track:41", preserveQueue: false },
+    ]);
+    expect(page.selectedAlbum.value).toBeNull();
+    expect(page.tracks.value).toEqual([]);
+  });
+
+  it("does not start playback for an empty album or a failed track request", async () => {
+    const page = mountLibraryPage();
+    await settleRequests();
+    availableTracks = [];
+    const target = { albumArtist: null, album: null };
+    expect(await page.playAlbumFromLibrary(target)).toBe(false);
+    albumTracksError = new Error("Database unavailable");
+    expect(await page.playAlbumFromLibrary(target)).toBe(false);
+    expect(albumPlaybackCalls).toEqual([]);
+    expect(page.trackActionError.value).toBe("播放专辑失败");
+    expect(page.isTrackActionPending.value).toBe(false);
+  });
+});
+
 async function loadTrack(page: ReturnType<typeof useLibraryBrowser>) {
   await settleRequests();
   page.selectArtist(artist);
@@ -223,6 +260,7 @@ beforeEach(() => {
   availableTracks = [track];
   playlistAddCalls = [];
   playlistAddFailures = new Map();
+  albumPlaybackCalls = [];
   queueNextBatchCalls = [];
   queueEndBatchCalls = [];
   albumTrackRequests = [];

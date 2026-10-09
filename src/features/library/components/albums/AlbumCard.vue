@@ -22,6 +22,8 @@
           showFallback ? coverPalette : 'bg-transparent',
           showFallback || artworkImageLoaded ? 'shadow-lg' : 'shadow-none',
         ]"
+        @click.stop="handleCoverClick"
+        @dblclick.stop="playAlbum"
       >
         <img v-if="artworkUrl" :src="artworkUrl" alt="" class="size-full object-cover" />
         <DiscAlbum
@@ -41,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import { DiscAlbum } from "@lucide/vue";
 import type { AlbumSummary } from "@/features/library/types";
 import { useArtworkSize } from "@/features/artwork/useArtworkSize";
@@ -58,10 +60,39 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [];
+  play: [];
   contextMenu: [
     request: { x: number; y: number; trigger: InstanceType<typeof globalThis.HTMLButtonElement> },
   ];
 }>();
+
+const COVER_SINGLE_CLICK_DELAY_MS = 300;
+let pendingCoverClick: ReturnType<typeof globalThis.setTimeout> | undefined;
+
+function cancelCoverClick() {
+  globalThis.clearTimeout(pendingCoverClick);
+  pendingCoverClick = undefined;
+}
+
+function handleCoverClick(event: InstanceType<typeof globalThis.MouseEvent>) {
+  cancelCoverClick();
+  if (event.detail > 1) return;
+  if (!props.isSelected) {
+    emit("select");
+    return;
+  }
+  pendingCoverClick = globalThis.setTimeout(() => {
+    pendingCoverClick = undefined;
+    emit("select");
+  }, COVER_SINGLE_CLICK_DELAY_MS);
+}
+
+function playAlbum() {
+  cancelCoverClick();
+  emit("play");
+}
+
+onUnmounted(cancelCoverClick);
 
 function openAlbumContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
   event.preventDefault();

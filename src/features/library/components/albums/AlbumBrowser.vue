@@ -36,6 +36,7 @@
               :is-focused="albumFocus.isFocused(getAlbumKey(album))"
               :is-context-menu-open="albumMenu?.contextMenu?.payload.album === album.album"
               @select="toggleAlbum(album)"
+              @play="playAlbum(album)"
               @context-menu="openAlbumContextMenu(album, $event)"
             />
           </div>
@@ -72,7 +73,7 @@
               @retry="emit('retry')"
               @close="closeAlbum(row.selectedAlbum)"
               @play-track="emit('playTrack', $event)"
-              @play-album="emit('playAlbum')"
+              @play-album="playAlbum(row.selectedAlbum)"
               @refresh-playlists="emit('refreshPlaylists')"
               @add-tracks-to-next="emit('addTracksToNext', $event)"
               @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
@@ -154,7 +155,7 @@ const emit = defineEmits<{
   retry: [];
   selectAlbum: [album: AlbumSummary | null];
   playTrack: [trackId: number];
-  playAlbum: [];
+  playAlbum: [album: LibraryAlbumSelection];
   refreshPlaylists: [];
   addTracksToNext: [trackIds: number[]];
   addTracksToQueueEnd: [trackIds: number[]];
@@ -246,6 +247,12 @@ function isSelectedAlbum(album: AlbumSummary) {
 function toggleAlbum(album: AlbumSummary) {
   albumFocus.focusItem(getAlbumKey(album));
   emit("selectAlbum", isSelectedAlbum(album) ? null : album);
+}
+
+function playAlbum(album: AlbumSummary) {
+  if (!props.artist || props.trackActionPending) return;
+  albumFocus.focusItem(getAlbumKey(album));
+  emit("playAlbum", { albumArtist: props.artist.albumArtist, album: album.album });
 }
 
 function closeAlbum(album: AlbumSummary) {

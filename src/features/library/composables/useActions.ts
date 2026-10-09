@@ -100,14 +100,18 @@ export function useLibraryActions(
     await playTracks(displayedTracks, `album-track:${trackId}`);
   }
 
-  async function playAlbumFromLibrary() {
-    if (isLoadingTracks.value || tracks.value.length === 0) return;
+  function playAlbumFromLibrary(selection: LibraryAlbumSelection) {
+    return runTrackAction("播放专辑", async () => {
+      const sourceTracks = await loadAlbumActionTracks(selection);
+      const firstTrack = sourceTracks[0];
+      if (!firstTrack) return false;
 
-    const firstTrack = tracks.value[0];
-    if (!firstTrack) return;
-
-    const displayedTracks = toPlaybackDisplayTracks(tracks.value);
-    await playTracks(displayedTracks, `album-track:${firstTrack.id}`, false);
+      return playTracks(
+        toPlaybackDisplayTracks(sourceTracks),
+        `album-track:${firstTrack.id}`,
+        false,
+      );
+    });
   }
 
   function findLibraryTracks(trackIds: readonly number[]) {
