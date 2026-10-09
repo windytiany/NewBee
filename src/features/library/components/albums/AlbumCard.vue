@@ -66,8 +66,10 @@ const emit = defineEmits<{
   ];
 }>();
 
-const COVER_SINGLE_CLICK_DELAY_MS = 300;
+const COVER_DOUBLE_CLICK_WINDOW_MS = 150;
 let pendingCoverClick: ReturnType<typeof globalThis.setTimeout> | undefined;
+let lastCoverClickAt: number | null = null;
+let isCoverDoubleClick = false;
 
 function cancelCoverClick() {
   globalThis.clearTimeout(pendingCoverClick);
@@ -76,7 +78,12 @@ function cancelCoverClick() {
 
 function handleCoverClick(event: InstanceType<typeof globalThis.MouseEvent>) {
   cancelCoverClick();
-  if (event.detail > 1) return;
+  isCoverDoubleClick =
+    event.detail === 2 &&
+    lastCoverClickAt !== null &&
+    event.timeStamp - lastCoverClickAt <= COVER_DOUBLE_CLICK_WINDOW_MS;
+  lastCoverClickAt = event.timeStamp;
+  if (isCoverDoubleClick) return;
   if (!props.isSelected) {
     emit("select");
     return;
@@ -84,11 +91,14 @@ function handleCoverClick(event: InstanceType<typeof globalThis.MouseEvent>) {
   pendingCoverClick = globalThis.setTimeout(() => {
     pendingCoverClick = undefined;
     emit("select");
-  }, COVER_SINGLE_CLICK_DELAY_MS);
+  }, COVER_DOUBLE_CLICK_WINDOW_MS);
 }
 
 function playAlbum() {
+  if (!isCoverDoubleClick) return;
   cancelCoverClick();
+  isCoverDoubleClick = false;
+  lastCoverClickAt = null;
   emit("play");
 }
 

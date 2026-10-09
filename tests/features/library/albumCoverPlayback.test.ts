@@ -143,10 +143,10 @@ function mountBrowser(selected = false, initialState: Partial<PlaybackState> = {
   apps.push(app);
   const cover = findNode(root, (node) => node.type === "span" && !!node.props.onDblclick);
   if (!cover) throw new Error("Missing album cover");
-  function dispatch(name: string, detail: number) {
+  function dispatch(name: string, detail: number, timeStamp = globalThis.performance.now()) {
     const handler = cover?.props[name];
     if (typeof handler !== "function") throw new Error(`Missing ${name}`);
-    handler({ detail, stopPropagation() {} });
+    handler({ detail, timeStamp, stopPropagation() {} });
   }
   function playbackButton() {
     const header = findNode(root, (node) => node.type === "h2")?.parent;
@@ -194,6 +194,32 @@ describe("library album cover playback", () => {
       expect(browser.toggles).toEqual([]);
       expect(browser.selections).toEqual(selected ? [] : [{ album: "Album", year: 2024 }]);
       expect(browser.selectedAlbum.value?.album).toBe("Album");
+    });
+  }
+
+  it("accepts a double click just inside the 150ms window", async () => {
+    const browser = mountBrowser(true);
+    browser.dispatch("onClick", 1, 0);
+    browser.dispatch("onClick", 2, 149);
+    browser.dispatch("onDblclick", 2, 149);
+    await waitForSingleClick();
+    expect(browser.plays).toEqual([{ albumArtist: "Artist", album: "Album" }]);
+    expect(browser.selections).toEqual([]);
+    expect(browser.selectedAlbum.value?.album).toBe("Album");
+  });
+
+  for (const selected of [false, true]) {
+    it(`treats a native double click outside 150ms as single clicks when selected=${selected}`, async () => {
+      const browser = mountBrowser(selected);
+      browser.dispatch("onClick", 1, 0);
+      await new Promise((resolve) => setTimeout(resolve, 175));
+      expect(browser.selectedAlbum.value !== null).toBe(!selected);
+      browser.dispatch("onClick", 2, 151);
+      browser.dispatch("onDblclick", 2, 151);
+      await waitForSingleClick();
+      expect(browser.selectedAlbum.value !== null).toBe(selected);
+      expect(browser.selections).toHaveLength(2);
+      expect(browser.plays).toEqual([]);
     });
   }
 
