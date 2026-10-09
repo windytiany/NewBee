@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import { computed, nextTick, onScopeDispose, shallowRef, toValue, watch } from "vue";
+import { computed, onScopeDispose, shallowRef, toValue, watch } from "vue";
 import type { MaybeRefOrGetter } from "vue";
 import type { TrackArtwork } from "@/features/artwork/types";
+import { createArtworkResource } from "@/features/artwork/artworkResources";
+import type { ArtworkResource, ArtworkResourceSnapshot } from "@/features/artwork/artworkResources";
 import {
   ALBUM_BACKGROUND_SAMPLE_SIZE,
   createAlbumBackgroundPixels,
@@ -21,15 +23,12 @@ type ArtworkSnapshot = {
 };
 
 type SharedArtwork = {
-  selection: AlbumArtworkSelection;
-  size: number | null;
-  generation: number;
+  resource: ArtworkResource;
   snapshot: ArtworkSnapshot;
   subscribers: Set<(snapshot: ArtworkSnapshot) => void>;
   backgroundRequested: boolean;
   backgroundAttempted: boolean;
-  decoder: HTMLImageElement | null;
-  objectUrl: string | null;
+  unsubscribe: (() => void) | null;
 };
 
 const fallback: ArtworkSnapshot = {
@@ -61,51 +60,50 @@ export function useAlbumArtwork(
       snapshot.value = fallback;
       const album = toValue(selection);
       if (key === null || album === null) return;
-
       let entry = sharedArtwork.get(key);
       const isNew = entry === undefined;
       if (!entry) {
+        const selectedAlbum = { ...album };
+        const selectedSize = toValue(size);
         entry = {
-          selection: { ...album },
-          size: toValue(size),
-          generation: 0,
+          resource: createArtworkResource(
+            () =>
+              invoke<TrackArtwork>("get_album_artwork", { ...selectedAlbum, size: selectedSize }),
+            (error) =>
+              `读取专辑封面失败：${error instanceof Error ? error.message : String(error)}`,
+          ),
           snapshot: { ...fallback, status: "loading" },
           subscribers: new Set(),
           backgroundRequested: false,
           backgroundAttempted: false,
-          decoder: null,
-          objectUrl: null,
+          unsubscribe: null,
         };
         sharedArtwork.set(key, entry);
       }
+      const subscribedEntry = entry;
       const subscriber = (value: ArtworkSnapshot) => (snapshot.value = value);
       entry.subscribers.add(subscriber);
       entry.backgroundRequested ||= purpose === "background";
       snapshot.value = entry.snapshot;
-      if (isNew) void loadArtwork(key, album, entry, ++entry.generation);
-      else if (purpose === "background") generateBackground(entry);
-
-      const subscribedEntry = entry;
+      if (isNew) {
+        entry.unsubscribe = entry.resource.subscribe((value) =>
+          updateResource(subscribedEntry, value),
+        );
+      } else if (purpose === "background") generateBackground(entry);
       unsubscribe = () => {
         subscribedEntry.subscribers.delete(subscriber);
         if (subscribedEntry.subscribers.size > 0) return;
-        sharedArtwork.delete(key);
-        subscribedEntry.decoder?.removeAttribute("src");
-        subscribedEntry.decoder = null;
-        const url = subscribedEntry.objectUrl;
-        subscribedEntry.objectUrl = null;
-        // Let rendered consumers drop their image before revoking its URL.
-        if (url) void nextTick().then(() => globalThis.URL.revokeObjectURL(url));
+        if (sharedArtwork.get(key) === subscribedEntry) sharedArtwork.delete(key);
+        subscribedEntry.unsubscribe?.();
+        subscribedEntry.unsubscribe = null;
       };
     },
     { immediate: true, flush: "sync" },
   );
-
   onScopeDispose(() => {
     stop();
     unsubscribe?.();
   });
-
   return {
     status: computed(() => snapshot.value.status),
     url: computed(() => snapshot.value.url),
@@ -116,64 +114,27 @@ export function useAlbumArtwork(
 
 /** Reload subscribed covers and backgrounds after embedded artwork changes. */
 export function invalidateAlbumArtworkCache() {
-  for (const [key, entry] of sharedArtwork) {
-    const url = entry.objectUrl;
-    entry.objectUrl = null;
-    entry.decoder?.removeAttribute("src");
-    entry.decoder = null;
-    entry.backgroundAttempted = false;
-    publish(entry, { ...fallback, status: "loading" });
-    if (url) void nextTick().then(() => globalThis.URL.revokeObjectURL(url));
-    void loadArtwork(key, entry.selection, entry, ++entry.generation);
-  }
+  for (const entry of [...sharedArtwork.values()]) entry.resource.reload();
 }
 
-async function loadArtwork(
-  key: string,
-  selection: AlbumArtworkSelection,
-  entry: SharedArtwork,
-  generation: number,
-) {
-  try {
-    const artwork = await invoke<TrackArtwork>("get_album_artwork", {
-      ...selection,
-      size: entry.size,
-    });
-    if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
-    if (artwork.byteLength === 0) {
-      publish(entry, fallback);
-      return;
-    }
-    const blob = new globalThis.Blob([artwork]);
-    const url = globalThis.URL.createObjectURL(blob);
-    entry.objectUrl = url;
-    const decoder = new globalThis.Image();
-    entry.decoder = decoder;
-    decoder.src = url;
-    await decoder.decode();
-    if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
-    publish(entry, { ...fallback, status: "ready", url });
-    generateBackground(entry);
-  } catch (error) {
-    if (sharedArtwork.get(key) !== entry || entry.generation !== generation) return;
-    const url = entry.objectUrl;
-    entry.objectUrl = null;
-    entry.decoder?.removeAttribute("src");
-    entry.decoder = null;
-    if (url) globalThis.URL.revokeObjectURL(url);
-    publish(entry, {
-      ...fallback,
-      error: `读取专辑封面失败：${error instanceof Error ? error.message : String(error)}`,
-    });
-  }
+function updateResource(entry: SharedArtwork, value: ArtworkResourceSnapshot) {
+  if (value.status === "loading") entry.backgroundAttempted = false;
+  publish(entry, {
+    status: value.status,
+    url: value.image?.url ?? null,
+    background: null,
+    error: value.error,
+  });
+  generateBackground(entry);
 }
 
 function generateBackground(entry: SharedArtwork) {
+  const image = entry.resource.snapshot.image;
   if (
     !entry.backgroundRequested ||
     entry.backgroundAttempted ||
     entry.snapshot.status !== "ready" ||
-    !entry.decoder
+    !image
   )
     return;
   entry.backgroundAttempted = true;
@@ -184,14 +145,14 @@ function generateBackground(entry: SharedArtwork) {
     canvas.height = size;
     const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) throw new Error("Canvas 2D 不可用");
-    context.drawImage(entry.decoder, 0, 0, size, size);
-    const image = context.getImageData(0, 0, size, size);
-    const { pixels, color } = createAlbumBackgroundPixels(image.data, size, size);
-    image.data.set(pixels);
-    context.putImageData(image, 0, 0);
+    context.drawImage(image.decoder, 0, 0, size, size);
+    const pixels = context.getImageData(0, 0, size, size);
+    const background = createAlbumBackgroundPixels(pixels.data, size, size);
+    pixels.data.set(background.pixels);
+    context.putImageData(pixels, 0, 0);
     publish(entry, {
       ...entry.snapshot,
-      background: { imageUrl: canvas.toDataURL("image/png"), color },
+      background: { imageUrl: canvas.toDataURL("image/png"), color: background.color },
     });
   } catch (error) {
     publish(entry, {
@@ -203,5 +164,7 @@ function generateBackground(entry: SharedArtwork) {
 
 function publish(entry: SharedArtwork, snapshot: ArtworkSnapshot) {
   entry.snapshot = snapshot;
-  for (const subscriber of entry.subscribers) subscriber(snapshot);
+  for (const subscriber of [...entry.subscribers]) {
+    if (entry.subscribers.has(subscriber)) subscriber(snapshot);
+  }
 }

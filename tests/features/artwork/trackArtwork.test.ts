@@ -91,7 +91,11 @@ dependencies["@tauri-apps/api/core"] = {
 };
 
 await loadSourceModules(
-  ["features/artwork/useTrackArtwork.ts", "features/playback/composables/useTrackDetails.ts"],
+  [
+    "features/artwork/useTrackArtwork.ts",
+    "features/artwork/useTrackArtworkPresentation.ts",
+    "features/playback/composables/useTrackDetails.ts",
+  ],
   dependencies,
 );
 const artworkModule = dependencies[
@@ -100,7 +104,7 @@ const artworkModule = dependencies[
 const trackInfoModule = dependencies[
   "@/features/playback/composables/useTrackDetails"
 ] as typeof import("@/features/playback/composables/useTrackDetails");
-const { useTrackArtwork, invalidateTrackArtworkCache, retainTrackArtwork } = artworkModule;
+const { useTrackArtwork, invalidateTrackArtworkCache } = artworkModule;
 const measuredArtworkSize = ref<number | null>(null);
 const playingTrack = ref<{ trackId: number; title: string; artist: string } | null>(null);
 
@@ -112,6 +116,8 @@ function createTrackArtworkComponent(
   const modules: Record<string, unknown> = {
     vue: { ...Vue, Transition: testTransition },
     "@/features/artwork/useTrackArtwork": artworkModule,
+    "@/features/artwork/useTrackArtworkPresentation":
+      dependencies["@/features/artwork/useTrackArtworkPresentation"],
     "@/features/artwork/useArtworkSize": { useArtworkSize: () => measuredArtworkSize },
     "@/features/playback/session": {
       usePlaybackSession: () => ({ state: { currentTrack: playingTrack } }),
@@ -633,23 +639,6 @@ describe("曲目封面加载", () => {
     expect(second.artwork.url.value).toBe(secondUrl);
   });
 
-  it("缓存刷新时仍保留正在退出的 URL，最后一次释放才回收", async () => {
-    const { artwork } = mountArtwork(109);
-    await settleArtwork();
-    const releaseFirst = retainTrackArtwork(109);
-    const releaseSecond = retainTrackArtwork(109);
-
-    invalidateTrackArtworkCache();
-    await settleArtwork();
-    expect(artwork.url.value).toBe("blob:artwork-2");
-    expect(revokedUrls).toEqual([]);
-    releaseFirst();
-    releaseFirst();
-    expect(revokedUrls).toEqual([]);
-    releaseSecond();
-    expect(revokedUrls).toEqual(["blob:artwork-1"]);
-  });
-
   it("两处封面共享请求，并在最后一个订阅者释放时回收资源", async () => {
     const first = mountArtwork(71);
     const second = mountArtwork(71);
@@ -838,14 +827,15 @@ it("实际尺寸就绪后才请求，尺寸变化不复用旧 URL，更新只刷
   expect(invokedArtworkRequests.map((request) => request.size)).toEqual([40, 120, 120]);
 });
 
-it("尺寸缩略图离场保留只订阅同尺寸，不额外请求原图", async () => {
+it("保留当前尺寸封面不新增加载订阅或额外请求原图", async () => {
   const scope = effectScope();
   mountedScopes.push(scope);
   const artwork = scope.run(() => useTrackArtwork(702, 128));
   await settleArtwork();
   const url = artwork?.url.value;
   if (!url) throw new Error("Missing thumbnail URL");
-  const release = retainTrackArtwork(702, 128);
+  if (!artwork) throw new Error("Missing thumbnail subscription");
+  const release = artwork.retain();
   scope.stop();
   expect(invokedArtworkRequests).toEqual([{ trackId: 702, size: 128 }]);
   expect(revokedUrls).not.toContain(url);

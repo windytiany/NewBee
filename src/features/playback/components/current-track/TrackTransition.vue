@@ -34,13 +34,8 @@
 </template>
 
 <script setup lang="ts">
-import { onScopeDispose, shallowRef, watch } from "vue";
-import {
-  isSameTrackArtwork,
-  retainTrackArtwork,
-  useTrackArtwork,
-} from "@/features/artwork/useTrackArtwork";
-import type { TrackArtwork } from "@/features/artwork/types";
+import { shallowRef, watch } from "vue";
+import { useTrackArtworkPresentation } from "@/features/artwork/useTrackArtworkPresentation";
 import type { TrackArtworkStatus } from "@/features/artwork/useTrackArtwork";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
 import type { NowPlayingTrack } from "@/features/playback/types";
@@ -53,7 +48,6 @@ type DisplayedTrack = {
   details: TrackDetails | null;
   artworkUrl: string | null;
   artworkStatus: TrackArtworkStatus;
-  artworkContent: TrackArtwork | null;
   detailsError: string;
   artworkError: string;
 };
@@ -66,72 +60,33 @@ const props = defineProps<{
 const { currentTrackDetails, isLoading, currentTrackDetailsError, retry } = useTrackDetails(
   () => props.track?.trackId ?? null,
 );
-const { status, url, content, error } = useTrackArtwork(
+const { status, url, error, present, release } = useTrackArtworkPresentation(
   () => props.track?.trackId ?? null,
   () => props.artworkSize ?? null,
 );
 const displayed = shallowRef<DisplayedTrack | null>(null);
-const retainedArtwork = new Map<number, () => void>();
-let nextKey = 0;
 
 function releaseArtwork(element: { getAttribute: (name: string) => string | null }) {
-  const key = Number(element.getAttribute("data-artwork-key"));
-  retainedArtwork.get(key)?.();
-  retainedArtwork.delete(key);
+  release(Number(element.getAttribute("data-artwork-key")));
 }
 
 watch(
-  [
-    () => props.track,
-    currentTrackDetails,
-    isLoading,
-    status,
-    url,
-    content,
-    currentTrackDetailsError,
-    error,
-  ],
-  ([
-    track,
-    details,
-    detailsLoading,
-    artworkStatus,
-    artworkUrl,
-    artworkContent,
-    detailsError,
-    artworkError,
-  ]) => {
+  [() => props.track, currentTrackDetails, isLoading, status, url, currentTrackDetailsError, error],
+  ([track, details, detailsLoading, artworkStatus, , detailsError]) => {
     const loading = !!track && (detailsLoading || artworkStatus === "loading");
     if (loading && displayed.value && displayed.value.artworkStatus !== "loading") return;
 
-    const previous = displayed.value;
-    const sameArtwork =
-      !loading &&
-      previous !== null &&
-      previous.artworkStatus === artworkStatus &&
-      isSameTrackArtwork(previous.artworkContent, artworkContent);
-    const key =
-      previous && (previous.artworkStatus === "loading" || sameArtwork) ? previous.key : ++nextKey;
-    // Reuse the displayed URL and its retention when only the track information changes.
-    // Different artwork stays alive through its DOM leave animation.
-    if (!loading && !sameArtwork && track && artworkUrl)
-      retainedArtwork.set(key, retainTrackArtwork(track.trackId, props.artworkSize ?? null));
+    const artwork = present(loading);
     displayed.value = {
-      key,
+      key: artwork.key,
       track: track ? { trackId: track.trackId, title: track.title, artist: track.artist } : null,
       details,
-      artworkUrl: loading ? null : sameArtwork ? previous.artworkUrl : artworkUrl,
-      artworkStatus: loading ? "loading" : artworkStatus,
-      artworkContent: loading ? null : artworkContent,
+      artworkUrl: artwork.url,
+      artworkStatus: artwork.status,
       detailsError,
-      artworkError,
+      artworkError: artwork.error,
     };
   },
   { immediate: true },
 );
-
-onScopeDispose(() => {
-  for (const release of retainedArtwork.values()) release();
-  retainedArtwork.clear();
-});
 </script>

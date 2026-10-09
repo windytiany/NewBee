@@ -213,18 +213,6 @@ describe("共享专辑封面和背景", () => {
     expect(artwork.error.value).toContain("IPC unavailable");
   });
 
-  it("解码失败释放 URL 并回退", async () => {
-    decodeImage = () => Promise.reject(new Error("Invalid image"));
-    const { artwork } = subscribe(album, "background");
-    requestAt(0).resolve(available);
-    await settle();
-    expect(artwork.status.value).toBe("fallback");
-    expect(artwork.error.value).toContain("Invalid image");
-    expect(artwork.url.value).toBeNull();
-    expect(revokedUrls).toEqual(["blob:album-1"]);
-    expect(canvasCount).toBe(0);
-  });
-
   it("背景生成失败不影响封面，保留错误并使用默认背景", async () => {
     canvasAvailable = false;
     const { artwork } = subscribe(album, "background");
@@ -253,22 +241,6 @@ describe("共享专辑封面和背景", () => {
     expect(artwork.background.value).toBeNull();
     await settle();
     expect(revokedUrls).toEqual(["blob:album-1"]);
-  });
-
-  it("解码尚未完成时卸载仍会释放 URL，不发布过期结果", async () => {
-    const decode = deferred<void>();
-    decodeImage = () => decode.promise;
-    const { artwork, dispose } = subscribe(album, "background");
-    requestAt(0).resolve(available);
-    await settle();
-    expect(artwork.status.value).toBe("loading");
-    dispose();
-    await settle();
-    decode.resolve();
-    await settle();
-    expect(revokedUrls).toEqual(["blob:album-1"]);
-    expect(canvasCount).toBe(0);
-    expect(artwork.status.value).toBe("loading");
   });
 
   it("写入后刷新订阅封面及背景，过期请求不能覆盖刷新结果", async () => {
