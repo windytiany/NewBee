@@ -52,6 +52,8 @@ function mountBrowser() {
             return [artist];
           case "list_albums":
             return availableAlbums;
+          case "list_album_tracks":
+            return [];
           case "get_album_artwork":
             return new ArrayBuffer(0);
           default:
@@ -200,6 +202,40 @@ it("keeps real album cards and cover subscriptions mounted across inactive/activ
     });
     expect(fixture.covers).toEqual({ subscriptions: 1, unsubscriptions: 0 });
     expect(fixture.requests).toEqual(["list_album_artists", "list_albums", "get_album_artwork"]);
+  }
+});
+
+it("reserves scrollbar space and only adds an outer ring when opening or closing an album", async () => {
+  const fixture = mountBrowser();
+  await settle();
+  fixture.browser.selectArtist(fixture.artist);
+  await settle();
+  const section = findNode(
+    fixture.root,
+    (node) => node.props["aria-labelledby"] === "album-browser-heading",
+  );
+  expect(section?.props.class).toContain("[scrollbar-gutter:stable]");
+  const card = findNode(fixture.root, (node) => node.type === "article");
+  const button = findNode(fixture.root, (node) => node.props["aria-label"] === "查看专辑 Album");
+  if (!button || typeof button.props.onClick !== "function") throw new Error("Missing album card");
+  const initialClasses = String(button.props.class).split(/\s+/).sort();
+  expect(initialClasses).not.toContain("ring-2");
+  expect(initialClasses).not.toContain("ring-app-accent");
+
+  for (const expanded of [true, false]) {
+    button.props.onClick();
+    await settle();
+    expect(button.props["aria-expanded"]).toBe(expanded);
+    const classes = String(button.props.class).split(/\s+/);
+    expect(classes).toContain("ring-2");
+    expect(classes).toContain("ring-app-accent");
+    expect(
+      classes.filter((value) => value !== "ring-2" && value !== "ring-app-accent").sort(),
+    ).toEqual(initialClasses);
+    expect(section?.props.class).toContain("[scrollbar-gutter:stable]");
+    expect(findNode(fixture.root, (node) => node.type === "article")).toBe(card);
+    expect(fixture.covers).toEqual({ subscriptions: 1, unsubscriptions: 0 });
+    expect(fixture.requests.filter((command) => command === "get_album_artwork")).toHaveLength(1);
   }
 });
 

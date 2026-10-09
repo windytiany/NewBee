@@ -2,7 +2,7 @@
   <section
     aria-labelledby="album-browser-heading"
     :aria-busy="props.trackActionPending || props.albumsLoading"
-    class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto text-white"
+    class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 [scrollbar-gutter:stable] flex-col overflow-y-auto text-white"
   >
     <template v-if="props.artist">
       <header class="shrink-0 px-5 py-6 sm:px-8 sm:py-8">
