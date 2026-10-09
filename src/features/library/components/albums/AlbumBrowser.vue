@@ -10,10 +10,6 @@
           {{ props.artist.albumArtist ?? "未知演出者" }}
         </h1>
       </header>
-
-      <p v-if="props.albumsError" role="alert" class="px-3 py-3 text-sm text-amber-200">
-        读取失败，请重试或查看日志 <button type="button" @click="emit('retry')">重试</button>
-      </p>
       <p
         v-if="!props.albumsLoading && !props.albumsError && props.albums.length === 0"
         class="text-app-muted px-5 text-sm sm:px-8"
@@ -43,7 +39,6 @@
           <div
             v-if="row.selectedAlbum"
             class="relative"
-            :title="selectedArtwork.error.value || undefined"
             :style="{ '--album-background-color': selectedArtwork.background.value?.color }"
           >
             <div
@@ -72,7 +67,6 @@
               :playlists-loading="props.playlistsLoading"
               :playlists-error="props.playlistsError"
               :track-action-pending="props.trackActionPending"
-              @retry="emit('retry')"
               @close="closeAlbum(row.selectedAlbum)"
               @play-track="emit('playTrack', $event)"
               @play-album="playAlbum(row.selectedAlbum)"
@@ -157,7 +151,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  retry: [];
   selectAlbum: [album: AlbumSummary | null];
   playTrack: [trackId: number];
   playAlbum: [album: LibraryAlbumSelection];

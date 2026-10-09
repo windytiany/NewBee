@@ -67,21 +67,14 @@ function mount(properties: { trackIds?: number[]; album?: LibraryAlbumSelection 
   if (!button) throw new Error("Missing lyrics menu item");
   return { root, button, tracks, albums, state, closed: () => closed, refreshed: () => refreshed };
 }
-it("offers a synchronization-only retry after a refresh failure", async () => {
+it("does not offer a retry after a refresh failure", async () => {
   const result = mount({ trackIds: [1] });
   result.state.synchronizationError = "reload failed";
   await Vue.nextTick();
-  const button = findNode(
-    result.root,
-    (node) => node.type === "button" && getTextContent(node).includes("重试歌词界面刷新"),
-  );
-  if (!button) throw new Error("Missing refresh retry");
-  const click = button.props.onClick as (event: { stopPropagation: () => void }) => void;
-  click({ stopPropagation() {} });
-  expect(result.refreshed()).toBe(1);
-  expect(result.closed()).toBe(1);
+  expect(getTextContent(result.root)).not.toContain("重试");
+  expect(result.refreshed()).toBe(0);
+  expect(result.closed()).toBe(0);
   expect(result.tracks).toEqual([]);
-  expect(result.albums).toEqual([]);
 });
 
 it("retains the exact menu name and snapshots selected targets before closing", () => {

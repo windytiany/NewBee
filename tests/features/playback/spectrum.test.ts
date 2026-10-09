@@ -3,6 +3,7 @@ import * as Vue from "vue";
 import { compileSfc, loadSourceModules, evaluateSource } from "../../support/moduleLoader";
 
 import { createHostNode, createHostRenderer } from "../../support/hostRenderer";
+import type { NotificationInput } from "@/shared/notifications/center";
 
 function deferred<Value>() {
   let resolve: (value: Value) => void = () => {};
@@ -23,6 +24,8 @@ const apps: Array<{ unmount: () => void }> = [];
 const originalGlobals = new Map<string, PropertyDescriptor | undefined>();
 let nextTimer = 0;
 let desktop = true;
+const feedback: NotificationInput[] = [];
+const warnings: unknown[][] = [];
 const testDocument = {
   hidden: false,
   addEventListener(event: string, listener: () => void) {
@@ -35,6 +38,8 @@ const testDocument = {
   },
 };
 const dependencies: Record<string, unknown> = {
+  "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
+  "@/shared/logging/logger": { logger: { warn: (...args: unknown[]) => warnings.push(args) } },
   vue: { ...Vue, onMounted: (callback: () => void) => mountCallbacks.push(callback) },
   "@tauri-apps/api/core": {
     isTauri: () => desktop,
@@ -88,6 +93,8 @@ function setHidden(hidden: boolean) {
 
 beforeEach(() => {
   requests.length = 0;
+  feedback.length = 0;
+  warnings.length = 0;
   timers.clear();
   listeners.clear();
   mountCallbacks.length = 0;
@@ -190,8 +197,16 @@ describe("实时音频频谱轮询", () => {
     await settle();
     expect(spectrum.error.value).toContain("IPC unavailable");
     expect(spectrum.bands.value).toEqual(Array(8).fill(0));
+    expect(feedback).toEqual([
+      { type: "warning", message: "实时频谱不可用，请查看日志", key: "playback-spectrum" },
+    ]);
+    expect(warnings).toHaveLength(1);
     advancePoll();
-    requestAt(1).response.resolve(Array(8).fill(0.3));
+    requestAt(1).response.reject(new Error("still unavailable"));
+    await settle();
+    expect(feedback).toHaveLength(1);
+    advancePoll();
+    requestAt(2).response.resolve(Array(8).fill(0.3));
     await settle();
     expect(spectrum.error.value).toBe("");
     expect(spectrum.bands.value).toEqual(Array(8).fill(0.3));
@@ -276,7 +291,7 @@ describe("播放条分段频谱", () => {
     ).toBe(true);
     viewError.value = "实时频谱不可用：IPC unavailable";
     await Vue.nextTick();
-    expect(view.props.title).toContain("IPC unavailable");
+    expect(view.props.title).toBe("实时音频频谱 · 40 Hz–16 kHz");
   });
 
   it("空闲时保留完整的低亮度分段底纹，播放和暂停只改变真实频谱层", async () => {

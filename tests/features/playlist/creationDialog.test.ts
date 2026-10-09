@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import * as Vue from "vue";
+import { notifications, notify } from "@/shared/notifications/center";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
 import { createHostRenderer, findNode, getTextContent } from "../../support/hostRenderer";
 import type { HostTree } from "../../support/hostRenderer";
@@ -101,6 +102,7 @@ function mountDialog(
   const errors = mock(() => {});
   const component = evaluateSource<{ default: Vue.Component }>(dialogOutput, {
     vue: Vue,
+    "@/shared/notifications/center": { notify },
     "@tauri-apps/api/core": { invoke },
     "@/shared/logging/logger": { logger: { error: errors } },
   }).default;
@@ -155,6 +157,7 @@ function mountDialog(
 }
 
 beforeEach(() => {
+  notifications.clear();
   documentTarget = new TestDocument();
   for (const [key, value] of Object.entries({
     document: documentTarget,
@@ -166,6 +169,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  notifications.clear();
   for (const app of apps.splice(0)) app.unmount();
   for (const [key, descriptor] of originals) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -223,7 +227,7 @@ describe("创建歌单对话框", () => {
     expect(loader).not.toHaveBeenCalled();
   });
 
-  it("空白名称显示内联校验并聚焦输入，不调用创建或 loader", async () => {
+  it("空白名称通过 toast 校验并聚焦输入，不调用创建或 loader", async () => {
     const dialog = mountDialog();
     const loader = mock(async () => [41]);
     dialog.show(loader);
@@ -233,7 +237,11 @@ describe("创建歌单对话框", () => {
     expect(loader).not.toHaveBeenCalled();
     expect(dialog.created).toEqual([]);
     expect(dialog.dialog.open).toBe(true);
-    expect(dialog.alert()).toBe("请输入歌单名称");
+    expect(dialog.alert()).toBe("");
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      message: "请输入歌单名称",
+    });
     expect(dialog.input.props["aria-invalid"]).toBe(true);
     expect(documentTarget.activeElement).toBe(dialog.input);
     expect(dialog.input.focusCalls).toBe(2);
@@ -255,7 +263,12 @@ describe("创建歌单对话框", () => {
     dialog.show(loader);
     dialog.setName("Retry");
     await dialog.submit();
-    expect(dialog.alert()).toContain("创建歌单失败");
+    expect(dialog.alert()).toBe("");
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "error",
+      message: "创建歌单失败，请查看日志",
+    });
     expect(dialog.dialog.open).toBe(true);
     expect(dialog.input.value).toBe("Retry");
     expect(dialog.input.props.disabled).toBe(false);
@@ -298,7 +311,9 @@ describe("创建歌单对话框", () => {
     await dialog.submit();
     expect(tracks).toEqual([41]);
     expect(dialog.created).toEqual([73]);
-    expect(dialog.alert()).toContain("歌单已创建，已添加 1 首");
+    expect(dialog.alert()).toBe("");
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.message).toContain("歌单已创建，已添加 1 首");
     expect(dialog.dialog.open).toBe(true);
     expect(dialog.input.value).toBe("Partial");
     expect(dialog.input.props.disabled).toBe(true);

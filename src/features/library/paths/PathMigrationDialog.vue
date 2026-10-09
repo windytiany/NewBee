@@ -4,18 +4,10 @@ import { usePathMigration } from "@/features/library/paths/usePathMigration";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
 
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
-const {
-  migrationError,
-  oldPath,
-  newPath,
-  isMigrating,
-  isTauriApp,
-  migrate: migratePaths,
-} = usePathMigration();
+const { oldPath, newPath, isMigrating, isTauriApp, migrate: migratePaths } = usePathMigration();
 
 function show() {
   if (dialogElement.value?.open || isMigrating.value) return;
-  migrationError.value = "";
   oldPath.value = "";
   newPath.value = "";
   dialogElement.value?.showModal();
@@ -69,7 +61,6 @@ defineExpose({ show });
             class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
             spellcheck="false"
             type="text"
-            required
           />
         </label>
         <label class="flex flex-col gap-2 text-sm font-semibold">
@@ -80,14 +71,9 @@ defineExpose({ show });
             class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
             spellcheck="false"
             type="text"
-            required
           />
         </label>
       </fieldset>
-      <p v-if="migrationError" role="alert" class="px-5 pb-4 text-sm text-amber-200">
-        {{ migrationError }}
-      </p>
-      <p v-if="!isTauriApp" class="text-app-muted px-5 pb-4 text-sm">请在桌面应用中迁移路径。</p>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           class="focus-visible:outline-app-accent rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"

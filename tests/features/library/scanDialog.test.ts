@@ -188,7 +188,7 @@ describe("library scan dialog", () => {
     expect(notifications.items.value).toEqual([]);
   });
 
-  it("duplicate additions still explain why the list did not change", async () => {
+  it("duplicate additions keep the saved list without notifications", async () => {
     const dialog = mountDialog(idleScan(), async (command) => {
       if (command === "list_music_library_directories") return [directory];
       return false;
@@ -196,11 +196,12 @@ describe("library scan dialog", () => {
     await settle();
     click(button(dialog.root, "添加目录"));
     await settle();
-    expect(textContent(dialog.root)).toContain("目录已添加");
+    expect(textContent(dialog.root)).toContain(directory.displayPath);
+    expect(textContent(dialog.root)).not.toContain("目录已添加");
     expect(notifications.items.value).toEqual([]);
   });
 
-  it("directory operation failures stay inline and do not remove the saved entry", async () => {
+  it("directory operation failures notify without removing the saved entry", async () => {
     const dialog = mountDialog(idleScan(), async (command) => {
       if (command === "list_music_library_directories") return [directory];
       throw new Error("permission denied");
@@ -208,14 +209,37 @@ describe("library scan dialog", () => {
     await settle();
     click(button(dialog.root, "添加目录"));
     await settle();
-    expect(textContent(dialog.root)).toContain("添加目录失败");
-    expect(notifications.items.value).toEqual([]);
+    expect(textContent(dialog.root)).not.toContain("添加目录失败");
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "error",
+      message: "添加目录失败，请查看日志",
+    });
     notifications.clear();
     click(button(dialog.root, "移除"));
     await settle();
-    expect(textContent(dialog.root)).toContain("移除目录失败");
-    expect(notifications.items.value).toEqual([]);
+    expect(textContent(dialog.root)).not.toContain("移除目录失败");
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "error",
+      message: "移除目录失败，请查看日志",
+    });
     expect(textContent(dialog.root)).toContain(directory.displayPath);
+  });
+
+  it("notifies directory read failures without empty-state or retry controls", async () => {
+    const dialog = mountDialog(idleScan(), async () => {
+      throw new Error("read failed");
+    });
+    await settle();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "error",
+      message: "读取已保存目录失败，请查看日志",
+    });
+    expect(textContent(dialog.root)).not.toContain("无目录");
+    expect(textContent(dialog.root)).not.toContain("重试");
+    expect(find(dialog.root, (node) => node.props.role === "alert")).toBeNull();
   });
 
   it("closes immediately and completes scanning even after the dialog unmounts", async () => {

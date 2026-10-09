@@ -9,6 +9,8 @@ import {
   createAlbumBackgroundPixels,
 } from "@/features/artwork/background";
 import type { AlbumBackground } from "@/features/artwork/background";
+import { logger } from "@/shared/logging/logger";
+import { notify } from "@/shared/notifications/center";
 
 export type AlbumArtworkSelection = {
   albumArtist: string | null;
@@ -69,8 +71,15 @@ export function useAlbumArtwork(
           resource: createArtworkResource(
             () =>
               invoke<TrackArtwork>("get_album_artwork", { ...selectedAlbum, size: selectedSize }),
-            (error) =>
-              `读取专辑封面失败：${error instanceof Error ? error.message : String(error)}`,
+            (error) => {
+              logger.warn("artwork", "album_read_failed", error);
+              notify({
+                type: "warning",
+                message: "封面加载失败，已显示占位图，请查看日志",
+                key: "artwork-read",
+              });
+              return `读取专辑封面失败：${error instanceof Error ? error.message : String(error)}`;
+            },
           ),
           snapshot: { ...fallback, status: "loading" },
           subscribers: new Set(),
@@ -155,6 +164,8 @@ function generateBackground(entry: SharedArtwork) {
       background: { imageUrl: canvas.toDataURL("image/png"), color: background.color },
     });
   } catch (error) {
+    logger.warn("artwork", "background_generation_failed", error);
+    notify({ type: "warning", message: "生成专辑背景失败，请查看日志", key: "artwork-background" });
     publish(entry, {
       ...entry.snapshot,
       error: `生成专辑背景失败：${error instanceof Error ? error.message : String(error)}`,

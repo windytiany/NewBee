@@ -190,7 +190,7 @@ describe("album tag editing", () => {
     await settle();
     expect(editor.state.cover?.data).toEqual([2]);
   });
-  it("retries only failed files using the saved patch snapshot", async () => {
+  it("retains each outcome and the patch snapshot after partial failure", async () => {
     const calls: TrackPatch[][] = [];
     const { editor, synchronized } = await ready({
       save: async (patches, _cover, progress) => {
@@ -206,13 +206,16 @@ describe("album tag editing", () => {
     await editor.save();
     expect(editor.state.open).toBe(true);
     expect(editor.state.results.length).toBe(2);
-    editor.retryFailed();
-    await editor.save();
-    expect(calls[1]?.map((patch) => patch.trackId)).toEqual([2]);
-    expect(synchronized).toEqual([[1], [2]]);
-    expect(editor.state.open).toBe(false);
+    expect(calls).toHaveLength(1);
+    expect(editor.state.patches.map((patch) => patch.trackId)).toEqual([1, 2]);
+    expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([
+      true,
+      false,
+    ]);
+    expect(synchronized).toEqual([[1]]);
+    expect("retryFailed" in editor).toBe(false);
   });
-  it("retries failed synchronization without reapplying patches", async () => {
+  it("retains saved results after synchronization failure without a retry entry", async () => {
     let attempts = 0;
     const { editor, saves } = await ready({
       synchronize: async () => {
@@ -226,10 +229,10 @@ describe("album tag editing", () => {
     expect(editor.state.dirty).toBe(false);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.synchronizationError).toContain("reload failed");
-    await editor.retrySynchronization();
-    expect(attempts).toBe(2);
+    expect("retrySynchronization" in editor).toBe(false);
+    expect(attempts).toBe(1);
     expect(saves).toHaveLength(1);
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.open).toBe(true);
   });
   it("does not allow closing or saving twice during a write", async () => {
     const pending = deferred<TagSaveResult[]>();

@@ -199,6 +199,30 @@ describe("媒体库 workspace", () => {
     expect(notifications.items.value[0]?.persistent).toBe(true);
   });
 
+  it("notifies failures while confirmations remain open without repeating on close", async () => {
+    const { workspace } = createWorkspace();
+    workspace.requestAlbumDeletion(album);
+    page.isTrackActionPending.value = true;
+    page.trackActionRemoval.value = { deletedCount: 1, failedCount: 1, queueSyncFailed: false };
+    page.trackActionMessage.value = "已从曲库移除 1 首";
+    page.trackActionError.value = "移除失败";
+    await Vue.nextTick();
+    expect(notifications.items.value).toEqual([]);
+    page.isTrackActionPending.value = false;
+    await Vue.nextTick();
+    expect(workspace.deleteAlbumTarget).not.toBeNull();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      persistent: true,
+      count: 1,
+    });
+    workspace.cancelAlbumDeletion();
+    await Vue.nextTick();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.count).toBe(1);
+  });
+
   it("keeps library confirmations when the page becomes inactive", async () => {
     const { workspace, active } = createWorkspace();
     workspace.requestTrackDeletion(track.id);

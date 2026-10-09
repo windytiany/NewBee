@@ -12,7 +12,6 @@ const discardDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | nu
 const disabled = computed(
   () => state.loading || state.saving || state.confirmSave || state.confirmDiscard,
 );
-const failed = computed(() => state.results.filter((result) => !result.databaseUpdated));
 const pendingFields = computed(() => {
   const keys = new Set(
     state.patches.flatMap((patch) => patch.changes.map((change) => change.field)),
@@ -52,16 +51,6 @@ watch(
       class="flex max-h-[calc(100dvh_-_52px)] flex-col gap-[8px] overflow-y-auto p-[8px]"
     >
       <p v-if="state.loading" role="status" class="text-app-muted text-sm">读取本地曲目中…</p>
-      <p v-if="state.error" role="alert" class="text-sm whitespace-pre-wrap text-red-200">
-        {{ state.error }}
-      </p>
-      <p
-        v-if="state.synchronizationError"
-        role="alert"
-        class="text-sm whitespace-pre-wrap text-red-200"
-      >
-        {{ state.synchronizationError }}
-      </p>
       <ReleaseSearch :editor="editor" :disabled="disabled" class="shrink-0" />
       <div
         class="grid shrink-0 grid-cols-[minmax(0,1fr)_80px] gap-[8px] border-y border-white/10 py-[8px]"
@@ -94,51 +83,12 @@ watch(
           >
             取消
           </button>
-          <button
-            v-if="failed.length"
-            type="button"
-            :disabled="disabled"
-            class="rounded border border-white/20 px-2 py-1 text-xs disabled:opacity-50"
-            @click="editor.retryFailed()"
-          >
-            仅重试失败项
-          </button>
-          <button
-            v-if="state.synchronizationError"
-            type="button"
-            :disabled="disabled"
-            class="rounded border border-white/20 px-2 py-1 text-xs disabled:opacity-50"
-            @click="editor.retrySynchronization()"
-          >
-            重试界面刷新
-          </button>
-          <p
-            v-if="state.selected && state.selected.summary.trackCount !== state.tracks.length"
-            class="text-xs text-amber-200"
-          >
-            来源 {{ state.selected.summary.trackCount }} 首 / 本地 {{ state.tracks.length }} 首
-          </p>
         </div>
       </div>
       <div v-if="state.saving" role="status" aria-live="polite" class="shrink-0 text-xs">
         <p>正在保存 {{ state.completed }} / {{ state.total }}</p>
         <progress :value="state.completed" :max="state.total" class="w-full"></progress>
       </div>
-      <section
-        v-if="state.results.length"
-        aria-label="逐曲保存结果"
-        class="max-h-20 shrink-0 overflow-auto text-xs"
-      >
-        <p>{{ state.results.length - failed.length }} 首成功，{{ failed.length }} 首失败。</p>
-        <p
-          v-for="result in state.results"
-          :key="result.trackId"
-          :class="result.databaseUpdated ? 'text-app-muted' : 'text-red-200'"
-          class="break-all"
-        >
-          {{ result.path }}：{{ result.error ?? "保存成功" }}
-        </p>
-      </section>
       <section
         v-if="state.confirmSave"
         aria-label="确认覆盖标签"

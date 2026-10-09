@@ -12,16 +12,13 @@
     </h2>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
-      <p v-if="props.error" role="alert" class="px-2 py-3 text-sm text-amber-200">
-        队列操作失败，请重试或查看日志
-      </p>
       <p
-        v-if="!props.isLoading && !props.error && props.tracks.length === 0"
+        v-if="!props.isLoading && props.tracks.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
       >
         {{ props.emptyMessage }}
       </p>
-      <ul v-else-if="!props.isLoading && !props.error" ref="listElement" class="space-y-1">
+      <ul v-else-if="!props.isLoading" ref="listElement" class="space-y-1">
         <QueueRow
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
@@ -106,7 +103,6 @@ const props = withDefaults(
     currentRowKey?: string | null;
     title?: string;
     isLoading?: boolean;
-    error?: string;
     emptyMessage?: string;
     canRemoveFromQueue?: boolean;
     skippedTrackIds?: readonly number[];
@@ -116,7 +112,6 @@ const props = withDefaults(
     currentRowKey: null,
     title: "当前曲目列表",
     isLoading: false,
-    error: "",
     emptyMessage: "暂无曲目。",
     canRemoveFromQueue: false,
     skippedTrackIds: () => [],

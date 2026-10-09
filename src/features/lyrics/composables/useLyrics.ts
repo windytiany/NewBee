@@ -5,6 +5,7 @@ import type { Ref } from "vue";
 import type { PlaybackCommandInvoker, PlaybackStatus } from "@/features/playback/types";
 
 import type { LyricLine, TrackLyrics } from "@/features/lyrics/types";
+import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 
@@ -44,8 +45,22 @@ export function getActiveLyricIndices(
   };
 }
 
+// Concurrent consumers share only the in-flight read, not a cached failure.
+const pendingReads = new WeakMap<
+  PlaybackCommandInvoker,
+  Map<
+    number,
+    {
+      promise: Promise<TrackLyrics>;
+      notified: boolean;
+      logged: boolean;
+    }
+  >
+>();
+
 export function useLyrics(options: LyricsOptions) {
-  const api = createLyricsApi(options.invokeCommand ?? invoke);
+  const invokeCommand = options.invokeCommand ?? invoke;
+  const api = createLyricsApi(invokeCommand);
   const lyricsState = ref<LyricsState>({ status: "idle" });
   const displayState = computed<LyricsState>(() => {
     const sidecar = options.sidecarLyrics?.value;
@@ -72,11 +87,33 @@ export function useLyrics(options: LyricsOptions) {
   let requestVersion = 0;
 
   async function loadLyrics(trackId: number, version: number) {
+    let reads = pendingReads.get(invokeCommand);
+    if (!reads) {
+      reads = new Map();
+      pendingReads.set(invokeCommand, reads);
+    }
+    let request = reads.get(trackId);
+    if (!request) {
+      let promise: Promise<TrackLyrics>;
+      try {
+        promise = api.read(trackId);
+      } catch (error) {
+        promise = Promise.reject(error);
+      }
+      request = { promise, notified: false, logged: false };
+      reads.set(trackId, request);
+      const currentReads = reads;
+      const currentRequest = request;
+      const release = () => {
+        if (currentReads.get(trackId) === currentRequest) currentReads.delete(trackId);
+      };
+      void request.promise.then(release, release);
+    }
     let outcome!: { status: "ready"; lyrics: TrackLyrics } | { status: "error"; message: string };
     try {
       outcome = {
         status: "ready",
-        lyrics: await api.read(trackId),
+        lyrics: await request.promise,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
@@ -84,7 +121,18 @@ export function useLyrics(options: LyricsOptions) {
     } finally {
       if (version === requestVersion) {
         if (outcome.status === "error") {
-          logger.warn("lyrics", "read_failed", outcome.message, { trackId });
+          if (!request.logged) {
+            request.logged = true;
+            logger.warn("lyrics", "read_failed", outcome.message, { trackId });
+          }
+          if (!request.notified && !options.sidecarLyrics?.value) {
+            request.notified = true;
+            notify({
+              type: "warning",
+              message: "读取歌词失败，请查看日志",
+              key: `lyrics-read:${trackId}`,
+            });
+          }
         }
         lyricsState.value =
           outcome.status === "ready"

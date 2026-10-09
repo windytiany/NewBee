@@ -36,7 +36,6 @@ function toggle(id: number, event: InstanceType<typeof globalThis.Event>) {
     </header>
     <div class="space-y-4 px-5 py-5">
       <p v-if="state.loading" role="status" class="text-app-muted text-sm">加载中…</p>
-      <p v-if="state.error" role="alert" class="text-sm text-red-200">{{ state.error }}</p>
       <template v-if="!state.loading && !state.error">
         <div class="flex items-center gap-3 text-sm">
           <button

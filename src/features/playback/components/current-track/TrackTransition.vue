@@ -17,9 +17,6 @@
         class="col-start-1 row-start-1 min-w-0"
         :class="props.contentClass"
       >
-        <p v-if="displayed.detailsError" role="alert" class="text-sm text-amber-200">
-          {{ displayed.detailsError }} <button type="button" @click="retry">重试</button>
-        </p>
         <slot
           :track="displayed.track"
           :details="displayed.details"
@@ -57,7 +54,7 @@ const props = defineProps<{
   contentClass?: string;
   artworkSize?: number | null;
 }>();
-const { currentTrackDetails, isLoading, currentTrackDetailsError, retry } = useTrackDetails(
+const { currentTrackDetails, isLoading, currentTrackDetailsError } = useTrackDetails(
   () => props.track?.trackId ?? null,
 );
 const { status, url, error, present, release } = useTrackArtworkPresentation(

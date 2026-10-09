@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
+import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 
 type LibraryDirectory = {
@@ -10,7 +11,6 @@ type LibraryDirectory = {
 };
 
 export function useDirectories() {
-  const directoryError = ref("");
   const directories = ref<LibraryDirectory[]>([]);
   const isLoadingDirectories = ref(false);
   const directoryLoadFailed = ref(false);
@@ -18,13 +18,16 @@ export function useDirectories() {
   async function refreshDirectories() {
     isLoadingDirectories.value = true;
     directoryLoadFailed.value = false;
-    directoryError.value = "";
     try {
       directories.value = await invoke<LibraryDirectory[]>("list_music_library_directories");
     } catch (error) {
       directoryLoadFailed.value = true;
       logger.warn("library.directories", "read_failed", error);
-      directoryError.value = "读取已保存目录失败，请重试或查看日志";
+      notify({
+        type: "error",
+        message: "读取已保存目录失败，请查看日志",
+        key: "library-directories",
+      });
     } finally {
       isLoadingDirectories.value = false;
     }
@@ -39,12 +42,11 @@ export function useDirectories() {
       });
       if (typeof selectedPath !== "string") return;
 
-      const added = await invoke<boolean>("add_music_library_directory", { path: selectedPath });
+      await invoke<boolean>("add_music_library_directory", { path: selectedPath });
       await refreshDirectories();
-      if (!added) directoryError.value = "目录已添加";
     } catch (error) {
       logger.warn("library.directories", "add_failed", error);
-      directoryError.value = "添加目录失败，请重试或查看日志";
+      notify({ type: "error", message: "添加目录失败，请查看日志", key: "library-directories" });
     }
   }
 
@@ -54,12 +56,11 @@ export function useDirectories() {
       directories.value = directories.value.filter((saved) => saved.id !== directory.id);
     } catch (error) {
       logger.warn("library.directories", "remove_failed", error);
-      directoryError.value = "移除目录失败，请重试或查看日志";
+      notify({ type: "error", message: "移除目录失败，请查看日志", key: "library-directories" });
     }
   }
 
   return {
-    directoryError,
     directories,
     isLoadingDirectories,
     directoryLoadFailed,

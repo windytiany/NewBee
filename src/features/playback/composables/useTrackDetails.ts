@@ -3,6 +3,7 @@ import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import type { TrackDetails } from "@/features/library/types";
 import { logger } from "@/shared/logging/logger";
+import { notifications, notify } from "@/shared/notifications/center";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 
 export type TrackDetailsInvoker = <Result>(
@@ -36,6 +37,15 @@ export function useTrackDetails(
     void loadCurrentTrackDetails(trackId);
   }
 
+  function reportError(trackId: number, message: string, reason: unknown = message) {
+    currentTrackDetailsError.value = message;
+    logger.warn("playback", "details_read_failed", reason, { trackId });
+    const key = `playback-details:${trackId}`;
+    if (!notifications.items.value.some((item) => item.key === key)) {
+      notify({ type: "warning", message, key });
+    }
+  }
+
   async function loadCurrentTrackDetails(trackId: number) {
     const generation = ++detailsRequestGeneration;
     isLoading.value = true;
@@ -46,20 +56,18 @@ export function useTrackDetails(
       if (generation !== detailsRequestGeneration || currentTrackId !== trackId) return;
 
       if (!result) {
-        currentTrackDetailsError.value = "未找到正在播放曲目的详情。";
+        reportError(trackId, "未找到正在播放曲目的详情。");
         return;
       }
       if (result.id !== trackId) {
-        currentTrackDetailsError.value = "返回的曲目详情与当前播放曲目不匹配。";
+        reportError(trackId, "返回的曲目详情与当前播放曲目不匹配。");
         return;
       }
 
       currentTrackDetails.value = result;
     } catch (error) {
       if (generation !== detailsRequestGeneration || currentTrackId !== trackId) return;
-      const message = error instanceof Error ? error.message : String(error ?? "未知错误");
-      logger.warn("playback", "details_read_failed", message, { trackId });
-      currentTrackDetailsError.value = "读取曲目详情失败";
+      reportError(trackId, "读取曲目详情失败", error);
     } finally {
       if (generation === detailsRequestGeneration && currentTrackId === trackId) {
         isLoading.value = false;

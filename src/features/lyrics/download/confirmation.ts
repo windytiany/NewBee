@@ -1,3 +1,5 @@
+import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { computed, reactive } from "vue";
 import { createLibraryApi } from "@/features/library/api";
@@ -54,8 +56,11 @@ export function createLyricsConfirmation(options: LyricsConfirmationOptions) {
         !hasLyrics && !noLyrics ? [id] : [],
       );
     } catch (error) {
-      if (state.open && version === generation)
+      if (state.open && version === generation) {
         state.error = error instanceof Error ? error.message : String(error);
+        logger.warn("lyrics", "download_targets_failed", error);
+        notify({ type: "warning", message: "读取歌词下载目标失败，请查看日志" });
+      }
     } finally {
       if (version === generation) state.loading = false;
     }

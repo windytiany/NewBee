@@ -297,9 +297,6 @@ function durationDiffers(index: number) {
               </td>
               <td class="text-app-muted truncate px-2 py-2" :title="local(row.trackId)?.track.path">
                 {{ filename(local(row.trackId)?.track.path ?? "") }}
-                <p v-if="local(row.trackId)?.issue" class="text-amber-200">
-                  {{ local(row.trackId)?.issue }}
-                </p>
               </td>
             </tr>
             <tr v-if="expanded === index && row.source" class="bg-black/10">
@@ -319,15 +316,6 @@ function durationDiffers(index: number) {
                 <div class="grid gap-3 md:grid-cols-3">
                   <div v-for="field in TAG_FIELDS" :key="field.key" class="space-y-1 text-xs">
                     <label :for="`match-${index}-${field.key}`">{{ field.label }}</label>
-                    <p
-                      v-if="
-                        row.trackId !== null &&
-                        !local(row.trackId)?.writableFields.includes(field.key)
-                      "
-                      class="text-amber-200"
-                    >
-                      不支持写入
-                    </p>
                     <p class="text-app-muted break-all">
                       原值：{{
                         row.trackId !== null

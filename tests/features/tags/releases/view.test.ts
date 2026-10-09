@@ -108,7 +108,7 @@ function mountDialog(editor: ReturnType<typeof createReleaseEditor>) {
 }
 
 describe("album tag views", () => {
-  it("offers a refresh-only retry while retaining successful save results", async () => {
+  it("hides result details and retry controls while retaining successful save results", async () => {
     let refreshes = 0;
     const editor = fixture(async () => {
       refreshes++;
@@ -121,16 +121,14 @@ describe("album tag views", () => {
     editor.prepareSave();
     await editor.save();
     await settle();
-    expect(getTextContent(root)).toContain("reload failed");
-    const button = node(
-      root,
-      (entry) => entry.type === "button" && getTextContent(entry).trim() === "重试界面刷新",
-    );
-    event(button, "onClick");
-    await settle();
-    expect(refreshes).toBe(2);
+    expect(getTextContent(root)).not.toContain("reload failed");
+    expect(getTextContent(root)).not.toContain("重试");
+    expect(getTextContent(root)).not.toContain("保存成功");
+    expect(findNode(root, (entry) => entry.props["aria-label"] === "逐曲保存结果")).toBeNull();
+    expect(refreshes).toBe(1);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.synchronizationError).toContain("reload failed");
+    expect(editor.state.open).toBe(true);
   });
 
   it("wires album context-menu selection to the album editor", async () => {
@@ -240,6 +238,16 @@ describe("album tag views", () => {
     );
     event(disclosure, "onClick");
     await settle();
+    const selectedLocal = editor.state.tracks.find(
+      ({ track }) => track.id === editor.state.rows[0]?.trackId,
+    );
+    if (!selectedLocal) throw new Error("Missing selected local track");
+    selectedLocal.issue = "track issue details";
+    selectedLocal.writableFields = [];
+    await settle();
+    expect(getTextContent(root)).not.toContain("track issue details");
+    expect(getTextContent(root)).not.toContain("不支持写入");
+    expect(getTextContent(root)).toContain("原值：");
     const titleInput = node(root, (entry) => entry.props.id === "match-0-title");
     event(titleInput, "onInput", { target: { value: "手动修订" } });
     expect(editor.state.rows[0]?.values.title).toBe("手动修订");
@@ -343,6 +351,10 @@ describe("album tag views", () => {
     });
     app.mount(root);
     apps.push(app);
+    editor.state.coverError = "cover failed details";
+    await settle();
+    expect(getTextContent(root)).not.toContain("cover failed details");
+    expect(getTextContent(root)).not.toContain("重试封面");
     expect(getTextContent(root)).not.toContain("勾选的字段才会写入");
     const checkbox = node(root, (entry) => entry.props["aria-label"] === "覆盖专辑");
     const input = node(root, (entry) => entry.props.id === "album-tag-album");

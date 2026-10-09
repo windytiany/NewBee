@@ -28,10 +28,6 @@
           @input="validationError = ''"
         />
       </div>
-
-      <p v-if="validationError || props.error" role="alert" class="px-5 pb-4 text-sm text-red-400">
-        {{ validationError || props.error }}
-      </p>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           class="focus-visible:outline-app-accent rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -54,13 +50,13 @@
 </template>
 
 <script setup lang="ts">
+import { notify } from "@/shared/notifications/center";
 import { ref } from "vue";
 import type { PlaylistSummary } from "@/features/playlist/types";
 
 const props = defineProps<{
   playlist: PlaylistSummary;
   isPending: boolean;
-  error?: string;
 }>();
 
 const emit = defineEmits<{
@@ -100,6 +96,7 @@ function renamePlaylist() {
   const trimmedName = name.value.trim();
   if (!trimmedName) {
     validationError.value = "请输入歌单名称";
+    notify({ type: "warning", message: validationError.value, key: "playlist-name" });
 
     nameInput.value?.focus();
     return;

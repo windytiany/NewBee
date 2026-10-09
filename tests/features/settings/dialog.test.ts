@@ -13,6 +13,7 @@ import type { HostNode } from "../../support/hostRenderer";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
 import { THEMES } from "@/features/settings/theme";
+import type { NotificationInput } from "@/shared/notifications/center";
 
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
@@ -30,7 +31,6 @@ type DialogBindings = {
   playingCoverBackground: Vue.Ref<boolean>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
-  error: Vue.Ref<string>;
   isLoaded: Vue.Ref<boolean>;
   isLoading: Vue.Ref<boolean>;
   show: () => Promise<void>;
@@ -62,6 +62,7 @@ afterEach(() => {
 
 function createDialog(invoke: (command: string, args?: unknown) => Promise<unknown>) {
   const events: string[] = [];
+  const feedback: NotificationInput[] = [];
   const appliedThemes: Settings["theme"][] = [];
   const appliedMotion: boolean[] = [];
   Object.defineProperty(globalThis, "window", {
@@ -70,6 +71,7 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/shared/components/HelpDialog.vue": HelpDialog,
     "@tauri-apps/api/core": { invoke, isTauri: () => true },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
@@ -95,7 +97,7 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     },
   };
   bindings.dialogElement.value = element;
-  return { bindings, element, events, appliedThemes, appliedMotion };
+  return { bindings, element, events, appliedThemes, appliedMotion, feedback };
 }
 
 function deferred<Value>() {
@@ -128,19 +130,25 @@ describe("settings dialog", () => {
     expect(createDialog(async () => defaults).bindings.detailedLogging.value).toBe(false);
   });
 
-  it("keeps diagnostic failures inline, rolls back the toggle and permits retry", async () => {
+  it("notifies diagnostic failures, rolls back the toggle and permits another operation", async () => {
     let fail = true;
-    const { bindings } = createDialog(async (command) => {
+    const { bindings, feedback } = createDialog(async (command) => {
       if (command === "get_settings") return defaults;
       if (fail) throw new Error("permission denied");
     });
     await bindings.show();
     await bindings.openLogs();
-    expect(bindings.error.value).toContain("打开日志目录失败");
+    expect(feedback[feedback.length - 1]).toMatchObject({
+      type: "error",
+      message: "打开日志目录失败，请查看日志",
+    });
     bindings.detailedLogging.value = true;
     await bindings.changeLogging();
     expect(bindings.detailedLogging.value).toBe(false);
-    expect(bindings.error.value).toContain("切换日志级别失败");
+    expect(feedback[feedback.length - 1]).toMatchObject({
+      type: "error",
+      message: "切换日志级别失败，请查看日志",
+    });
     expect(bindings.isChangingLogging.value).toBe(false);
     fail = false;
     bindings.detailedLogging.value = true;
@@ -151,6 +159,7 @@ describe("settings dialog", () => {
   it("renders settings with category navigation and only cancel/save footer actions", async () => {
     const modules: Record<string, unknown> = {
       vue: Vue,
+      "@/shared/notifications/center": { notify: () => {} },
       "@/shared/components/HelpDialog.vue": HelpDialog,
       "@tauri-apps/api/core": { invoke: async () => defaults, isTauri: () => true },
       "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
@@ -467,28 +476,33 @@ describe("settings dialog", () => {
 
   it("blocks saving when loading fails", async () => {
     const calls: string[] = [];
-    const { bindings, element, events } = createDialog(async (command) => {
+    const { bindings, element, events, feedback } = createDialog(async (command) => {
       calls.push(command);
       throw new Error("Unavailable");
     });
     await bindings.show();
     await bindings.save();
-    expect(bindings.error.value).toContain("读取设置失败");
+    expect(feedback).toEqual([
+      { type: "error", message: "读取设置失败，请查看日志", key: "settings-load" },
+    ]);
     expect(bindings.isLoaded.value).toBe(false);
     expect(element.open).toBe(true);
     expect(calls).toEqual(["get_settings"]);
     expect(events).toEqual([]);
   });
 
-  it("keeps the dialog open and does not notify after save failures", async () => {
-    const { bindings, element, events, appliedThemes } = createDialog(async (command) => {
+  it("keeps the dialog open and notifies save failures without applying settings", async () => {
+    const { bindings, element, events, appliedThemes, feedback } = createDialog(async (command) => {
       if (command === "get_settings") return defaults;
       throw new Error("Disk unavailable");
     });
     await bindings.show();
     await bindings.save();
     expect(element.open).toBe(true);
-    expect(bindings.error.value).toContain("Disk unavailable");
+    expect(feedback).toEqual([
+      { type: "error", message: "保存设置失败，请查看日志", key: "settings-save" },
+    ]);
+    expect(JSON.stringify(feedback)).not.toContain("Disk unavailable");
     expect(appliedThemes).toEqual([]);
     expect(events).toEqual([]);
   });

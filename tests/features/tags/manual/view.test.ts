@@ -81,6 +81,7 @@ function mountDialog(
   readOnly = false,
   marked = false,
   synchronize: () => Promise<void> = async () => {},
+  downloading = false,
 ) {
   const saved: TagChange[][] = [];
   const savedActions: string[] = [];
@@ -112,7 +113,9 @@ function mountDialog(
     {
       vue: Vue,
       "@/features/tags/manual/useEditor": { useTagEditor: () => editor },
-      "@/features/lyrics/download/batch": { useLyricsBatch: () => ({ state: { running: false } }) },
+      "@/features/lyrics/download/batch": {
+        useLyricsBatch: () => ({ state: { running: downloading } }),
+      },
       "@/features/lyrics/components/LyricsSearch.vue": Vue.defineComponent({
         setup: () => () => null,
       }),
@@ -135,7 +138,17 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
-  it("shows refresh errors and retries the UI without writing successful tags again", async () => {
+  it("keeps saving disabled during lyrics download without explanatory warning text", async () => {
+    const { editor, root } = mountDialog(false, false, async () => {}, true);
+    await editor.openTracks([1, 2]);
+    editor.changeLyricsAction("mark");
+    await settle();
+    expect(findNode(root, (node) => node.props.type === "submit")?.props.disabled).toBe(true);
+    expect(getTextContent(root)).not.toContain("暂时无法保存标签");
+    expect(getTextContent(root)).not.toContain("保存时将清除");
+  });
+
+  it("hides refresh error details and retry controls while retaining saved outcomes", async () => {
     let refreshes = 0;
     const { editor, root, saved } = mountDialog(false, false, async () => {
       refreshes++;
@@ -148,18 +161,13 @@ describe("metadata editor views", () => {
     editor.prepareSave();
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     await settle();
-    expect(getTextContent(root)).toContain("reload failed");
-    const button = findNode(
-      root,
-      (node) => node.type === "button" && getTextContent(node).trim() === "重试界面刷新",
-    );
-    if (!button) throw new Error("Missing refresh retry");
-    (button.props.onClick as () => void)();
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    await settle();
-    expect(refreshes).toBe(2);
+    expect(getTextContent(root)).not.toContain("reload failed");
+    expect(getTextContent(root)).not.toContain("重试");
+    expect(editor.state.results[0]?.databaseUpdated).toBe(true);
+    expect(editor.state.synchronizationError).toContain("reload failed");
+    expect(refreshes).toBe(1);
     expect(saved).toHaveLength(1);
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.open).toBe(true);
   });
 
   it("shows a native modal with database values and does not close on the backdrop", async () => {
@@ -337,7 +345,7 @@ describe("metadata editor views", () => {
     await settle();
     expect(checkbox.props.checked).toBe(true);
     expect(textarea.props.value).toBe("");
-    expect(getTextContent(panel)).toContain("保存时将清除原有的内嵌歌词");
+    expect(getTextContent(panel)).not.toContain("保存时将清除原有的内嵌歌词");
     editor.prepareSave();
     await settle();
     expect(saved).toEqual([[]]);

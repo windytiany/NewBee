@@ -1,4 +1,6 @@
 import { reactive } from "vue";
+import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import type {
   LyricsCandidate,
   LyricsContent,
@@ -39,6 +41,12 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
   let searchedQuery = "";
   let searchedProvider: LyricsProvider | null = null;
 
+  function report(message: string, event: string, reason?: unknown) {
+    state.error = message;
+    if (reason !== undefined) logger.warn("lyrics", event, reason);
+    notify({ type: reason === undefined ? "info" : "warning", message });
+  }
+
   function reset(query: string) {
     invalidate();
     Object.assign(state, {
@@ -77,7 +85,10 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     state.candidates = previous;
     state.nextOffset = null;
     try {
-      if (!query) throw new Error("请输入搜索关键词。");
+      if (!query) {
+        report("请输入搜索关键词。", "search_query_missing");
+        return;
+      }
       const result = await options.search(query, provider, offset);
       if (generation !== searchGeneration) return;
       const combined = [...previous, ...result.candidates];
@@ -91,10 +102,10 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       state.nextOffset = result.nextOffset;
       searchedQuery = query;
       searchedProvider = provider;
-      if (!state.candidates.length) state.error = "未找到候选曲目。";
+      if (!state.candidates.length) report("未找到候选曲目。", "search_empty");
     } catch (error) {
       if (generation === searchGeneration)
-        state.error = String(error instanceof Error ? error.message : error);
+        report("歌词搜索失败，请查看日志", "search_failed", error);
     } finally {
       if (generation === searchGeneration) state.searching = false;
     }
@@ -119,11 +130,11 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       if (content.kind === "available") state.preview = content.text;
       else {
         state.previewInstrumental = content.kind === "instrumental";
-        state.error = contentMessage(content);
+        report(contentMessage(content), "preview_unavailable");
       }
     } catch (error) {
       if (generation === previewGeneration)
-        state.error = String(error instanceof Error ? error.message : error);
+        report("歌词预览失败，请查看日志", "preview_failed", error);
     } finally {
       if (generation === previewGeneration) state.previewing = false;
     }
@@ -137,12 +148,12 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       if (generation !== automaticGeneration) return;
       if (content.kind === "available") options.apply(content.text);
       else {
-        state.error = contentMessage(content);
+        report(contentMessage(content), "automatic_unavailable");
         if (content.kind === "instrumental") options.mark();
       }
     } catch (error) {
       if (generation === automaticGeneration)
-        state.error = String(error instanceof Error ? error.message : error);
+        report("自动获取歌词失败，请查看日志", "automatic_failed", error);
     } finally {
       if (generation === automaticGeneration) state.automatic = false;
     }

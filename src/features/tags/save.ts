@@ -1,4 +1,5 @@
 import { reactive } from "vue";
+import { notify } from "@/shared/notifications/center";
 import { logger, operationId } from "@/shared/logging/logger";
 import type { TagSaveResult } from "@/features/tags/types";
 
@@ -22,6 +23,7 @@ type MetadataSaveOptions = {
   editFiles: MetadataFileEditor;
   synchronize: (trackIds: number[]) => void | Promise<void>;
   refreshWrittenFiles?: boolean;
+  notifyResult?: boolean;
 };
 
 export function createMetadataSave(options: MetadataSaveOptions) {
@@ -123,6 +125,19 @@ export function createMetadataSave(options: MetadataSaveOptions) {
         count: reported.size,
         refreshFailed: Boolean(state.synchronizationError),
       });
+      const succeeded = [...reported.values()].filter((result) => result.databaseUpdated).length;
+      const failed = reported.size - succeeded;
+      if (options.notifyResult)
+        notify({
+          type: failed
+            ? succeeded
+              ? "warning"
+              : "error"
+            : state.synchronizationError
+              ? "warning"
+              : "success",
+          message: `标签保存完成：${succeeded} 首成功，${failed} 首失败。${state.synchronizationError ? "元数据已保存，但界面刷新失败。" : ""}`,
+        });
       state.saving = false;
     }
     return [...reported.values()];

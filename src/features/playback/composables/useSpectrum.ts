@@ -1,6 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { onMounted, onScopeDispose, readonly, ref, shallowRef, toValue, watch } from "vue";
 import type { MaybeRefOrGetter } from "vue";
+import { logger } from "@/shared/logging/logger";
+import { notify } from "@/shared/notifications/center";
 
 export const SPECTRUM_BAND_COUNT = 8;
 const POLL_INTERVAL_MS = 50;
@@ -53,6 +55,14 @@ export function usePlaybackSpectrum(
     } catch (reason) {
       if (requestGeneration !== generation) return;
       bands.value = emptyBands();
+      if (!error.value) {
+        logger.warn("playback", "spectrum_read_failed", reason, { playbackId: id });
+        notify({
+          type: "warning",
+          message: "实时频谱不可用，请查看日志",
+          key: "playback-spectrum",
+        });
+      }
       error.value = `实时频谱不可用：${reason instanceof Error ? reason.message : String(reason)}`;
     } finally {
       requestInFlight = false;

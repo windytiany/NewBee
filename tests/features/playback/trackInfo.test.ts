@@ -4,6 +4,7 @@ import type { EffectScope, MaybeRefOrGetter } from "vue";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
 import type { TrackDetailsInvoker } from "@/features/playback/composables/useTrackDetails";
 import type { TrackDetails } from "@/features/library/types";
+import { notifications } from "@/shared/notifications/center";
 
 type Deferred<Value> = {
   promise: Promise<Value>;
@@ -69,6 +70,7 @@ async function settleRequests() {
 
 afterEach(() => {
   for (const scope of scopes.splice(0)) scope.stop();
+  notifications.clear();
 });
 
 describe("useTrackDetails", () => {
@@ -146,6 +148,19 @@ describe("useTrackDetails", () => {
     await settleRequests();
     expect(trackInfo.currentTrackDetailsError.value).toBe("读取曲目详情失败");
     expect(trackInfo.isLoading.value).toBe(false);
+  });
+
+  it("多个详情消费者只显示一个警告，不暴露技术错误", async () => {
+    const invoke = createInvoker(() => Promise.reject(new Error("private database details")));
+    mountTrackInfo(73, invoke);
+    mountTrackInfo(73, invoke);
+    await settleRequests();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      message: "读取曲目详情失败",
+      count: 1,
+    });
   });
 
   it("格式化非 Error 拒绝值", async () => {

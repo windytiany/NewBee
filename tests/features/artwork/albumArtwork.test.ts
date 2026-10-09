@@ -4,6 +4,7 @@ import { loadSourceModules } from "../../support/moduleLoader";
 import * as backgroundModule from "@/features/artwork/background";
 import type { AlbumArtworkSelection } from "@/features/artwork/useAlbumArtwork";
 import type { TrackArtwork } from "@/features/artwork/types";
+import type { NotificationInput } from "@/shared/notifications/center";
 
 function deferred<Value>() {
   let resolve: (value: Value) => void = () => {};
@@ -28,6 +29,7 @@ let canvasCount: number;
 let canvasAvailable: boolean;
 let decodeImage: () => Promise<void>;
 let images: TestImage[];
+const feedback: NotificationInput[] = [];
 
 class TestImage {
   src = "";
@@ -44,6 +46,7 @@ class TestImage {
 
 const dependencies: Record<string, unknown> = {
   vue: Vue,
+  "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
   "@/features/artwork/background": backgroundModule,
   "@tauri-apps/api/core": {
     invoke(command: string, selection: AlbumArtworkSelection & { size: number | null }) {
@@ -88,6 +91,7 @@ async function settle() {
 
 beforeEach(() => {
   requests.length = 0;
+  feedback.length = 0;
   invokedSelections = [];
   revokedUrls = [];
   createdUrls = 0;
@@ -203,14 +207,19 @@ describe("共享专辑封面和背景", () => {
     expect(artwork.error.value).toBe("");
     expect(createdUrls).toBe(0);
     expect(canvasCount).toBe(0);
+    expect(feedback).toEqual([]);
   });
 
-  it("读取失败保留错误上下文并回退", async () => {
+  it("读取失败保留错误上下文并回退，共享订阅只通知一次", async () => {
     const { artwork } = subscribe();
+    subscribe();
     requestAt(0).reject(new Error("IPC unavailable"));
     await settle();
     expect(artwork.status.value).toBe("fallback");
     expect(artwork.error.value).toContain("IPC unavailable");
+    expect(feedback).toEqual([
+      { type: "warning", message: "封面加载失败，已显示占位图，请查看日志", key: "artwork-read" },
+    ]);
   });
 
   it("背景生成失败不影响封面，保留错误并使用默认背景", async () => {
@@ -222,6 +231,9 @@ describe("共享专辑封面和背景", () => {
     expect(artwork.url.value).toBe("blob:album-1");
     expect(artwork.background.value).toBeNull();
     expect(artwork.error.value).toContain("Canvas 2D");
+    expect(feedback).toEqual([
+      { type: "warning", message: "生成专辑背景失败，请查看日志", key: "artwork-background" },
+    ]);
   });
 
   it("快速切换专辑时旧请求不能覆盖新封面和背景", async () => {

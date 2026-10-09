@@ -55,9 +55,6 @@
     </header>
 
     <h3 class="sr-only">曲目</h3>
-    <p v-if="props.tracksError" role="alert" class="px-3 py-3 text-sm text-amber-200">
-      读取失败，请重试或查看日志 <button type="button" @click="emit('retry')">重试</button>
-    </p>
 
     <div
       v-if="!props.tracksLoading && !props.tracksError && props.tracks.length > 0"
@@ -258,7 +255,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  retry: [];
   close: [];
   playTrack: [trackId: number];
   playAlbum: [];

@@ -1,7 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { createLyricsConfirmation } from "@/features/lyrics/download/confirmation";
 import type { LyricsConfirmationOptions } from "@/features/lyrics/download/confirmation";
 import type { LyricsDownloadTarget } from "@/features/lyrics/types";
+
+import { notifications } from "@/shared/notifications/center";
+
+afterEach(() => notifications.clear());
 
 const targets: LyricsDownloadTarget[] = [
   { id: 1, title: "Missing", artist: "Artist", hasLyrics: false, noLyrics: false },
@@ -77,6 +81,8 @@ describe("lyrics download confirmation", () => {
     const { confirmation, started } = setup({ targets: async () => [targets[0]!, targets[0]!] });
     await confirmation.openTracks([1, 2]);
     expect(confirmation.state.error).toContain("不匹配");
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.message).toBe("读取歌词下载目标失败，请查看日志");
     await confirmation.confirm();
     expect(started).toEqual([]);
   });

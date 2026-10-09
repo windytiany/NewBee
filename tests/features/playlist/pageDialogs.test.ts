@@ -482,7 +482,7 @@ afterEach(() => {
 });
 
 describe("歌单 workspace 管理", () => {
-  it("空名称通过内联校验，保留输入焦点和 aria-invalid", async () => {
+  it("空名称通过 toast 校验，保留输入焦点和 aria-invalid", async () => {
     let renameCalls = 0;
     renameAction = async () => {
       renameCalls++;
@@ -499,17 +499,21 @@ describe("歌单 workspace 管理", () => {
     expect(renameCalls).toBe(0);
     expect(input.props["aria-invalid"]).toBe("true");
     expect(focusedNode).toBe(input);
-    expect(notifications.items.value).toEqual([]);
-    expect(getTextContent(findNode(root, (node) => node.props.role === "alert")!)).toContain(
-      "请输入歌单名称",
-    );
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      message: "请输入歌单名称",
+    });
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
     expect(input.props["aria-invalid"]).toBe("true");
     submitRename(root);
     await settleApp();
-    expect(notifications.items.value).toEqual([]);
-    expect(getTextContent(findNode(root, (node) => node.props.role === "alert")!)).toContain(
-      "请输入歌单名称",
-    );
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      message: "请输入歌单名称",
+    });
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
     setInputValue(input, "Valid name");
     await Vue.nextTick();
     expect(input.props["aria-invalid"]).toBeUndefined();
@@ -528,10 +532,12 @@ describe("歌单 workspace 管理", () => {
     await settleApp();
 
     expect(input.value).toBe("My edited name");
-    expect(getTextContent(findNode(root, (node) => node.props.role === "alert")!)).toContain(
-      "重命名歌单失败",
-    );
-    expect(notifications.items.value).toEqual([]);
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "error",
+      message: "重命名歌单失败，请查看日志",
+    });
     expect(findNode(root, (node) => node.type === "dialog" && node.open)).not.toBeNull();
     expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
     expect(findByTestId(root, "right-playlist")?.props["data-playlist-id"]).toBe("1");
@@ -575,6 +581,24 @@ describe("歌单 workspace 管理", () => {
     expect(findByTestId(root, "right-playlist")?.props["data-playlist-id"]).toBe("1");
   });
 
+  it("删除失败保留歌单和确认说明，仅通知一次", async () => {
+    deleteAction = async () => ({ status: "error", message: "数据库不可用" });
+    const root = mountApp();
+    requestDelete(root, secondPlaylist.id);
+    await settleApp();
+    click(findButtonByText(root, "确认删除"));
+    await settleApp();
+    expect(playlists.value.map(({ id }) => id)).toEqual([1, 2, 3]);
+    expect(findNode(root, (node) => node.type === "dialog" && node.open)).not.toBeNull();
+    expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "error",
+      message: "删除歌单失败，请查看日志",
+      count: 1,
+    });
+  });
+
   it("删除非当前歌单不改变右侧当前选择", async () => {
     const root = mountApp();
     requestDelete(root, secondPlaylist.id);
@@ -603,7 +627,7 @@ describe("歌单 workspace 管理", () => {
     expect(queueMutationCalls).toEqual([]);
   });
 
-  it("切页关闭管理对话框且忽略迟到的操作结果", async () => {
+  it("切页关闭管理对话框但仍通知操作失败", async () => {
     let resolveRename!: (result: ManagementResult) => void;
     renameAction = () =>
       new Promise((resolve) => {
@@ -622,7 +646,8 @@ describe("歌单 workspace 管理", () => {
     expect(findNode(root, (node) => node.type === "dialog" && node.open)).toBeNull();
     resolveRename({ status: "error", message: "late failure" });
     await settleApp();
-    expect(notifications.items.value).toEqual([]);
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.type).toBe("error");
     activePage.value = "Playlist";
     await settleApp();
     expect(findNode(root, (node) => node.type === "dialog" && node.open)).toBeNull();
@@ -679,7 +704,8 @@ describe("歌单 workspace 管理", () => {
     const currentInput = findNode(root, (node) => node.props.id === "rename-playlist-name");
     expect(currentInput?.value).toBe("Second");
     expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
-    expect(notifications.items.value).toEqual([]);
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.type).toBe("error");
     expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
     expect(queueMutationCalls).toEqual([]);
   });

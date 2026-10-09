@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { notify } from "@/shared/notifications/center";
+import { notifications, notify } from "@/shared/notifications/center";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import { transpileScript, evaluateSource } from "../../support/moduleLoader";
 
@@ -102,6 +102,7 @@ const { getActiveLyricIndices, useLyrics } = evaluateSource<
 );
 
 afterEach(() => {
+  notifications.clear();
   for (const scope of scopes.splice(0)) scope.stop();
 });
 
@@ -215,6 +216,33 @@ describe("NowPlayingPage 歌词状态", () => {
     expect(lyrics.activeGroupStartIndex.value).toBe(-1);
   });
 
+  it("并发消费者对同一次读取失败只通知一次，后续请求仍可通知", async () => {
+    const request = deferred<TrackLyrics>();
+    let calls = 0;
+    const invoker = createInvoker(() => {
+      calls++;
+      return request.promise;
+    });
+    const track = ref<TestTrack | null>({ trackId: 15, title: "Song" });
+    const first = mountPlayingLyrics(track, ref({ ...EMPTY_PLAYBACK_STATUS }), invoker);
+    const second = mountPlayingLyrics(track, ref({ ...EMPTY_PLAYBACK_STATUS }), invoker);
+    expect(calls).toBe(1);
+    request.reject(new Error("read failed"));
+    await settleLyricsRequests();
+    expect(first.lyrics.state.value.status).toBe("error");
+    expect(second.lyrics.state.value.status).toBe("error");
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.count).toBe(1);
+    expect(notifications.items.value[0]?.key).toBe("lyrics-read:15");
+    notifications.clear();
+    track.value = null;
+    track.value = { trackId: 15, title: "Song again" };
+    await settleLyricsRequests();
+    expect(calls).toBe(2);
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.count).toBe(1);
+  });
+
   it("切歌立即清除旧歌词与错误，并在没有曲目时回到 idle", async () => {
     const requestB = deferred<TrackLyrics>();
     const requestC = deferred<TrackLyrics>();
@@ -295,6 +323,7 @@ describe("NowPlayingPage 歌词状态", () => {
     requestA.reject(new Error("stale failure for A"));
     await settleLyricsRequests();
     expect(lyrics.state.value).toEqual({ status: "ready", lyrics: { kind: "none" } });
+    expect(notifications.items.value).toHaveLength(0);
   });
 
   it("scope 销毁后忽略尚未完成的请求", async () => {

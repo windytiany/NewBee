@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { logger } from "@/shared/logging/logger";
+import { notify } from "@/shared/notifications/center";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
 import { ref } from "vue";
@@ -15,24 +16,22 @@ const isChangingLogging = ref(false);
 async function changeLogging() {
   if (isChangingLogging.value) return;
   isChangingLogging.value = true;
-  error.value = "";
   try {
     await invoke<void>("set_detailed_logging", { enabled: detailedLogging.value });
   } catch (reason) {
     logger.error("settings", "logging_level_change_failed", reason);
     detailedLogging.value = !detailedLogging.value;
-    error.value = `切换日志级别失败：${errorMessage(reason)}`;
+    notify({ type: "error", message: "切换日志级别失败，请查看日志", key: "settings-logging" });
   } finally {
     isChangingLogging.value = false;
   }
 }
 async function openLogs() {
-  error.value = "";
   try {
     await invoke<void>("open_logs_directory");
   } catch (reason) {
     logger.error("settings", "open_logs_failed", reason);
-    error.value = `打开日志目录失败：${errorMessage(reason)}`;
+    notify({ type: "error", message: "打开日志目录失败，请查看日志", key: "settings-logs" });
   }
 }
 
@@ -57,19 +56,13 @@ const neteaseLyricsMode = ref<Settings["neteaseLyricsMode"]>("original");
 const isLoading = ref(false);
 const isLoaded = ref(false);
 const isSaving = ref(false);
-const error = ref("");
 const isTauriApp = isTauri();
 let loadRequestSequence = 0;
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : String(reason);
-}
 
 async function show() {
   if (dialogElement.value?.open) return;
   selectedCategory.value = "general";
   dialogElement.value?.showModal();
-  error.value = "";
   isLoaded.value = false;
   const requestId = ++loadRequestSequence;
   if (!isTauriApp) return;
@@ -90,7 +83,7 @@ async function show() {
   } catch (reason) {
     if (requestId === loadRequestSequence) {
       logger.error("settings", "load_failed", reason);
-      error.value = `读取设置失败：${errorMessage(reason)}`;
+      notify({ type: "error", message: "读取设置失败，请查看日志", key: "settings-load" });
     }
   } finally {
     if (requestId === loadRequestSequence) isLoading.value = false;
@@ -105,7 +98,6 @@ function close() {
 async function save() {
   if (!isTauriApp || !isLoaded.value || isLoading.value || isSaving.value) return;
   isSaving.value = true;
-  error.value = "";
   try {
     await api.save({
       closeBehavior: closeBehavior.value,
@@ -123,7 +115,7 @@ async function save() {
     dialogElement.value?.close();
   } catch (reason) {
     logger.error("settings", "save_failed", reason);
-    error.value = `保存设置失败：${errorMessage(reason)}`;
+    notify({ type: "error", message: "保存设置失败，请查看日志", key: "settings-save" });
   } finally {
     isSaving.value = false;
   }
@@ -334,7 +326,6 @@ defineExpose({ show });
               />
               详细日志（下次启动恢复默认）
             </label>
-            <p class="text-app-muted mt-3 text-sm">日志仅保存在本机。分享前请检查路径隐私。</p>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
             <legend class="sr-only">专辑排序</legend>
@@ -365,8 +356,6 @@ defineExpose({ show });
         </section>
       </div>
       <p v-if="isLoading" class="text-app-muted px-5 pb-4 text-sm" role="status">正在读取设置…</p>
-      <p v-if="!isTauriApp" class="text-app-muted px-5 pb-4 text-sm">请在桌面应用中修改设置。</p>
-      <p v-if="error" class="px-5 pb-4 text-sm text-red-400" role="alert">{{ error }}</p>
       <footer class="flex shrink-0 justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           class="focus-visible:outline-app-accent rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"

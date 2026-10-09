@@ -4,7 +4,7 @@ import { effectScope, nextTick, ref } from "vue";
 import type { Ref } from "vue";
 import { compileSfc, loadSourceModules, evaluateSource } from "../../support/moduleLoader";
 
-import { notify } from "@/shared/notifications/center";
+import { notifications, notify } from "@/shared/notifications/center";
 import { useNotification } from "@/shared/notifications/useNotification";
 import { createHostNode, createHostRenderer } from "../../support/hostRenderer";
 import type { HostNode as ArtworkHostNode } from "../../support/hostRenderer";
@@ -76,7 +76,7 @@ class TestImage {
 
 const dependencies: Record<string, unknown> = {
   vue: Vue,
-  "@/shared/notifications/center": { notify },
+  "@/shared/notifications/center": { notifications, notify },
   "@/features/library/events": { LIBRARY_CHANGED_EVENT: "newbee:library-changed" },
   "@/shared/notifications/useNotification": { useNotification },
 };

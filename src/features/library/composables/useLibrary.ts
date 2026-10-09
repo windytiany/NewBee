@@ -1,5 +1,5 @@
 import { logger } from "@/shared/logging/logger";
-import { watch, nextTick, reactive, ref, markRaw } from "vue";
+import { nextTick, reactive, ref, markRaw } from "vue";
 import type { Ref } from "vue";
 import { useLibraryBrowser } from "@/features/library/composables/useBrowser";
 import type { LibraryAlbumSelection, TrackSummary } from "@/features/library/types";
@@ -29,8 +29,11 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
     ["library-albums", page.albumsError],
     ["library-tracks", page.tracksError],
   ] as const) {
-    watch(source, (message) => {
-      if (message) logger.error("library", key, message);
+    useNotification(() => {
+      const message = source.value;
+      if (!message) return null;
+      logger.error("library", key, message);
+      return { type: "error", message: "读取曲库失败，请查看日志", key };
     });
   }
   useNotification(() => {
@@ -43,7 +46,6 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
     if (page.trackActionError.value) type = page.trackActionMessage.value ? "warning" : "error";
     if (page.trackActionError.value)
       logger.warn("library", "action_failed", page.trackActionError.value);
-    if (deleteAlbumTarget.value || deleteTrackTarget.value) return null;
     const removal = page.trackActionRemoval.value;
     const inconsistent = Boolean(
       removal && removal.deletedCount > 0 && (removal.failedCount > 0 || removal.queueSyncFailed),

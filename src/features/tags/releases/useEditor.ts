@@ -1,4 +1,6 @@
 import { markRaw, reactive, toRefs } from "vue";
+import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import type { EditableTrack, TagSaveResult } from "@/features/tags/types";
@@ -44,7 +46,7 @@ export type ReleaseEditorOptions = {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createReleaseEditor(options: ReleaseEditorOptions) {
-  const saving = createMetadataSave(options);
+  const saving = createMetadataSave({ ...options, notifyResult: true });
   const state = reactive({
     ...toRefs(saving.state),
     open: false,
@@ -74,6 +76,20 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     confirmSave: false,
     patches: [] as TrackPatch[],
   });
+  function reportError(event: string, error: unknown, cover = false) {
+    const text = message(error);
+    if (cover) state.coverError = text;
+    else state.error = text;
+    logger.error("tags", event, error);
+    const failures: Record<string, string> = {
+      release_editor_load_failed: "读取本地标签失败，请查看日志",
+      release_search_failed: "搜索发行版本失败，请查看日志",
+      release_load_failed: "读取发行版本失败，请查看日志",
+      release_covers_failed: "读取封面列表失败，请查看日志",
+      release_cover_failed: "读取封面失败，请查看日志",
+    };
+    notify({ type: "error", message: failures[event] ?? text, key: "tags-release" });
+  }
   let lifetime = 0;
   let searchGeneration = 0;
   let releaseGeneration = 0;
@@ -129,8 +145,22 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       if (generation !== lifetime) return;
       if (!tracks.length) throw new Error("专辑没有可编辑的曲目。");
       state.tracks = tracks;
+      const unavailable = tracks.filter(
+        ({ issue, writableFields }) => issue || !writableFields.length,
+      );
+      for (const { track, issue } of unavailable) {
+        logger.warn("tags", "editable_track_unavailable", issue ?? "不支持写入", {
+          trackId: track.id,
+          path: track.path,
+        });
+      }
+      if (unavailable.length)
+        notify({
+          type: "warning",
+          message: `${unavailable.length} 首曲目的标签读取失败或不支持写入。`,
+        });
     } catch (error) {
-      if (generation === lifetime) state.error = message(error);
+      if (generation === lifetime) reportError("release_editor_load_failed", error);
     } finally {
       if (generation === lifetime) state.loading = false;
     }
@@ -186,7 +216,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       state.offset = results.offset;
       state.hasSearched = true;
     } catch (error) {
-      if (generation === searchGeneration) state.error = message(error);
+      if (generation === searchGeneration) reportError("release_search_failed", error);
     } finally {
       if (generation === searchGeneration) state.searching = false;
     }
@@ -202,6 +232,11 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       if (generation !== releaseGeneration || !state.open) return;
       state.selected = release;
       state.rows = createMatchRows(release, state.tracks);
+      if (release.summary.trackCount !== state.tracks.length) {
+        const text = `来源 ${release.summary.trackCount} 首 / 本地 ${state.tracks.length} 首，曲目数量不一致，请核对对应关系。`;
+        logger.warn("tags", "release_track_count_mismatch", text, { context: release.summary.id });
+        notify({ type: "warning", message: text });
+      }
       state.fields = TAG_FIELDS.flatMap(({ key }) =>
         state.rows.some((row) => row.values[key] !== undefined) ? [key] : [],
       );
@@ -216,7 +251,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       state.patches = [];
       void loadCovers(release.summary.id, generation);
     } catch (error) {
-      if (generation === releaseGeneration) state.error = message(error);
+      if (generation === releaseGeneration) reportError("release_load_failed", error);
     } finally {
       if (generation === releaseGeneration) state.loadingRelease = false;
     }
@@ -228,7 +263,10 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
   function loadDirect() {
     const id = releaseId(state.directId);
     if (!id) {
-      state.error = "请输入 MusicBrainz 发行版本链接或有效 ID（不是 release-group）。";
+      reportError(
+        "release_id_invalid",
+        new Error("请输入 MusicBrainz 发行版本链接或有效 ID（不是 release-group）。"),
+      );
       return;
     }
     selectRelease(id);
@@ -240,9 +278,12 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       if (generation !== releaseGeneration || !state.open) return;
       state.covers = covers;
       if (covers[0]) await loadCover(covers[0].id);
-      else state.coverError = "该发行版本没有正面封面，保留本地封面。";
+      else {
+        state.coverError = "该发行版本没有正面封面，保留本地封面。";
+        logger.info("tags", "release_cover_missing", { context: id });
+      }
     } catch (error) {
-      if (generation === releaseGeneration) state.coverError = message(error);
+      if (generation === releaseGeneration) reportError("release_covers_failed", error, true);
     } finally {
       if (generation === releaseGeneration) state.loadingCover = false;
     }
@@ -268,7 +309,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       state.cover = markRaw(data);
     } catch (error) {
       if (generation === coverGeneration && selectedGeneration === releaseGeneration) {
-        state.coverError = message(error);
+        reportError("release_cover_failed", error, true);
         state.writeCover = false;
       }
     } finally {
@@ -318,7 +359,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
   }
   function confirmPatches() {
     if (!state.patches.length) {
-      state.error = "没有需要写入的改动。";
+      reportError("release_changes_empty", new Error("没有需要写入的改动。"));
       return;
     }
     state.confirmSave = true;
@@ -336,20 +377,30 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
         state.included,
         state.writeCover,
       );
+      const unsupported = state.rows.filter((row) => {
+        if (!row.source || row.trackId === null || !state.included.includes(row.trackId))
+          return false;
+        const local = state.tracks.find(({ track }) => track.id === row.trackId);
+        const fields = state.fields.filter(
+          (field) => row.values[field] !== undefined && !local?.writableFields.includes(field),
+        );
+        if (!fields.length) return false;
+        logger.warn("tags", "release_fields_unsupported", "不支持写入", {
+          trackId: row.trackId,
+          context: fields.join(","),
+        });
+        return true;
+      });
+      if (unsupported.length)
+        notify({
+          type: "warning",
+          message: `${unsupported.length} 首曲目不支持写入部分所选字段，请核对所选字段。`,
+        });
       savedCover = state.writeCover ? state.cover : null;
       confirmPatches();
     } catch (error) {
-      state.error = message(error);
+      reportError("release_validation_failed", error);
     }
-  }
-  function retryFailed() {
-    if (busy() || state.loadingRelease) return;
-    state.error = "";
-    const failed = new Set(
-      state.results.flatMap((result) => (result.databaseUpdated ? [] : [result.trackId])),
-    );
-    state.patches = state.patches.filter((patch) => failed.has(patch.trackId));
-    confirmPatches();
   }
   async function save() {
     if (!state.confirmSave || state.saving) return;
@@ -397,9 +448,6 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     selectRelease,
     loadDirect,
     selectCover,
-    retryCovers: () => {
-      if (state.selected && !busy()) void loadCovers(state.selected.summary.id, releaseGeneration);
-    },
     move,
     setValue,
     setSharedValue,
@@ -407,11 +455,6 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     toggleTrack,
     toggleCover,
     prepareSave,
-    retryFailed,
-    retrySynchronization: async () => {
-      await saving.retrySynchronization();
-      if (!state.dirty && !state.error && !state.synchronizationError) close();
-    },
     save,
   };
 }

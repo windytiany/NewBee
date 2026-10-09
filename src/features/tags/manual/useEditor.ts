@@ -1,5 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { reactive, toRefs } from "vue";
+import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import { createLibraryApi } from "@/features/library/api";
 import { createTagsApi } from "@/features/tags/api";
@@ -36,7 +38,7 @@ function errorMessage(error: unknown) {
 }
 
 export function createTagEditor(options: TagEditorOptions) {
-  const saving = createMetadataSave(options);
+  const saving = createMetadataSave({ ...options, notifyResult: true });
   const state = reactive({
     ...toRefs(saving.state),
     open: false,
@@ -48,6 +50,15 @@ export function createTagEditor(options: TagEditorOptions) {
     lyricsAction: "keep" as LyricsMarkAction,
     confirmDiscard: false,
   });
+  function reportError(event: string, error: unknown) {
+    state.error = errorMessage(error);
+    logger.error("tags", event, error);
+    notify({
+      type: "error",
+      message: event === "editor_load_failed" ? "读取标签失败，请查看日志" : state.error,
+      key: "tags-editor",
+    });
+  }
   let loadGeneration = 0;
   let pendingChanges: TagChange[] = [];
   let pendingTrackIds: number[] = [];
@@ -86,8 +97,22 @@ export function createTagEditor(options: TagEditorOptions) {
       }
       state.tracks = tracks;
       state.draft = createTagDraft(tracks, mode);
+      const unavailable = tracks.filter(
+        ({ issue, writableFields }) => issue || !writableFields.length,
+      );
+      for (const { track, issue } of unavailable) {
+        logger.warn("tags", "editable_track_unavailable", issue ?? "不支持写入", {
+          trackId: track.id,
+          path: track.path,
+        });
+      }
+      if (unavailable.length)
+        notify({
+          type: "warning",
+          message: `${unavailable.length} 首曲目的标签读取失败或不支持写入。`,
+        });
     } catch (error) {
-      if (state.open && generation === loadGeneration) state.error = errorMessage(error);
+      if (state.open && generation === loadGeneration) reportError("editor_load_failed", error);
     } finally {
       if (generation === loadGeneration) state.loading = false;
     }
@@ -147,7 +172,7 @@ export function createTagEditor(options: TagEditorOptions) {
       if (pendingTrackIds.length === 0) return;
       void save();
     } catch (error) {
-      state.error = errorMessage(error);
+      reportError("editor_validation_failed", error);
     }
   }
 
@@ -185,15 +210,7 @@ export function createTagEditor(options: TagEditorOptions) {
     changeLyricsAction,
     edited,
     save,
-    retrySynchronization: async () => {
-      await saving.retrySynchronization();
-      if (!state.dirty && !state.error && !state.synchronizationError) close();
-    },
     prepareSave: () => prepareTargetSave(state.tracks.map(({ track }) => track.id)),
-    retryFailed: () =>
-      prepareTargetSave(
-        state.results.flatMap((result) => (result.databaseUpdated ? [] : [result.trackId])),
-      ),
   };
 }
 

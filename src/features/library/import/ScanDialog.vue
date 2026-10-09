@@ -59,11 +59,6 @@
         >
           无目录
         </p>
-
-        <p v-if="directoryError" role="alert" class="mt-3 text-sm text-amber-200">
-          {{ directoryError }} <button type="button" @click="refreshDirectories">重试读取</button>
-        </p>
-        <p v-if="!isTauriApp" class="text-app-muted mt-3 text-sm">请在桌面应用中选择和扫描目录。</p>
       </div>
 
       <footer class="border-t border-white/10 px-5 py-4">
@@ -104,7 +99,6 @@ const {
   directories,
   isLoadingDirectories,
   directoryLoadFailed,
-  directoryError,
   refreshDirectories,
   addDirectory,
   removeDirectory,

@@ -159,7 +159,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         type: failure || state.failed ? "warning" : "success",
         persistent: inconsistent || Boolean(state.synchronizationError),
         message: state.synchronizationError
-          ? "歌词已保存，但界面刷新失败，请重试刷新"
+          ? "歌词已保存，但界面刷新失败，请查看日志"
           : inconsistent
             ? "歌词已写入，但曲库更新失败，请重新扫描"
             : failure

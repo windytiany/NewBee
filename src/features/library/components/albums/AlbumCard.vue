@@ -6,7 +6,6 @@
       :class="isFocused ? 'ring-app-accent ring-2' : ''"
       :aria-label="`查看专辑 ${album.album ?? '未知专辑'}`"
       :aria-expanded="isSelected"
-      :title="artworkLoadFailed ? artwork.error.value : undefined"
       type="button"
       aria-haspopup="menu"
       :aria-controls="props.isContextMenuOpen ? 'album-context-menu' : undefined"
@@ -134,9 +133,6 @@ const artwork = useAlbumArtwork(
   size,
 );
 const artworkUrl = artwork.url;
-const artworkLoadFailed = computed(
-  () => artwork.status.value === "fallback" && artwork.error.value !== "",
-);
 const artworkImageLoaded = computed(() => artwork.status.value === "ready");
 const showFallback = computed(() => artwork.status.value === "fallback");
 

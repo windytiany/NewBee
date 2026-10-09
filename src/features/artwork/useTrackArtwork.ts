@@ -9,6 +9,7 @@ import type {
   DecodedArtwork,
 } from "@/features/artwork/artworkResources";
 import { logger } from "@/shared/logging/logger";
+import { notify } from "@/shared/notifications/center";
 
 export type TrackArtworkStatus = "loading" | "ready" | "fallback";
 
@@ -104,6 +105,11 @@ function subscribeToTrackArtwork(
         (error) => {
           const message = error instanceof Error ? error.message : String(error ?? "未知错误");
           logger.warn("artwork", "read_failed", error, { trackId });
+          notify({
+            type: "warning",
+            message: "封面加载失败，已显示占位图，请查看日志",
+            key: "artwork-read",
+          });
           return `读取封面失败，已显示占位图：${message}`;
         },
         (run, isCurrent) => scheduleArtworkLoad(size, run, isCurrent),

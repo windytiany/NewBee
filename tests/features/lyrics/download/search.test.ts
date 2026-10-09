@@ -1,8 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { createLyricsSearch } from "@/features/lyrics/download/search";
 import type { LyricsSearchOptions } from "@/features/lyrics/download/search";
 import { searchQuery } from "@/features/lyrics/download/query";
 import type { LyricsCandidate, LyricsContent, LyricsSearchResults } from "@/features/lyrics/types";
+
+import { notifications } from "@/shared/notifications/center";
+
+afterEach(() => notifications.clear());
 
 const candidate: LyricsCandidate = {
   provider: "netease",
@@ -38,6 +42,37 @@ function setup(overrides: Partial<LyricsSearchOptions> = {}) {
 }
 
 describe("lyrics search", () => {
+  it("reports failures once from the business request without changing draft data", async () => {
+    const { search, applied } = setup({
+      search: async () => {
+        throw new Error("provider error");
+      },
+      preview: async () => {
+        throw new Error("preview error");
+      },
+      automatic: async () => {
+        throw new Error("automatic error");
+      },
+    });
+    search.reset("query");
+    await search.search();
+    await search.select(candidate);
+    await search.automatic(1);
+    expect(notifications.items.value.map(({ message }) => message)).toEqual([
+      "歌词搜索失败，请查看日志",
+      "歌词预览失败，请查看日志",
+      "自动获取歌词失败，请查看日志",
+    ]);
+    expect(applied).toEqual([]);
+  });
+  it("keeps empty search results as data and reports them once", async () => {
+    const { search } = setup({ search: async () => ({ candidates: [], nextOffset: null }) });
+    search.reset("query");
+    await search.search();
+    expect(search.state.candidates).toEqual([]);
+    expect(notifications.items.value[0]?.message).toBe("未找到候选曲目。");
+    expect(notifications.items.value[0]?.count).toBe(1);
+  });
   it("uses local title and artist with a filename fallback, preserving version names", () => {
     expect(searchQuery({ title: "Song (Live)", artist: "Artist", path: "ignored.mp3" })).toBe(
       "Song (Live) Artist",

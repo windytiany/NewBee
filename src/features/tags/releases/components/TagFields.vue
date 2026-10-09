@@ -89,23 +89,6 @@ function changeCover(event: InstanceType<typeof globalThis.Event>) {
           封面 {{ index + 1 }} {{ cover.comment }}
         </option>
       </select>
-      <p
-        v-if="state.coverError"
-        role="status"
-        class="truncate text-xs text-amber-200"
-        :title="state.coverError"
-      >
-        {{ state.coverError }}
-      </p>
-      <button
-        v-if="state.coverError && state.selected"
-        type="button"
-        :disabled="disabled || state.loadingCover"
-        class="text-xs underline disabled:opacity-50"
-        @click="editor.retryCovers()"
-      >
-        重试封面
-      </button>
     </div>
     <div class="grid min-w-0 grid-cols-3 content-start gap-1">
       <div

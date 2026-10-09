@@ -339,15 +339,17 @@ describe("App notification integration", () => {
     expect(notifications.items.value).toEqual([]);
   });
 
-  it("keeps load failures in inline business state without a toast", async () => {
+  it("notifies load failures without changing business state or duplicating on page changes", async () => {
     mountApp();
     artistsError.value = "读取专辑演出者失败：database unavailable";
     await Vue.nextTick();
-    expect(notifications.items.value).toEqual([]);
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({ type: "error", key: "library-artists" });
     expect(artistsError.value).toContain("database unavailable");
     activePage.value = "Playlist";
     await Vue.nextTick();
-    expect(notifications.items.value).toEqual([]);
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({ type: "error", key: "library-artists" });
     expect(artistsError.value).toContain("database unavailable");
   });
 });
@@ -368,7 +370,7 @@ describe("App track deletion confirmation", () => {
     expect(findByTestId(root, "delete-dialog")).toBeNull();
   });
 
-  it("keeps the dialog open and displays the database error when deletion did not happen", async () => {
+  it("keeps the dialog open and notifies the error when deletion did not happen", async () => {
     removalResult = { status: "not-deleted", message: "数据库不可用" };
     const root = mountApp();
     click(findByTestId(root, "request-delete"));
@@ -381,8 +383,9 @@ describe("App track deletion confirmation", () => {
     expect(dialogShowCalls).toBe(1);
     expect(dialogCloseCalls).toBe(0);
     expect(findByTestId(root, "delete-dialog")).not.toBeNull();
-    expect(findByTestId(root, "dialog-error")?.text).toBe("数据库不可用");
-    expect(notifications.items.value).toEqual([]);
+    expect(findByTestId(root, "dialog-error")).toBeNull();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.type).toBe("error");
     expect(libraryTrackActionError.value).toBe("数据库不可用");
     expect(findByTestId(root, "delete-dialog")).not.toBeNull();
     expect(playlistRefreshCalls).toBe(0);

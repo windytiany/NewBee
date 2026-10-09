@@ -4,7 +4,6 @@ import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 
 export function usePathMigration() {
-  const migrationError = ref("");
   const oldPath = ref("");
   const newPath = ref("");
   const isMigrating = ref(false);
@@ -15,10 +14,13 @@ export function usePathMigration() {
     const source = oldPath.value.trim();
     const target = newPath.value.trim();
     if (!source || !target || source === target) {
-      migrationError.value = "请输入不同且非空的原路径和新路径";
+      notify({
+        type: "warning",
+        message: "请输入不同且非空的原路径和新路径",
+        key: "library-path-migration",
+      });
       return;
     }
-    migrationError.value = "";
     isMigrating.value = true;
     try {
       const count = await invoke<number>("migrate_track_paths", {
@@ -27,15 +29,17 @@ export function usePathMigration() {
       });
       logger.info("library", "paths_migrated", { count });
       if (count > 0) notify({ type: "success", message: `已更新 ${count} 首曲目的路径` });
-      else migrationError.value = "没有匹配原路径的曲目";
+      else {
+        notify({ type: "warning", message: "没有匹配原路径的曲目", key: "library-path-migration" });
+      }
       return count > 0;
     } catch (reason) {
       logger.error("library", "path_migration_failed", reason);
-      migrationError.value = "路径迁移失败，请重试或查看日志";
+      notify({ type: "error", message: "路径迁移失败，请查看日志", key: "library-path-migration" });
     } finally {
       isMigrating.value = false;
     }
   }
 
-  return { migrationError, oldPath, newPath, isMigrating, isTauriApp, migrate };
+  return { oldPath, newPath, isMigrating, isTauriApp, migrate };
 }

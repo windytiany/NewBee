@@ -200,7 +200,7 @@ describe("metadata editing", () => {
     expect(changes.some(({ field }) => field === "trackNumber")).toBe(false);
   });
 
-  it("preserves successful results and retries only failed files", async () => {
+  it("preserves per-track results after partial failure without a retry entry", async () => {
     const calls: number[][] = [];
     const { editor, synchronized } = fixture({
       save: async (ids, _changes, progress) => {
@@ -219,12 +219,13 @@ describe("metadata editing", () => {
     expect(editor.state.open).toBe(true);
     expect(editor.state.results).toHaveLength(2);
     expect(synchronized).toEqual([[1]]);
-    editor.retryFailed();
-    await settle();
-    expect(calls).toEqual([[1, 2], [2]]);
-    expect(synchronized).toEqual([[1], [2]]);
-    expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
-    expect(editor.state.open).toBe(false);
+    expect(calls).toEqual([[1, 2]]);
+    expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([
+      true,
+      false,
+    ]);
+    expect("retryFailed" in editor).toBe(false);
+    expect(editor.state.dirty).toBe(true);
   });
 
   it("sends a bulk mark action without rewriting unchanged tags", async () => {
@@ -275,7 +276,7 @@ describe("metadata editing", () => {
     expect(editor.state.open).toBe(false);
   });
 
-  it("retries only failed marks and preserves the selected action", async () => {
+  it("preserves mark outcomes and the selected action after partial failure", async () => {
     const calls: Array<{ ids: number[]; action: string }> = [];
     const { editor } = fixture({
       save: async (ids, _changes, _progress, action) => {
@@ -287,11 +288,11 @@ describe("metadata editing", () => {
     editor.changeLyricsAction("mark");
     editor.prepareSave();
     await settle();
-    editor.retryFailed();
-    await settle();
-    expect(calls).toEqual([
-      { ids: [1, 2], action: "mark" },
-      { ids: [2], action: "mark" },
+    expect(calls).toEqual([{ ids: [1, 2], action: "mark" }]);
+    expect(editor.state.lyricsAction).toBe("mark");
+    expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([
+      true,
+      false,
     ]);
   });
 
@@ -338,7 +339,7 @@ describe("metadata editing", () => {
     expect(editor.state.saving).toBe(false);
   });
 
-  it("preserves reported successes after a request error and retries every other target", async () => {
+  it("preserves reported successes and every failed target after a request error", async () => {
     const calls: number[][] = [];
     const { editor, synchronized } = fixture({
       save: async (ids, _changes, progress) => {
@@ -362,14 +363,12 @@ describe("metadata editing", () => {
     ]);
     expect(editor.state.dirty).toBe(true);
     expect(synchronized).toEqual([[1]]);
-    editor.retryFailed();
-    await settle();
-    expect(calls).toEqual([[1, 2], [2]]);
-    expect(synchronized).toEqual([[1], [2]]);
-    expect(editor.state.open).toBe(false);
+    expect(calls).toEqual([[1, 2]]);
+    expect(editor.state.results[1]?.error).toBe("interrupted");
+    expect(editor.state.open).toBe(true);
   });
 
-  it("retries failed synchronization without saving again or marking successful tracks dirty", async () => {
+  it("retains successful results after synchronization failure without a refresh retry entry", async () => {
     let attempts = 0;
     const { editor, saves } = fixture({
       synchronize: async () => {
@@ -387,10 +386,10 @@ describe("metadata editing", () => {
     expect(editor.state.dirty).toBe(false);
     expect(editor.state.results[0]?.databaseUpdated).toBe(true);
     expect(editor.state.synchronizationError).toContain("reload failed");
-    await editor.retrySynchronization();
-    expect(attempts).toBe(2);
+    expect("retrySynchronization" in editor).toBe(false);
+    expect(attempts).toBe(1);
     expect(saves).toHaveLength(1);
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.open).toBe(true);
   });
 
   it("releases every mark target even without cached lyrics, but not for unmarking", async () => {

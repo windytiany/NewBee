@@ -243,7 +243,7 @@ describe("专辑背景展示", () => {
     const { root, selectedAlbum } = mountBrowser();
     artworkError.value = "生成专辑背景失败：Canvas 2D 不可用";
     await Vue.nextTick();
-    expect(panel(root).parent?.props.title).toContain("Canvas 2D");
+    expect(panel(root).parent?.props.title).toBeUndefined();
     expect(panel(root).children[0]?.props.class).toContain("opacity-0");
     selectedAlbum.value = null;
     await Vue.nextTick();

@@ -76,14 +76,6 @@
 
     <div class="space-y-4 px-5 py-5">
       <p v-if="state.loading" role="status" class="text-app-muted text-sm">加载中…</p>
-      <p
-        v-for="error in errors"
-        :key="error"
-        role="alert"
-        class="text-sm whitespace-pre-wrap text-red-200"
-      >
-        {{ error }}
-      </p>
 
       <section
         v-if="singleTrack"
@@ -175,9 +167,6 @@
             <option value="mark">全部标记为“无歌词”</option>
             <option value="unmark">全部取消标记</option>
           </select>
-          <p v-if="state.lyricsAction === 'mark'" class="text-amber-200">
-            保存时将清除这些曲目的内嵌歌词，并标记为无歌词。
-          </p>
         </div>
         <LyricsEditor
           v-if="state.open && singleTrack && lyricsField"
@@ -204,29 +193,13 @@
             />
             标记为无歌词
           </label>
-          <p
-            v-if="state.lyricsAction === 'mark' && lyricsField?.originalValue?.trim()"
-            class="text-xs text-amber-200"
-          >
-            保存时将清除原有的内嵌歌词。
-          </p>
         </div>
       </section>
 
-      <p v-if="batch.state.running" role="status" class="text-app-muted text-sm">
-        歌词下载任务运行中，暂时无法保存标签。
-      </p>
       <div v-if="state.saving" role="status" class="space-y-2 text-sm" aria-live="polite">
         <p>{{ multiple ? `正在保存 ${state.completed} / ${state.total}` : "保存中…" }}</p>
         <progress :value="state.completed" :max="state.total" class="w-full"></progress>
       </div>
-      <p
-        v-if="multiple && state.results.length && !state.saving"
-        class="text-sm"
-        aria-live="polite"
-      >
-        {{ state.results.length - failedCount }} 首成功，{{ failedCount }} 首失败。
-      </p>
     </div>
 
     <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -237,24 +210,6 @@
         @click="editor.requestClose()"
       >
         取消
-      </button>
-      <button
-        v-if="failedCount"
-        type="button"
-        class="focus-visible:outline-app-accent rounded border border-white/20 px-4 py-2 text-sm focus-visible:outline-2 disabled:opacity-50"
-        :disabled="!canSave"
-        @click="editor.retryFailed()"
-      >
-        仅重试失败项
-      </button>
-      <button
-        v-if="state.synchronizationError"
-        type="button"
-        class="focus-visible:outline-app-accent rounded border border-white/20 px-4 py-2 text-sm focus-visible:outline-2 disabled:opacity-50"
-        :disabled="state.saving || state.confirmDiscard"
-        @click="editor.retrySynchronization()"
-      >
-        重试界面刷新
       </button>
       <button
         type="submit"
@@ -327,17 +282,6 @@ const lyricsMarked = computed(
       !lyricsField.value?.value.trim()),
 );
 const singleTrack = computed(() => (state.tracks.length === 1 ? state.tracks[0]?.track : null));
-const failedCount = computed(
-  () => state.results.filter((result) => !result.databaseUpdated).length,
-);
-const errors = computed(() => [
-  ...new Set([
-    ...(state.error ? [state.error] : []),
-    ...(state.synchronizationError ? [state.synchronizationError] : []),
-    ...state.tracks.flatMap(({ issue }) => (issue ? [issue] : [])),
-    ...state.results.flatMap(({ error }) => (error ? [error] : [])),
-  ]),
-]);
 const properties = computed(() => {
   const track = singleTrack.value;
   if (!track) return [];

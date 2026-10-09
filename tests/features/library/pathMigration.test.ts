@@ -26,7 +26,6 @@ const dialogOutput = compileSfc(
 
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
-  migrationError: Vue.Ref<string>;
   oldPath: Vue.Ref<string>;
   newPath: Vue.Ref<string>;
   isMigrating: Vue.Ref<boolean>;
@@ -144,8 +143,9 @@ describe("path migration dialog", () => {
   it("keeps the dialog and input when no tracks match", async () => {
     const { bindings, element, notices } = createDialog(async () => 0);
     await bindings.migrate();
-    expect(notices).toEqual([]);
-    expect(bindings.migrationError.value).toBe("没有匹配原路径的曲目");
+    expect(notices).toEqual([
+      { type: "warning", message: "没有匹配原路径的曲目", key: "library-path-migration" },
+    ]);
     expect(element.open).toBe(true);
     expect(bindings.oldPath.value).toBe("C:\\Music\\");
   });
@@ -157,8 +157,8 @@ describe("path migration dialog", () => {
       return 1;
     });
     await bindings.migrate();
-    expect(notices).toEqual([]);
-    expect(bindings.migrationError.value).toContain("路径迁移失败");
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ type: "error", message: "路径迁移失败，请查看日志" });
     expect(element.open).toBe(true);
     expect(bindings.isMigrating.value).toBe(false);
     expect(bindings.newPath.value).toBe("D:\\Music\\");
@@ -174,8 +174,12 @@ describe("path migration dialog", () => {
     bindings.oldPath.value = bindings.newPath.value;
     await bindings.migrate();
     expect(calls).toBe(0);
-    expect(notices).toEqual([]);
-    expect(bindings.migrationError.value).toContain("请输入不同且非空");
+    expect(notices).toHaveLength(2);
+    expect(
+      notices.every(
+        ({ type, message }) => type === "warning" && message === "请输入不同且非空的原路径和新路径",
+      ),
+    ).toBe(true);
   });
 
   it("blocks duplicate submits, closing and resetting while migration is pending", async () => {

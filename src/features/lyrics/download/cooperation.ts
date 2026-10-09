@@ -1,3 +1,4 @@
+import { logger } from "@/shared/logging/logger";
 import { createMetadataSave } from "@/features/tags/save";
 import type { MetadataFileEditor } from "@/features/tags/save";
 import type { TagSaveResult } from "@/features/tags/types";
@@ -46,6 +47,10 @@ export function createLyricsBatchCooperation(
     try {
       await options.cancel(activeBatchId);
     } catch (error) {
+      logger.warn("lyrics", "download_cancellation_failed", error, {
+        operationId: progress.operationId,
+        batchId: activeBatchId,
+      });
       if (accepting) cancellationError = `取消请求失败：${message(error)}`;
     }
   }
@@ -91,6 +96,11 @@ export function createLyricsBatchCooperation(
     try {
       await save(event);
     } catch (error) {
+      logger.warn("lyrics", "download_cooperation_failed", error, {
+        operationId: progress.operationId,
+        batchId: event.batchId,
+        trackId: event.trackId,
+      });
       if (accepting) cooperationError = `歌词保存协作失败：${message(error)}`;
     }
   }

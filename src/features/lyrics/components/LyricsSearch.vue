@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { notify } from "@/shared/notifications/center";
+import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onScopeDispose, ref, watch } from "vue";
 import type { TrackDetails } from "@/features/library/types";
@@ -17,7 +19,6 @@ const emit = defineEmits<{ apply: [text: string]; mark: [] }>();
 const searchDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const replaceDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const enabled = ref(false);
-const settingsError = ref("");
 const pendingText = ref<string | null>(null);
 const pendingMark = ref(false);
 const preparing = ref(false);
@@ -46,16 +47,26 @@ const busy = computed(() => props.disabled || !enabled.value || preparing.value 
 
 async function loadSettings() {
   const generation = ++settingsGeneration;
-  settingsError.value = "";
   enabled.value = false;
   try {
     const settings = await settingsApi.get();
     if (!alive || generation !== settingsGeneration) return;
     enabled.value = settings.lyricsProviders.includes("netease");
-    if (!enabled.value) settingsError.value = "请先在设置中启用歌词来源。";
+    if (!enabled.value)
+      notify({
+        type: "warning",
+        message: "请先在设置中启用歌词来源。",
+        key: "lyrics-provider-disabled",
+      });
   } catch (error) {
-    if (alive && generation === settingsGeneration)
-      settingsError.value = `读取歌词设置失败：${String(error)}`;
+    if (alive && generation === settingsGeneration) {
+      logger.warn("lyrics", "settings_failed", error);
+      notify({
+        type: "warning",
+        message: "读取歌词设置失败，请查看日志",
+        key: "lyrics-settings-failed",
+      });
+    }
   }
 }
 function closeSearch() {
@@ -134,9 +145,6 @@ void loadSettings();
         手动搜索
       </button>
     </div>
-    <p v-if="settingsError || state.error" role="status" class="text-sm text-amber-200">
-      {{ settingsError || state.error }}
-    </p>
   </div>
 
   <dialog
@@ -173,9 +181,11 @@ void loadSettings();
         {{ state.searching ? "搜索中…" : "搜索" }}
       </button>
     </form>
-    <p v-if="state.error" role="status" class="mb-3 text-sm text-amber-200">{{ state.error }}</p>
     <div class="grid gap-4 md:grid-cols-2">
       <div class="max-h-96 overflow-y-auto rounded border border-white/10">
+        <p v-if="!state.searching && !state.candidates.length" class="text-app-muted p-3 text-sm">
+          暂无候选曲目
+        </p>
         <ul aria-label="歌词候选曲目">
           <li v-for="candidate in state.candidates" :key="`${candidate.provider}:${candidate.id}`">
             <button

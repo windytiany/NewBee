@@ -8,8 +8,11 @@ import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { TrackDetails } from "@/features/library/types";
 import type { LyricsContent } from "@/features/lyrics/types";
 
+import { notifications, notify } from "@/shared/notifications/center";
+
 const scopes: Vue.EffectScope[] = [];
 afterEach(() => {
+  notifications.clear();
   for (const scope of scopes.splice(0)) scope.stop();
 });
 const source = await Bun.file("src/features/lyrics/components/LyricsSearch.vue").text();
@@ -40,6 +43,7 @@ function dialog(): Dialog {
 function setup(
   modified = false,
   automatic: () => Promise<LyricsContent> = async () => ({ kind: "available", text: "downloaded" }),
+  settings: () => { lyricsProviders: string[] } = () => ({ lyricsProviders: ["netease"] }),
 ) {
   const calls: string[] = [];
   const applied: string[] = [];
@@ -70,10 +74,11 @@ function setup(
     default: { setup: (properties: typeof props, context: object) => Bindings };
   }>(output, {
     vue: Vue,
+    "@/shared/notifications/center": { notify },
     "@tauri-apps/api/core": {
       invoke: async (command: string) => {
         calls.push(command);
-        if (command === "get_settings") return { lyricsProviders: ["netease"] };
+        if (command === "get_settings") return settings();
         if (command === "find_track_lyrics") return automatic();
         if (command === "search_lyrics_candidates")
           return {
@@ -117,6 +122,24 @@ function setup(
 }
 
 describe("lyrics editor actions", () => {
+  it("notifies when lyrics providers are disabled without inline error UI", async () => {
+    const { bindings, calls } = setup(false, undefined, () => ({ lyricsProviders: [] }));
+    await Vue.nextTick();
+    expect(notifications.items.value[0]?.message).toBe("请先在设置中启用歌词来源。");
+    await bindings.automatic();
+    expect(calls).not.toContain("find_track_lyrics");
+    expect(source).not.toContain('v-if="state.error"');
+    expect(source).not.toContain("settingsError");
+  });
+  it("notifies settings read failures without attempting lyrics downloads", async () => {
+    const { bindings, calls } = setup(false, undefined, () => {
+      throw new Error("settings unavailable");
+    });
+    await Vue.nextTick();
+    expect(notifications.items.value[0]?.message).toBe("读取歌词设置失败，请查看日志");
+    await bindings.automatic();
+    expect(calls).not.toContain("find_track_lyrics");
+  });
   it("applies automatic results to the draft without a file-write command", async () => {
     const { bindings, calls, applied } = setup();
     await bindings.automatic();

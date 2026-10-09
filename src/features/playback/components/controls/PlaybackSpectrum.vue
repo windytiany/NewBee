@@ -3,7 +3,7 @@
     aria-label="实时音频频谱"
     class="text-app-muted ml-6 flex h-7 w-12 shrink-0 items-end justify-between"
     role="img"
-    :title="error || '实时音频频谱 · 40 Hz–16 kHz'"
+    title="实时音频频谱 · 40 Hz–16 kHz"
   >
     <span
       v-for="(level, index) in bands"
@@ -27,7 +27,7 @@ const props = defineProps<{
   active: boolean;
 }>();
 
-const { bands, error } = usePlaybackSpectrum(
+const { bands } = usePlaybackSpectrum(
   () => props.playbackId,
   () => props.active,
 );

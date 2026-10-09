@@ -19,10 +19,6 @@
           不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。
         </p>
       </div>
-
-      <p v-if="props.error" role="alert" class="px-5 pb-4 text-sm text-amber-200">
-        {{ props.error }}
-      </p>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           class="focus-visible:outline-app-accent rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -52,7 +48,6 @@ import type { TrackSummary } from "@/features/library/types";
 const props = defineProps<{
   track: TrackSummary;
   isDeleting: boolean;
-  error?: string;
 }>();
 
 const emit = defineEmits<{
