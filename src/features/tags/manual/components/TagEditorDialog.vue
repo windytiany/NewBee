@@ -180,20 +180,21 @@
           form="metadata-editor-form"
           @update:model-value="editor.changeField(lyricsField, $event)"
           @mark="editor.changeLyricsAction('mark')"
-        />
-        <div v-if="singleTrack" class="mt-3 space-y-2">
-          <label class="text-app-muted inline-flex items-center gap-2 text-xs">
-            <input
-              id="metadata-no-lyrics"
-              type="checkbox"
-              :checked="lyricsMarked"
-              :disabled="state.loading || state.saving || state.confirmDiscard"
-              class="accent-app-accent size-3.5"
-              @change="toggleLyricsMark"
-            />
-            标记为无歌词
-          </label>
-        </div>
+        >
+          <template #mark>
+            <label class="text-app-muted inline-flex shrink-0 items-center gap-2 text-xs">
+              <input
+                id="metadata-no-lyrics"
+                type="checkbox"
+                :checked="lyricsMarked"
+                :disabled="state.loading || state.saving || state.confirmDiscard"
+                class="accent-app-accent size-3.5"
+                @change="toggleLyricsMark"
+              />
+              标记为无歌词
+            </label>
+          </template>
+        </LyricsEditor>
       </section>
 
       <div v-if="state.saving" role="status" class="space-y-2 text-sm" aria-live="polite">

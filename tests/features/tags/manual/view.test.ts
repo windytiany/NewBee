@@ -117,7 +117,11 @@ function mountDialog(
         useLyricsBatch: () => ({ state: { running: downloading } }),
       },
       "@/features/lyrics/components/LyricsSearch.vue": Vue.defineComponent({
-        setup: () => () => null,
+        setup: () => () =>
+          Vue.h("div", [
+            Vue.h("button", { type: "button" }, "自动获取"),
+            Vue.h("button", { type: "button" }, "手动搜索"),
+          ]),
       }),
       "@/features/artwork/components/TrackArtwork.vue": Vue.defineComponent({
         setup: () => () => null,
@@ -319,7 +323,7 @@ describe("metadata editor views", () => {
     expect(getTextContent(root)).not.toContain("确认写入");
   });
 
-  it("places a small checkbox below single-track lyrics instead of a dropdown", async () => {
+  it("places lyric search actions at the bottom right on the same row as the mark checkbox", async () => {
     const { editor, root, saved, savedActions } = mountDialog();
     await editor.openTracks([1]);
     await settle();
@@ -339,6 +343,18 @@ describe("metadata editor views", () => {
     );
     expect(textareaIndex).toBeGreaterThanOrEqual(0);
     expect(checkboxIndex).toBeGreaterThan(textareaIndex);
+    const actionRow = checkbox.parent?.parent;
+    if (!actionRow) throw new Error("Missing lyrics action row");
+    expect(actionRow.props.class).toContain("flex items-center justify-between");
+    const searchActions = actionRow.children.find((node) =>
+      String(node.props.class).includes("ml-auto"),
+    );
+    if (!searchActions) throw new Error("Missing right-aligned search actions");
+    expect(getTextContent(searchActions)).toContain("自动获取");
+    expect(getTextContent(searchActions)).toContain("手动搜索");
+    expect(actionRow.children.indexOf(searchActions)).toBeGreaterThan(
+      actionRow.children.indexOf(checkbox.parent!),
+    );
     (checkbox.props.onChange as (event: { target: { checked: boolean } }) => void)({
       target: { checked: true },
     });
@@ -411,7 +427,7 @@ describe("metadata editor views", () => {
     const lyricsTab = findNode(root, (node) => node.props.id === "metadata-tab-lyrics");
     const tagsTab = findNode(root, (node) => node.props.id === "metadata-tab-tags");
     expect(input(root, "lyrics").type).toBe("textarea");
-    expect(input(root, "lyrics").props.placeholder).toBe("无歌词");
+    expect(input(root, "lyrics").props.placeholder).toBeUndefined();
     expect(getTextContent(root)).not.toContain("可编辑纯文本");
     expect(findNode(root, (node) => node.props["aria-label"] === "歌词说明")).toBeNull();
     expect(input(root, "lyrics").props.value).toBe(

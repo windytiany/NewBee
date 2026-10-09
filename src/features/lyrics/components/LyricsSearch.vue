@@ -126,25 +126,23 @@ void loadSettings();
 </script>
 
 <template>
-  <div class="mb-3 space-y-2">
-    <div class="flex flex-wrap gap-2">
-      <button
-        type="button"
-        :disabled="busy"
-        class="focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        @click="automatic"
-      >
-        {{ state.automatic ? "正在获取…" : "自动获取" }}
-      </button>
-      <button
-        type="button"
-        :disabled="busy"
-        class="focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        @click="openSearch"
-      >
-        手动搜索
-      </button>
-    </div>
+  <div class="flex items-center gap-2">
+    <button
+      type="button"
+      :disabled="busy"
+      class="focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+      @click="automatic"
+    >
+      {{ state.automatic ? "正在获取…" : "自动获取" }}
+    </button>
+    <button
+      type="button"
+      :disabled="busy"
+      class="focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+      @click="openSearch"
+    >
+      手动搜索
+    </button>
   </div>
 
   <dialog
