@@ -260,6 +260,7 @@ import { useTagEditor } from "@/features/tags/manual/useEditor";
 import type { DraftField, LyricsMarkAction, TagField } from "@/features/tags/types";
 import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
 import { formatTrackDuration } from "@/features/library/format";
+import { formatPathForDisplay } from "@/shared/filesystem/pathPresentation";
 import LyricsEditor from "@/features/lyrics/components/LyricsEditor.vue";
 import { useLyricsBatch } from "@/features/lyrics/download/batch";
 
@@ -287,7 +288,7 @@ const properties = computed(() => {
   const track = singleTrack.value;
   if (!track) return [];
   return [
-    { label: "位置", value: track.path },
+    { label: "位置", value: formatPathForDisplay(track.path) },
     { label: "时长", value: formatTrackDuration(track.durationMs) ?? "-" },
     { label: "编码", value: track.codec ?? "-" },
     { label: "采样率", value: track.sampleRateHz === null ? "-" : `${track.sampleRateHz} Hz` },

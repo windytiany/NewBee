@@ -142,6 +142,27 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
+  for (const [path, displayedPath] of [
+    [String.raw`\\?\C:\Music\song.mp3`, String.raw`C:\Music\song.mp3`],
+    [String.raw`\\?\UNC\server\music\song.mp3`, String.raw`\\server\music\song.mp3`],
+    [String.raw`C:\Music\song.mp3`, String.raw`C:\Music\song.mp3`],
+    ["/music/song.mp3", "/music/song.mp3"],
+    [String.raw`\\?\Volume{test}\song.mp3`, String.raw`\\?\Volume{test}\song.mp3`],
+  ]) {
+    it(`formats the property location without changing the stored path: ${path}`, async () => {
+      const { editor, root } = mountDialog();
+      await editor.openTracks([1]);
+      const editable = editor.state.tracks[0];
+      if (!editable || !path) throw new Error("Missing editable track or path");
+      editable.track.path = path;
+      await settle();
+      const panel = findNode(root, (node) => node.props.id === "metadata-panel-properties");
+      if (!panel) throw new Error("Missing properties panel");
+      expect(findNode(panel, (node) => node.type === "dd")?.text).toBe(displayedPath);
+      expect(editable.track.path).toBe(path);
+    });
+  }
+
   it("keeps saving disabled during lyrics download without explanatory warning text", async () => {
     const { editor, root } = mountDialog(false, false, async () => {}, true);
     await editor.openTracks([1, 2]);
