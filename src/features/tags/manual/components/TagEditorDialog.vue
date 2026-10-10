@@ -54,6 +54,25 @@
         标签
       </button>
       <button
+        id="metadata-tab-additional"
+        ref="additionalTab"
+        type="button"
+        role="tab"
+        aria-controls="metadata-panel-additional"
+        :aria-selected="activeTab === 'additional'"
+        :tabindex="activeTab === 'additional' ? 0 : -1"
+        :class="
+          activeTab === 'additional'
+            ? 'border-app-accent text-white'
+            : 'text-app-muted border-transparent'
+        "
+        class="focus-visible:outline-app-accent border-b-2 px-5 py-3 text-sm hover:text-white focus-visible:outline-2"
+        @click="activeTab = 'additional'"
+        @keydown="onTabKeydown"
+      >
+        更多标签
+      </button>
+      <button
         id="metadata-tab-lyrics"
         ref="lyricsTab"
         type="button"
@@ -92,91 +111,66 @@
         </dl>
       </section>
 
-      <section
-        v-show="activeTab === 'tags'"
-        id="metadata-panel-tags"
-        role="tabpanel"
-        aria-labelledby="metadata-tab-tags"
-      >
-        <div v-if="!state.loading && state.tracks.length" class="flex items-start gap-5">
-          <TrackArtwork
-            v-if="singleTrack"
-            :track-id="singleTrack.id"
-            class="hidden size-36 shrink-0 rounded-md sm:block"
-            alt=""
-          >
-            <div class="bg-app-interactive h-full"></div>
-          </TrackArtwork>
-          <form
-            id="metadata-editor-form"
-            class="min-w-0 flex-1 space-y-4"
-            @submit.prevent="editor.prepareSave()"
-          >
-            <div
-              v-for="row in fieldRows"
-              :key="row[0]?.key"
-              class="grid gap-4"
-              :class="row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'"
-            >
+      <form id="metadata-editor-form" @submit.prevent="editor.prepareSave()">
+        <section
+          v-for="tab in fieldTabs"
+          v-show="activeTab === tab"
+          :id="`metadata-panel-${tab}`"
+          :key="tab"
+          role="tabpanel"
+          :aria-labelledby="`metadata-tab-${tab}`"
+        >
+          <div v-if="!state.loading && state.tracks.length" class="flex items-start gap-5">
+            <TagCoverEditor
+              v-if="tab === 'tags'"
+              :track-id="state.tracks[0]?.track.id ?? null"
+              :cover="state.cover"
+              :disabled="
+                !state.open || state.saving || state.confirmDiscard || activeTab !== 'tags'
+              "
+              class="size-36 shrink-0"
+              @change="editor.changeCover($event)"
+              @failed="editor.coverSelectionFailed($event)"
+            />
+            <div class="min-w-0 flex-1 space-y-4">
               <div
-                v-for="(field, index) in row"
-                :key="field.key"
-                class="grid min-w-0 items-center gap-3"
-                :class="
-                  index === 1 ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[5rem_minmax(0,1fr)]'
-                "
+                v-for="row in fieldRows[tab]"
+                :key="row[0]?.key"
+                class="grid gap-4"
+                :class="row.length === 2 ? 'grid-cols-2' : 'grid-cols-1'"
               >
-                <label :for="`metadata-${field.key}`" class="text-sm">{{
-                  row.length === 2 && index === 1 ? "共" : field.label
-                }}</label>
-                <input
-                  :id="`metadata-${field.key}`"
-                  :aria-label="field.label"
-                  :value="field.value"
-                  :readonly="!field.writable"
-                  :disabled="state.saving || state.confirmDiscard"
-                  :placeholder="field.mixed ? '多个值' : ''"
-                  :inputmode="field.type === 'number' ? 'numeric' : 'text'"
-                  class="focus-visible:outline-app-accent w-full rounded border border-white/15 bg-black/20 px-3 py-2 text-sm read-only:text-white/50 focus-visible:outline-2 disabled:opacity-50"
-                  type="text"
-                  @input="editField(field, $event)"
-                  @keydown="clearMixedValue(field, $event)"
-                />
+                <div
+                  v-for="(field, index) in row"
+                  :key="field.key"
+                  class="grid min-w-0 items-center gap-3"
+                  :class="
+                    index === 1
+                      ? 'grid-cols-[auto_minmax(0,1fr)]'
+                      : 'grid-cols-[5rem_minmax(0,1fr)]'
+                  "
+                >
+                  <label :for="`metadata-${field.key}`" class="text-sm">{{
+                    index === 1 && state.mode !== "album" ? "共" : field.label
+                  }}</label>
+                  <input
+                    :id="`metadata-${field.key}`"
+                    :aria-label="field.label"
+                    :value="field.value"
+                    :readonly="!field.writable"
+                    :disabled="state.saving || state.confirmDiscard"
+                    :placeholder="field.mixed ? '多个值' : ''"
+                    :inputmode="field.type === 'number' ? 'numeric' : 'text'"
+                    class="focus-visible:outline-app-accent w-full rounded border border-white/15 bg-black/20 px-3 py-2 text-sm read-only:text-white/50 focus-visible:outline-2 disabled:opacity-50"
+                    type="text"
+                    @input="editField(field, $event)"
+                    @keydown="clearMixedValue(field, $event)"
+                  />
+                </div>
               </div>
             </div>
-          </form>
-        </div>
-        <div v-if="!state.loading && state.tracks.length" class="mt-4 space-y-2 text-sm">
-          <label class="inline-block cursor-pointer rounded border border-white/15 px-3 py-2">
-            替换封面
-            <input
-              type="file"
-              accept="image/*"
-              :disabled="state.saving || state.confirmDiscard"
-              class="sr-only"
-              @change="replaceCover"
-            />
-          </label>
-          <button
-            type="button"
-            class="ml-2 rounded border border-white/15 px-3 py-2"
-            :disabled="state.saving || state.confirmDiscard"
-            @click="editor.changeCover({ action: 'delete' })"
-          >
-            删除封面
-          </button>
-          <p class="text-app-muted">
-            替换或删除会移除所选文件内的全部旧图片。未修改封面则保留原图。
-          </p>
-          <p v-if="state.cover" role="status">
-            {{
-              state.cover.action === "delete"
-                ? "保存后删除全部内嵌图片"
-                : "保存后替换为一张正面封面"
-            }}
-          </p>
-        </div>
-      </section>
+          </div>
+        </section>
+      </form>
 
       <section
         v-show="activeTab === 'lyrics'"
@@ -288,7 +282,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useTagEditor } from "@/features/tags/manual/useEditor";
 import type { DraftField, LyricsMarkAction, TagField } from "@/features/tags/types";
-import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
+import TagCoverEditor from "@/features/tags/manual/components/TagCoverEditor.vue";
 import { formatTrackDuration } from "@/features/library/format";
 import { formatPathForDisplay } from "@/shared/filesystem/pathPresentation";
 import LyricsEditor from "@/features/lyrics/components/LyricsEditor.vue";
@@ -297,29 +291,14 @@ import { useLyricsBatch } from "@/features/lyrics/download/batch";
 const editor = useTagEditor();
 const state = editor.state;
 const batch = useLyricsBatch();
-async function replaceCover(event: InstanceType<typeof globalThis.Event>) {
-  const input = event.target as InstanceType<typeof globalThis.HTMLInputElement>;
-  const file = input.files?.[0];
-  input.value = "";
-  if (!file) return;
-  if (!file.size || file.size > 20 * 1024 * 1024) {
-    editor.coverSelectionFailed(new Error("封面为空或超过 20 MiB。"));
-    return;
-  }
-  const tracks = state.tracks;
-  try {
-    const data = Array.from(new Uint8Array(await file.arrayBuffer()));
-    if (state.open && state.tracks === tracks) editor.changeCover({ action: "replace", data });
-  } catch (error) {
-    if (state.open && state.tracks === tracks) editor.coverSelectionFailed(error);
-  }
-}
-type EditorTab = "properties" | "tags" | "lyrics";
+const fieldTabs = ["tags", "additional"] as const;
+type EditorTab = "properties" | (typeof fieldTabs)[number] | "lyrics";
 const activeTab = ref<EditorTab>("tags");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const discardDialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const propertiesTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const tagsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
+const additionalTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const lyricsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const lyricsField = computed(() => state.draft.find((field) => field.key === "lyrics"));
 const multiple = computed(() => state.tracks.length > 1);
@@ -347,19 +326,29 @@ const numberPairs = new Map<TagField, TagField>([
   ["trackNumber", "trackTotal"],
   ["discNumber", "discTotal"],
 ]);
+const additionalFields = new Set<TagField>([
+  "artistSort",
+  "albumArtistSort",
+  "discSubtitle",
+  "label",
+  "originalReleaseDate",
+]);
 const fieldRows = computed(() => {
-  const rows: DraftField[][] = [];
+  const rows: Record<(typeof fieldTabs)[number], DraftField[][]> = { tags: [], additional: [] };
   const grouped = new Set<TagField>();
   for (const field of state.draft) {
     if (field.key === "lyrics" || grouped.has(field.key)) continue;
     const row = [field];
-    const totalKey = numberPairs.get(field.key);
-    const total = state.draft.find((entry) => entry.key === totalKey);
-    if (total) {
-      row.push(total);
-      grouped.add(total.key);
+    const pairedKey =
+      state.mode === "album" && field.key === "trackTotal"
+        ? "discTotal"
+        : numberPairs.get(field.key);
+    const paired = state.draft.find((entry) => entry.key === pairedKey);
+    if (paired) {
+      row.push(paired);
+      grouped.add(paired.key);
     }
-    rows.push(row);
+    rows[additionalFields.has(field.key) ? "additional" : "tags"].push(row);
   }
   return rows;
 });
@@ -412,8 +401,8 @@ function clearMixedValue(field: DraftField, event: InstanceType<typeof globalThi
 }
 function onTabKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
   const tabs: EditorTab[] = singleTrack.value
-    ? ["properties", "tags", "lyrics"]
-    : ["tags", "lyrics"];
+    ? ["properties", "tags", "additional", "lyrics"]
+    : ["tags", "additional", "lyrics"];
   const index = tabs.indexOf(activeTab.value);
   let nextIndex: number;
   if (event.key === "Home") nextIndex = 0;
@@ -423,7 +412,12 @@ function onTabKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
   else return;
   event.preventDefault();
   activeTab.value = tabs[nextIndex] ?? "tags";
-  const buttons = { properties: propertiesTab, tags: tagsTab, lyrics: lyricsTab };
+  const buttons = {
+    properties: propertiesTab,
+    tags: tagsTab,
+    additional: additionalTab,
+    lyrics: lyricsTab,
+  };
   buttons[activeTab.value].value?.focus();
 }
 </script>

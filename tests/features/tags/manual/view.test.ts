@@ -123,8 +123,18 @@ function mountDialog(
             Vue.h("button", { type: "button" }, "手动搜索"),
           ]),
       }),
-      "@/features/artwork/components/TrackArtwork.vue": Vue.defineComponent({
-        setup: () => () => null,
+      "@/features/tags/manual/components/TagCoverEditor.vue": Vue.defineComponent({
+        props: ["trackId", "cover", "disabled"],
+        emits: ["change", "failed"],
+        setup:
+          (props, { emit }) =>
+          () =>
+            Vue.h("div", {
+              "data-cover-editor": true,
+              "data-track-id": props.trackId,
+              "data-disabled": props.disabled,
+              onChange: (cover: { action: "delete" }) => emit("change", cover),
+            }),
       }),
       "@/features/library/format": { formatTrackDuration: () => "0:01" },
     },
@@ -142,23 +152,76 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
-  it("offers replacement and deletion only and explains removal of every old picture", async () => {
+  it("edits covers from the left artwork without explanatory text or permanent action buttons", async () => {
     const { editor, root } = mountDialog();
     await editor.openTracks([1]);
     await settle();
-    expect(getTextContent(root)).toContain("替换封面");
-    expect(getTextContent(root)).toContain("全部旧图片");
-    expect(getTextContent(root)).not.toContain("添加图片");
-    const remove = findNode(
-      root,
-      (node) => node.type === "button" && getTextContent(node).trim() === "删除封面",
-    );
-    if (!remove) throw new Error("Missing delete cover button");
-    (remove.props.onClick as () => void)();
+    expect(getTextContent(root)).not.toContain("替换封面");
+    expect(getTextContent(root)).not.toContain("全部旧图片");
+    const cover = findNode(root, (node) => node.props["data-cover-editor"] === true);
+    if (!cover) throw new Error("Missing cover editor");
+    expect(cover.props["data-track-id"]).toBe(1);
+    expect(cover.parent?.children.indexOf(cover)).toBe(0);
+    (cover.props.onChange as (cover: { action: "delete" }) => void)({ action: "delete" });
     await settle();
     expect(editor.state.cover).toEqual({ action: "delete" });
-    expect(getTextContent(root)).toContain("保存后删除全部内嵌图片");
+    expect(getTextContent(root)).not.toContain("保存后删除");
     expect(editor.state.dirty).toBe(true);
+  });
+
+  it("keeps uncommon fields in a separate tab and preserves edits across tab switches", async () => {
+    const { editor, root, saved } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    const tags = findNode(root, (node) => node.props.id === "metadata-panel-tags") as DialogNode;
+    const additional = findNode(
+      root,
+      (node) => node.props.id === "metadata-panel-additional",
+    ) as DialogNode;
+    const tab = findNode(root, (node) => node.props.id === "metadata-tab-additional");
+    expect(additional.style.display).toBe("none");
+    for (const key of [
+      "artistSort",
+      "albumArtistSort",
+      "discSubtitle",
+      "label",
+      "originalReleaseDate",
+    ]) {
+      expect(findNode(tags, (node) => node.props.id === `metadata-${key}`)).toBeNull();
+      expect(findNode(additional, (node) => node.props.id === `metadata-${key}`)).not.toBeNull();
+    }
+    expect(findNode(tags, (node) => node.props.id === "metadata-releaseDate")).not.toBeNull();
+    (tab?.props.onClick as () => void)();
+    await settle();
+    expect(tab?.props["aria-selected"]).toBe(true);
+    expect(additional.style.display).not.toBe("none");
+    expect(tags.style.display).toBe("none");
+    (input(root, "label").props.onInput as (event: { target: { value: string } }) => void)({
+      target: { value: "New label" },
+    });
+    const tagsTab = findNode(root, (node) => node.props.id === "metadata-tab-tags");
+    (tagsTab?.props.onClick as () => void)();
+    await settle();
+    expect(input(root, "label").props.value).toBe("New label");
+    editor.prepareSave();
+    await settle();
+    expect(saved[0]?.find(({ field }) => field === "label")?.value).toBe("New label");
+  });
+
+  it("groups album totals on one row with both labels and shows its cover", async () => {
+    const { editor, root } = mountDialog();
+    await editor.openAlbum({ albumArtist: "Group", album: "Album" });
+    await settle();
+    const totalsRow = input(root, "trackTotal").parent?.parent;
+    expect(totalsRow).toBe(input(root, "discTotal").parent?.parent);
+    expect(totalsRow?.props.class).toContain("grid-cols-2");
+    expect(getTextContent(totalsRow!)).toContain("总曲数");
+    expect(getTextContent(totalsRow!)).toContain("总碟数");
+    expect(getTextContent(totalsRow!)).not.toContain("共");
+    expect(findNode(root, (node) => node.props.id === "metadata-trackNumber")).toBeNull();
+    expect(
+      findNode(root, (node) => node.props["data-cover-editor"] === true)?.props["data-track-id"],
+    ).toBe(1);
   });
   for (const [path, displayedPath] of [
     [String.raw`\\?\C:\Music\song.mp3`, String.raw`C:\Music\song.mp3`],
@@ -473,6 +536,15 @@ describe("metadata editor views", () => {
       "[00:01.00]Original lyrics\n[00:02.00]Second line",
     );
     (tagsTab?.props.onKeydown as (event: { key: string; preventDefault: () => void }) => void)({
+      key: "ArrowRight",
+      preventDefault() {},
+    });
+    await settle();
+    const additionalTab = findNode(root, (node) => node.props.id === "metadata-tab-additional");
+    expect(additionalTab?.props["aria-selected"]).toBe(true);
+    (
+      additionalTab?.props.onKeydown as (event: { key: string; preventDefault: () => void }) => void
+    )({
       key: "ArrowRight",
       preventDefault() {},
     });
