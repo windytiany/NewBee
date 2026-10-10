@@ -36,6 +36,9 @@ fn validate_patches(patches: &mut [TrackPatch], cover: Option<&CoverData>) -> Re
             }
         } else {
             normalize_changes(&mut patch.changes)?;
+            patch
+                .changes
+                .retain(|change| change.value.is_some() || !change.values.is_empty());
         }
         if patch
             .changes

@@ -47,7 +47,9 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
             change(MetadataField::Album, Some("Album")),
             change(MetadataField::Lyrics, Some("embedded lyrics")),
         ],
-        Some(&files::cover_picture(include_bytes!("../../../fixtures/cover.png")).unwrap()),
+        Some(files::CoverAction::Replace(
+            &files::cover_picture(include_bytes!("../../../fixtures/cover.png")).unwrap(),
+        )),
     )
     .unwrap();
     let original_root = std::fs::canonicalize(&fixture.0).unwrap();
@@ -224,9 +226,12 @@ fn save_command_retains_each_file_and_database_outcome_when_database_is_locked()
     std::fs::remove_file(&paths[1]).unwrap();
     let save = |ids| {
         tauri::async_runtime::block_on(save_track_metadata(
-            ids,
-            vec![change(MetadataField::Title, Some("new"))],
-            LyricsMarkAction::Keep,
+            crate::metadata::model::MetadataSaveRequest {
+                track_ids: ids,
+                changes: vec![change(MetadataField::Title, Some("new"))],
+                lyrics_action: LyricsMarkAction::Keep,
+                cover: None,
+            },
             tauri::ipc::Channel::new(|_| Ok(())),
             None,
             app.handle().clone(),

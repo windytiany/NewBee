@@ -6,9 +6,7 @@ pub(crate) mod save;
 mod tests;
 
 use crate::database::{write::WriteState, Database, TrackDetails};
-use model::{
-    normalize_changes, validate_track_ids, LyricsMarkAction, MetadataChange, MetadataField,
-};
+use model::{normalize_changes, validate_track_ids, LyricsMarkAction, MetadataField};
 use serde::Serialize;
 use tauri::{ipc::Channel, Manager, State};
 
@@ -19,6 +17,7 @@ pub(crate) struct EditableTrack {
     lyrics: Option<String>,
     no_lyrics: bool,
     writable_fields: Vec<MetadataField>,
+    values: std::collections::HashMap<MetadataField, String>,
     issue: Option<String>,
 }
 
@@ -55,6 +54,7 @@ pub(crate) async fn get_editable_tracks<R: tauri::Runtime>(
                     lyrics: snapshot.text,
                     no_lyrics: snapshot.no_lyrics,
                     writable_fields,
+                    values: metadata.values,
                     issue,
                 })
             })
@@ -66,16 +66,26 @@ pub(crate) async fn get_editable_tracks<R: tauri::Runtime>(
 
 #[tauri::command]
 pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
-    track_ids: Vec<i64>,
-    mut changes: Vec<MetadataChange>,
-    lyrics_action: LyricsMarkAction,
+    request: model::MetadataSaveRequest,
     on_progress: Channel<MetadataSaveResult>,
     operation_id: Option<String>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<Vec<MetadataSaveResult>, String> {
+    let model::MetadataSaveRequest {
+        track_ids,
+        mut changes,
+        lyrics_action,
+        cover,
+    } = request;
     let track_ids = validate_track_ids(&track_ids)?;
-    if !changes.is_empty() || lyrics_action == LyricsMarkAction::Keep {
+    if changes
+        .iter()
+        .any(|change| MetadataField::IDENTIFIERS.contains(&change.field))
+    {
+        return Err("标识仅支持在线导入".to_owned());
+    }
+    if !changes.is_empty() || (lyrics_action == LyricsMarkAction::Keep && cover.is_none()) {
         normalize_changes(&mut changes)?;
     }
     if track_ids.len() != 1
@@ -89,11 +99,13 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
     tauri::async_runtime::spawn_blocking(move || {
         crate::logging::with_operation(operation_id.clone(), || {
             let _guard = guard;
+            let cover = cover.map(|request| request.prepare()).transpose()?;
             let database = app.state::<Database>();
             let results = track_ids
                 .into_iter()
                 .map(|id| {
-                    let result = save::save_track(&database, id, &changes, lyrics_action, None);
+                    let result =
+                        save::save_track(&database, id, &changes, lyrics_action, cover.as_ref());
                     if let Err(error) = on_progress.send(result.clone()) {
                         log::warn!("Could not report metadata progress: {error}");
                     }

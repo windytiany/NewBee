@@ -9,6 +9,8 @@ pub(crate) struct EditingSnapshot {
     pub(crate) tag_types: Vec<String>,
     pub(crate) writable_fields: Vec<MetadataField>,
     pub(crate) issue: Option<String>,
+    #[serde(default)]
+    pub(crate) values: std::collections::HashMap<MetadataField, String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
@@ -24,10 +26,21 @@ pub(crate) enum MetadataField {
     TrackTotal,
     DiscTotal,
     Lyrics,
+    ArtistSort,
+    AlbumArtistSort,
+    DiscSubtitle,
+    Label,
+    OriginalReleaseDate,
+    MusicBrainzReleaseId,
+    MusicBrainzReleaseGroupId,
+    MusicBrainzTrackId,
+    MusicBrainzRecordingId,
+    MusicBrainzArtistId,
+    MusicBrainzAlbumArtistId,
 }
 
 impl MetadataField {
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 15] = [
         Self::Title,
         Self::Artist,
         Self::Album,
@@ -38,22 +51,21 @@ impl MetadataField {
         Self::TrackTotal,
         Self::DiscTotal,
         Self::Lyrics,
+        Self::ArtistSort,
+        Self::AlbumArtistSort,
+        Self::DiscSubtitle,
+        Self::Label,
+        Self::OriginalReleaseDate,
     ];
 
-    pub(crate) fn column(self) -> &'static str {
-        match self {
-            Self::Title => "title",
-            Self::Artist => "artist",
-            Self::Album => "album",
-            Self::AlbumArtist => "album_artist",
-            Self::ReleaseDate => "release_date",
-            Self::TrackNumber => "track_number",
-            Self::DiscNumber => "disc_number",
-            Self::TrackTotal => "track_total",
-            Self::DiscTotal => "disc_total",
-            Self::Lyrics => "lyrics",
-        }
-    }
+    pub(crate) const IDENTIFIERS: [Self; 6] = [
+        Self::MusicBrainzReleaseId,
+        Self::MusicBrainzReleaseGroupId,
+        Self::MusicBrainzTrackId,
+        Self::MusicBrainzRecordingId,
+        Self::MusicBrainzArtistId,
+        Self::MusicBrainzAlbumArtistId,
+    ];
 
     pub(crate) fn key(self, tag_type: TagType) -> ItemKey {
         match self {
@@ -61,10 +73,26 @@ impl MetadataField {
             Self::Artist => ItemKey::TrackArtist,
             Self::Album => ItemKey::AlbumTitle,
             Self::AlbumArtist => ItemKey::AlbumArtist,
-            Self::ReleaseDate if ItemKey::ReleaseDate.map_key(tag_type).is_none() => {
-                ItemKey::RecordingDate
+            // Picard/Mp3tag DATE uses TDRC, DATE and ©day. The business meaning
+            // is the selected release date, not the recording session date.
+            Self::ReleaseDate => ItemKey::RecordingDate,
+            Self::OriginalReleaseDate => ItemKey::OriginalReleaseDate,
+            Self::ArtistSort => ItemKey::TrackArtistSortOrder,
+            Self::AlbumArtistSort => ItemKey::AlbumArtistSortOrder,
+            Self::DiscSubtitle => ItemKey::SetSubtitle,
+            Self::Label => {
+                if tag_type == TagType::Id3v2 {
+                    ItemKey::Publisher
+                } else {
+                    ItemKey::Label
+                }
             }
-            Self::ReleaseDate => ItemKey::ReleaseDate,
+            Self::MusicBrainzReleaseId => ItemKey::MusicBrainzReleaseId,
+            Self::MusicBrainzReleaseGroupId => ItemKey::MusicBrainzReleaseGroupId,
+            Self::MusicBrainzTrackId => ItemKey::MusicBrainzTrackId,
+            Self::MusicBrainzRecordingId => ItemKey::MusicBrainzRecordingId,
+            Self::MusicBrainzArtistId => ItemKey::MusicBrainzArtistId,
+            Self::MusicBrainzAlbumArtistId => ItemKey::MusicBrainzReleaseArtistId,
             Self::TrackNumber => ItemKey::TrackNumber,
             Self::DiscNumber => ItemKey::DiscNumber,
             Self::TrackTotal => ItemKey::TrackTotal,
@@ -95,6 +123,19 @@ pub(crate) enum LyricsMarkAction {
 pub(crate) struct MetadataChange {
     pub(crate) field: MetadataField,
     pub(crate) value: Option<String>,
+    #[serde(default)]
+    pub(crate) values: Vec<String>,
+}
+
+pub(crate) fn valid_musicbrainz_id(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| {
+            if [8, 13, 18, 23].contains(&index) {
+                byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        })
 }
 
 pub(crate) fn normalize_changes(changes: &mut [MetadataChange]) -> Result<(), String> {
@@ -105,6 +146,24 @@ pub(crate) fn normalize_changes(changes: &mut [MetadataChange]) -> Result<(), St
     for change in changes {
         if !fields.insert(change.field) {
             return Err("写入字段不能重复".to_owned());
+        }
+        if MetadataField::IDENTIFIERS.contains(&change.field) {
+            if change.value.is_some() {
+                return Err("标识必须使用列表".to_owned());
+            }
+            change.values = change
+                .values
+                .iter()
+                .map(|v| v.trim().to_owned())
+                .filter(|v| !v.is_empty())
+                .collect();
+            if change.values.iter().any(|v| !valid_musicbrainz_id(v)) {
+                return Err("MusicBrainz 标识无效".to_owned());
+            }
+            continue;
+        }
+        if !change.values.is_empty() {
+            return Err("此字段不支持多值".to_owned());
         }
         change.value = change.value.take().and_then(|value| {
             if change.field == MetadataField::Lyrics {
@@ -130,7 +189,11 @@ pub(crate) fn normalize_changes(changes: &mut [MetadataChange]) -> Result<(), St
                 .filter(|number| *number > 0)
                 .ok_or_else(|| "编号和总数必须是有效的正整数".to_owned())?;
             *value = number.to_string();
-        } else if change.field == MetadataField::ReleaseDate && !valid_date(value) {
+        } else if matches!(
+            change.field,
+            MetadataField::ReleaseDate | MetadataField::OriginalReleaseDate
+        ) && !valid_date(value)
+        {
             return Err("发行日期必须是有效的 YYYY、YYYY-MM 或 YYYY-MM-DD".to_owned());
         }
     }
@@ -173,6 +236,32 @@ fn valid_date(value: &str) -> bool {
     };
     let day = parts[2].parse::<u32>().unwrap_or(0);
     (1..=days).contains(&day)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct MetadataSaveRequest {
+    pub(crate) track_ids: Vec<i64>,
+    pub(crate) changes: Vec<MetadataChange>,
+    pub(crate) lyrics_action: LyricsMarkAction,
+    pub(crate) cover: Option<CoverRequest>,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) enum CoverRequest {
+    Replace { data: Vec<u8> },
+    Delete,
+}
+impl CoverRequest {
+    pub(crate) fn prepare(self) -> Result<super::save::CoverUpdate, String> {
+        match self {
+            Self::Replace { data } => {
+                super::files::cover_picture(&data).map(super::save::CoverUpdate::new)
+            }
+            Self::Delete => Ok(super::save::CoverUpdate::delete()),
+        }
+    }
 }
 
 pub(crate) fn validate_track_ids(track_ids: &[i64]) -> Result<Vec<i64>, String> {

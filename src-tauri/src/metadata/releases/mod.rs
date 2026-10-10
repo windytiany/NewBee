@@ -1,6 +1,6 @@
 mod model;
 pub(crate) mod save;
-use crate::metadata::files::MAX_COVER_BYTES;
+use crate::metadata::{files::MAX_COVER_BYTES, model::valid_musicbrainz_id as valid_id};
 pub(crate) use model::CoverData;
 use model::{CoverChoice, RawCovers, RawRelease, RawSearch, ReleaseDetails, SearchResults};
 use reqwest::blocking::{Client, Response};
@@ -66,16 +66,6 @@ fn musicbrainz<T: DeserializeOwned>(path: &str, query: &[(&str, String)]) -> Res
         .map_err(|error| format!("MusicBrainz 连接失败，可重试：{error}"))?;
     json(response)
 }
-fn valid_id(value: &str) -> bool {
-    value.len() == 36
-        && value.bytes().enumerate().all(|(index, byte)| {
-            if [8, 13, 18, 23].contains(&index) {
-                byte == b'-'
-            } else {
-                byte.is_ascii_hexdigit()
-            }
-        })
-}
 fn validate_id(value: &str) -> Result<(), String> {
     if valid_id(value) {
         Ok(())
@@ -137,7 +127,10 @@ pub(crate) async fn get_album_release(release_id: String) -> Result<ReleaseDetai
     tauri::async_runtime::spawn_blocking(move || {
         let raw: RawRelease = musicbrainz(
             &format!("release/{release_id}"),
-            &[("inc", "recordings+artist-credits".to_owned())],
+            &[(
+                "inc",
+                "recordings+artist-credits+release-groups+labels".to_owned(),
+            )],
         )?;
         raw.details()
     })

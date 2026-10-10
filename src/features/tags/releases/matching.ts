@@ -1,6 +1,6 @@
 import type { TrackDetails } from "@/features/library/types";
 import { buildTagChanges, TAG_FIELDS } from "@/features/tags/draft";
-import type { EditableTrack } from "@/features/tags/types";
+import type { EditableTrack, IdentifierField, TagChange } from "@/features/tags/types";
 
 import type {
   ReleaseTrack,
@@ -54,7 +54,10 @@ export function createMatchRows(
   const rows = release.tracks.map((source): MatchRow => ({
     source,
     trackId: null,
+    identifiers: { ...release.identifiers, ...source.identifiers },
     values: {
+      ...release.values,
+      ...source.values,
       title: source.title || undefined,
       artist: source.artist || undefined,
       album: release.summary.title || undefined,
@@ -125,12 +128,17 @@ export function buildAlbumPatches(
     if (!local) throw new Error("对应的本地曲目不存在。");
     const changed = TAG_FIELDS.flatMap((field) => {
       const value = row.values[field.key];
-      if (!fields.includes(field.key) || value === undefined) return [];
-      const original = String(local.track[field.key] ?? "");
+      if (!fields.includes(field.key) || value === undefined || !value.trim()) return [];
+      const original = String({ ...local.track, ...local.values }[field.key] ?? "");
       if (value.trim() === original.trim()) return [];
       return [{ ...field, value, mixed: false, writable: true }];
     });
-    const changes = changed.length ? buildTagChanges(changed, [local]) : [];
+    const changes: TagChange[] = changed.length ? buildTagChanges(changed, [local]) : [];
+    for (const [field, values] of Object.entries(row.identifiers ?? {})) {
+      const valid = values?.map((value) => value.trim()).filter(Boolean) ?? [];
+      if (valid.length)
+        changes.push({ field: field as IdentifierField, value: null, values: valid });
+    }
     if (changes.length || writeCover) patches.push({ trackId: row.trackId, changes, writeCover });
   }
   return patches;

@@ -168,7 +168,9 @@ fn every_scan_reparses_audio_without_sidecar_reads_and_clears_confirmed_removals
             change(MetadataField::Title, Some("alpha")),
             change(MetadataField::Lyrics, Some("embedded")),
         ],
-        Some(&files::cover_picture(include_bytes!("../../../fixtures/cover.png")).unwrap()),
+        Some(files::CoverAction::Replace(
+            &files::cover_picture(include_bytes!("../../../fixtures/cover.png")).unwrap(),
+        )),
     )
     .unwrap();
     let sidecar = path.with_extension("lrc");
@@ -309,9 +311,9 @@ fn import_caches_real_tag_capabilities_even_when_the_extension_is_misleading() {
     assert_eq!(edited[0]["track"]["title"], "legacy");
     let fields = edited[0]["writableFields"].as_array().unwrap();
     assert!(fields.contains(&serde_json::json!("title")));
-    assert!(!fields.contains(&serde_json::json!("albumArtist")));
-    assert!(!fields.contains(&serde_json::json!("releaseDate")));
-    assert!(!fields.contains(&serde_json::json!("lyrics")));
+    assert!(fields.contains(&serde_json::json!("albumArtist")));
+    assert!(fields.contains(&serde_json::json!("releaseDate")));
+    assert!(fields.contains(&serde_json::json!("lyrics")));
     let snapshot = app.state::<Database>().get_editing_snapshot(1).unwrap();
     assert_eq!(snapshot.file_type, "Mpeg");
     assert_eq!(snapshot.tag_types, ["Id3v1"]);
@@ -368,9 +370,12 @@ fn save_command_rechecks_permissions_and_tag_format_per_target() {
     tag.save_to_path(&paths[2], WriteOptions::default())
         .unwrap();
     let saved = tauri::async_runtime::block_on(save_track_metadata(
-        vec![1, 2, 3],
-        vec![change(MetadataField::AlbumArtist, Some("selected"))],
-        LyricsMarkAction::Keep,
+        crate::metadata::model::MetadataSaveRequest {
+            track_ids: vec![1, 2, 3],
+            changes: vec![change(MetadataField::AlbumArtist, Some("selected"))],
+            lyrics_action: LyricsMarkAction::Keep,
+            cover: None,
+        },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
         app.handle().clone(),
@@ -387,23 +392,28 @@ fn save_command_rechecks_permissions_and_tag_format_per_target() {
                 result.database_updated
             ))
             .collect::<Vec<_>>(),
-        [(1, true, true), (2, false, false), (3, false, false)]
+        [(1, true, true), (2, false, false), (3, true, true)]
     );
     assert!(saved[1].error.as_deref().unwrap().contains("只读"));
-    assert!(saved[2].error.as_deref().unwrap().contains("不支持"));
+    assert!(saved[2].error.is_none());
+    assert_eq!(
+        files::read_track(&paths[2])
+            .unwrap()
+            .unwrap()
+            .album_artist
+            .as_deref(),
+        Some("selected")
+    );
     let written = files::read_track(&paths[0]).unwrap().unwrap();
     assert_eq!(written.album_artist.as_deref(), Some("selected"));
     assert_eq!(
         serde_json::to_value(app.state::<Database>().get_track(1).unwrap()).unwrap()["albumArtist"],
         "selected"
     );
-    for id in [2, 3] {
-        assert!(
-            serde_json::to_value(app.state::<Database>().get_track(id).unwrap()).unwrap()
-                ["albumArtist"]
-                .is_null()
-        );
-    }
+    assert!(
+        serde_json::to_value(app.state::<Database>().get_track(2).unwrap()).unwrap()["albumArtist"]
+            .is_null()
+    );
     assert_eq!(
         app.state::<Database>()
             .get_editing_snapshot(1)
@@ -475,9 +485,12 @@ fn release_command_and_lyrics_editor_write_only_selected_embedded_content() {
         Some("release title")
     );
     let results = tauri::async_runtime::block_on(save_track_metadata(
-        vec![1],
-        vec![change(MetadataField::Lyrics, Some("new embedded"))],
-        LyricsMarkAction::Keep,
+        crate::metadata::model::MetadataSaveRequest {
+            track_ids: vec![1],
+            changes: vec![change(MetadataField::Lyrics, Some("new embedded"))],
+            lyrics_action: LyricsMarkAction::Keep,
+            cover: None,
+        },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
         app.handle().clone(),
@@ -504,9 +517,12 @@ fn release_command_and_lyrics_editor_write_only_selected_embedded_content() {
     std::fs::remove_file(&path).unwrap();
     crate::metadata::files::access::take(&fixture.0);
     let results = tauri::async_runtime::block_on(save_track_metadata(
-        vec![1],
-        vec![],
-        LyricsMarkAction::Unmark,
+        crate::metadata::model::MetadataSaveRequest {
+            track_ids: vec![1],
+            changes: vec![],
+            lyrics_action: LyricsMarkAction::Unmark,
+            cover: None,
+        },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
         app.handle().clone(),

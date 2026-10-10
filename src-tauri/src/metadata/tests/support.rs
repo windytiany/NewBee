@@ -43,8 +43,15 @@ impl Drop for Fixture {
         fs::remove_dir_all(&self.0).unwrap()
     }
 }
+// The existing fixture contains complete ADTS frames. Repeating them makes a
+// legal approximately 140-second AAC stream without re-encoding its payload.
+pub(super) fn long_aac_audio() -> Vec<u8> {
+    include_bytes!("../../../fixtures/silence.aac").repeat(1024)
+}
+
 pub(super) fn change(field: MetadataField, value: Option<&str>) -> MetadataChange {
     MetadataChange {
+        values: Vec::new(),
         field,
         value: value.map(str::to_owned),
     }

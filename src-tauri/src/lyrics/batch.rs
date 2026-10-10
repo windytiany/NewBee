@@ -227,6 +227,7 @@ impl Task {
             let (changes, action) = match content {
                 LyricsContent::Available { text } => (
                     vec![MetadataChange {
+                        values: Vec::new(),
                         field: MetadataField::Lyrics,
                         value: Some(text),
                     }],
@@ -512,6 +513,7 @@ fn validate_content(content: LyricsContent) -> Result<LyricsContent, String> {
             return Err("歌词为空或过大，原文件未修改".to_owned());
         }
         let mut changes = [MetadataChange {
+            values: Vec::new(),
             field: MetadataField::Lyrics,
             value: Some(text),
         }];

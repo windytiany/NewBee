@@ -5,7 +5,12 @@ export const TAG_FIELDS = [
   { key: "artist", label: "艺术家", type: "text" },
   { key: "albumArtist", label: "专辑艺术家", type: "text" },
   { key: "album", label: "专辑", type: "text" },
-  { key: "releaseDate", label: "发行日期", type: "date" },
+  { key: "artistSort", label: "艺术家排序名", type: "text" },
+  { key: "albumArtistSort", label: "专辑艺术家排序名", type: "text" },
+  { key: "discSubtitle", label: "碟片标题", type: "text" },
+  { key: "label", label: "厂牌", type: "text" },
+  { key: "releaseDate", label: "当前发行日期", type: "date" },
+  { key: "originalReleaseDate", label: "首次发行日期", type: "date" },
   { key: "trackNumber", label: "曲号", type: "number" },
   { key: "trackTotal", label: "总曲数", type: "number" },
   { key: "discNumber", label: "碟号", type: "number" },
@@ -16,7 +21,9 @@ import type { DraftField, EditableTrack, EditMode, TagChange } from "@/features/
 export function createTagDraft(tracks: readonly EditableTrack[], mode: EditMode): DraftField[] {
   const draft: DraftField[] = TAG_FIELDS.flatMap((field) => {
     if (mode === "album" && ["title", "trackNumber", "discNumber"].includes(field.key)) return [];
-    const values = tracks.map(({ track }) => String(track[field.key] ?? ""));
+    const values = tracks.map(({ track, values }) =>
+      String({ ...track, ...values }[field.key] ?? ""),
+    );
     const mixed = values.some((value) => value !== values[0]);
     return [
       {

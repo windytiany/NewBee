@@ -3,7 +3,7 @@ use lofty::{
     file::FileType,
     picture::PictureType,
     prelude::*,
-    tag::{ItemKey, Tag},
+    tag::{ItemKey, Tag, TagType},
 };
 use std::path::Path;
 
@@ -20,9 +20,8 @@ pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String>
     }
 
     let properties = tagged_file.properties();
-    let tag = tagged_file
-        .primary_tag()
-        .or_else(|| tagged_file.first_tag());
+    let editing_tag = super::editing_tag(&tagged_file);
+    let tag = Some(&editing_tag);
     let (title, artist, album, album_artist, release_date, disc_number, track_number, artwork) =
         match tag {
             Some(tag) => (
@@ -30,14 +29,28 @@ pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String>
                 tag_text(tag, &ItemKey::TrackArtist),
                 tag_text(tag, &ItemKey::AlbumTitle),
                 tag_text(tag, &ItemKey::AlbumArtist),
-                tag_text(tag, &ItemKey::ReleaseDate)
-                    .or_else(|| tag_text(tag, &ItemKey::RecordingDate)),
+                tag_text(tag, &ItemKey::RecordingDate)
+                    .or_else(|| tag_text(tag, &ItemKey::ReleaseDate)),
                 tag_number(tag, &ItemKey::DiscNumber),
                 tag_number(tag, &ItemKey::TrackNumber),
                 read_artwork(tag)?,
             ),
             None => (None, None, None, None, None, None, None, None),
         };
+
+    let mut artwork = artwork;
+    if artwork.is_none() {
+        for other in tagged_file
+            .tags()
+            .iter()
+            .filter(|other| other.tag_type() != editing_tag.tag_type())
+        {
+            if let Some(found) = read_artwork(other)? {
+                artwork = Some(found);
+                break;
+            }
+        }
+    }
 
     let duration_ms = i64::try_from(properties.duration().as_millis())
         .ok()
@@ -87,11 +100,13 @@ fn tag_number(tag: &Tag, key: &ItemKey) -> Option<i64> {
 }
 
 fn read_artwork(tag: &Tag) -> Result<Option<ArtworkContent>, String> {
-    let picture = tag
-        .pictures()
-        .iter()
-        .find(|picture| picture.pic_type() == PictureType::CoverFront)
-        .or_else(|| tag.pictures().first());
+    let picture = if tag.tag_type() == TagType::Mp4Ilst {
+        tag.pictures().first()
+    } else {
+        tag.pictures()
+            .iter()
+            .find(|picture| picture.pic_type() == PictureType::CoverFront)
+    };
     let Some(picture) = picture else {
         return Ok(None);
     };

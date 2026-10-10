@@ -1,4 +1,6 @@
+use crate::metadata::model::MetadataField;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -10,8 +12,40 @@ pub(super) struct Credit {
     artist: Option<Artist>,
 }
 #[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 struct Artist {
     name: String,
+    id: Option<String>,
+    sort_name: Option<String>,
+}
+fn sorting(credits: &[Credit]) -> Option<String> {
+    let mut value = String::new();
+    for credit in credits {
+        value.push_str(credit.artist.as_ref()?.sort_name.as_deref()?);
+        value.push_str(&credit.joinphrase);
+    }
+    (!value.trim().is_empty()).then_some(value)
+}
+fn artist_ids(credits: &[Credit]) -> Vec<String> {
+    credits
+        .iter()
+        .filter_map(|credit| credit.artist.as_ref()?.id.clone())
+        .filter(|id| super::valid_id(id))
+        .collect()
+}
+fn put(values: &mut HashMap<MetadataField, String>, field: MetadataField, value: Option<String>) {
+    if let Some(value) = value.filter(|v| !v.trim().is_empty()) {
+        values.insert(field, value);
+    }
+}
+fn identifier(
+    values: &mut HashMap<MetadataField, Vec<String>>,
+    field: MetadataField,
+    id: Option<String>,
+) {
+    if let Some(id) = id.filter(|id| super::valid_id(id)) {
+        values.insert(field, vec![id]);
+    }
 }
 fn credited(credits: &[Credit]) -> Option<String> {
     let value: String = credits
@@ -44,11 +78,29 @@ pub(super) struct RawRelease {
     artist_credit: Vec<Credit>,
     #[serde(default)]
     media: Vec<Medium>,
+    release_group: Option<ReleaseGroup>,
+    #[serde(default)]
+    label_info: Vec<LabelInfo>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct ReleaseGroup {
+    id: Option<String>,
+    first_release_date: Option<String>,
+}
+#[derive(Deserialize)]
+struct LabelInfo {
+    label: Option<Label>,
+}
+#[derive(Deserialize)]
+struct Label {
+    name: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Medium {
     position: Option<u32>,
+    title: Option<String>,
     format: Option<String>,
     track_count: u32,
     #[serde(default)]
@@ -57,11 +109,17 @@ struct Medium {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct RawTrack {
+    id: Option<String>,
+    recording: Option<Recording>,
     title: String,
     position: u32,
     length: Option<u64>,
     #[serde(default)]
     artist_credit: Vec<Credit>,
+}
+#[derive(Deserialize)]
+struct Recording {
+    id: Option<String>,
 }
 #[derive(Deserialize)]
 pub(super) struct RawSearch {
@@ -92,11 +150,15 @@ pub(crate) struct ReleaseTrack {
     track_number: u32,
     track_total: u32,
     duration_ms: Option<u64>,
+    values: HashMap<MetadataField, String>,
+    identifiers: HashMap<MetadataField, Vec<String>>,
 }
 #[derive(Serialize)]
 pub(crate) struct ReleaseDetails {
     summary: ReleaseSummary,
     tracks: Vec<ReleaseTrack>,
+    values: HashMap<MetadataField, String>,
+    identifiers: HashMap<MetadataField, Vec<String>>,
 }
 impl RawRelease {
     pub(super) fn summary(&self) -> ReleaseSummary {
@@ -119,6 +181,46 @@ impl RawRelease {
     }
     pub(super) fn details(self) -> Result<ReleaseDetails, String> {
         let summary = self.summary();
+        let mut values = HashMap::new();
+        put(
+            &mut values,
+            MetadataField::AlbumArtistSort,
+            sorting(&self.artist_credit),
+        );
+        put(
+            &mut values,
+            MetadataField::Label,
+            Some(
+                self.label_info
+                    .iter()
+                    .filter_map(|info| info.label.as_ref()?.name.as_deref())
+                    .filter(|v| !v.trim().is_empty())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            ),
+        );
+        put(
+            &mut values,
+            MetadataField::OriginalReleaseDate,
+            self.release_group
+                .as_ref()
+                .and_then(|group| group.first_release_date.clone()),
+        );
+        let mut identifiers = HashMap::new();
+        identifier(
+            &mut identifiers,
+            MetadataField::MusicBrainzReleaseId,
+            Some(self.id),
+        );
+        identifier(
+            &mut identifiers,
+            MetadataField::MusicBrainzReleaseGroupId,
+            self.release_group.and_then(|group| group.id),
+        );
+        identifiers.insert(
+            MetadataField::MusicBrainzAlbumArtistId,
+            artist_ids(&self.artist_credit),
+        );
         let mut tracks = Vec::new();
         for (index, medium) in self.media.into_iter().enumerate() {
             let disc_number = medium.position.unwrap_or(index as u32 + 1);
@@ -126,7 +228,35 @@ impl RawRelease {
                 if disc_number == 0 || track.position == 0 || track.position > medium.track_count {
                     return Err("MusicBrainz 返回了无效曲目编号".to_owned());
                 }
+                let mut values = HashMap::new();
+                put(
+                    &mut values,
+                    MetadataField::ArtistSort,
+                    sorting(&track.artist_credit),
+                );
+                put(
+                    &mut values,
+                    MetadataField::DiscSubtitle,
+                    medium.title.clone(),
+                );
+                let mut identifiers = HashMap::new();
+                identifier(
+                    &mut identifiers,
+                    MetadataField::MusicBrainzTrackId,
+                    track.id,
+                );
+                identifier(
+                    &mut identifiers,
+                    MetadataField::MusicBrainzRecordingId,
+                    track.recording.and_then(|recording| recording.id),
+                );
+                identifiers.insert(
+                    MetadataField::MusicBrainzArtistId,
+                    artist_ids(&track.artist_credit),
+                );
                 tracks.push(ReleaseTrack {
+                    values,
+                    identifiers,
                     title: track.title,
                     artist: credited(&track.artist_credit),
                     disc_number,
@@ -140,7 +270,12 @@ impl RawRelease {
         if tracks.is_empty() {
             return Err("该发行版本没有可用的曲目列表".to_owned());
         }
-        Ok(ReleaseDetails { summary, tracks })
+        Ok(ReleaseDetails {
+            summary,
+            tracks,
+            values,
+            identifiers,
+        })
     }
 }
 #[derive(Serialize)]

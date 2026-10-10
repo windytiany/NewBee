@@ -142,6 +142,24 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
+  it("offers replacement and deletion only and explains removal of every old picture", async () => {
+    const { editor, root } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    expect(getTextContent(root)).toContain("替换封面");
+    expect(getTextContent(root)).toContain("全部旧图片");
+    expect(getTextContent(root)).not.toContain("添加图片");
+    const remove = findNode(
+      root,
+      (node) => node.type === "button" && getTextContent(node).trim() === "删除封面",
+    );
+    if (!remove) throw new Error("Missing delete cover button");
+    (remove.props.onClick as () => void)();
+    await settle();
+    expect(editor.state.cover).toEqual({ action: "delete" });
+    expect(getTextContent(root)).toContain("保存后删除全部内嵌图片");
+    expect(editor.state.dirty).toBe(true);
+  });
   for (const [path, displayedPath] of [
     [String.raw`\\?\C:\Music\song.mp3`, String.raw`C:\Music\song.mp3`],
     [String.raw`\\?\UNC\server\music\song.mp3`, String.raw`\\server\music\song.mp3`],

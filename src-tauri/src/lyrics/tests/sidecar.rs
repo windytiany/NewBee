@@ -113,12 +113,16 @@ fn playback_reads_only_same_name_lrc_without_changing_embedded_snapshot() {
     assert_eq!(read("get_playback_sidecar_lyrics"), serde_json::Value::Null);
     std::fs::write(&sidecar, "[00:01]unchanged sidecar").unwrap();
     let results = tauri::async_runtime::block_on(crate::metadata::save_track_metadata(
-        vec![1],
-        vec![crate::metadata::model::MetadataChange {
-            field: crate::metadata::model::MetadataField::Lyrics,
-            value: Some("saved embedded".into()),
-        }],
-        crate::metadata::model::LyricsMarkAction::Keep,
+        crate::metadata::model::MetadataSaveRequest {
+            track_ids: vec![1],
+            changes: vec![crate::metadata::model::MetadataChange {
+                values: Vec::new(),
+                field: crate::metadata::model::MetadataField::Lyrics,
+                value: Some("saved embedded".into()),
+            }],
+            lyrics_action: crate::metadata::model::LyricsMarkAction::Keep,
+            cover: None,
+        },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
         app.handle().clone(),
@@ -140,9 +144,12 @@ fn playback_reads_only_same_name_lrc_without_changing_embedded_snapshot() {
         "[00:01]unchanged sidecar"
     );
     tauri::async_runtime::block_on(crate::metadata::save_track_metadata(
-        vec![1],
-        vec![],
-        crate::metadata::model::LyricsMarkAction::Mark,
+        crate::metadata::model::MetadataSaveRequest {
+            track_ids: vec![1],
+            changes: vec![],
+            lyrics_action: crate::metadata::model::LyricsMarkAction::Mark,
+            cover: None,
+        },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
         app.handle().clone(),

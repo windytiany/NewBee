@@ -10,6 +10,49 @@ import { local, release } from "./fixtures";
 const fields = TAG_FIELDS.map(({ key }) => key);
 
 describe("album tag mapping", () => {
+  it("imports selected extra fields and automatically replaces identifier lists while preserving absent values", () => {
+    const source = release();
+    const id = source.summary.id;
+    source.values = {
+      albumArtistSort: "Artist, The",
+      label: "Label",
+      originalReleaseDate: "1998-03",
+    };
+    source.identifiers = {
+      musicBrainzReleaseId: [id],
+      musicBrainzReleaseGroupId: [id],
+      musicBrainzAlbumArtistId: [id, "89ad4ac3-39f7-470e-963a-56509c546377"],
+    };
+    source.tracks[0]!.values = { artistSort: "Guest, The", discSubtitle: "Bonus" };
+    source.tracks[0]!.identifiers = {
+      musicBrainzTrackId: [id],
+      musicBrainzRecordingId: [id],
+      musicBrainzArtistId: [id, "89ad4ac3-39f7-470e-963a-56509c546377"],
+    };
+    const locals = [local(1)];
+    locals[0]!.values = { label: "Old label", originalReleaseDate: "1980" };
+    const rows = createMatchRows(source, locals);
+    const patch = buildAlbumPatches(rows, locals, fields, [1], false)[0];
+    expect(patch?.changes).toContainEqual({ field: "originalReleaseDate", value: "1998-03" });
+    expect(patch?.changes).toContainEqual({ field: "artistSort", value: "Guest, The" });
+    expect(patch?.changes).toContainEqual({ field: "discSubtitle", value: "Bonus" });
+    expect(patch?.changes).toContainEqual({
+      field: "musicBrainzArtistId",
+      value: null,
+      values: [id, "89ad4ac3-39f7-470e-963a-56509c546377"],
+    });
+    expect(patch?.changes.filter((change) => change.field.startsWith("musicBrainz"))).toHaveLength(
+      6,
+    );
+    rows[0]!.values.label = "   ";
+    rows[0]!.values.originalReleaseDate = undefined;
+    rows[0]!.identifiers = { musicBrainzArtistId: [] };
+    const sparse = buildAlbumPatches(rows, locals, fields, [1], false)[0];
+    expect(
+      sparse?.changes.some(({ field }) => ["label", "originalReleaseDate"].includes(field)),
+    ).toBe(false);
+    expect(sparse?.changes.some(({ field }) => field.startsWith("musicBrainz"))).toBe(false);
+  });
   it("accepts only release IDs and MusicBrainz release links", () => {
     const id = release().summary.id;
     expect(releaseId(id.toUpperCase())).toBe(id);
@@ -79,7 +122,7 @@ describe("album tag mapping", () => {
     assignTrack(rows, 1, 100);
     expect(rows[2]?.trackId).toBe(1);
   });
-  it("preserves missing values and supports explicit clearing without touching unchecked fields or files", () => {
+  it("preserves missing and empty values without touching unchecked fields or files", () => {
     const source = release();
     source.summary.releaseDate = null;
     const locals = [local(1), local(2)];
@@ -87,8 +130,9 @@ describe("album tag mapping", () => {
     expect(buildAlbumPatches(rows, locals, ["releaseDate"], [1, 2], false)).toEqual([]);
     rows[0]!.values.releaseDate = "";
     rows[0]!.values.title = "new";
-    expect(buildAlbumPatches(rows, locals, ["releaseDate"], [1], false)).toEqual([
-      { trackId: 1, changes: [{ field: "releaseDate", value: null }], writeCover: false },
+    expect(buildAlbumPatches(rows, locals, ["releaseDate"], [1], false)).toEqual([]);
+    expect(buildAlbumPatches(rows, locals, ["title"], [1], false)).toEqual([
+      { trackId: 1, changes: [{ field: "title", value: "new" }], writeCover: false },
     ]);
   });
   it("writes only changes, supports cover-only updates and rejects duplicate mappings", () => {

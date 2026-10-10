@@ -11,6 +11,87 @@ use lofty::{file::TaggedFileExt, prelude::*};
 use std::fs;
 
 #[test]
+fn deleted_cover_and_file_only_fields_sync_or_report_database_failure_and_retry() {
+    let fixture = Fixture::new();
+    let path = fixture.0.join("track.flac");
+    fs::write(&path, include_bytes!("../../../fixtures/silence.flac")).unwrap();
+    let cover = CoverUpdate::new(
+        files::cover_picture(include_bytes!("../../../fixtures/cover.png")).unwrap(),
+    );
+    let database_path = fixture.0.join("library.sqlite3");
+    let database = Database::open(&database_path).unwrap();
+    database
+        .upsert_track(
+            &files::read_track(&path).unwrap().unwrap(),
+            crate::database::ArtworkUpdate::Embedded,
+        )
+        .unwrap();
+    assert!(save_track(&database, 1, &[], LyricsMarkAction::Keep, Some(&cover)).database_updated);
+    let connection = rusqlite::Connection::open(&database_path).unwrap();
+    connection.execute_batch("CREATE TRIGGER fail_delete_cover BEFORE UPDATE ON tracks BEGIN SELECT RAISE(FAIL, 'database unavailable'); END;").unwrap();
+    let changes = [
+        change(MetadataField::Label, Some("new label")),
+        change(MetadataField::OriginalReleaseDate, Some("1998-03")),
+    ];
+    let delete = CoverUpdate::delete();
+    let failed = save_track(
+        &database,
+        1,
+        &changes,
+        LyricsMarkAction::Keep,
+        Some(&delete),
+    );
+    assert!(failed.file_written && !failed.database_updated);
+    assert!(failed.error.unwrap().contains("数据库同步失败"));
+    let file = files::read_track(&path).unwrap().unwrap();
+    assert!(file.artwork.is_none());
+    assert_eq!(
+        file.editing.unwrap().values[&MetadataField::Label],
+        "new label"
+    );
+    assert!(matches!(
+        database.get_track_artwork(1).unwrap(),
+        Some(crate::database::TrackArtwork::Available { .. })
+    ));
+    connection
+        .execute_batch("DROP TRIGGER fail_delete_cover")
+        .unwrap();
+    let saved = save_track(
+        &database,
+        1,
+        &changes,
+        LyricsMarkAction::Keep,
+        Some(&delete),
+    );
+    assert!(saved.file_written && saved.database_updated);
+    assert!(matches!(
+        database.get_track_artwork(1).unwrap(),
+        Some(crate::database::TrackArtwork::NoArtwork)
+    ));
+    let snapshot = database.get_editing_snapshot(1).unwrap();
+    assert_eq!(snapshot.values[&MetadataField::Label], "new label");
+    assert_eq!(
+        snapshot.values[&MetadataField::OriginalReleaseDate],
+        "1998-03"
+    );
+    assert!(
+        save_track(
+            &database,
+            1,
+            &[change(MetadataField::Label, None)],
+            LyricsMarkAction::Keep,
+            None
+        )
+        .database_updated
+    );
+    assert!(!database
+        .get_editing_snapshot(1)
+        .unwrap()
+        .values
+        .contains_key(&MetadataField::Label));
+}
+
+#[test]
 fn writes_selected_fields_and_updates_the_confirmed_database_snapshot() {
     let fixture = Fixture::new();
     let path = fixture.wav();

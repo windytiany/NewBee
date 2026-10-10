@@ -146,6 +146,36 @@
             </div>
           </form>
         </div>
+        <div v-if="!state.loading && state.tracks.length" class="mt-4 space-y-2 text-sm">
+          <label class="inline-block cursor-pointer rounded border border-white/15 px-3 py-2">
+            替换封面
+            <input
+              type="file"
+              accept="image/*"
+              :disabled="state.saving || state.confirmDiscard"
+              class="sr-only"
+              @change="replaceCover"
+            />
+          </label>
+          <button
+            type="button"
+            class="ml-2 rounded border border-white/15 px-3 py-2"
+            :disabled="state.saving || state.confirmDiscard"
+            @click="editor.changeCover({ action: 'delete' })"
+          >
+            删除封面
+          </button>
+          <p class="text-app-muted">
+            替换或删除会移除所选文件内的全部旧图片。未修改封面则保留原图。
+          </p>
+          <p v-if="state.cover" role="status">
+            {{
+              state.cover.action === "delete"
+                ? "保存后删除全部内嵌图片"
+                : "保存后替换为一张正面封面"
+            }}
+          </p>
+        </div>
       </section>
 
       <section
@@ -267,6 +297,23 @@ import { useLyricsBatch } from "@/features/lyrics/download/batch";
 const editor = useTagEditor();
 const state = editor.state;
 const batch = useLyricsBatch();
+async function replaceCover(event: InstanceType<typeof globalThis.Event>) {
+  const input = event.target as InstanceType<typeof globalThis.HTMLInputElement>;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  if (!file.size || file.size > 20 * 1024 * 1024) {
+    editor.coverSelectionFailed(new Error("封面为空或超过 20 MiB。"));
+    return;
+  }
+  const tracks = state.tracks;
+  try {
+    const data = Array.from(new Uint8Array(await file.arrayBuffer()));
+    if (state.open && state.tracks === tracks) editor.changeCover({ action: "replace", data });
+  } catch (error) {
+    if (state.open && state.tracks === tracks) editor.coverSelectionFailed(error);
+  }
+}
 type EditorTab = "properties" | "tags" | "lyrics";
 const activeTab = ref<EditorTab>("tags");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
@@ -323,7 +370,9 @@ const canSave = computed(
     !batch.state.running &&
     !state.confirmDiscard &&
     state.tracks.length > 0 &&
-    (state.lyricsAction !== "keep" || state.draft.some((field) => field.writable && !field.mixed)),
+    (state.cover !== null ||
+      state.lyricsAction !== "keep" ||
+      state.draft.some((field) => field.writable && !field.mixed)),
 );
 watch(
   () => [state.open, state.confirmDiscard],

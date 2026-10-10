@@ -430,7 +430,12 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
         if (!field) continue;
         const value =
           change.value !== null && field.type === "number" ? Number(change.value) : change.value;
-        Object.assign(local.track, { [change.field]: value });
+        if (field.key in local.track) Object.assign(local.track, { [field.key]: value });
+        else {
+          local.values ??= {};
+          if (change.value === null) delete local.values[field.key];
+          else local.values[field.key] = change.value;
+        }
       }
     }
     const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");

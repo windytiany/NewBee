@@ -26,6 +26,7 @@ fn cleared_numbers_must_be_absent_not_unparseable() {
     let mut actual = Tag::new(TagType::Id3v2);
     actual.insert_text(ItemKey::TrackNumber, "invalid".into());
     let changes = [MetadataChange {
+        values: Vec::new(),
         field: MetadataField::TrackNumber,
         value: None,
     }];

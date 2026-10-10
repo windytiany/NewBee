@@ -8,8 +8,8 @@ use lofty::picture::Picture;
 use std::path::Path;
 
 pub(crate) struct CoverUpdate {
-    picture: Picture,
-    artwork: ArtworkContent,
+    picture: Option<Picture>,
+    artwork: Option<ArtworkContent>,
 }
 
 impl CoverUpdate {
@@ -21,7 +21,16 @@ impl CoverUpdate {
                 .unwrap_or_default(),
             image: picture.data().to_vec(),
         };
-        Self { picture, artwork }
+        Self {
+            picture: Some(picture),
+            artwork: Some(artwork),
+        }
+    }
+    pub(crate) fn delete() -> Self {
+        Self {
+            picture: None,
+            artwork: None,
+        }
     }
 }
 
@@ -50,6 +59,7 @@ pub(crate) fn save_track(
         if action == LyricsMarkAction::Mark {
             effective_changes.retain(|change| change.field != MetadataField::Lyrics);
             effective_changes.push(MetadataChange {
+                values: Vec::new(),
                 field: MetadataField::Lyrics,
                 value: None,
             });
@@ -57,7 +67,14 @@ pub(crate) fn save_track(
         if !effective_changes.is_empty() || cover.is_some() {
             let path = Path::new(track.path());
             if let Some(cover) = cover {
-                files::write_file_with_cover(path, &effective_changes, Some(&cover.picture))?;
+                files::write_file_with_cover(
+                    path,
+                    &effective_changes,
+                    Some(match cover.picture.as_ref() {
+                        Some(picture) => files::CoverAction::Replace(picture),
+                        None => files::CoverAction::Delete,
+                    }),
+                )?;
             } else {
                 files::write_file(path, &effective_changes)?;
             }
@@ -75,7 +92,7 @@ pub(crate) fn save_track(
             database.update_metadata_cover_and_lyrics(
                 track_id,
                 &effective_changes,
-                cover.map(|cover| &cover.artwork),
+                cover.and_then(|cover| cover.artwork.as_ref()),
                 action,
                 confirmed.as_ref(),
             )

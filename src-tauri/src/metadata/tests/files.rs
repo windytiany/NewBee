@@ -2,7 +2,7 @@ use super::super::{
     files,
     model::{normalize_changes, MetadataField},
 };
-use super::support::{change, Fixture};
+use super::support::{change, long_aac_audio, Fixture};
 use lofty::{
     config::WriteOptions,
     file::TaggedFileExt,
@@ -124,7 +124,7 @@ fn lyrics_write_preserves_multivalue_id3_and_number_values_across_formats() {
         let path = fixture.0.join(format!("track.{extension}"));
         match extension {
             "mp3" => fs::write(&path, include_bytes!("../../../fixtures/silence.mp3")).unwrap(),
-            "aac" => fs::write(&path, include_bytes!("../../../fixtures/silence.aac")).unwrap(),
+            "aac" => fs::write(&path, long_aac_audio()).unwrap(),
             _ => {
                 fixture.wav();
             }
@@ -332,7 +332,7 @@ fn failed_round_trip_discards_the_copy_and_keeps_original_bytes() {
         &[change(MetadataField::Title, Some("first\0second"))],
     )
     .unwrap_err();
-    assert!(error.contains("字段 title 写入后回读不一致"), "{error}");
+    assert!(error.contains("字段 Title 写入后回读不一致"), "{error}");
     assert_eq!(fs::read(&path).unwrap(), before);
     assert_eq!(fs::read_dir(&fixture.0).unwrap().count(), 1);
 }
@@ -417,7 +417,8 @@ fn fallback_native_tags_preserve_unmapped_fields() {
     )
     .unwrap();
     let riff = written.riff_info().unwrap();
-    assert_eq!(riff.title().as_deref(), Some("new"));
+    assert_eq!(riff.title().as_deref(), Some("old"));
+    assert_eq!(written.id3v2().unwrap().title().as_deref(), Some("new"));
     assert_eq!(riff.get("XTRA"), Some("keep custom"));
 
     let mp3 = fixture.0.join("ape.mp3");
@@ -448,7 +449,8 @@ fn fallback_native_tags_preserve_unmapped_fields() {
     )
     .unwrap();
     let ape = written.ape().unwrap();
-    assert_eq!(ape.title().as_deref(), Some("new"));
+    assert_eq!(ape.title().as_deref(), Some("old"));
+    assert_eq!(written.id3v2().unwrap().title().as_deref(), Some("new"));
     assert_eq!(
         ape.get("CUSTOM").unwrap().value().text(),
         Some("keep custom")
@@ -469,9 +471,10 @@ fn failed_validation_never_changes_file() {
 
 #[test]
 fn supported_formats_round_trip_all_exposed_fields() {
+    let aac = long_aac_audio();
     let fixtures: &[(&str, &[u8])] = &[
         ("mp3", include_bytes!("../../../fixtures/silence.mp3")),
-        ("aac", include_bytes!("../../../fixtures/silence.aac")),
+        ("aac", aac.as_slice()),
         ("m4a", include_bytes!("../../../fixtures/silence.m4a")),
         ("ogg", include_bytes!("../../../fixtures/silence.ogg")),
         ("oga", include_bytes!("../../../fixtures/silence.ogg")),
@@ -482,12 +485,21 @@ fn supported_formats_round_trip_all_exposed_fields() {
         let path = fixture.0.join(format!("track.{extension}"));
         fs::write(&path, bytes).unwrap();
         let writable = files::inspect_file(&path).unwrap();
-        assert_eq!(writable.writable_fields.len(), 10, "{extension}");
+        assert_eq!(
+            writable.writable_fields.len(),
+            MetadataField::ALL.len(),
+            "{extension}"
+        );
         let changes = [
             change(MetadataField::Title, Some("测试标题")),
             change(MetadataField::Artist, Some("A & B")),
             change(MetadataField::Album, Some("New album")),
             change(MetadataField::AlbumArtist, Some("Single artist")),
+            change(MetadataField::ArtistSort, Some("Artist, The")),
+            change(MetadataField::AlbumArtistSort, Some("Album Artist, The")),
+            change(MetadataField::DiscSubtitle, Some("碟片标题")),
+            change(MetadataField::Label, Some("厂牌")),
+            change(MetadataField::OriginalReleaseDate, Some("1998-03-14")),
             change(MetadataField::ReleaseDate, Some("2024-02-29")),
             change(MetadataField::TrackNumber, Some("2")),
             change(MetadataField::DiscNumber, Some("1")),
@@ -506,6 +518,14 @@ fn supported_formats_round_trip_all_exposed_fields() {
             .read()
             .unwrap();
         let tag = file.primary_tag().unwrap();
+        for update in &changes {
+            assert_eq!(
+                tag.get_string(update.field.key(tag.tag_type())),
+                update.value.as_deref(),
+                "{extension}: {:?}",
+                update.field
+            );
+        }
         assert_eq!(tag.title().as_deref(), Some("测试标题"));
         assert_eq!(tag.artist().as_deref(), Some("A & B"));
         assert_eq!(tag.track(), Some(2));
@@ -537,7 +557,7 @@ fn supported_formats_round_trip_all_exposed_fields() {
 }
 
 #[test]
-fn id3v1_fallback_exposes_only_representable_fields() {
+fn id3v1_only_files_are_edited_in_id3v2_and_keep_legacy_data() {
     let fixture = Fixture::new();
     let path = fixture.0.join("fallback.mp3");
     fs::write(&path, include_bytes!("../../../fixtures/silence.mp3")).unwrap();
@@ -555,12 +575,19 @@ fn id3v1_fallback_exposes_only_representable_fields() {
     tag.save_to_path(&path, WriteOptions::default()).unwrap();
     let writable = files::inspect_file(&path).unwrap().writable_fields;
     assert!(writable.contains(&MetadataField::Title));
-    assert!(!writable.contains(&MetadataField::AlbumArtist));
-    assert!(!writable.contains(&MetadataField::DiscNumber));
-    assert!(!writable.contains(&MetadataField::ReleaseDate));
-    let before = fs::read(&path).unwrap();
-    assert!(files::write_file(&path, &[change(MetadataField::Title, Some("标题"))]).is_err());
-    assert_eq!(fs::read(&path).unwrap(), before);
+    assert!(writable.contains(&MetadataField::AlbumArtist));
+    assert!(writable.contains(&MetadataField::DiscNumber));
+    assert!(writable.contains(&MetadataField::ReleaseDate));
+    files::write_file(&path, &[change(MetadataField::Title, Some("标题"))]).unwrap();
+    let written = lofty::read_from_path(&path).unwrap();
+    assert_eq!(
+        written.primary_tag().unwrap().title().as_deref(),
+        Some("标题")
+    );
+    assert_eq!(
+        written.tag(TagType::Id3v1).unwrap().title().as_deref(),
+        Some("legacy")
+    );
 }
 
 #[test]

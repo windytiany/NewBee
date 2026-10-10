@@ -1,3 +1,5 @@
+mod aac_playability;
+mod flac_id3;
 mod snapshot;
 use super::model::{EditingSnapshot, MetadataChange, MetadataField};
 use lofty::config::{ParseOptions, WriteOptions};
@@ -28,6 +30,18 @@ fn read_file(path: &Path) -> Result<TaggedFile, String> {
 }
 
 fn editing_tag(file: &TaggedFile) -> Tag {
+    if matches!(
+        file.file_type(),
+        FileType::Wav | FileType::Mpeg | FileType::Aac
+    ) && file.tag(TagType::Id3v2).is_none()
+    {
+        let mut tag = file
+            .first_tag()
+            .cloned()
+            .unwrap_or_else(|| Tag::new(TagType::Id3v2));
+        tag.re_map(TagType::Id3v2);
+        return tag;
+    }
     file.primary_tag()
         .or_else(|| file.first_tag())
         .cloned()
@@ -93,14 +107,36 @@ fn metadata_from_file(file: &TaggedFile, readonly: bool) -> EditingSnapshot {
             .collect(),
         writable_fields,
         issue,
+        values: MetadataField::ALL
+            .into_iter()
+            .filter_map(|field| {
+                tag.get_string(field.key(tag.tag_type()))
+                    .map(|value| (field, value.to_owned()))
+            })
+            .collect(),
     }
 }
 
 fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String> {
     for change in changes {
         let key = change.field.key(tag.tag_type());
+        if MetadataField::IDENTIFIERS.contains(&change.field) {
+            if change.values.is_empty() {
+                continue;
+            }
+            tag.remove_key(key);
+            for value in &change.values {
+                if !tag.push(TagItem::new(
+                    key,
+                    lofty::tag::ItemValue::Text(value.clone()),
+                )) {
+                    return Err(format!("标签不支持标识 {:?}", change.field));
+                }
+            }
+            continue;
+        }
         if change.field == MetadataField::ReleaseDate {
-            // Import falls back to RecordingDate. Clearing a date must clear that fallback too.
+            // Remove the alternate release-date storage so an explicit clear cannot resurrect it.
             tag.remove_key(ItemKey::ReleaseDate);
             tag.remove_key(ItemKey::RecordingDate);
         } else if change.field == MetadataField::Lyrics {
@@ -111,7 +147,7 @@ fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String
         }
         if let Some(value) = &change.value {
             if !tag.insert_text(key, value.clone()) {
-                return Err(format!("标签不支持字段 {}", change.field.column()));
+                return Err(format!("标签不支持字段 {:?}", change.field));
             }
         }
     }
@@ -120,6 +156,17 @@ fn apply_changes(tag: &mut Tag, changes: &[MetadataChange]) -> Result<(), String
 
 fn verify_changes(tag: &Tag, changes: &[MetadataChange]) -> Result<(), String> {
     for change in changes {
+        if MetadataField::IDENTIFIERS.contains(&change.field) {
+            if !change.values.is_empty()
+                && tag
+                    .get_strings(change.field.key(tag.tag_type()))
+                    .collect::<Vec<_>>()
+                    != change.values.iter().map(String::as_str).collect::<Vec<_>>()
+            {
+                return Err(format!("标识 {:?} 回读不一致，原文件未修改", change.field));
+            }
+            continue;
+        }
         let actual = tag
             .get_string(change.field.key(tag.tag_type()))
             .filter(|value| !value.is_empty());
@@ -133,8 +180,8 @@ fn verify_changes(tag: &Tag, changes: &[MetadataChange]) -> Result<(), String> {
         };
         if !matches {
             return Err(format!(
-                "字段 {} 写入后回读不一致，原文件未修改",
-                change.field.column()
+                "字段 {:?} 写入后回读不一致，原文件未修改",
+                change.field
             ));
         }
     }
@@ -218,8 +265,10 @@ fn save_tag<T: TagExt>(tag: &T, file: &mut File) -> Result<(), String> {
 fn save_vorbis_tag(mut native: VorbisComments, tag: &Tag, file: &mut File) -> Result<(), String> {
     let editable = |key| {
         key == ItemKey::RecordingDate
+            || key == ItemKey::ReleaseDate
             || MetadataField::ALL
                 .iter()
+                .chain(MetadataField::IDENTIFIERS.iter())
                 .any(|field| field.key(TagType::VorbisComments) == key)
     };
     // Replace editor fields only. Keep vendor, encoder, custom comments and all
@@ -248,11 +297,20 @@ fn save_vorbis_tag(mut native: VorbisComments, tag: &Tag, file: &mut File) -> Re
     save_tag(&native, file)
 }
 
-fn write_tag(file: &mut File, file_type: FileType, tag: &Tag) -> Result<(), String> {
+fn write_tag(
+    file: &mut File,
+    file_type: FileType,
+    tag: &Tag,
+    edit_cover: bool,
+) -> Result<(), String> {
     // Use concrete tags for formats whose unmapped fields are not retained by
     // generic Tag. No raw metadata block parsing or rewriting is needed.
     let options = ParseOptions::default();
     match (file_type, tag.tag_type()) {
+        (FileType::Flac, TagType::Id3v2) if edit_cover => flac_id3::write_tag(file, tag),
+        (FileType::Flac, TagType::Id3v2) => {
+            Err("FLAC 的只读前置 ID3 不能用于字段编辑，原文件未修改".to_owned())
+        }
         (FileType::Flac, TagType::VorbisComments) => {
             let native = lofty::flac::FlacFile::read_from(file, options)
                 .map_err(|error| error.to_string())?
@@ -307,43 +365,57 @@ pub(crate) fn cover_picture(data: &[u8]) -> Result<Picture, String> {
     Ok(picture)
 }
 
+pub(crate) enum CoverAction<'a> {
+    Replace(&'a Picture),
+    Delete,
+}
+
 pub(crate) fn write_file_with_cover(
     path: &Path,
     changes: &[MetadataChange],
-    cover: Option<&Picture>,
+    cover: Option<CoverAction<'_>>,
 ) -> Result<(), String> {
     let metadata = file_metadata(path).map_err(|error| error.to_string())?;
     if metadata.permissions().readonly() {
         return Err("文件为只读".to_owned());
     }
     let original = read_file(path)?;
+    if !is_supported_file_type(original.file_type()) {
+        return Err("此文件格式不支持标签写入".to_owned());
+    }
     let mut tag = editing_tag(&original);
+    // A newly selected modern tag must not duplicate pictures from a fallback tag.
+    // The original tag's pictures remain untouched unless the cover is edited.
+    if original.tag(tag.tag_type()).is_none() {
+        while !tag.pictures().is_empty() {
+            tag.remove_picture(0);
+        }
+    }
     let writable = writable_fields(&original, &tag);
-    if changes
-        .iter()
-        .any(|change| !writable.contains(&change.field))
-    {
+    if changes.iter().any(|change| {
+        !writable.contains(&change.field) && !MetadataField::IDENTIFIERS.contains(&change.field)
+    }) {
         return Err("文件格式或标签不支持所选字段".to_owned());
     }
     validate_totals(&tag, changes)?;
     let before = tag.clone();
     apply_changes(&mut tag, changes)?;
-    if let Some(cover) = cover {
+    if let Some(ref cover) = cover {
         if !matches!(
             tag.tag_type(),
             TagType::Id3v2 | TagType::Mp4Ilst | TagType::VorbisComments
         ) {
             return Err("此标签格式不支持内嵌封面".to_owned());
         }
-        if tag.tag_type() == TagType::Mp4Ilst {
-            // MP4 covr stores no picture roles. Its first picture is the displayed cover;
-            // keep all remaining images in their original order.
-            let mut cover = cover.clone();
-            cover.set_pic_type(PictureType::Other);
-            tag.set_picture(0, cover);
-        } else {
-            tag.remove_picture_type(PictureType::CoverFront);
-            tag.push_picture(cover.clone());
+        while !tag.pictures().is_empty() {
+            tag.remove_picture(0);
+        }
+        if let CoverAction::Replace(picture) = cover {
+            let mut picture = (*picture).clone();
+            if tag.tag_type() == TagType::Mp4Ilst {
+                picture.set_pic_type(PictureType::Other);
+            }
+            tag.push_picture(picture);
         }
     }
     let same_items = before.items().count() == tag.items().count()
@@ -359,9 +431,25 @@ pub(crate) fn write_file_with_cover(
         .filter(|other| other.tag_type() != tag.tag_type())
         .map(|other| {
             let mut updated = other.clone();
+            if cover.is_some() {
+                while !updated.pictures().is_empty() {
+                    updated.remove_picture(0);
+                }
+            }
             if lyrics_change.is_some() {
                 updated.remove_key(ItemKey::Lyrics);
                 updated.remove_key(ItemKey::UnsyncLyrics);
+            }
+            // Explicit clears must not reappear through a secondary-tag fallback.
+            for change in changes.iter().filter(|change| {
+                change.value.is_none() && !MetadataField::IDENTIFIERS.contains(&change.field)
+            }) {
+                updated.remove_key(change.field.key(updated.tag_type()));
+                if change.field == MetadataField::ReleaseDate {
+                    updated.remove_key(ItemKey::ReleaseDate);
+                    updated.remove_key(ItemKey::RecordingDate);
+                    updated.remove_key(ItemKey::Year);
+                }
             }
             updated
         })
@@ -375,7 +463,22 @@ pub(crate) fn write_file_with_cover(
                 other.get_strings(ItemKey::Lyrics).next().is_some()
                     || other.get_strings(ItemKey::UnsyncLyrics).next().is_some()
             });
-    if same_items && before.pictures() == tag.pictures() && !secondary_lyrics {
+    let secondary_pictures = cover.is_some()
+        && original
+            .tags()
+            .iter()
+            .any(|other| other.tag_type() != tag.tag_type() && !other.pictures().is_empty());
+    let secondary_clears = secondary_tags.iter().any(|other| {
+        original
+            .tag(other.tag_type())
+            .is_some_and(|old| old.items().count() != other.items().count())
+    });
+    if same_items
+        && before.pictures() == tag.pictures()
+        && !secondary_lyrics
+        && !secondary_pictures
+        && !secondary_clears
+    {
         return Ok(());
     }
 
@@ -385,14 +488,27 @@ pub(crate) fn write_file_with_cover(
         .map_err(|error| format!("创建安全副本失败：{error}"))?;
     drop(source);
     destination.rewind().map_err(|error| error.to_string())?;
-    write_tag(&mut destination, original.file_type(), &tag)
-        .map_err(|error| format!("写入标签失败，原文件未修改：{error}"))?;
-    if secondary_lyrics {
+    write_tag(
+        &mut destination,
+        original.file_type(),
+        &tag,
+        cover.is_some(),
+    )
+    .map_err(|error| format!("写入标签失败，原文件未修改：{error}"))?;
+    if secondary_lyrics || secondary_pictures || secondary_clears {
         for other in &secondary_tags {
             destination.rewind().map_err(|error| error.to_string())?;
-            write_tag(&mut destination, original.file_type(), other)
-                .map_err(|error| format!("清理其他标签的歌词失败，原文件未修改：{error}"))?;
+            write_tag(
+                &mut destination,
+                original.file_type(),
+                other,
+                cover.is_some(),
+            )
+            .map_err(|error| format!("清理其他标签失败，原文件未修改：{error}"))?;
         }
+    }
+    if original.file_type() == FileType::Aac {
+        aac_playability::verify(&temporary.0, &mut destination)?;
     }
     destination.sync_all().map_err(|error| error.to_string())?;
     drop(destination);
@@ -468,6 +584,10 @@ impl Drop for TemporaryFile {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/aac_playability.rs"]
+mod aac_tests;
 
 #[cfg(test)]
 #[path = "tests/verify.rs"]

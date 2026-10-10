@@ -28,6 +28,7 @@ fn rejects_empty_patches_and_lyrics() {
     let mut lyrics = [TrackPatch {
         track_id: 1,
         changes: vec![MetadataChange {
+            values: Vec::new(),
             field: MetadataField::Lyrics,
             value: Some("lyrics".into()),
         }],
@@ -48,6 +49,7 @@ fn normalizes_independent_patches_and_preserves_cover_selection() {
         TrackPatch {
             track_id: 1,
             changes: vec![MetadataChange {
+                values: Vec::new(),
                 field: MetadataField::Title,
                 value: Some(" first ".into()),
             }],
@@ -56,6 +58,7 @@ fn normalizes_independent_patches_and_preserves_cover_selection() {
         TrackPatch {
             track_id: 2,
             changes: vec![MetadataChange {
+                values: Vec::new(),
                 field: MetadataField::TrackNumber,
                 value: Some("02".into()),
             }],

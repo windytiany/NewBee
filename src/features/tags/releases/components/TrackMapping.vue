@@ -119,7 +119,7 @@ function durationDiffers(index: number) {
         <h3 class="font-semibold">曲目对照</h3>
         <label
           v-for="field in TAG_FIELDS.filter(({ key }) =>
-            ['artist', 'title', 'trackNumber', 'trackTotal'].includes(key),
+            ['artist', 'artistSort', 'title', 'trackNumber', 'trackTotal'].includes(key),
           )"
           :key="field.key"
           class="flex items-center gap-1.5"
@@ -319,7 +319,9 @@ function durationDiffers(index: number) {
                     <p class="text-app-muted break-all">
                       原值：{{
                         row.trackId !== null
-                          ? (local(row.trackId)?.track[field.key] ?? "（空）")
+                          ? ({ ...local(row.trackId)?.track, ...local(row.trackId)?.values }[
+                              field.key
+                            ] ?? "（空）")
                           : "无对应文件"
                       }}
                     </p>
@@ -332,14 +334,6 @@ function durationDiffers(index: number) {
                       @input="input(index, field.key, $event)"
                     />
                     <div class="flex gap-3">
-                      <button
-                        type="button"
-                        :disabled="disabled"
-                        class="hover:underline disabled:opacity-50"
-                        @click="editor.setValue(index, field.key, '')"
-                      >
-                        清空
-                      </button>
                       <button
                         type="button"
                         :disabled="disabled"

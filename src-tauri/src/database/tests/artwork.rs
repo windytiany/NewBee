@@ -546,12 +546,16 @@ fn cover_write_changes_only_target_embedded_tags_and_preserves_file_and_database
     assert_eq!(sources, ["embedded", "directory"]);
     // An unrelated tag write must not clear an existing directory association.
     let metadata = tauri::async_runtime::block_on(crate::metadata::save_track_metadata(
-        vec![2],
-        vec![crate::metadata::model::MetadataChange {
-            field: crate::metadata::model::MetadataField::Title,
-            value: Some("new title".into()),
-        }],
-        crate::metadata::model::LyricsMarkAction::Keep,
+        crate::metadata::model::MetadataSaveRequest {
+            track_ids: vec![2],
+            changes: vec![crate::metadata::model::MetadataChange {
+                values: Vec::new(),
+                field: crate::metadata::model::MetadataField::Title,
+                value: Some("new title".into()),
+            }],
+            lyrics_action: crate::metadata::model::LyricsMarkAction::Keep,
+            cover: None,
+        },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
         library.app.handle().clone(),
@@ -831,6 +835,7 @@ fn album_selection_change_during_derivation_does_not_return_old_thumbnail() {
             .update_metadata_cover_and_lyrics(
                 1,
                 &[crate::metadata::model::MetadataChange {
+                    values: Vec::new(),
                     field: crate::metadata::model::MetadataField::Album,
                     value: Some("Other album".into()),
                 }],

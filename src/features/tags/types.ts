@@ -10,8 +10,19 @@ export type EditableTrack = {
   noLyrics: boolean;
   writableFields: TagField[];
   issue: string | null;
+  values?: Partial<Record<TagField, string>>;
 };
-export type TagChange = { field: TagField; value: string | null };
+export type IdentifierField =
+  | "musicBrainzReleaseId"
+  | "musicBrainzReleaseGroupId"
+  | "musicBrainzTrackId"
+  | "musicBrainzRecordingId"
+  | "musicBrainzArtistId"
+  | "musicBrainzAlbumArtistId";
+export type TagChange =
+  | { field: TagField; value: string | null }
+  | { field: IdentifierField; value: null; values: string[] };
+export type CoverEdit = { action: "replace"; data: number[] } | { action: "delete" };
 export type TagSaveResult = {
   trackId: number;
   path: string;

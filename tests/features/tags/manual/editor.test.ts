@@ -64,6 +64,82 @@ async function settle() {
 }
 
 describe("metadata editing", () => {
+  it("loads file-only fields from the editing snapshot and clears them explicitly", async () => {
+    const { editor, saves } = fixture({
+      loadTracks: async (ids) =>
+        ids.map((id) => ({
+          ...editable(id),
+          values: {
+            artistSort: "Artist, The",
+            albumArtistSort: "Group, The",
+            discSubtitle: "Bonus",
+            label: "Label",
+            originalReleaseDate: "1998-03",
+          },
+        })),
+    });
+    await editor.openTracks([1]);
+    for (const key of [
+      "artistSort",
+      "albumArtistSort",
+      "discSubtitle",
+      "label",
+      "originalReleaseDate",
+    ]) {
+      const field = editor.state.draft.find((field) => field.key === key);
+      if (!field) throw new Error(`Missing ${key}`);
+      expect(field.value).not.toBe("");
+      editor.changeField(field, "");
+    }
+    editor.prepareSave();
+    await settle();
+    expect(saves[0]?.changes).toEqual([
+      { field: "artistSort", value: null },
+      { field: "albumArtistSort", value: null },
+      { field: "discSubtitle", value: null },
+      { field: "label", value: null },
+      { field: "originalReleaseDate", value: null },
+    ]);
+    expect(editor.state.draft.some((field) => field.key.includes("musicBrainz"))).toBe(false);
+  });
+
+  it("saves cover-only replacement and deletion through file editing and preserves results on refresh failure", async () => {
+    const editing: number[][] = [];
+    const covers: unknown[] = [];
+    const { editor } = fixture({
+      editFiles: (ids, save) => {
+        editing.push([...ids]);
+        return save();
+      },
+      save: async (ids, changes, progress, _action, _operationId, cover) => {
+        expect(changes).toEqual([]);
+        covers.push(cover);
+        const results = ids.map((id) => result(id));
+        results.forEach(progress);
+        return results;
+      },
+      synchronize: async () => {
+        throw new Error("refresh failed");
+      },
+    });
+    await editor.openTracks([1, 2]);
+    editor.changeCover({ action: "replace", data: [1, 2, 3] });
+    editor.prepareSave();
+    await settle();
+    expect(covers).toEqual([{ action: "replace", data: [1, 2, 3] }]);
+    expect(editing).toEqual([[1, 2]]);
+    expect(editor.state.results.map((entry) => entry.databaseUpdated)).toEqual([true, true]);
+    expect(editor.state.synchronizationError).toContain("refresh failed");
+    editor.changeCover({ action: "delete" });
+    editor.prepareSave();
+    await settle();
+    expect(covers[1]).toEqual({ action: "delete" });
+    expect(editing).toEqual([
+      [1, 2],
+      [1, 2],
+    ]);
+    expect(editor.state.results.map((entry) => entry.databaseUpdated)).toEqual([true, true]);
+  });
   it("loads raw single-track lyrics, preserves whitespace and saves only edited lyrics", async () => {
     const { editor, saves } = fixture();
     await editor.openTracks([1]);
@@ -143,11 +219,16 @@ describe("metadata editing", () => {
       "artist",
       "albumArtist",
       "album",
+      "artistSort",
+      "albumArtistSort",
+      "discSubtitle",
+      "label",
       "releaseDate",
+      "originalReleaseDate",
       "trackTotal",
       "discTotal",
     ]);
-    expect(buildTagChanges(editor.state.draft)).toHaveLength(6);
+    expect(buildTagChanges(editor.state.draft)).toHaveLength(11);
   });
 
   it("only enables fields writable on every target and retains database information for unreadable files", () => {
@@ -175,7 +256,7 @@ describe("metadata editing", () => {
     }
     for (const value of ["2024", "2024-02", "2024-02-29"]) {
       date.value = value;
-      expect(buildTagChanges(draft)).toHaveLength(9);
+      expect(buildTagChanges(draft)).toHaveLength(14);
     }
     for (const value of ["0", "-1", "1.1", "4294967296"]) {
       number.value = value;

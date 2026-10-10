@@ -1,5 +1,5 @@
 import type { TAG_FIELDS } from "@/features/tags/draft";
-import type { TagChange } from "@/features/tags/types";
+import type { TagChange, IdentifierField } from "@/features/tags/types";
 
 export type ReleaseSummary = {
   id: string;
@@ -20,8 +20,15 @@ export type ReleaseTrack = {
   trackNumber: number;
   trackTotal: number;
   durationMs: number | null;
+  values?: Partial<Record<AlbumField, string>>;
+  identifiers?: Partial<Record<IdentifierField, string[]>>;
 };
-export type ReleaseDetails = { summary: ReleaseSummary; tracks: ReleaseTrack[] };
+export type ReleaseDetails = {
+  summary: ReleaseSummary;
+  tracks: ReleaseTrack[];
+  values?: Partial<Record<AlbumField, string>>;
+  identifiers?: Partial<Record<IdentifierField, string[]>>;
+};
 export type SearchResults = { count: number; offset: number; releases: ReleaseSummary[] };
 export type CoverChoice = { id: string; comment: string };
 export type CoverData = { mimeType: string; data: number[] };
@@ -30,5 +37,6 @@ export type MatchRow = {
   source: ReleaseTrack | null;
   trackId: number | null;
   values: Partial<Record<AlbumField, string>>;
+  identifiers?: Partial<Record<IdentifierField, string[]>>;
 };
 export type TrackPatch = { trackId: number; changes: TagChange[]; writeCover: boolean };

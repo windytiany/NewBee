@@ -2,6 +2,21 @@ use super::{ArtworkContent, Database};
 use crate::metadata::model::{LyricsMarkAction, MetadataChange, MetadataField};
 use rusqlite::params;
 
+fn track_column(field: MetadataField) -> Option<&'static str> {
+    Some(match field {
+        MetadataField::Title => "title",
+        MetadataField::Artist => "artist",
+        MetadataField::Album => "album",
+        MetadataField::AlbumArtist => "album_artist",
+        MetadataField::ReleaseDate => "release_date",
+        MetadataField::TrackNumber => "track_number",
+        MetadataField::DiscNumber => "disc_number",
+        MetadataField::TrackTotal => "track_total",
+        MetadataField::DiscTotal => "disc_total",
+        _ => return None,
+    })
+}
+
 impl Database {
     pub(crate) fn record_scan_issue(&self, path: &str, issue: &str) -> Result<(), String> {
         self.connection()?.execute(
@@ -62,10 +77,10 @@ impl Database {
                 ).map_err(|error| format!("同步歌词失败：{error}"))?;
                 continue;
             }
-            let sql = format!(
-                "UPDATE tracks SET {} = ?1 WHERE id = ?2",
-                change.field.column()
-            );
+            let Some(column) = track_column(change.field) else {
+                continue;
+            };
+            let sql = format!("UPDATE tracks SET {column} = ?1 WHERE id = ?2");
             let count = transaction
                 .execute(&sql, params![change.value, track_id])
                 .map_err(|error| format!("更新数据库失败：{error}"))?;

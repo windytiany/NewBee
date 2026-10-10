@@ -5,7 +5,17 @@ import type { AlbumField } from "@/features/tags/releases/types";
 import { TAG_FIELDS } from "@/features/tags/draft";
 const props = defineProps<{ editor: ReturnType<typeof createReleaseEditor>; disabled: boolean }>();
 const state = props.editor.state;
-const sharedKeys: AlbumField[] = ["albumArtist", "album", "discNumber", "discTotal", "releaseDate"];
+const sharedKeys: AlbumField[] = [
+  "albumArtist",
+  "album",
+  "albumArtistSort",
+  "discSubtitle",
+  "label",
+  "discNumber",
+  "discTotal",
+  "releaseDate",
+  "originalReleaseDate",
+];
 const sharedFields = sharedKeys.map((key) => TAG_FIELDS.find((field) => field.key === key)!);
 const coverUrl = ref<string | null>(null);
 watch(
@@ -32,7 +42,11 @@ const original = computed(() =>
   Object.fromEntries(
     sharedFields.map(({ key }) => [
       key,
-      [...new Set(state.tracks.map(({ track }) => String(track[key] ?? "（空）")))].join(" / "),
+      [
+        ...new Set(
+          state.tracks.map(({ track, values }) => String({ ...track, ...values }[key] ?? "（空）")),
+        ),
+      ].join(" / "),
     ]),
   ),
 );
@@ -75,8 +89,9 @@ function changeCover(event: InstanceType<typeof globalThis.Event>) {
           :disabled="disabled || !state.cover || state.loadingCover"
           class="accent-app-accent"
           @change="editor.toggleCover()"
-        />封面
+        />替换封面
       </label>
+      <p v-if="state.writeCover" class="text-app-muted text-xs">将移除全部旧图片。</p>
       <select
         v-if="state.covers.length > 1"
         aria-label="选择正面封面"

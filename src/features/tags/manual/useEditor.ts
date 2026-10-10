@@ -11,6 +11,7 @@ import type { MetadataFileEditor } from "@/features/tags/save";
 import { usePlaybackSession } from "@/features/playback/session";
 import { buildTagChanges, createTagDraft } from "@/features/tags/draft";
 import type {
+  CoverEdit,
   DraftField,
   EditableTrack,
   EditMode,
@@ -28,6 +29,7 @@ export type TagEditorOptions = {
     progress: (result: TagSaveResult) => void,
     lyricsAction: LyricsMarkAction,
     operationId?: string,
+    cover?: CoverEdit | null,
   ) => Promise<TagSaveResult[]>;
   editFiles: MetadataFileEditor;
   synchronize: (trackIds: number[]) => Promise<void>;
@@ -48,6 +50,7 @@ export function createTagEditor(options: TagEditorOptions) {
     draft: [] as DraftField[],
     dirty: false,
     lyricsAction: "keep" as LyricsMarkAction,
+    cover: null as CoverEdit | null,
     confirmDiscard: false,
   });
   function reportError(event: string, error: unknown) {
@@ -78,6 +81,7 @@ export function createTagEditor(options: TagEditorOptions) {
       error: "",
       dirty: false,
       lyricsAction: "keep",
+      cover: null,
       confirmDiscard: false,
       results: [],
       completed: 0,
@@ -164,7 +168,7 @@ export function createTagEditor(options: TagEditorOptions) {
       pendingLyricsAction = state.lyricsAction;
       pendingChanges = buildTagChanges(state.draft, state.tracks, {
         changedOnly: true,
-        allowEmpty: pendingLyricsAction !== "keep",
+        allowEmpty: pendingLyricsAction !== "keep" || state.cover !== null,
       });
       if (pendingLyricsAction === "mark")
         pendingChanges = pendingChanges.filter(({ field }) => field !== "lyrics");
@@ -186,13 +190,14 @@ export function createTagEditor(options: TagEditorOptions) {
     );
     const writeIds = state.tracks.flatMap(({ track }) => {
       if (!ids.includes(track.id)) return [];
-      if (changes.length || action === "mark") return [track.id];
+      if (changes.length || action === "mark" || state.cover !== null) return [track.id];
       return [];
     });
     await saving.run({
       targets,
       writeTrackIds: writeIds,
-      execute: (progress, operationId) => options.save(ids, changes, progress, action, operationId),
+      execute: (progress, operationId) =>
+        options.save(ids, changes, progress, action, operationId, state.cover),
     });
     const failed = state.results.filter((result) => !result.databaseUpdated).length;
     const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
@@ -208,6 +213,12 @@ export function createTagEditor(options: TagEditorOptions) {
     close,
     changeField,
     changeLyricsAction,
+    coverSelectionFailed: (error: unknown) => reportError("editor_cover_failed", error),
+    changeCover: (cover: CoverEdit) => {
+      if (state.loading || state.saving) return;
+      state.cover = cover;
+      edited();
+    },
     edited,
     save,
     prepareSave: () => prepareTargetSave(state.tracks.map(({ track }) => track.id)),
@@ -224,10 +235,10 @@ export function useTagEditor() {
   sharedEditor = createTagEditor({
     loadTracks: api.editableTracks,
     loadAlbum: async (album) => (await library.listAlbumTracks(album)).map((track) => track.id),
-    save: (trackIds, changes, progress, lyricsAction, operationId) => {
+    save: (trackIds, changes, progress, lyricsAction, operationId, cover) => {
       const onProgress = new Channel<TagSaveResult>();
       onProgress.onmessage = progress;
-      return api.saveMetadata(trackIds, changes, onProgress, lyricsAction, operationId);
+      return api.saveMetadata(trackIds, changes, onProgress, lyricsAction, operationId, cover);
     },
     editFiles: session.withMetadataEditing,
     synchronize: synchronize.tracks,
