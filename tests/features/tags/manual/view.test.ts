@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
+import { setLocale } from "@/shared/i18n/locale";
 import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
 
 import {
@@ -19,6 +20,7 @@ const dialogSource = await Bun.file(
 const menuSource = await Bun.file("src/features/tags/manual/components/EditMenuItem.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
+  setLocale("zh-CN");
   for (const app of apps.splice(0)) app.unmount();
 });
 interface DialogNode extends HostNode {
@@ -152,6 +154,28 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
+  it("updates field and property labels after opening without changing draft values", async () => {
+    const { editor, root } = mountDialog();
+    await editor.openTracks([1, 2]);
+    await settle();
+    expect(getTextContent(root)).toContain("2 首曲目");
+    setLocale("en");
+    await settle();
+    expect(getTextContent(root)).toContain("2 tracks");
+    expect(input(root, "title").props["aria-label"]).toBe("Title");
+    expect(input(root, "title").props.placeholder).toBe("Multiple values");
+    expect(getTextContent(root)).toContain("Mark all as having no lyrics");
+    editor.close();
+    await editor.openTracks([1]);
+    await settle();
+    expect(getTextContent(root)).toContain("Location");
+    expect(input(root, "title").props.value).toBe("Database title 1");
+    setLocale("zh-CN");
+    await settle();
+    expect(getTextContent(root)).toContain("位置");
+    expect(input(root, "title").props["aria-label"]).toBe("标题");
+    expect(input(root, "title").props.value).toBe("Database title 1");
+  });
   it("edits covers from the left artwork without explanatory text or permanent action buttons", async () => {
     const { editor, root } = mountDialog();
     await editor.openTracks([1]);

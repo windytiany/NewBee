@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import type { TrackDetails } from "@/features/library/types";
 
 export const TAG_FIELDS = [
@@ -86,17 +87,18 @@ export function buildTagChanges(
         Number(value) < 1 ||
         Number(value) > 4_294_967_295
       ) {
-        throw new Error(`${field.label}必须是有效的正整数或留空。`);
+        throw new Error(t("{field}必须是有效的正整数或留空。", { field: t(field.label) }));
       }
       value = String(Number(value));
     }
     if (value && field.type === "date" && !validDate(value)) {
-      throw new Error("发行日期必须是有效的 YYYY、YYYY-MM 或 YYYY-MM-DD。");
+      throw new Error(t("发行日期必须是有效的 YYYY、YYYY-MM 或 YYYY-MM-DD。"));
     }
-    if (value.includes("\0")) throw new Error(`${field.label}不能包含空字符。`);
+    if (value.includes("\0"))
+      throw new Error(t("{field}不能包含空字符。", { field: t(field.label) }));
     return [{ field: field.key, value: value || null }];
   });
-  if (changes.length === 0 && !options.allowEmpty) throw new Error("没有可写入的字段。");
+  if (changes.length === 0 && !options.allowEmpty) throw new Error(t("没有可写入的字段。"));
   for (const { track } of tracks) validateNumberTotals(track, changes);
   return changes;
 }
@@ -113,6 +115,6 @@ function validateNumberTotals(track: TrackDetails, changes: readonly TagChange[]
     let total = track[totalField] ?? 0;
     if (updates.has(numberField)) number = Number(updates.get(numberField));
     if (updates.has(totalField)) total = Number(updates.get(totalField));
-    if (total > 0 && number > total) throw new Error("编号不能大于对应总数。");
+    if (total > 0 && number > total) throw new Error(t("编号不能大于对应总数。"));
   }
 }

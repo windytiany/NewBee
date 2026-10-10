@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { markRaw, reactive, toRefs } from "vue";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
@@ -82,11 +83,11 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     else state.error = text;
     logger.error("tags", event, error);
     const failures: Record<string, string> = {
-      release_editor_load_failed: "读取本地标签失败，请查看日志",
-      release_search_failed: "搜索发行版本失败，请查看日志",
-      release_load_failed: "读取发行版本失败，请查看日志",
-      release_covers_failed: "读取封面列表失败，请查看日志",
-      release_cover_failed: "读取封面失败，请查看日志",
+      release_editor_load_failed: t("读取本地标签失败，请查看日志"),
+      release_search_failed: t("搜索发行版本失败，请查看日志"),
+      release_load_failed: t("读取发行版本失败，请查看日志"),
+      release_covers_failed: t("读取封面列表失败，请查看日志"),
+      release_cover_failed: t("读取封面失败，请查看日志"),
     };
     notify({ type: "error", message: failures[event] ?? text, key: "tags-release" });
   }
@@ -143,7 +144,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     try {
       const tracks = await options.loadAlbum(album);
       if (generation !== lifetime) return;
-      if (!tracks.length) throw new Error("专辑没有可编辑的曲目。");
+      if (!tracks.length) throw new Error(t("专辑没有可编辑的曲目。"));
       state.tracks = tracks;
       const unavailable = tracks.filter(
         ({ issue, writableFields }) => issue || !writableFields.length,
@@ -157,7 +158,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       if (unavailable.length)
         notify({
           type: "warning",
-          message: `${unavailable.length} 首曲目的标签读取失败或不支持写入。`,
+          message: t("{count} 首曲目的标签读取失败或不支持写入。", { count: unavailable.length }),
         });
     } catch (error) {
       if (generation === lifetime) reportError("release_editor_load_failed", error);
@@ -235,7 +236,13 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       if (release.summary.trackCount !== state.tracks.length) {
         const text = `来源 ${release.summary.trackCount} 首 / 本地 ${state.tracks.length} 首，曲目数量不一致，请核对对应关系。`;
         logger.warn("tags", "release_track_count_mismatch", text, { context: release.summary.id });
-        notify({ type: "warning", message: text });
+        notify({
+          type: "warning",
+          message: t("来源 {sourceCount} 首 / 本地 {count} 首，曲目数量不一致，请核对对应关系。", {
+            sourceCount: release.summary.trackCount,
+            count: state.tracks.length,
+          }),
+        });
       }
       state.fields = TAG_FIELDS.flatMap(({ key }) =>
         state.rows.some((row) => row.values[key] !== undefined) ? [key] : [],
@@ -265,7 +272,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     if (!id) {
       reportError(
         "release_id_invalid",
-        new Error("请输入 MusicBrainz 发行版本链接或有效 ID（不是 release-group）。"),
+        new Error(t("请输入 MusicBrainz 发行版本链接或有效 ID（不是 release-group）。")),
       );
       return;
     }
@@ -279,7 +286,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       state.covers = covers;
       if (covers[0]) await loadCover(covers[0].id);
       else {
-        state.coverError = "该发行版本没有正面封面，保留本地封面。";
+        state.coverError = t("该发行版本没有正面封面，保留本地封面。");
         logger.info("tags", "release_cover_missing", { context: id });
       }
     } catch (error) {
@@ -359,7 +366,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
   }
   function confirmPatches() {
     if (!state.patches.length) {
-      reportError("release_changes_empty", new Error("没有需要写入的改动。"));
+      reportError("release_changes_empty", new Error(t("没有需要写入的改动。")));
       return;
     }
     state.confirmSave = true;
@@ -369,7 +376,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     state.error = "";
     try {
       if (state.writeCover && (!state.cover || state.loadingCover))
-        throw new Error("请等待封面下载完成，或取消封面覆盖。");
+        throw new Error(t("请等待封面下载完成，或取消封面覆盖。"));
       state.patches = buildAlbumPatches(
         state.rows,
         state.tracks,
@@ -394,7 +401,9 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       if (unsupported.length)
         notify({
           type: "warning",
-          message: `${unsupported.length} 首曲目不支持写入部分所选字段，请核对所选字段。`,
+          message: t("{count} 首曲目不支持写入部分所选字段，请核对所选字段。", {
+            count: unsupported.length,
+          }),
         });
       savedCover = state.writeCover ? state.cover : null;
       confirmPatches();

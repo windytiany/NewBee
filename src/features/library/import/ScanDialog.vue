@@ -9,24 +9,24 @@
     <section class="flex max-h-[85vh] flex-col">
       <header class="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
         <div class="flex items-center gap-2">
-          <h2 id="scan-dialog-title" class="text-lg font-semibold">扫描文件夹</h2>
-          <HelpDialog label="扫描说明">
-            <p>添加音乐目录后，扫描其中支持的音频文件。</p>
-            <p>移除目录只会移除扫描配置，不会删除已入库歌曲。</p>
+          <h2 id="scan-dialog-title" class="text-lg font-semibold">{{ t("扫描文件夹") }}</h2>
+          <HelpDialog :label="t('扫描说明')">
+            <p>{{ t("添加音乐目录后，扫描其中支持的音频文件。") }}</p>
+            <p>{{ t("移除目录只会移除扫描配置，不会删除已入库歌曲。") }}</p>
           </HelpDialog>
         </div>
       </header>
 
       <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <div class="flex items-center justify-between gap-3">
-          <h3 class="text-sm font-semibold">已保存目录</h3>
+          <h3 class="text-sm font-semibold">{{ t("已保存目录") }}</h3>
           <button
             class="focus-visible:outline-app-accent rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="!isTauriApp || isLoadingDirectories || isScanning"
             type="button"
             @click="addDirectory"
           >
-            添加目录
+            {{ t("添加目录") }}
           </button>
         </div>
 
@@ -44,12 +44,12 @@
             </span>
             <button
               class="focus-visible:outline-app-accent text-app-muted shrink-0 rounded px-2 py-1 text-xs hover:bg-white/10 hover:text-white focus-visible:outline-2 disabled:opacity-50"
-              :aria-label="`移除目录 ${directory.displayPath}`"
+              :aria-label="t('移除目录 {path}', { path: directory.displayPath })"
               :disabled="!isTauriApp || isScanning"
               type="button"
               @click="removeDirectory(directory)"
             >
-              移除
+              {{ t("移除") }}
             </button>
           </li>
         </ul>
@@ -57,7 +57,7 @@
           v-else-if="!isLoadingDirectories && !directoryLoadFailed"
           class="text-app-muted mt-3 rounded-lg bg-white/5 px-3 py-4 text-sm"
         >
-          无目录
+          {{ t("无目录") }}
         </p>
       </div>
 
@@ -68,7 +68,7 @@
             type="button"
             @click="closeDialog"
           >
-            取消
+            {{ t("取消") }}
           </button>
           <button
             class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -78,7 +78,7 @@
             type="button"
             @click="startScan"
           >
-            {{ isScanning ? "正在扫描…" : "开始扫描" }}
+            {{ isScanning ? t("正在扫描…") : t("开始扫描") }}
           </button>
         </div>
       </footer>
@@ -87,6 +87,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { useLibraryScan } from "@/features/library/import/useScan";

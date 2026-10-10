@@ -1,12 +1,12 @@
 <template>
   <footer
-    aria-label="Playback controls"
+    :aria-label="t('播放控制')"
     class="bg-app-surface text-app-muted fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 px-4 py-1 sm:h-10 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:gap-x-6 sm:px-6 sm:py-0 md:grid-cols-[minmax(10rem,20rem)_minmax(20rem,1fr)_minmax(9.5rem,14rem)] md:gap-x-[clamp(4px,calc(9.459459459vw-68.64864865px),32px)] md:pr-4 md:pl-8"
   >
     <div class="col-start-1 row-start-1 flex min-w-0 items-center gap-4 md:gap-5">
       <div class="flex items-center gap-1">
         <button
-          aria-label="Previous track"
+          :aria-label="t('上一首')"
           class="text-app-muted focus-visible:outline-app-accent grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
           :class="canPlayPrevious ? 'hover:text-white' : 'cursor-not-allowed opacity-50'"
           :disabled="!canPlayPrevious"
@@ -16,7 +16,7 @@
           <SkipBack aria-hidden="true" class="size-4" />
         </button>
         <button
-          :aria-label="displayedIsPlaying ? 'Pause' : 'Play'"
+          :aria-label="displayedIsPlaying ? t('暂停') : t('播放')"
           class="bg-app-accent focus-visible:outline-app-accent grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
           :class="{ 'opacity-50': !currentTrack && !canStartRestoredQueue }"
           :disabled="
@@ -29,7 +29,7 @@
           <Play v-else aria-hidden="true" class="size-5 fill-current" />
         </button>
         <button
-          aria-label="Next track"
+          :aria-label="t('下一首')"
           class="text-app-muted focus-visible:outline-app-accent grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
           :class="canPlayNext ? 'hover:text-white' : 'cursor-not-allowed opacity-50'"
           :disabled="!canPlayNext"
@@ -43,7 +43,7 @@
       <div ref="volumeControl" class="text-app-muted relative flex shrink-0 items-center gap-3">
         <button
           :aria-label="
-            isHorizontalVolumeVisible ? (volume === 0 ? 'Unmute' : 'Mute') : 'Volume controls'
+            isHorizontalVolumeVisible ? (volume === 0 ? t('取消静音') : t('静音')) : t('音量控制')
           "
           :aria-controls="isHorizontalVolumeVisible ? undefined : 'volume-popover'"
           class="focus-visible:outline-app-accent grid size-8 shrink-0 place-items-center rounded-full transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 lg:-mx-2"
@@ -63,7 +63,7 @@
           />
           <input
             v-model.number="volume"
-            aria-label="Volume"
+            :aria-label="t('音量')"
             class="absolute top-1/2 left-0 z-10 h-6 w-full -translate-y-1/2 cursor-pointer opacity-0"
             max="100"
             min="0"
@@ -87,7 +87,7 @@
             />
             <input
               v-model.number="volume"
-              aria-label="Volume"
+              :aria-label="t('音量')"
               aria-orientation="vertical"
               class="absolute top-0 left-1/2 h-full w-10 -translate-x-1/2 cursor-pointer opacity-0 [direction:rtl] [writing-mode:vertical-lr]"
               max="100"
@@ -112,9 +112,9 @@
         class="pointer-events-none absolute top-10 left-1/2 w-max max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-1"
       >
         <template v-if="currentTrack">
-          {{ currentTrack.title ?? "未知曲目" }} - {{ currentTrack.artist ?? "未知演出者" }}
+          {{ currentTrack.title ?? t("未知曲目") }} - {{ currentTrack.artist ?? t("未知演出者") }}
         </template>
-        <template v-else>未选择歌曲</template>
+        <template v-else>{{ t("未选择歌曲") }}</template>
       </span>
       <div class="bg-app-track relative mt-1 h-1 rounded-full sm:mb-1">
         <div class="bg-app-accent h-full rounded-full" :style="{ width: `${progressPercent}%` }" />
@@ -123,8 +123,13 @@
           :style="{ left: `${progressPercent}%` }"
         />
         <input
-          aria-label="Playback progress"
-          :aria-valuetext="`${formatTime(sliderPositionMs)} of ${formatTime(playbackStatus.durationMs)}`"
+          :aria-label="t('播放进度')"
+          :aria-valuetext="
+            t('{position} / {duration}', {
+              position: formatTime(sliderPositionMs),
+              duration: formatTime(playbackStatus.durationMs),
+            })
+          "
           class="focus-visible:outline-app-accent absolute top-1/2 left-0 z-10 h-6 w-full -translate-y-1/2 cursor-pointer opacity-0 focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-not-allowed"
           :disabled="
             !playbackStatus.hasAudio || playbackStatus.durationMs === 0 || isPlaybackCommandPending
@@ -141,11 +146,11 @@
     </section>
 
     <div
-      aria-label="Playback options"
+      :aria-label="t('播放选项')"
       class="text-app-muted col-start-2 row-start-1 flex items-center justify-end gap-2 sm:col-start-3 sm:justify-end"
     >
       <button
-        aria-label="Repeat one"
+        :aria-label="t('单曲循环')"
         class="focus-visible:outline-app-accent grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
         :class="repeatOneEnabled ? 'text-app-accent' : 'text-app-muted hover:text-white'"
         :aria-pressed="repeatOneEnabled"
@@ -155,7 +160,7 @@
         <Repeat1 aria-hidden="true" class="size-4" />
       </button>
       <button
-        aria-label="Shuffle playback"
+        :aria-label="t('随机播放')"
         class="focus-visible:outline-app-accent grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
         :class="shuffleEnabled ? 'text-app-accent' : 'text-app-muted hover:text-white'"
         :aria-pressed="shuffleEnabled"
@@ -173,6 +178,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { usePlaybackControls } from "@/features/playback/composables/useControls";
@@ -295,7 +301,7 @@ useNotification(() => {
   ].join("\n");
   if (!message) return null;
   logger.info("playback", "failure_feedback_shown");
-  return { type: "error", message: "播放操作失败，请重试或查看日志", key: "playback" };
+  return { type: "error", message: t("播放操作失败，请重试或查看日志"), key: "playback" };
 });
 const progressPercent = computed(() =>
   playbackStatus.value.durationMs > 0

@@ -1,4 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { setLocale } from "@/shared/i18n/locale";
+
+afterEach(() => setLocale("zh-CN"));
 import { createLyricsBatch } from "@/features/lyrics/download/batch";
 import type { LyricsBatchOptions } from "@/features/lyrics/download/batch";
 import type {
@@ -164,6 +167,25 @@ function started(receive: (event: LyricsBatchEvent) => void) {
 }
 
 describe("lyrics batch", () => {
+  it("translates task counts and final notifications at call time", async () => {
+    const lookup = deferred<LyricsContent>();
+    const result = setup({}, () => lookup.promise);
+    setLocale("en");
+    const running = result.batch.startTracks([1]);
+    await settle();
+    expect(result.tasks.get("lyrics-download")?.message).toBe(
+      "Updating missing lyrics · 0 tracks written",
+    );
+    lookup.resolve({ kind: "available", text: "原始歌词" });
+    await running;
+    expect(result.messages[0]?.message).toBe("Lyrics update complete: 1 tracks written");
+    expect(result.batch.state.written).toBe(1);
+    expect(result.committed).toEqual([1]);
+    expect(result.tasks.size).toBe(0);
+    setLocale("zh-CN");
+    await result.batch.startTracks([1]);
+    expect(result.messages[1]?.message).toBe("歌词更新完成：写入 1 首");
+  });
   it("deduplicates targets, commits each request and synchronizes once after the terminal result", async () => {
     const result = setup();
     await result.batch.startTracks([1, 2, 1]);

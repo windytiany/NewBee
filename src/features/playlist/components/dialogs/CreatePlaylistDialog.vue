@@ -10,12 +10,12 @@
   >
     <form @submit.prevent="createPlaylist">
       <header class="border-b border-white/10 px-5 py-4">
-        <h2 :id="`${dialogId}-title`" class="text-lg font-semibold">新建歌单</h2>
+        <h2 :id="`${dialogId}-title`" class="text-lg font-semibold">{{ t("新建歌单") }}</h2>
       </header>
 
       <div class="px-5 py-4">
         <label :for="`${dialogId}-name`" class="text-sm font-medium text-white/90">
-          歌单名称
+          {{ t("歌单名称") }}
         </label>
         <input
           :id="`${dialogId}-name`"
@@ -37,14 +37,14 @@
           type="button"
           @click="closeDialog"
         >
-          取消
+          {{ t("取消") }}
         </button>
         <button
           class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="isCreating"
           type="submit"
         >
-          {{ isCreating ? "正在创建…" : "确认" }}
+          {{ isCreating ? t("正在创建…") : t("确认") }}
         </button>
       </footer>
     </form>
@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { createPlaylistApi } from "@/features/playlist/api";
 import { ref, useId } from "vue";
@@ -99,7 +100,7 @@ async function createPlaylist() {
   const trimmedName = name.value.trim();
   if (!trimmedName) {
     invalidName.value = true;
-    notify({ type: "warning", message: "请输入歌单名称", key: "playlist-name" });
+    notify({ type: "warning", message: t("请输入歌单名称"), key: "playlist-name" });
     nameInput.value?.focus();
     return;
   }

@@ -7,14 +7,14 @@
     <template v-if="props.artist">
       <header class="shrink-0 px-5 py-6 sm:px-8 sm:py-8">
         <h1 id="album-browser-heading" class="text-3xl font-bold tracking-tight sm:text-4xl">
-          {{ props.artist.albumArtist ?? "未知演出者" }}
+          {{ props.artist.albumArtist ?? t("未知演出者") }}
         </h1>
       </header>
       <p
         v-if="!props.albumsLoading && !props.albumsError && props.albums.length === 0"
         class="text-app-muted px-5 text-sm sm:px-8"
       >
-        无专辑
+        {{ t("无专辑") }}
       </p>
       <div
         v-else-if="!props.albumsLoading && !props.albumsError"
@@ -82,7 +82,7 @@
         </template>
       </div>
     </template>
-    <p v-else class="text-app-muted px-5 py-6 text-sm sm:px-8">请选择演出者</p>
+    <p v-else class="text-app-muted px-5 py-6 text-sm sm:px-8">{{ t("请选择演出者") }}</p>
     <AlbumContextMenu
       ref="albumMenu"
       :scope="albumListScope"
@@ -103,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";

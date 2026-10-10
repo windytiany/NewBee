@@ -1,9 +1,9 @@
 <template>
   <div
-    aria-label="实时音频频谱"
+    :aria-label="t('实时音频频谱')"
     class="text-app-muted ml-6 flex h-7 w-12 shrink-0 items-end justify-between"
     role="img"
-    title="实时音频频谱 · 40 Hz–16 kHz"
+    :title="t('实时音频频谱 · 40 Hz–16 kHz')"
   >
     <span
       v-for="(level, index) in bands"
@@ -20,6 +20,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { usePlaybackSpectrum } from "@/features/playback/composables/useSpectrum";
 
 const props = defineProps<{

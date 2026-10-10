@@ -1,6 +1,6 @@
 <template>
   <section
-    aria-label="专辑演出者列表"
+    :aria-label="t('专辑演出者列表')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
     <div ref="groupingControl" class="relative z-10 shrink-0 px-2 py-1">
@@ -13,7 +13,7 @@
         type="button"
         @click="isGroupingMenuOpen = !isGroupingMenuOpen"
       >
-        <span>专辑演出者</span>
+        <span>{{ t("专辑演出者") }}</span>
         <ChevronDown
           aria-hidden="true"
           class="text-app-muted size-4 transition-transform"
@@ -26,7 +26,7 @@
         id="grouping-options"
         class="bg-app-interactive absolute top-full right-2 left-2 rounded-md p-1 shadow-xl ring-1 ring-white/10"
         role="menu"
-        aria-label="分组方式"
+        :aria-label="t('分组方式')"
       >
         <button
           aria-checked="true"
@@ -36,7 +36,7 @@
           @click="isGroupingMenuOpen = false"
         >
           <Check aria-hidden="true" class="text-app-accent size-4" />
-          <span>专辑演出者</span>
+          <span>{{ t("专辑演出者") }}</span>
         </button>
       </div>
     </div>
@@ -46,13 +46,13 @@
         v-if="!props.isLoading && !props.error && props.artists.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
       >
-        无演出者
+        {{ t("无演出者") }}
       </p>
       <ul v-if="props.artists.length > 0" class="space-y-0.5">
         <ArtistRow
           v-for="artist in props.artists"
           :key="getArtistKey(artist.albumArtist)"
-          :name="artist.albumArtist ?? '未知演出者'"
+          :name="artist.albumArtist ?? t('未知演出者')"
           :album-count="artist.albumCount"
           :is-selected="isSelectedArtist(artist)"
           :is-focused="artistFocus.isFocused(getArtistKey(artist.albumArtist))"
@@ -64,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";

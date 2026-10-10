@@ -12,13 +12,14 @@
         <span class="truncate text-sm font-medium text-white">
           {{ name }}
         </span>
-        <span class="text-app-muted text-xs">{{ albumCount }} 张专辑</span>
+        <span class="text-app-muted text-xs">{{ t("{count} 张专辑", { count: albumCount }) }}</span>
       </span>
     </button>
   </li>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 defineProps<{
   name: string;
   albumCount: number;

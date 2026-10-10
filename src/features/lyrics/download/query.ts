@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import type { LyricsContent } from "@/features/lyrics/types";
 
 export function searchQuery(track: { title: string | null; artist: string | null; path: string }) {
@@ -10,5 +11,5 @@ export function searchQuery(track: { title: string | null; artist: string | null
 }
 
 export function contentMessage(content: LyricsContent) {
-  return content.kind === "instrumental" ? "此曲目为纯音乐。" : "未找到歌词。";
+  return content.kind === "instrumental" ? t("此曲目为纯音乐。") : t("未找到歌词。");
 }

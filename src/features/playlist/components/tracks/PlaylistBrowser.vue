@@ -1,6 +1,6 @@
 <template>
   <section
-    aria-label="播放列表浏览"
+    :aria-label="t('播放列表浏览')"
     class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-white"
   >
     <template v-if="props.playlist">
@@ -22,7 +22,9 @@
             </div>
           </TrackArtwork>
           <div class="min-w-0 flex-1 pb-1">
-            <p class="mb-2 text-xs font-semibold tracking-wide text-white/75 uppercase">播放列表</p>
+            <p class="mb-2 text-xs font-semibold tracking-wide text-white/75 uppercase">
+              {{ t("播放列表") }}
+            </p>
             <h1
               id="playlist-browser-heading"
               ref="playlistHeadingElement"
@@ -33,7 +35,7 @@
             </h1>
           </div>
           <button
-            aria-label="播放歌单"
+            :aria-label="t('播放歌单')"
             class="focus-visible:outline-app-accent bg-app-accent grid size-11 shrink-0 place-items-center rounded-full text-black transition-transform focus-visible:outline-2"
             :class="
               props.isLoadingTracks || props.tracks.length === 0
@@ -41,7 +43,7 @@
                 : 'hover:scale-105 active:scale-95'
             "
             :disabled="props.isLoadingTracks || props.tracks.length === 0"
-            title="播放歌单"
+            :title="t('播放歌单')"
             type="button"
             @click="emit('playPlaylist')"
           >
@@ -58,9 +60,9 @@
           class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
         >
           <span class="text-right">#</span>
-          <span>歌曲</span>
-          <span class="hidden sm:block">专辑</span>
-          <span class="text-right">时长</span>
+          <span>{{ t("歌曲") }}</span>
+          <span class="hidden sm:block">{{ t("专辑") }}</span>
+          <span class="text-right">{{ t("时长") }}</span>
         </div>
 
         <p
@@ -72,7 +74,7 @@
           "
           class="text-app-muted py-4 text-sm"
         >
-          无曲目
+          {{ t("无曲目") }}
         </p>
         <ol
           v-else-if="!props.isLoadingTracks && !props.playlistsError && !props.tracksError"
@@ -106,7 +108,7 @@
         class="bg-app-interactive fixed z-100 w-56 rounded-md p-1 shadow-xl ring-1 ring-white/10"
         :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
         role="menu"
-        aria-label="歌单条目操作"
+        :aria-label="t('歌单条目操作')"
         @pointerdown.stop
       >
         <button
@@ -117,7 +119,7 @@
           type="button"
           @click.stop="addToNext"
         >
-          添加为下一首
+          {{ t("添加为下一首") }}
         </button>
         <button
           class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
@@ -126,7 +128,7 @@
           type="button"
           @click.stop="addToQueueEnd"
         >
-          添加到队尾
+          {{ t("添加到队尾") }}
         </button>
         <EditMenuItem
           :track-ids="contextTargetTrackIds"
@@ -151,7 +153,7 @@
           type="button"
           @click.stop="removeFromPlaylist"
         >
-          从当前歌单移除
+          {{ t("从当前歌单移除") }}
         </button>
       </div>
       <div
@@ -175,19 +177,20 @@
         v-if="!props.isLoadingPlaylists && !props.playlistsError && !props.hasPlaylists"
         class="text-app-muted text-sm"
       >
-        无歌单
+        {{ t("无歌单") }}
       </p>
       <p
         v-else-if="!props.isLoadingPlaylists && !props.playlistsError"
         class="text-app-muted text-sm"
       >
-        请选择歌单
+        {{ t("请选择歌单") }}
       </p>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
 import { DiscAlbum, Files, Play } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";

@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import type { ComputedRef, Ref } from "vue";
 import { PlaybackQueueCoordinator } from "@/features/playback/queue/coordinator";
@@ -218,7 +219,7 @@ export function createPlaybackSessionCommands(options: PlaybackSessionCommandOpt
     trackIds: readonly number[],
     save: () => Promise<T>,
   ): Promise<T> {
-    if (options.isCommandPending.value) throw new Error("播放操作尚未完成，请稍后重试。");
+    if (options.isCommandPending.value) throw new Error(t("播放操作尚未完成，请稍后重试。"));
     const generation = beginUserIntent();
     setSessionCommandPending(generation, true);
     options.coordinator.invalidatePendingAdvance();

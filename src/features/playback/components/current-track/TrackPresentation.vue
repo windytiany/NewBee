@@ -1,6 +1,6 @@
 <template>
   <article
-    aria-label="Track details"
+    :aria-label="t('曲目详情')"
     class="w-full"
     :class="
       props.horizontal
@@ -37,13 +37,13 @@
           ref="coverElement"
           class="from-app-interactive to-app-surface via-app-highlight grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-linear-to-br shadow-2xl"
           :class="{ 'md:w-[min(100cqw,100cqh)]': props.compact && !props.horizontal }"
-          :aria-label="artworkStatus === 'fallback' ? '专辑封面占位图' : undefined"
+          :aria-label="artworkStatus === 'fallback' ? t('专辑封面占位图') : undefined"
           :role="artworkStatus === 'fallback' ? 'img' : undefined"
         >
           <img
             v-if="artworkUrl"
             :src="artworkUrl"
-            :alt="details?.album ? `${details.album} 封面` : '专辑封面'"
+            :alt="details?.album ? t('{album} 封面', { album: details.album }) : t('专辑封面')"
             class="h-full w-full object-cover"
           />
           <DiscAlbum
@@ -76,7 +76,7 @@
                 : 'text-3xl sm:text-4xl'
           "
         >
-          {{ track ? (details?.title ?? track.title ?? "未知曲目") : "未选择歌曲" }}
+          {{ track ? (details?.title ?? track.title ?? t("未知曲目")) : t("未选择歌曲") }}
         </h1>
         <p
           v-if="track"
@@ -89,7 +89,7 @@
                 : 'text-base'
           "
         >
-          {{ details?.artist ?? track.artist ?? "未知艺术家" }}
+          {{ details?.artist ?? track.artist ?? t("未知艺术家") }}
         </p>
         <p
           v-if="track"
@@ -101,7 +101,7 @@
                 : 'text-app-muted/70 text-sm'
           "
         >
-          {{ details?.album ?? "未知专辑" }}
+          {{ details?.album ?? t("未知专辑") }}
         </p>
       </div>
     </TrackTransition>
@@ -109,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { ref } from "vue";
 import { useArtworkSize } from "@/features/artwork/useArtworkSize";
 import { DiscAlbum } from "@lucide/vue";

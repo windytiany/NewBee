@@ -1,6 +1,6 @@
 <template>
   <section
-    aria-label="Now playing"
+    :aria-label="t('正在播放')"
     class="relative isolate grid h-full min-h-0 w-full min-w-0 place-items-center"
     :class="displayedBackground ? '[--app-muted:#e5e7eb] [--app-text:#fff]' : ''"
   >
@@ -32,9 +32,9 @@
       ]"
     >
       <button
-        :aria-label="nextModeLabel[presentation]"
+        :aria-label="t(nextModeLabel[presentation])"
         class="bg-app-interactive text-app-muted focus-visible:outline-app-accent hover:bg-app-highlight fixed top-16 right-4 z-40 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-6"
-        :title="nextModeLabel[presentation]"
+        :title="t(nextModeLabel[presentation])"
         type="button"
         @click="cyclePresentation"
       >
@@ -55,7 +55,7 @@
           v-if="lyricsState.status === 'idle'"
           class="text-app-muted mx-auto max-w-5xl px-6 py-8 text-center text-lg"
         >
-          未选择歌曲
+          {{ t("未选择歌曲") }}
         </p>
         <LyricsView
           v-show="lyricsState.status === 'ready' && presentation !== 'track'"
@@ -76,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, shallowRef, watch } from "vue";
 import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
@@ -150,9 +151,9 @@ const nextPresentation: Record<Presentation, Presentation> = {
   both: "track",
 };
 const nextModeLabel: Record<Presentation, string> = {
-  track: "Show lyrics",
-  lyrics: "Show track and lyrics",
-  both: "Show track details",
+  track: "显示歌词",
+  lyrics: "显示曲目和歌词",
+  both: "显示曲目详情",
 };
 const nextModeIcon = {
   track: ListMusic,

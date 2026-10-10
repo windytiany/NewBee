@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t, setLocale, locale } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -25,7 +26,7 @@ async function changeLogging() {
   } catch (reason) {
     logger.error("settings", "logging_level_change_failed", reason);
     detailedLogging.value = !detailedLogging.value;
-    notify({ type: "error", message: "切换日志级别失败，请查看日志", key: "settings-logging" });
+    notify({ type: "error", message: t("切换日志级别失败，请查看日志"), key: "settings-logging" });
   } finally {
     isChangingLogging.value = false;
   }
@@ -35,7 +36,7 @@ async function openLogs() {
     await invoke<void>("open_logs_directory");
   } catch (reason) {
     logger.error("settings", "open_logs_failed", reason);
-    notify({ type: "error", message: "打开日志目录失败，请查看日志", key: "settings-logs" });
+    notify({ type: "error", message: t("打开日志目录失败，请查看日志"), key: "settings-logs" });
   }
 }
 
@@ -48,6 +49,7 @@ const categories = {
 } as const;
 const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
+const selectedLocale = ref<Settings["locale"]>(locale.value);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
 const accentColor = ref(DEFAULT_ACCENT_COLOR);
 const normalizedAccentColor = computed(() => normalizeAccentColor(accentColor.value));
@@ -75,6 +77,7 @@ async function show() {
   try {
     const settings = await api.get();
     if (requestId !== loadRequestSequence) return;
+    selectedLocale.value = settings.locale;
     closeBehavior.value = settings.closeBehavior;
     accentColor.value = settings.accentColor;
     reducedMotion.value = settings.reducedMotion;
@@ -88,7 +91,7 @@ async function show() {
   } catch (reason) {
     if (requestId === loadRequestSequence) {
       logger.error("settings", "load_failed", reason);
-      notify({ type: "error", message: "读取设置失败，请查看日志", key: "settings-load" });
+      notify({ type: "error", message: t("读取设置失败，请查看日志"), key: "settings-load" });
     }
   } finally {
     if (requestId === loadRequestSequence) isLoading.value = false;
@@ -106,7 +109,7 @@ async function save() {
   if (!color) {
     notify({
       type: "error",
-      message: "主题色必须是有效的 #RRGGBB 颜色",
+      message: t("主题色必须是有效的 #RRGGBB 颜色"),
       key: "settings-accent-color",
     });
     return;
@@ -114,6 +117,7 @@ async function save() {
   isSaving.value = true;
   try {
     await api.save({
+      locale: selectedLocale.value,
       closeBehavior: closeBehavior.value,
       accentColor: color,
       reducedMotion: reducedMotion.value,
@@ -124,13 +128,14 @@ async function save() {
       lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
       neteaseLyricsMode: neteaseLyricsMode.value,
     });
+    setLocale(selectedLocale.value);
     accentColor.value = color;
     applyAppearance({ accentColor: color, reducedMotion: reducedMotion.value });
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
   } catch (reason) {
     logger.error("settings", "save_failed", reason);
-    notify({ type: "error", message: "保存设置失败，请查看日志", key: "settings-save" });
+    notify({ type: "error", message: t("保存设置失败，请查看日志"), key: "settings-save" });
   } finally {
     isSaving.value = false;
   }
@@ -150,13 +155,13 @@ defineExpose({ show });
   >
     <form class="flex h-[min(36rem,85dvh)] flex-col" @submit.prevent="save">
       <header class="shrink-0 border-b border-white/10 px-5 py-4">
-        <h2 id="settings-dialog-title" class="text-lg font-semibold">设置</h2>
+        <h2 id="settings-dialog-title" class="text-lg font-semibold">{{ t("设置") }}</h2>
       </header>
       <div
         class="grid min-h-0 flex-1 grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[10rem_minmax(0,1fr)]"
       >
         <nav
-          aria-label="设置分类"
+          :aria-label="t('设置分类')"
           class="bg-app-base/40 overflow-y-auto border-r border-white/10 p-2 sm:p-3"
         >
           <button
@@ -173,7 +178,7 @@ defineExpose({ show });
             type="button"
             @click="selectedCategory = category"
           >
-            {{ label }}
+            {{ t(label) }}
           </button>
         </nav>
         <section
@@ -183,33 +188,44 @@ defineExpose({ show });
         >
           <div class="mb-6 flex items-center gap-2">
             <h3 id="settings-category-title" class="text-base font-semibold">
-              {{ categories[selectedCategory] }}
+              {{ t(categories[selectedCategory]) }}
             </h3>
-            <HelpDialog :key="selectedCategory" :label="`${categories[selectedCategory]}设置说明`">
+            <HelpDialog
+              :key="selectedCategory"
+              :label="t(`${categories[selectedCategory]}设置说明`)"
+            >
               <template v-if="selectedCategory === 'general'">
-                <p>缩小到托盘时继续播放，点击托盘图标恢复窗口；直接退出时停止播放并退出。</p>
-                <p>托盘菜单中的“退出”始终会退出软件。</p>
+                <p>
+                  {{ t("缩小到托盘时继续播放，点击托盘图标恢复窗口；直接退出时停止播放并退出。") }}
+                </p>
+                <p>{{ t("托盘菜单中的“退出”始终会退出软件。") }}</p>
               </template>
               <template v-else-if="selectedCategory === 'appearance'">
                 <p>
-                  专辑详情和播放页的封面背景可分别开关；启用后使用封面生成的模糊背景，关闭后使用默认背景。
+                  {{
+                    t(
+                      "专辑详情和播放页的封面背景可分别开关；启用后使用封面生成的模糊背景，关闭后使用默认背景。",
+                    )
+                  }}
                 </p>
-                <p>减少动态效果仅由应用设置控制，不跟随系统设置。</p>
-                <p>保存后立即生效，下次启动时自动恢复。</p>
+                <p>{{ t("减少动态效果仅由应用设置控制，不跟随系统设置。") }}</p>
+                <p>{{ t("保存后立即生效，下次启动时自动恢复。") }}</p>
               </template>
               <template v-else-if="selectedCategory === 'lyrics'">
-                <p>按启用的来源顺序获取歌词，无需登录网易云。</p>
-                <p>网易云歌词可以选择原始歌词、翻译歌词或双语歌词。</p>
-                <p>当前批量操作下载成功后直接覆盖内嵌歌词，不检查是否缺少。</p>
+                <p>{{ t("按启用的来源顺序获取歌词，无需登录网易云。") }}</p>
+                <p>{{ t("网易云歌词可以选择原始歌词、翻译歌词或双语歌词。") }}</p>
+                <p>{{ t("当前批量操作下载成功后直接覆盖内嵌歌词，不检查是否缺少。") }}</p>
               </template>
               <template v-else-if="selectedCategory === 'diagnostics'">
-                <p>日志仅保存在本机，最多保留约 30 MB。分享前请检查文件路径等隐私信息。</p>
-                <p>详细日志立即生效，下次启动恢复普通日志。不记录歌词正文或封面数据。</p>
+                <p>
+                  {{ t("日志仅保存在本机，最多保留约 30 MB。分享前请检查文件路径等隐私信息。") }}
+                </p>
+                <p>{{ t("详细日志立即生效，下次启动恢复普通日志。不记录歌词正文或封面数据。") }}</p>
               </template>
               <template v-else>
-                <p>按完整发布日期排序，专辑仍只显示年份。</p>
-                <p>缺少日期的专辑排在最后，相同日期按名称排序。</p>
-                <p>升序为 A → Z 或从旧到新；降序为 Z → A 或从新到旧。</p>
+                <p>{{ t("按完整发布日期排序，专辑仍只显示年份。") }}</p>
+                <p>{{ t("缺少日期的专辑排在最后，相同日期按名称排序。") }}</p>
+                <p>{{ t("升序为 A → Z 或从旧到新；降序为 Z → A 或从新到旧。") }}</p>
               </template>
             </HelpDialog>
           </div>
@@ -217,15 +233,15 @@ defineExpose({ show });
             v-if="selectedCategory === 'appearance'"
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           >
-            <legend class="sr-only">外观</legend>
+            <legend class="sr-only">{{ t("外观") }}</legend>
             <div role="group" aria-labelledby="accent-color-label" class="space-y-3">
-              <h4 id="accent-color-label" class="text-sm font-semibold">主题色</h4>
+              <h4 id="accent-color-label" class="text-sm font-semibold">{{ t("主题色") }}</h4>
               <div class="flex flex-wrap gap-3">
                 <button
                   v-for="color in ACCENT_COLORS"
                   :key="color.value"
                   type="button"
-                  :aria-label="`${color.label}色`"
+                  :aria-label="t(`${color.label}色`)"
                   :aria-pressed="normalizedAccentColor === color.value"
                   :style="{ backgroundColor: color.value }"
                   class="focus-visible:outline-app-accent size-8 rounded-full border-2 focus-visible:outline-2 focus-visible:outline-offset-4"
@@ -240,14 +256,14 @@ defineExpose({ show });
                   v-model="accentColor"
                   type="color"
                   name="accent-color-picker"
-                  aria-label="选择自定义主题色"
+                  :aria-label="t('选择自定义主题色')"
                   class="focus-visible:outline-app-accent h-9 w-12 cursor-pointer rounded border border-white/10 bg-transparent focus-visible:outline-2"
                 />
                 <input
                   v-model="accentColor"
                   type="text"
                   name="accent-color"
-                  aria-label="自定义主题色"
+                  :aria-label="t('自定义主题色')"
                   pattern="#[0-9a-fA-F]{6}"
                   maxlength="7"
                   required
@@ -265,7 +281,7 @@ defineExpose({ show });
                 name="reduced-motion"
                 type="checkbox"
               />
-              <span class="text-sm font-semibold">减少动态效果</span>
+              <span class="text-sm font-semibold">{{ t("减少动态效果") }}</span>
             </label>
             <label
               class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
@@ -276,7 +292,7 @@ defineExpose({ show });
                 name="album-cover-background"
                 type="checkbox"
               />
-              <span class="text-sm font-semibold">专辑详情封面背景</span>
+              <span class="text-sm font-semibold">{{ t("专辑详情封面背景") }}</span>
             </label>
             <label
               class="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
@@ -287,15 +303,28 @@ defineExpose({ show });
                 name="playing-cover-background"
                 type="checkbox"
               />
-              <span class="text-sm font-semibold">播放页封面背景</span>
+              <span class="text-sm font-semibold">{{ t("播放页封面背景") }}</span>
             </label>
           </fieldset>
           <fieldset
             v-else-if="selectedCategory === 'general'"
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           >
-            <legend class="sr-only">关闭窗口时的行为</legend>
-            <p id="close-behavior-description" class="mb-3 text-sm font-semibold">关闭窗口时</p>
+            <legend class="sr-only">{{ t("关闭窗口时的行为") }}</legend>
+            <label class="mb-5 flex flex-col gap-2 text-sm font-semibold">
+              {{ t("语言") }}
+              <select
+                v-model="selectedLocale"
+                name="locale"
+                class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
+              >
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <p id="close-behavior-description" class="mb-3 text-sm font-semibold">
+              {{ t("关闭窗口时") }}
+            </p>
             <label class="flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3">
               <input
                 v-model="closeBehavior"
@@ -305,7 +334,7 @@ defineExpose({ show });
                 type="radio"
                 value="tray"
               />
-              <span class="text-sm">缩小到托盘</span>
+              <span class="text-sm">{{ t("缩小到托盘") }}</span>
             </label>
             <label
               class="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
@@ -318,15 +347,15 @@ defineExpose({ show });
                 type="radio"
                 value="exit"
               />
-              <span class="text-sm">直接退出</span>
+              <span class="text-sm">{{ t("直接退出") }}</span>
             </label>
           </fieldset>
           <fieldset
             v-else-if="selectedCategory === 'lyrics'"
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           >
-            <legend class="sr-only">歌词来源</legend>
-            <h4 class="mb-3 text-sm font-semibold">歌词来源</h4>
+            <legend class="sr-only">{{ t("歌词来源") }}</legend>
+            <h4 class="mb-3 text-sm font-semibold">{{ t("歌词来源") }}</h4>
             <label class="flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3">
               <input
                 v-model="neteaseEnabled"
@@ -334,29 +363,29 @@ defineExpose({ show });
                 name="netease-lyrics"
                 class="accent-app-accent mt-1"
               />
-              <span class="text-sm">网易云音乐</span>
+              <span class="text-sm">{{ t("网易云音乐") }}</span>
             </label>
             <label class="mt-5 flex flex-col gap-2 text-sm font-semibold">
-              网易云歌词内容
+              {{ t("网易云歌词内容") }}
               <select
                 v-model="neteaseLyricsMode"
                 name="netease-lyrics-mode"
                 class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
               >
-                <option value="original">原始歌词</option>
-                <option value="translated">翻译歌词</option>
-                <option value="bilingual">双语歌词</option>
+                <option value="original">{{ t("原始歌词") }}</option>
+                <option value="translated">{{ t("翻译歌词") }}</option>
+                <option value="bilingual">{{ t("双语歌词") }}</option>
               </select>
             </label>
           </fieldset>
           <fieldset v-else-if="selectedCategory === 'diagnostics'" :disabled="!isTauriApp">
-            <legend class="sr-only">诊断日志</legend>
+            <legend class="sr-only">{{ t("诊断日志") }}</legend>
             <button
               type="button"
               class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
               @click="openLogs"
             >
-              打开日志目录
+              {{ t("打开日志目录") }}
             </button>
             <label class="mt-5 flex items-center gap-3 text-sm">
               <input
@@ -366,38 +395,40 @@ defineExpose({ show });
                 class="accent-app-accent"
                 @change="changeLogging"
               />
-              详细日志（下次启动恢复默认）
+              {{ t("详细日志（下次启动恢复默认）") }}
             </label>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
-            <legend class="sr-only">专辑排序</legend>
-            <h4 class="mb-3 text-sm font-semibold">专辑排序</h4>
+            <legend class="sr-only">{{ t("专辑排序") }}</legend>
+            <h4 class="mb-3 text-sm font-semibold">{{ t("专辑排序") }}</h4>
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="text-app-muted flex flex-col gap-2 text-sm">
-                排序依据
+                {{ t("排序依据") }}
                 <select
                   v-model="albumSortBy"
                   class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 text-white focus-visible:outline-2"
                 >
-                  <option value="name">专辑名称</option>
-                  <option value="year">发布日期</option>
+                  <option value="name">{{ t("专辑名称") }}</option>
+                  <option value="year">{{ t("发布日期") }}</option>
                 </select>
               </label>
               <label class="text-app-muted flex flex-col gap-2 text-sm">
-                排序方向
+                {{ t("排序方向") }}
                 <select
                   v-model="albumSortOrder"
                   class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 text-white focus-visible:outline-2"
                 >
-                  <option value="ascending">升序</option>
-                  <option value="descending">降序</option>
+                  <option value="ascending">{{ t("升序") }}</option>
+                  <option value="descending">{{ t("降序") }}</option>
                 </select>
               </label>
             </div>
           </fieldset>
         </section>
       </div>
-      <p v-if="isLoading" class="text-app-muted px-5 pb-4 text-sm" role="status">正在读取设置…</p>
+      <p v-if="isLoading" class="text-app-muted px-5 pb-4 text-sm" role="status">
+        {{ t("正在读取设置…") }}
+      </p>
       <footer class="flex shrink-0 justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           class="focus-visible:outline-app-accent rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
@@ -405,14 +436,14 @@ defineExpose({ show });
           type="button"
           @click="close"
         >
-          取消
+          {{ t("取消") }}
         </button>
         <button
           class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           type="submit"
         >
-          {{ isSaving ? "正在保存…" : "保存" }}
+          {{ isSaving ? t("正在保存…") : t("保存") }}
         </button>
       </footer>
     </form>

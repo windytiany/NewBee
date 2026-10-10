@@ -2,7 +2,7 @@ import { expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
 
-import { pageNames } from "@/app/pages";
+import { pageNames, pageLabel } from "@/app/pages";
 import type { AppMenuAction } from "@/app/shell/AppMenu.vue";
 
 type Dialog = { show: () => void };
@@ -27,7 +27,7 @@ it("routes brand menu selections to existing import and dialog actions", async (
     "@tauri-apps/api/window": { getCurrentWindow: () => null },
     "@lucide/vue": { Copy: {}, Maximize: {}, Minus: {}, X: {} },
     "@/app/shell/AppMenu.vue": { default: {} },
-    "@/app/pages": { pageNames },
+    "@/app/pages": { pageNames, pageLabel },
     "@/features/library/import/ScanDialog.vue": { default: {} },
     "@/features/library/paths/PathMigrationDialog.vue": { default: {} },
     "@/features/settings/components/SettingsDialog.vue": { default: {} },

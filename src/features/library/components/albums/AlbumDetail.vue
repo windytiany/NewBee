@@ -17,7 +17,7 @@
             class="min-w-0 flex-1 truncate text-xl font-bold sm:text-2xl"
             tabindex="-1"
           >
-            {{ props.album.album ?? "未知专辑" }}
+            {{ props.album.album ?? t("未知专辑") }}
           </h2>
           <button
             :aria-label="playbackButtonLabel"
@@ -41,11 +41,11 @@
           </button>
         </div>
         <p class="text-app-muted mt-1 truncate text-base">
-          {{ props.albumArtist ?? "未知演出者" }} ({{ props.album.year ?? "年份未知" }})
+          {{ props.albumArtist ?? t("未知演出者") }} ({{ props.album.year ?? t("年份未知") }})
         </p>
       </div>
       <button
-        aria-label="收起专辑曲目"
+        :aria-label="t('收起专辑曲目')"
         class="focus-visible:outline-app-accent text-app-muted grid size-8 shrink-0 place-items-center rounded-full transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2"
         type="button"
         @click="emit('close')"
@@ -54,7 +54,7 @@
       </button>
     </header>
 
-    <h3 class="sr-only">曲目</h3>
+    <h3 class="sr-only">{{ t("曲目") }}</h3>
 
     <div
       v-if="!props.tracksLoading && !props.tracksError && props.tracks.length > 0"
@@ -64,7 +64,7 @@
       <ol
         v-for="disc in trackDiscs"
         :key="disc.number"
-        :aria-label="`第 ${disc.number} 碟`"
+        :aria-label="t('第 {count} 碟', { count: disc.number })"
         class="grid gap-x-8"
         :class="trackColumnCount === 2 ? 'grid-flow-col grid-cols-2' : 'grid-cols-1'"
         :style="{
@@ -90,7 +90,7 @@
       v-else-if="!props.tracksLoading && !props.tracksError"
       class="text-app-muted relative py-3 text-sm"
     >
-      无曲目
+      {{ t("无曲目") }}
     </p>
 
     <div
@@ -101,7 +101,7 @@
       class="bg-app-interactive fixed z-100 w-64 rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
       role="menu"
-      aria-label="专辑曲目操作"
+      :aria-label="t('专辑曲目操作')"
       @pointerdown.stop
       @pointerleave="closePlaylistMenuOnPointerLeave"
     >
@@ -113,7 +113,7 @@
         type="button"
         @click.stop="addToNext"
       >
-        添加为下一首
+        {{ t("添加为下一首") }}
       </button>
       <button
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
@@ -122,7 +122,7 @@
         type="button"
         @click.stop="addToQueueEnd"
       >
-        添加到队尾
+        {{ t("添加到队尾") }}
       </button>
       <button
         ref="playlistMenuTriggerElement"
@@ -137,7 +137,7 @@
         @mouseenter="openPlaylistMenu()"
         @click.stop="openPlaylistMenu(true)"
       >
-        添加到播放列表
+        {{ t("添加到播放列表") }}
         <ChevronRight aria-hidden="true" class="size-4" />
       </button>
       <div
@@ -147,7 +147,7 @@
         class="bg-app-interactive fixed z-101 max-h-72 w-56 overflow-y-auto rounded-md p-1 shadow-xl ring-1 ring-white/10"
         :style="{ left: `${playlistMenuPosition.x}px`, top: `${playlistMenuPosition.y}px` }"
         role="menu"
-        aria-label="选择目标歌单"
+        :aria-label="t('选择目标歌单')"
       >
         <button
           ref="createPlaylistMenuItemElement"
@@ -157,14 +157,14 @@
           type="button"
           @click.stop="createPlaylistWithTracks"
         >
-          新建播放列表…
+          {{ t("新建播放列表…") }}
         </button>
         <div class="my-1 border-t border-white/10" role="separator"></div>
         <p
           v-if="!props.playlistsLoading && !props.playlistsError && props.playlists.length === 0"
           class="text-app-muted px-2 py-2 text-sm"
         >
-          无歌单
+          {{ t("无歌单") }}
         </p>
         <button
           v-for="playlist in props.playlists"
@@ -200,18 +200,21 @@
         role="menuitem"
         :disabled="props.trackActionPending || contextMenu.payload.targetTrackIds.length !== 1"
         :title="
-          contextMenu.payload.targetTrackIds.length !== 1 ? '多选时暂不支持从曲库删除' : undefined
+          contextMenu.payload.targetTrackIds.length !== 1
+            ? t('多选时暂不支持从曲库删除')
+            : undefined
         "
         type="button"
         @click.stop="requestTrackDeletion"
       >
-        从库中删除
+        {{ t("从库中删除") }}
       </button>
     </div>
   </article>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { ChevronRight, Pause, Play, X } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
@@ -271,7 +274,11 @@ const isCurrentAlbum = computed(() =>
   props.tracks.some((track) => track.id === props.currentTrackId),
 );
 const playbackButtonLabel = computed(() =>
-  isCurrentAlbum.value ? (props.isPlaying ? "暂停当前曲目" : "继续播放当前曲目") : "播放专辑",
+  isCurrentAlbum.value
+    ? props.isPlaying
+      ? t("暂停当前曲目")
+      : t("继续播放当前曲目")
+    : t("播放专辑"),
 );
 const playbackButtonDisabled = computed(
   () =>

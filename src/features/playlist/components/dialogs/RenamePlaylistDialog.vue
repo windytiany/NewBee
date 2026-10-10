@@ -9,12 +9,14 @@
   >
     <form @submit.prevent="renamePlaylist">
       <header class="border-b border-white/10 px-5 py-4">
-        <h2 id="rename-playlist-dialog-title" class="text-lg font-semibold">重命名歌单</h2>
+        <h2 id="rename-playlist-dialog-title" class="text-lg font-semibold">
+          {{ t("重命名歌单") }}
+        </h2>
       </header>
 
       <div class="px-5 py-4">
         <label for="rename-playlist-name" class="text-sm font-medium text-white/90">
-          歌单名称
+          {{ t("歌单名称") }}
         </label>
         <input
           id="rename-playlist-name"
@@ -35,14 +37,14 @@
           type="button"
           @click="cancelDialog"
         >
-          取消
+          {{ t("取消") }}
         </button>
         <button
           class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="props.isPending"
           type="submit"
         >
-          {{ props.isPending ? "正在保存…" : "确认" }}
+          {{ props.isPending ? t("正在保存…") : t("确认") }}
         </button>
       </footer>
     </form>
@@ -50,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { notify } from "@/shared/notifications/center";
 import { ref } from "vue";
 import type { PlaylistSummary } from "@/features/playlist/types";
@@ -95,7 +98,7 @@ function renamePlaylist() {
 
   const trimmedName = name.value.trim();
   if (!trimmedName) {
-    validationError.value = "请输入歌单名称";
+    validationError.value = t("请输入歌单名称");
     notify({ type: "warning", message: validationError.value, key: "playlist-name" });
 
     nameInput.value?.focus();

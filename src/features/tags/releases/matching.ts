@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import type { TrackDetails } from "@/features/library/types";
 import { buildTagChanges, TAG_FIELDS } from "@/features/tags/draft";
 import type { EditableTrack, IdentifierField, TagChange } from "@/features/tags/types";
@@ -122,10 +123,10 @@ export function buildAlbumPatches(
   const seen = new Set<number>();
   for (const row of rows) {
     if (row.source === null || row.trackId === null || !included.includes(row.trackId)) continue;
-    if (seen.has(row.trackId)) throw new Error("同一本地曲目不能重复对应。");
+    if (seen.has(row.trackId)) throw new Error(t("同一本地曲目不能重复对应。"));
     seen.add(row.trackId);
     const local = tracks.find(({ track }) => track.id === row.trackId);
-    if (!local) throw new Error("对应的本地曲目不存在。");
+    if (!local) throw new Error(t("对应的本地曲目不存在。"));
     const changed = TAG_FIELDS.flatMap((field) => {
       const value = row.values[field.key];
       if (!fields.includes(field.key) || value === undefined || !value.trim()) return [];

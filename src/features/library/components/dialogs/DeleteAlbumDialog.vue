@@ -10,13 +10,19 @@
   >
     <section>
       <header class="border-b border-white/10 px-5 py-4">
-        <h2 id="delete-album-dialog-title" class="text-lg font-semibold">从曲库中删除专辑</h2>
+        <h2 id="delete-album-dialog-title" class="text-lg font-semibold">
+          {{ t("从曲库中删除专辑") }}
+        </h2>
       </header>
       <div class="px-5 py-4">
-        <p class="font-medium">{{ album.album ?? "未知专辑" }}</p>
-        <p class="text-app-muted mt-1 text-sm">{{ album.albumArtist ?? "未知演出者" }}</p>
+        <p class="font-medium">{{ album.album ?? t("未知专辑") }}</p>
+        <p class="text-app-muted mt-1 text-sm">{{ album.albumArtist ?? t("未知演出者") }}</p>
         <p id="delete-album-dialog-description" class="text-app-muted mt-3 text-sm leading-6">
-          删除此专辑的全部曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。
+          {{
+            t(
+              "删除此专辑的全部曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。",
+            )
+          }}
         </p>
       </div>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -26,7 +32,7 @@
           type="button"
           @click="cancel"
         >
-          取消
+          {{ t("取消") }}
         </button>
         <button
           class="focus-visible:outline-app-accent rounded-full bg-red-500 px-5 py-2 text-sm font-semibold text-white hover:bg-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -34,7 +40,7 @@
           type="button"
           @click="confirm"
         >
-          {{ pending ? "正在删除…" : "确认删除" }}
+          {{ pending ? t("正在删除…") : t("确认删除") }}
         </button>
       </footer>
     </section>
@@ -42,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { ref } from "vue";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 const props = defineProps<{ album: LibraryAlbumSelection; pending: boolean }>();

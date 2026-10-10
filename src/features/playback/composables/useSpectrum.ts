@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { onMounted, onScopeDispose, readonly, ref, shallowRef, toValue, watch } from "vue";
 import type { MaybeRefOrGetter } from "vue";
@@ -59,7 +60,7 @@ export function usePlaybackSpectrum(
         logger.warn("playback", "spectrum_read_failed", reason, { playbackId: id });
         notify({
           type: "warning",
-          message: "实时频谱不可用，请查看日志",
+          message: t("实时频谱不可用，请查看日志"),
           key: "playback-spectrum",
         });
       }

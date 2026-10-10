@@ -1,3 +1,4 @@
+import { setLocale } from "@/shared/i18n/locale";
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
@@ -64,6 +65,7 @@ afterEach(() => {
     else Reflect.deleteProperty(globalThis, name);
   });
   focused = null;
+  setLocale("zh-CN");
 });
 
 const output = compileSfc(
@@ -87,7 +89,7 @@ function fire(node: MenuNode, listenerName = "onClick", details: Record<string, 
 }
 
 function createMenu(canImport = true, isImporting = false) {
-  const document = new EventTarget();
+  const document = Object.assign(new EventTarget(), { documentElement: { lang: "zh-CN" } });
   Object.defineProperty(globalThis, "document", { configurable: true, value: document });
   Object.defineProperty(globalThis, "Node", { configurable: true, value: MenuNode });
   Object.defineProperty(globalThis, "Element", { configurable: true, value: MenuNode });
@@ -270,4 +272,21 @@ describe("brand menu", () => {
     expect(focused).toBe(menu.button("NewBee"));
     expect(findNode(menu.root, (node) => node.props.id === "brand-menu")).toBeNull();
   });
+});
+
+it("updates open menu groups, actions and status when the language changes", async () => {
+  const menu = createMenu(true, true);
+  await menu.open();
+  fire(menu.button("文件"));
+  await Vue.nextTick();
+  expect(menu.button("正在导入…").props.disabled).toBe(true);
+  setLocale("en");
+  await Vue.nextTick();
+  expect(menu.rootLabels()).toEqual(["File", "Tools", "Settings"]);
+  expect(menu.button("Importing…").props.disabled).toBe(true);
+  expect(menu.button("Scan folder")).toBeDefined();
+  expect(menu.menu().props["aria-label"]).toBe("NewBee menu");
+  setLocale("zh-CN");
+  await Vue.nextTick();
+  expect(menu.rootLabels()).toEqual(["文件", "工具", "设置"]);
 });

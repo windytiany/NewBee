@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { ref } from "vue";
+import { setLocale } from "@/shared/i18n/locale";
 import { transpileScript, evaluateSource } from "../../support/moduleLoader";
 
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
@@ -20,6 +21,7 @@ const changesOutput = transpileScript(
 );
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 afterEach(() => {
+  setLocale("zh-CN");
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
   else Reflect.deleteProperty(globalThis, "window");
 });
@@ -100,6 +102,26 @@ function deferred<T>() {
 }
 
 describe("audio file import", () => {
+  it("evaluates picker titles, filters, and count notifications in the current locale", async () => {
+    const importer = createImport();
+    setLocale("en");
+    await importer.importMusicFiles();
+    expect(importer.pickerOptions).toEqual([
+      {
+        title: "Import audio files",
+        directory: false,
+        multiple: true,
+        filters: [{ name: "Supported audio files", extensions }],
+      },
+    ]);
+    expect(importer.notices[0]).toMatchObject({
+      type: "success",
+      message: "Import complete: 2 tracks added, 1 updated",
+    });
+    expect(importer.calls[1]?.[0]).toBe("import_music_files");
+    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
+  });
+
   it("uses backend-supported extensions, imports the selection, and refreshes the library", async () => {
     const importer = createImport();
     await importer.importMusicFiles();

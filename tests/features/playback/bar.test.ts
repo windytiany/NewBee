@@ -1,3 +1,4 @@
+import { setLocale, t } from "@/shared/i18n/locale";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import * as Icons from "@lucide/vue";
@@ -124,7 +125,7 @@ function playButton(root: HostNode) {
   const button = findNode(
     root,
     (node) =>
-      node.type === "button" && ["Play", "Pause"].includes(String(node.props["aria-label"])),
+      node.type === "button" && [t("播放"), t("暂停")].includes(String(node.props["aria-label"])),
   );
   if (!button) throw new Error("Playback button was not rendered.");
   return button;
@@ -220,7 +221,11 @@ beforeEach(() => {
       addEventListener: () => {},
       removeEventListener: () => {},
     }),
-    document: { addEventListener: () => {}, removeEventListener: () => {} },
+    document: {
+      documentElement: { lang: "zh-CN" },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    },
   };
   for (const [key, value] of Object.entries(globals)) {
     originalGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -236,6 +241,7 @@ afterEach(() => {
     else Reflect.deleteProperty(globalThis, key);
   }
   originalGlobals.clear();
+  setLocale("zh-CN");
 });
 
 describe("playback bar button", () => {
@@ -243,11 +249,11 @@ describe("playback bar button", () => {
     const { session } = setupPlayback();
     await startQueue(session);
     const root = mountBar(session);
-    const options = findNode(root, (node) => node.props["aria-label"] === "Playback options");
+    const options = findNode(root, (node) => node.props["aria-label"] === t("播放选项"));
     const spectrum = findNode(root, (node) => node.props["data-playback-spectrum"] === true);
     if (!options || !spectrum) throw new Error("Playback options were not rendered");
-    expect(options.children[0]?.props["aria-label"]).toBe("Repeat one");
-    expect(options.children[1]?.props["aria-label"]).toBe("Shuffle playback");
+    expect(options.children[0]?.props["aria-label"]).toBe(t("单曲循环"));
+    expect(options.children[1]?.props["aria-label"]).toBe(t("随机播放"));
     expect(options.children[2]).toBe(spectrum);
     expect(spectrum.props["data-playback-id"]).toBe(1);
     expect(spectrum.props["data-active"]).toBe(true);
@@ -264,7 +270,7 @@ describe("playback bar button", () => {
     await settle();
     const button = playButton(root);
     expect(button.props.disabled).toBe(true);
-    expect(button.props["aria-label"]).toBe("Pause");
+    expect(button.props["aria-label"]).toBe(t("暂停"));
     expect(isDimmed(button)).toBe(false);
     nextStart.resolve(started(2));
     await switching;
@@ -274,16 +280,16 @@ describe("playback bar button", () => {
     const { session, nextStart, endTrack } = setupPlayback();
     await startQueue(session);
     const root = mountBar(session);
-    expect(playButton(root).props["aria-label"]).toBe("Pause");
+    expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
     endTrack();
     const advancing = session.refreshPlaybackStatus();
     await settle();
     expect(session.state.isPlaybackCommandPending.value).toBe(true);
-    expect(playButton(root).props["aria-label"]).toBe("Pause");
+    expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
     nextStart.resolve(started(2));
     await advancing;
     await settle();
-    expect(playButton(root).props["aria-label"]).toBe("Pause");
+    expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
   });
 
   it("keeps the icon stable while waiting for the new track's status", async () => {
@@ -299,13 +305,13 @@ describe("playback bar button", () => {
     await settle();
     expect(session.state.isPlaybackCommandPending.value).toBe(false);
     expect(session.state.isPlaybackStatusSettled.value).toBe(false);
-    expect(playButton(root).props["aria-label"]).toBe("Pause");
+    expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
     expect(isDimmed(playButton(root))).toBe(false);
 
     nextStatus.resolve(status(2));
     await settle();
     expect(session.state.isPlaybackStatusSettled.value).toBe(true);
-    expect(playButton(root).props["aria-label"]).toBe("Pause");
+    expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
   });
 
   it("shows Play when the queue truly ends", async () => {
@@ -319,7 +325,7 @@ describe("playback bar button", () => {
     endTrack();
     await session.refreshPlaybackStatus();
     await settle();
-    expect(playButton(root).props["aria-label"]).toBe("Play");
+    expect(playButton(root).props["aria-label"]).toBe(t("播放"));
     expect(session.state.isPlaybackStatusSettled.value).toBe(true);
   });
 
@@ -334,7 +340,7 @@ describe("playback bar button", () => {
     await settle();
     expect(session.state.isPlaybackCommandPending.value).toBe(false);
     expect(session.state.currentTrack.value).toBeNull();
-    expect(playButton(root).props["aria-label"]).toBe("Play");
+    expect(playButton(root).props["aria-label"]).toBe(t("播放"));
     expect(playButton(root).props.disabled).toBe(true);
     expect(isDimmed(playButton(root))).toBe(true);
     expect(notifications.items.value).toHaveLength(1);
@@ -355,9 +361,26 @@ describe("playback bar button", () => {
     const root = mountBar(session);
     await session.togglePlayback(async () => true);
     await settle();
-    expect(playButton(root).props["aria-label"]).toBe("Play");
+    expect(playButton(root).props["aria-label"]).toBe(t("播放"));
     await session.togglePlayback(async () => true);
     await settle();
-    expect(playButton(root).props["aria-label"]).toBe("Pause");
+    expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
   });
+});
+
+it("updates playback aria labels and named progress values when the language changes", async () => {
+  const { session } = setupPlayback();
+  await startQueue(session);
+  const root = mountBar(session);
+  expect(playButton(root).props["aria-label"]).toBe("暂停");
+  const progress = findNode(root, (node) => node.props["aria-label"] === "播放进度")!;
+  expect(progress.props["aria-valuetext"]).toBe("0:00 / 0:00");
+  setLocale("en");
+  await Vue.nextTick();
+  expect(playButton(root).props["aria-label"]).toBe("Pause");
+  expect(progress.props["aria-label"]).toBe("Playback progress");
+  expect(progress.props["aria-valuetext"]).toBe("0:00 of 0:00");
+  setLocale("zh-CN");
+  await Vue.nextTick();
+  expect(progress.props["aria-label"]).toBe("播放进度");
 });

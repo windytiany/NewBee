@@ -26,7 +26,7 @@
       <button
         type="button"
         autofocus
-        aria-label="关闭说明"
+        :aria-label="t('关闭说明')"
         class="focus-visible:outline-app-accent text-app-muted inline-flex size-7 shrink-0 items-center justify-center rounded-full hover:bg-white/10 hover:text-white focus-visible:outline-2"
         @click="close"
       >
@@ -40,6 +40,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { Info, X } from "@lucide/vue";
 import { nextTick, ref, useId } from "vue";
 

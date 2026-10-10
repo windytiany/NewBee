@@ -7,7 +7,7 @@
     class="bg-app-interactive fixed z-100 w-64 rounded-md p-1 shadow-xl ring-1 ring-white/10"
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
     role="menu"
-    aria-label="专辑操作"
+    :aria-label="t('专辑操作')"
     @pointerdown.stop
     @pointerleave="isPlaylistMenuOpen = false"
   >
@@ -19,7 +19,7 @@
       type="button"
       @click.stop="runAction('next')"
     >
-      添加为下一首
+      {{ t("添加为下一首") }}
     </button>
     <button
       class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
@@ -28,7 +28,7 @@
       type="button"
       @click.stop="runAction('end')"
     >
-      添加到队尾
+      {{ t("添加到队尾") }}
     </button>
     <button
       ref="playlistTriggerElement"
@@ -43,7 +43,7 @@
       @mouseenter="openPlaylistMenu()"
       @click.stop="openPlaylistMenu(true)"
     >
-      添加到播放列表<ChevronRight aria-hidden="true" class="size-4" />
+      {{ t("添加到播放列表") }}<ChevronRight aria-hidden="true" class="size-4" />
     </button>
     <div
       v-if="isPlaylistMenuOpen"
@@ -52,7 +52,7 @@
       class="bg-app-interactive fixed z-101 max-h-72 w-56 overflow-y-auto rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${playlistPosition.x}px`, top: `${playlistPosition.y}px` }"
       role="menu"
-      aria-label="选择目标歌单"
+      :aria-label="t('选择目标歌单')"
     >
       <button
         ref="createPlaylistMenuItemElement"
@@ -62,14 +62,14 @@
         type="button"
         @click.stop="createPlaylistWithAlbum"
       >
-        新建播放列表…
+        {{ t("新建播放列表…") }}
       </button>
       <div class="my-1 border-t border-white/10" role="separator"></div>
       <p
         v-if="!playlistsLoading && !playlistsError && playlists.length === 0"
         class="text-app-muted px-2 py-2 text-sm"
       >
-        无歌单
+        {{ t("无歌单") }}
       </p>
       <button
         v-for="playlist in playlists"
@@ -95,12 +95,13 @@
       type="button"
       @click.stop="runAction('delete')"
     >
-      从库中删除
+      {{ t("从库中删除") }}
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { nextTick, ref, watch } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";

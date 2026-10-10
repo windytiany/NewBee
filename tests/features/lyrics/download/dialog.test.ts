@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
+import { setLocale } from "@/shared/i18n/locale";
 import { createLyricsConfirmation } from "@/features/lyrics/download/confirmation";
 import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
 import {
@@ -13,6 +14,7 @@ import type { HostNode } from "../../../support/hostRenderer";
 const source = await Bun.file("src/features/lyrics/components/LyricsDownloadDialog.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
+  setLocale("zh-CN");
   for (const app of apps.splice(0)) app.unmount();
 });
 interface DialogNode extends HostNode {
@@ -67,6 +69,25 @@ async function mount() {
   await Vue.nextTick();
   return { root, confirmation, started };
 }
+it("reacts to locale changes in counts, actions and accessible labels without translating track data", async () => {
+  const { root, confirmation } = await mount();
+  expect(getTextContent(root)).toContain("已选 1 / 3 首");
+  setLocale("en");
+  await Vue.nextTick();
+  expect(getTextContent(root)).toContain("Selected 1 / 3 tracks");
+  expect(getTextContent(root)).toContain("Start update");
+  expect(getTextContent(root)).toContain("Marked as having no lyrics");
+  expect(
+    findNode(root, (entry) => entry.props["aria-label"] === "Select Missing")?.props.checked,
+  ).toBe(true);
+  confirmation.selectAll(true);
+  await Vue.nextTick();
+  expect(getTextContent(root)).toContain("Selected 3 / 3 tracks");
+  expect(getTextContent(root)).toContain("Instrumental");
+  setLocale("zh-CN");
+  await Vue.nextTick();
+  expect(getTextContent(root)).toContain("已选 3 / 3 首");
+});
 it("opens a modal with database states without explanatory text", async () => {
   const { root, started } = await mount();
   expect((findNode(root, (entry) => entry.type === "dialog") as DialogNode).open).toBe(true);

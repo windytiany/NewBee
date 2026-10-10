@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { ref } from "vue";
@@ -30,15 +31,18 @@ export function useLibraryScan() {
       notify({
         type: result.failed > 0 ? "warning" : "success",
         message: result.failed
-          ? `扫描完成，${result.failed} 首失败（详情见日志）`
-          : `扫描完成：新增 ${result.added} 首，更新 ${result.updated} 首`,
+          ? t("扫描完成，{count} 首失败（详情见日志）", { count: result.failed })
+          : t("扫描完成：新增 {added} 首，更新 {updated} 首", {
+              added: result.added,
+              updated: result.updated,
+            }),
         key: "library-scan",
       });
       reportLibraryImport(result);
     } catch (error) {
       scanError.value = error instanceof Error ? error.message : String(error);
       logger.error("library", "scan_failed", error, { operationId: id });
-      notify({ type: "error", message: "扫描失败，请查看日志", key: "library-scan" });
+      notify({ type: "error", message: t("扫描失败，请查看日志"), key: "library-scan" });
     } finally {
       isScanning.value = false;
     }

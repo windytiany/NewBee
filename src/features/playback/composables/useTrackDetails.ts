@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
@@ -42,7 +43,7 @@ export function useTrackDetails(
     logger.warn("playback", "details_read_failed", reason, { trackId });
     const key = `playback-details:${trackId}`;
     if (!notifications.items.value.some((item) => item.key === key)) {
-      notify({ type: "warning", message, key });
+      notify({ type: "warning", message: t(message), key });
     }
   }
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
+import { setLocale } from "@/shared/i18n/locale";
 import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
 
 import {
@@ -28,6 +29,7 @@ const dialogSource = await Bun.file(
 ).text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
+  setLocale("zh-CN");
   for (const app of apps.splice(0)) app.unmount();
 });
 const settle = async () => {
@@ -108,6 +110,65 @@ function mountDialog(editor: ReturnType<typeof createReleaseEditor>) {
 }
 
 describe("album tag views", () => {
+  it("translates pending field names and dynamic confirmation counts reactively", async () => {
+    const editor = fixture();
+    const root = mountDialog(editor);
+    await editor.open(album);
+    editor.selectRelease(release().summary.id);
+    await settle();
+    editor.setValue(0, "title", "新标题");
+    editor.setSharedValue("albumArtist", "新艺术家");
+    editor.prepareSave();
+    await settle();
+    expect(getTextContent(root)).toContain("2 首");
+    expect(getTextContent(root)).toContain("标题");
+    setLocale("en");
+    await settle();
+    expect(getTextContent(root)).toContain("2 tracks");
+    expect(getTextContent(root)).toContain("Title");
+    expect(getTextContent(root)).toContain("Album artist");
+    expect(getTextContent(root)).toContain("Confirm write");
+    expect(
+      findNode(root, (entry) => entry.props["aria-label"] === "Confirm tag overwrite"),
+    ).not.toBeNull();
+    setLocale("zh-CN");
+    await settle();
+    expect(getTextContent(root)).toContain("标题");
+    expect(getTextContent(root)).toContain("确认写入");
+  });
+  it("updates cover empty states and field accessibility labels while keeping release data intact", async () => {
+    const editor = fixture();
+    await editor.open(album);
+    editor.selectRelease(release().summary.id);
+    await settle();
+    const component = evaluateSource<{ default: Vue.Component }>(
+      compileSfc(fieldsSource, "TagFields.vue"),
+      { vue: Vue, "@/features/tags/draft": metadata },
+    ).default;
+    const root = createHostNode("root");
+    const app = createHostRenderer(createHostNode).createApp(component, {
+      editor,
+      disabled: false,
+    });
+    app.mount(root);
+    apps.push(app);
+    expect(getTextContent(root)).toContain("暂无封面");
+    const input = node(root, (entry) => entry.props.id === "album-tag-album");
+    const originalValue = input.props.value;
+    setLocale("en");
+    await settle();
+    expect(getTextContent(root)).toContain("No cover");
+    expect(
+      findNode(root, (entry) => entry.props["aria-label"] === "Overwrite Album"),
+    ).not.toBeNull();
+    expect(String(input.props.title)).toStartWith("Original: ");
+    expect(input.props.value).toBe(originalValue);
+    setLocale("zh-CN");
+    await settle();
+    expect(getTextContent(root)).toContain("暂无封面");
+    expect(findNode(root, (entry) => entry.props["aria-label"] === "覆盖专辑")).not.toBeNull();
+    expect(input.props.value).toBe(originalValue);
+  });
   it("hides result details and retry controls while retaining successful save results", async () => {
     let refreshes = 0;
     const editor = fixture(async () => {

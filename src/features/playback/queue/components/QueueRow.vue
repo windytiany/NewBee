@@ -44,8 +44,8 @@
         v-if="props.isSkipped"
         role="img"
         class="text-app-muted shrink-0"
-        title="自动播放时跳过，双击仍可播放"
-        aria-label="自动播放时跳过，双击仍可播放"
+        :title="t('自动播放时跳过，双击仍可播放')"
+        :aria-label="t('自动播放时跳过，双击仍可播放')"
       >
         <SkipForward aria-hidden="true" class="size-3.5" />
       </span>
@@ -55,6 +55,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { AudioLines, Disc3, SkipForward } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";

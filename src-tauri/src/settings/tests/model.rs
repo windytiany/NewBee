@@ -317,3 +317,53 @@ fn reduced_motion_persists_and_loads_from_disk() {
     }
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn locale_defaults_and_round_trips() {
+    assert_eq!(Settings::default().locale, Locale::ZhCn);
+    assert_eq!(
+        serde_json::from_str::<Settings>("{}").unwrap().locale,
+        Locale::ZhCn
+    );
+    for (locale, value) in [(Locale::ZhCn, "zh-CN"), (Locale::En, "en")] {
+        let settings = Settings {
+            locale,
+            ..Settings::default()
+        };
+        let data = serde_json::to_value(&settings).unwrap();
+        assert_eq!(data["locale"], value);
+        assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+    }
+    for value in [
+        serde_json::json!("invalid"),
+        serde_json::json!("zh"),
+        serde_json::json!(null),
+        serde_json::json!(1),
+    ] {
+        assert!(serde_json::from_value::<Settings>(serde_json::json!({"locale": value})).is_err());
+    }
+}
+
+#[test]
+fn locale_persists_and_loads_from_disk() {
+    let path = std::env::temp_dir().join(format!("newbee-locale-{}.json", std::process::id()));
+    let state = SettingsState::load(path.clone()).unwrap();
+    let app = tauri::test::mock_builder()
+        .manage(state)
+        .build(tauri::generate_context!())
+        .unwrap();
+    for locale in [Locale::En, Locale::ZhCn] {
+        let settings = Settings {
+            locale,
+            ..Settings::default()
+        };
+        tauri::async_runtime::block_on(save_settings(app.handle().clone(), settings.clone()))
+            .unwrap();
+        assert_eq!(app.state::<SettingsState>().get().unwrap(), settings);
+        assert_eq!(
+            SettingsState::load(path.clone()).unwrap().get().unwrap(),
+            settings
+        );
+    }
+    std::fs::remove_file(path).unwrap();
+}

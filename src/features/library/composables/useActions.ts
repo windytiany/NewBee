@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { ref } from "vue";
 import type { Ref } from "vue";
@@ -216,8 +217,11 @@ export function useLibraryActions(
 
     trackActionMessageType.value = failures.length ? "warning" : "success";
     trackActionMessage.value = failures.length
-      ? `已添加 ${successfulTrackIds.length} 首，${failures.length} 首失败（详情见日志）`
-      : `已添加 ${successfulTrackIds.length} 首到歌单`;
+      ? t("已添加 {count} 首，{failed} 首失败（详情见日志）", {
+          count: successfulTrackIds.length,
+          failed: failures.length,
+        })
+      : t("已添加 {count} 首到歌单", { count: successfulTrackIds.length });
     return { successfulTrackIds, failures };
   }
 
@@ -400,7 +404,7 @@ export function useLibraryActions(
         : "";
       trackActionMessageType.value = "success";
       trackActionMessage.value = failures.length
-        ? `已从曲库删除 ${deletedTrackIds.length} 首曲目。`
+        ? t("已从曲库删除 {count} 首曲目。", { count: deletedTrackIds.length })
         : "";
       return true;
     });

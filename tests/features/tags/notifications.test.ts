@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { notifications } from "@/shared/notifications/center";
+import { setLocale } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { createMetadataSave } from "@/features/tags/save";
 import { createTagEditor } from "@/features/tags/manual/useEditor";
@@ -11,7 +12,10 @@ import { album, local, release } from "./releases/fixtures";
 const settle = async () => {
   for (let index = 0; index < 8; index++) await Promise.resolve();
 };
-afterEach(() => notifications.clear());
+afterEach(() => {
+  setLocale("zh-CN");
+  notifications.clear();
+});
 
 function result(trackId: number, databaseUpdated = true): TagSaveResult {
   return {
@@ -37,6 +41,30 @@ function releaseEditor(overrides: Partial<ReleaseEditorOptions> = {}) {
 }
 
 describe("tag business notifications", () => {
+  it("uses the current locale for save summaries, counts and refresh errors at operation time", async () => {
+    const save = createMetadataSave({
+      notifyResult: true,
+      editFiles: (_ids, execute) => execute(),
+      synchronize: async () => {
+        throw new Error("refresh failed");
+      },
+    });
+    setLocale("en");
+    const saved = await save.run({
+      targets: [1, 2].map((trackId) => ({ trackId, path: `/music/${trackId}.flac` })),
+      writeTrackIds: [1, 2],
+      execute: async () => [result(1), result(2, false)],
+    });
+    expect(notifications.items.value[0]?.message).toBe(
+      "Tags saved: 1 succeeded, 1 failed. Metadata saved, but the interface could not be refreshed.",
+    );
+    expect(save.state.synchronizationError).toBe(
+      "Metadata saved, but the interface could not be refreshed: refresh failed",
+    );
+    expect(saved[0]?.databaseUpdated).toBe(true);
+    expect(saved[1]?.databaseUpdated).toBe(false);
+    expect(saved[1]?.error).toBe("database failed for /music/private.flac");
+  });
   for (const outcome of ["success", "failure", "interrupted"] as const) {
     it(`notifies exactly one summary for ${outcome}, retaining results and logging details`, async () => {
       notifications.clear();

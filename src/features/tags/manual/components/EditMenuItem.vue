@@ -6,11 +6,12 @@
     :disabled="props.disabled || editor.state.open"
     @click.stop="edit"
   >
-    编辑
+    {{ t("编辑") }}
   </button>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { useTagEditor } from "@/features/tags/manual/useEditor";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 

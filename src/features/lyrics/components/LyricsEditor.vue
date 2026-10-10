@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import type { TrackDetails } from "@/features/library/types";
 import LyricsSearch from "@/features/lyrics/components/LyricsSearch.vue";
 
@@ -24,7 +25,7 @@ function edit(event: InstanceType<typeof globalThis.Event>) {
   <textarea
     :id="inputId"
     :form="form"
-    aria-label="内嵌歌词"
+    :aria-label="t('内嵌歌词')"
     :value="props.modelValue"
     :readonly="!writable"
     :disabled="disabled"

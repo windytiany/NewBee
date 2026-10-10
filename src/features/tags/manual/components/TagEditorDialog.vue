@@ -8,12 +8,14 @@
   >
     <header class="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
       <h2 id="metadata-editor-title" class="text-lg font-semibold">
-        {{ state.mode === "album" ? "编辑专辑" : "编辑曲目" }}
+        {{ state.mode === "album" ? t("编辑专辑") : t("编辑曲目") }}
       </h2>
-      <span v-if="multiple" class="text-app-muted text-sm">{{ state.tracks.length }} 首曲目</span>
+      <span v-if="multiple" class="text-app-muted text-sm">{{
+        t("{count} 首曲目", { count: state.tracks.length })
+      }}</span>
     </header>
 
-    <div class="flex border-b border-white/10 px-5" role="tablist" aria-label="元数据编辑">
+    <div class="flex border-b border-white/10 px-5" role="tablist" :aria-label="t('元数据编辑')">
       <button
         v-if="singleTrack"
         id="metadata-tab-properties"
@@ -32,7 +34,7 @@
         @click="activeTab = 'properties'"
         @keydown="onTabKeydown"
       >
-        属性
+        {{ t("属性") }}
       </button>
       <button
         id="metadata-tab-tags"
@@ -51,7 +53,7 @@
         @click="activeTab = 'tags'"
         @keydown="onTabKeydown"
       >
-        标签
+        {{ t("标签") }}
       </button>
       <button
         id="metadata-tab-additional"
@@ -70,7 +72,7 @@
         @click="activeTab = 'additional'"
         @keydown="onTabKeydown"
       >
-        更多标签
+        {{ t("更多标签") }}
       </button>
       <button
         id="metadata-tab-lyrics"
@@ -89,12 +91,12 @@
         @click="activeTab = 'lyrics'"
         @keydown="onTabKeydown"
       >
-        歌词
+        {{ t("歌词") }}
       </button>
     </div>
 
     <div class="space-y-4 px-5 py-5">
-      <p v-if="state.loading" role="status" class="text-app-muted text-sm">加载中…</p>
+      <p v-if="state.loading" role="status" class="text-app-muted text-sm">{{ t("加载中…") }}</p>
 
       <section
         v-if="singleTrack"
@@ -150,15 +152,15 @@
                   "
                 >
                   <label :for="`metadata-${field.key}`" class="text-sm">{{
-                    index === 1 && state.mode !== "album" ? "共" : field.label
+                    index === 1 && state.mode !== "album" ? t("共") : t(field.label)
                   }}</label>
                   <input
                     :id="`metadata-${field.key}`"
-                    :aria-label="field.label"
+                    :aria-label="t(field.label)"
                     :value="field.value"
                     :readonly="!field.writable"
                     :disabled="state.saving || state.confirmDiscard"
-                    :placeholder="field.mixed ? '多个值' : ''"
+                    :placeholder="field.mixed ? t('多个值') : ''"
                     :inputmode="field.type === 'number' ? 'numeric' : 'text'"
                     class="focus-visible:outline-app-accent w-full rounded border border-white/15 bg-black/20 px-3 py-2 text-sm read-only:text-white/50 focus-visible:outline-2 disabled:opacity-50"
                     type="text"
@@ -179,7 +181,7 @@
         aria-labelledby="metadata-tab-lyrics"
       >
         <div v-if="multiple" class="mb-4 space-y-2 text-sm">
-          <label for="metadata-lyrics-action" class="block">无歌词标记</label>
+          <label for="metadata-lyrics-action" class="block">{{ t("无歌词标记") }}</label>
           <select
             id="metadata-lyrics-action"
             :value="state.lyricsAction"
@@ -187,9 +189,9 @@
             class="bg-app-surface focus-visible:outline-app-accent w-full rounded border border-white/15 px-3 py-2 focus-visible:outline-2 disabled:opacity-50"
             @change="changeLyricsAction"
           >
-            <option value="keep">保持原样</option>
-            <option value="mark">全部标记为“无歌词”</option>
-            <option value="unmark">全部取消标记</option>
+            <option value="keep">{{ t("保持原样") }}</option>
+            <option value="mark">{{ t("全部标记为“无歌词”") }}</option>
+            <option value="unmark">{{ t("全部取消标记") }}</option>
           </select>
         </div>
         <LyricsEditor
@@ -215,14 +217,20 @@
                 class="accent-app-accent size-3.5"
                 @change="toggleLyricsMark"
               />
-              标记为无歌词
+              {{ t("标记为无歌词") }}
             </label>
           </template>
         </LyricsEditor>
       </section>
 
       <div v-if="state.saving" role="status" class="space-y-2 text-sm" aria-live="polite">
-        <p>{{ multiple ? `正在保存 ${state.completed} / ${state.total}` : "保存中…" }}</p>
+        <p>
+          {{
+            multiple
+              ? t("正在保存 {count} / {total}", { count: state.completed, total: state.total })
+              : t("保存中…")
+          }}
+        </p>
         <progress :value="state.completed" :max="state.total" class="w-full"></progress>
       </div>
     </div>
@@ -234,7 +242,7 @@
         :disabled="state.saving"
         @click="editor.requestClose()"
       >
-        取消
+        {{ t("取消") }}
       </button>
       <button
         type="submit"
@@ -242,7 +250,7 @@
         class="focus-visible:outline-app-accent bg-app-accent rounded px-5 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
         :disabled="!canSave"
       >
-        保存
+        {{ t("保存") }}
       </button>
     </footer>
   </dialog>
@@ -256,8 +264,10 @@
     @cancel.prevent="state.confirmDiscard = false"
     @mousedown.stop
   >
-    <h2 id="metadata-discard-title" class="text-lg font-semibold">丢弃修改？</h2>
-    <p id="metadata-discard-description" class="text-app-muted text-sm">未保存的修改将丢失。</p>
+    <h2 id="metadata-discard-title" class="text-lg font-semibold">{{ t("丢弃修改？") }}</h2>
+    <p id="metadata-discard-description" class="text-app-muted text-sm">
+      {{ t("未保存的修改将丢失。") }}
+    </p>
     <div class="flex justify-end gap-2">
       <button
         type="button"
@@ -265,20 +275,21 @@
         class="focus-visible:outline-app-accent rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2"
         @click="state.confirmDiscard = false"
       >
-        取消
+        {{ t("取消") }}
       </button>
       <button
         type="button"
         class="focus-visible:outline-app-accent rounded bg-red-500 px-4 py-2 text-sm focus-visible:outline-2"
         @click="editor.close()"
       >
-        丢弃
+        {{ t("丢弃") }}
       </button>
     </div>
   </dialog>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { useTagEditor } from "@/features/tags/manual/useEditor";
 import type { DraftField, LyricsMarkAction, TagField } from "@/features/tags/types";
@@ -314,12 +325,12 @@ const properties = computed(() => {
   const track = singleTrack.value;
   if (!track) return [];
   return [
-    { label: "位置", value: formatPathForDisplay(track.path) },
-    { label: "时长", value: formatTrackDuration(track.durationMs) ?? "-" },
-    { label: "编码", value: track.codec ?? "-" },
-    { label: "采样率", value: track.sampleRateHz === null ? "-" : `${track.sampleRateHz} Hz` },
-    { label: "码率", value: track.bitrateKbps === null ? "-" : `${track.bitrateKbps} kbps` },
-    { label: "声道", value: track.channels ?? "-" },
+    { label: t("位置"), value: formatPathForDisplay(track.path) },
+    { label: t("时长"), value: formatTrackDuration(track.durationMs) ?? "-" },
+    { label: t("编码"), value: track.codec ?? "-" },
+    { label: t("采样率"), value: track.sampleRateHz === null ? "-" : `${track.sampleRateHz} Hz` },
+    { label: t("码率"), value: track.bitrateKbps === null ? "-" : `${track.bitrateKbps} kbps` },
+    { label: t("声道"), value: track.channels ?? "-" },
   ];
 });
 const numberPairs = new Map<TagField, TagField>([

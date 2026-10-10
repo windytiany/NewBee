@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
@@ -41,7 +42,7 @@ export function createLyricsConfirmation(options: LyricsConfirmationOptions) {
     try {
       const ids = [...new Set(await load())];
       if (!state.open || version !== generation) return;
-      if (!ids.length) throw new Error("没有可下载歌词的曲目。");
+      if (!ids.length) throw new Error(t("没有可下载歌词的曲目。"));
       const targets = await options.targets(ids);
       if (!state.open || version !== generation) return;
       if (
@@ -49,7 +50,7 @@ export function createLyricsConfirmation(options: LyricsConfirmationOptions) {
         new Set(targets.map(({ id }) => id)).size !== ids.length ||
         targets.some(({ id }) => !ids.includes(id))
       ) {
-        throw new Error("返回的曲目与下载目标不匹配。");
+        throw new Error(t("返回的曲目与下载目标不匹配。"));
       }
       state.targets = targets;
       state.selected = targets.flatMap(({ id, hasLyrics, noLyrics }) =>
@@ -59,7 +60,7 @@ export function createLyricsConfirmation(options: LyricsConfirmationOptions) {
       if (state.open && version === generation) {
         state.error = error instanceof Error ? error.message : String(error);
         logger.warn("lyrics", "download_targets_failed", error);
-        notify({ type: "warning", message: "读取歌词下载目标失败，请查看日志" });
+        notify({ type: "warning", message: t("读取歌词下载目标失败，请查看日志") });
       }
     } finally {
       if (version === generation) state.loading = false;

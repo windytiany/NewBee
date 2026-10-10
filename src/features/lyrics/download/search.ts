@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { reactive } from "vue";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
@@ -86,7 +87,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     state.nextOffset = null;
     try {
       if (!query) {
-        report("请输入搜索关键词。", "search_query_missing");
+        report(t("请输入搜索关键词。"), "search_query_missing");
         return;
       }
       const result = await options.search(query, provider, offset);
@@ -102,10 +103,10 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       state.nextOffset = result.nextOffset;
       searchedQuery = query;
       searchedProvider = provider;
-      if (!state.candidates.length) report("未找到候选曲目。", "search_empty");
+      if (!state.candidates.length) report(t("未找到候选曲目。"), "search_empty");
     } catch (error) {
       if (generation === searchGeneration)
-        report("歌词搜索失败，请查看日志", "search_failed", error);
+        report(t("歌词搜索失败，请查看日志"), "search_failed", error);
     } finally {
       if (generation === searchGeneration) state.searching = false;
     }
@@ -134,7 +135,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       }
     } catch (error) {
       if (generation === previewGeneration)
-        report("歌词预览失败，请查看日志", "preview_failed", error);
+        report(t("歌词预览失败，请查看日志"), "preview_failed", error);
     } finally {
       if (generation === previewGeneration) state.previewing = false;
     }
@@ -153,7 +154,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       }
     } catch (error) {
       if (generation === automaticGeneration)
-        report("自动获取歌词失败，请查看日志", "automatic_failed", error);
+        report(t("自动获取歌词失败，请查看日志"), "automatic_failed", error);
     } finally {
       if (generation === automaticGeneration) state.automatic = false;
     }

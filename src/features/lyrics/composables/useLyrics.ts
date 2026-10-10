@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { createLyricsApi } from "@/features/lyrics/api";
 import { computed, onScopeDispose, readonly, ref, watch } from "vue";
@@ -129,7 +130,7 @@ export function useLyrics(options: LyricsOptions) {
             request.notified = true;
             notify({
               type: "warning",
-              message: "读取歌词失败，请查看日志",
+              message: t("读取歌词失败，请查看日志"),
               key: `lyrics-read:${trackId}`,
             });
           }

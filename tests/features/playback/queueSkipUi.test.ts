@@ -1,4 +1,5 @@
 import { afterEach, expect, it } from "bun:test";
+import { setLocale } from "@/shared/i18n/locale";
 import * as Vue from "vue";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
 
@@ -10,6 +11,7 @@ const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document")
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();
+  setLocale("zh-CN");
   if (originalDocument) Object.defineProperty(globalThis, "document", originalDocument);
   else Reflect.deleteProperty(globalThis, "document");
 });
@@ -17,7 +19,7 @@ afterEach(() => {
 it("maps multi-selected queue occurrences to global track IDs and synchronizes skip indicators", async () => {
   Object.defineProperty(globalThis, "document", {
     configurable: true,
-    value: { addEventListener() {}, removeEventListener() {} },
+    value: { documentElement: { lang: "zh-CN" }, addEventListener() {}, removeEventListener() {} },
   });
   const row = Vue.defineComponent({
     props: ["trackId", "rowKey", "isSkipped"],
@@ -78,6 +80,14 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
   );
   app.mount(root);
   apps.push(app);
+  const heading = findNode(root, (node) => node.type === "section")!;
+  expect(heading.props["aria-label"]).toBe("当前曲目列表");
+  setLocale("en");
+  await Vue.nextTick();
+  expect(heading.props["aria-label"]).toBe("Current track list");
+  setLocale("zh-CN");
+  await Vue.nextTick();
+  expect(heading.props["aria-label"]).toBe("当前曲目列表");
   const first = findNode(root, (node) => node.props["data-row-key"] === "0")!;
   expect(first.props["data-skipped"]).toBe(true);
   expect(findNode(root, (node) => node.props["data-row-key"] === "1")?.props["data-skipped"]).toBe(

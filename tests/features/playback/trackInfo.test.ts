@@ -1,3 +1,4 @@
+import { setLocale } from "@/shared/i18n/locale";
 import { afterEach, describe, expect, it } from "bun:test";
 import { effectScope, nextTick, ref } from "vue";
 import type { EffectScope, MaybeRefOrGetter } from "vue";
@@ -71,6 +72,7 @@ async function settleRequests() {
 afterEach(() => {
   for (const scope of scopes.splice(0)) scope.stop();
   notifications.clear();
+  setLocale("zh-CN");
 });
 
 describe("useTrackDetails", () => {
@@ -183,4 +185,15 @@ describe("useTrackDetails", () => {
     await settleRequests();
     expect(trackInfo.currentTrackDetails.value).toBeNull();
   });
+});
+
+it("translates detail failure notifications at request time without exposing diagnostics", async () => {
+  setLocale("en");
+  mountTrackInfo(
+    91,
+    createInvoker(() => Promise.reject(new Error("private database details"))),
+  );
+  await settleRequests();
+  expect(notifications.items.value[0]?.message).toBe("Could not read track details");
+  expect(notifications.items.value[0]?.message).not.toContain("private database details");
 });

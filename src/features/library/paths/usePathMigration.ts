@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { logger } from "@/shared/logging/logger";
@@ -16,7 +17,7 @@ export function usePathMigration() {
     if (!source || !target || source === target) {
       notify({
         type: "warning",
-        message: "请输入不同且非空的原路径和新路径",
+        message: t("请输入不同且非空的原路径和新路径"),
         key: "library-path-migration",
       });
       return;
@@ -28,14 +29,23 @@ export function usePathMigration() {
         newPath: target,
       });
       logger.info("library", "paths_migrated", { count });
-      if (count > 0) notify({ type: "success", message: `已更新 ${count} 首曲目的路径` });
+      if (count > 0)
+        notify({ type: "success", message: t("已更新 {count} 首曲目的路径", { count }) });
       else {
-        notify({ type: "warning", message: "没有匹配原路径的曲目", key: "library-path-migration" });
+        notify({
+          type: "warning",
+          message: t("没有匹配原路径的曲目"),
+          key: "library-path-migration",
+        });
       }
       return count > 0;
     } catch (reason) {
       logger.error("library", "path_migration_failed", reason);
-      notify({ type: "error", message: "路径迁移失败，请查看日志", key: "library-path-migration" });
+      notify({
+        type: "error",
+        message: t("路径迁移失败，请查看日志"),
+        key: "library-path-migration",
+      });
     } finally {
       isMigrating.value = false;
     }

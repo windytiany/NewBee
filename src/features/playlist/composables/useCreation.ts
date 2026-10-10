@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { ref } from "vue";
@@ -30,8 +31,10 @@ export function usePlaylistCreation(api: ReturnType<typeof createPlaylistApi>) {
         type: playlistId.value === null ? "error" : "warning",
         message:
           playlistId.value === null
-            ? "创建歌单失败，请查看日志"
-            : `歌单已创建，已添加 ${addedCount.value} 首，剩余歌曲添加失败，请查看日志`,
+            ? t("创建歌单失败，请查看日志")
+            : t("歌单已创建，已添加 {count} 首，剩余歌曲添加失败，请查看日志", {
+                count: addedCount.value,
+              }),
         key: "playlist-create",
       });
       throw cause;

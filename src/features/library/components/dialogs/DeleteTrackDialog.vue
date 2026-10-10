@@ -10,13 +10,15 @@
   >
     <section>
       <header class="border-b border-white/10 px-5 py-4">
-        <h2 id="delete-track-dialog-title" class="text-lg font-semibold">从曲库中删除曲目</h2>
+        <h2 id="delete-track-dialog-title" class="text-lg font-semibold">
+          {{ t("从曲库中删除曲目") }}
+        </h2>
       </header>
 
       <div class="px-5 py-4">
-        <p class="font-medium">{{ props.track.title ?? "未知曲目" }}</p>
+        <p class="font-medium">{{ props.track.title ?? t("未知曲目") }}</p>
         <p id="delete-track-dialog-description" class="text-app-muted mt-3 text-sm leading-6">
-          不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。
+          {{ t("不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。") }}
         </p>
       </div>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -26,7 +28,7 @@
           type="button"
           @click="cancelDialog"
         >
-          取消
+          {{ t("取消") }}
         </button>
         <button
           class="focus-visible:outline-app-accent rounded-full bg-red-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -34,7 +36,7 @@
           type="button"
           @click="confirmDeletion"
         >
-          {{ props.isDeleting ? "正在删除…" : "确认删除" }}
+          {{ props.isDeleting ? t("正在删除…") : t("确认删除") }}
         </button>
       </footer>
     </section>
@@ -42,6 +44,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { ref } from "vue";
 import type { TrackSummary } from "@/features/library/types";
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { useReleaseEditor } from "@/features/tags/releases/useEditor";
 import { TAG_FIELDS } from "@/features/tags/draft";
@@ -17,8 +18,8 @@ const pendingFields = computed(() => {
     state.patches.flatMap((patch) => patch.changes.map((change) => change.field)),
   );
   return [
-    ...TAG_FIELDS.flatMap((field) => (keys.has(field.key) ? [field.label] : [])),
-    ...(state.patches.some((patch) => patch.writeCover) ? ["正面封面"] : []),
+    ...TAG_FIELDS.flatMap((field) => (keys.has(field.key) ? [t(field.label)] : [])),
+    ...(state.patches.some((patch) => patch.writeCover) ? [t("正面封面")] : []),
   ];
 });
 watch(
@@ -44,13 +45,15 @@ watch(
     @mousedown.stop
   >
     <header class="flex h-[36px] items-center justify-between gap-2 border-b border-white/10 px-2">
-      <h2 id="album-tags-title" class="text-sm font-semibold">根据专辑更新标签</h2>
+      <h2 id="album-tags-title" class="text-sm font-semibold">{{ t("根据专辑更新标签") }}</h2>
     </header>
     <div
       v-if="state.open"
       class="flex max-h-[calc(100dvh_-_52px)] flex-col gap-[8px] overflow-y-auto p-[8px]"
     >
-      <p v-if="state.loading" role="status" class="text-app-muted text-sm">读取本地曲目中…</p>
+      <p v-if="state.loading" role="status" class="text-app-muted text-sm">
+        {{ t("读取本地曲目中…") }}
+      </p>
       <ReleaseSearch :editor="editor" :disabled="disabled" class="shrink-0" />
       <div
         class="grid shrink-0 grid-cols-[minmax(0,1fr)_80px] gap-[8px] border-y border-white/10 py-[8px]"
@@ -73,7 +76,7 @@ watch(
             class="bg-app-accent rounded px-3 py-1 text-xs font-semibold text-black disabled:opacity-50"
             @click="editor.prepareSave()"
           >
-            应用
+            {{ t("应用") }}
           </button>
           <button
             type="button"
@@ -81,21 +84,26 @@ watch(
             class="rounded border border-white/15 px-3 py-1 text-xs hover:bg-white/10 disabled:opacity-50"
             @click="editor.requestClose()"
           >
-            取消
+            {{ t("取消") }}
           </button>
         </div>
       </div>
       <div v-if="state.saving" role="status" aria-live="polite" class="shrink-0 text-xs">
-        <p>正在保存 {{ state.completed }} / {{ state.total }}</p>
+        <p>{{ t("正在保存 {count} / {total}", { count: state.completed, total: state.total }) }}</p>
         <progress :value="state.completed" :max="state.total" class="w-full"></progress>
       </div>
       <section
         v-if="state.confirmSave"
-        aria-label="确认覆盖标签"
+        :aria-label="t('确认覆盖标签')"
         class="flex shrink-0 items-center justify-between gap-2 rounded border border-amber-200/30 px-2 py-1 text-xs"
       >
         <p class="min-w-0 truncate">
-          {{ state.patches.length }} 首 · {{ pendingFields.join("、") }}
+          {{
+            t("{count} 首 · {fields}", {
+              count: state.patches.length,
+              fields: pendingFields.join(" / "),
+            })
+          }}
         </p>
         <div class="flex shrink-0 gap-2">
           <button
@@ -103,13 +111,13 @@ watch(
             class="rounded px-2 py-1 hover:bg-white/10"
             @click="state.confirmSave = false"
           >
-            返回核对</button
+            {{ t("返回核对") }}</button
           ><button
             type="button"
             class="bg-app-accent rounded px-2 py-1 font-semibold text-black"
             @click="editor.save()"
           >
-            确认写入
+            {{ t("确认写入") }}
           </button>
         </div>
       </section>
@@ -128,7 +136,7 @@ watch(
     @cancel.prevent="state.confirmDiscard = false"
     @mousedown.stop
   >
-    <h2 id="album-tags-discard-title" class="font-semibold">丢弃调整？</h2>
+    <h2 id="album-tags-discard-title" class="font-semibold">{{ t("丢弃调整？") }}</h2>
     <div class="flex justify-end gap-3">
       <button
         type="button"
@@ -136,9 +144,9 @@ watch(
         class="rounded px-3 py-2 hover:bg-white/10"
         @click="state.confirmDiscard = false"
       >
-        取消</button
+        {{ t("取消") }}</button
       ><button type="button" class="rounded bg-red-500 px-3 py-2" @click="editor.confirmDiscard()">
-        丢弃调整
+        {{ t("丢弃调整") }}
       </button>
     </div>
   </dialog>

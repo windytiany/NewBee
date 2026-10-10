@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { reactive } from "vue";
 import { notify } from "@/shared/notifications/center";
 import { logger, operationId } from "@/shared/logging/logger";
@@ -62,12 +63,12 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn("tags", "synchronization_failed", error, { operationId: id });
-      state.synchronizationError = `元数据已保存，但界面刷新失败：${message}`;
+      state.synchronizationError = t("元数据已保存，但界面刷新失败：{error}", { error: message });
     }
   }
 
   async function run(request: SaveRequest) {
-    if (state.saving) throw new Error("元数据保存尚未完成，请稍后重试。");
+    if (state.saving) throw new Error(t("元数据保存尚未完成，请稍后重试。"));
     const id = request.operationId ?? operationId("metadata-save");
     logger.info("tags", "save_started", { operationId: id, count: request.targets.length });
     const targets = new Map(request.targets.map((target) => [target.trackId, target]));
@@ -101,7 +102,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
           ...target,
           fileWritten: false,
           databaseUpdated: false,
-          error: state.error || "保存未返回结果，请重试或重新扫描。",
+          error: state.error || t("保存未返回结果，请重试或重新扫描。"),
         };
         logger.write(result.databaseUpdated ? "info" : "warn", "tags", "save_result", {
           operationId: id,
@@ -136,7 +137,12 @@ export function createMetadataSave(options: MetadataSaveOptions) {
             : state.synchronizationError
               ? "warning"
               : "success",
-          message: `标签保存完成：${succeeded} 首成功，${failed} 首失败。${state.synchronizationError ? "元数据已保存，但界面刷新失败。" : ""}`,
+          message: state.synchronizationError
+            ? t("标签保存完成：{count} 首成功，{failed} 首失败。元数据已保存，但界面刷新失败。", {
+                count: succeeded,
+                failed,
+              })
+            : t("标签保存完成：{count} 首成功，{failed} 首失败。", { count: succeeded, failed }),
         });
       state.saving = false;
     }

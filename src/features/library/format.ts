@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import type { TrackDetails } from "@/features/library/types";
 
 export function formatTrackDuration(durationMs: number | null): string | null {
@@ -31,9 +32,9 @@ function formatChannels(channels: number | null) {
     return null;
   }
 
-  if (channels === 1) return "单声道";
-  if (channels === 2) return "立体声";
-  return `${channels} 声道`;
+  if (channels === 1) return t("单声道");
+  if (channels === 2) return t("立体声");
+  return t("{count} 声道", { count: channels });
 }
 
 export function formatAudioSummary(details: TrackDetails) {
@@ -47,5 +48,5 @@ export function formatAudioSummary(details: TrackDetails) {
     formatTrackDuration(details.durationMs),
   ].filter((value): value is string => value !== null && value !== "");
 
-  return values.length > 0 ? values.join(", ") : "音频信息未知";
+  return values.length > 0 ? values.join(", ") : t("音频信息未知");
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
@@ -55,7 +56,7 @@ async function loadSettings() {
     if (!enabled.value)
       notify({
         type: "warning",
-        message: "请先在设置中启用歌词来源。",
+        message: t("请先在设置中启用歌词来源。"),
         key: "lyrics-provider-disabled",
       });
   } catch (error) {
@@ -63,7 +64,7 @@ async function loadSettings() {
       logger.warn("lyrics", "settings_failed", error);
       notify({
         type: "warning",
-        message: "读取歌词设置失败，请查看日志",
+        message: t("读取歌词设置失败，请查看日志"),
         key: "lyrics-settings-failed",
       });
     }
@@ -133,7 +134,7 @@ void loadSettings();
       class="focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
       @click="automatic"
     >
-      {{ state.automatic ? "正在获取…" : "自动获取" }}
+      {{ state.automatic ? t("正在获取…") : t("自动获取") }}
     </button>
     <button
       type="button"
@@ -141,7 +142,7 @@ void loadSettings();
       class="focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
       @click="openSearch"
     >
-      手动搜索
+      {{ t("手动搜索") }}
     </button>
   </div>
 
@@ -152,12 +153,12 @@ void loadSettings();
     @cancel.prevent="closeSearch"
     @mousedown.stop
   >
-    <h2 id="lyrics-search-title" class="mb-4 text-lg font-semibold">搜索歌词</h2>
+    <h2 id="lyrics-search-title" class="mb-4 text-lg font-semibold">{{ t("搜索歌词") }}</h2>
     <form class="mb-4 flex flex-wrap gap-2" @submit.prevent="search.search()">
       <input
         v-model="state.query"
-        aria-label="歌词搜索关键词"
-        placeholder="歌名、歌手或其他关键词"
+        :aria-label="t('歌词搜索关键词')"
+        :placeholder="t('歌名、歌手或其他关键词')"
         type="text"
         maxlength="1024"
         autofocus
@@ -165,26 +166,26 @@ void loadSettings();
       />
       <select
         v-model="state.provider"
-        aria-label="歌词来源"
+        :aria-label="t('歌词来源')"
         class="bg-app-interactive focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm focus-visible:outline-2"
       >
-        <option :value="null">所有已启用来源</option>
-        <option value="netease">网易云音乐</option>
+        <option :value="null">{{ t("所有已启用来源") }}</option>
+        <option value="netease">{{ t("网易云音乐") }}</option>
       </select>
       <button
         type="submit"
         :disabled="state.searching || props.disabled"
         class="focus-visible:outline-app-accent rounded border border-white/20 px-4 py-2 text-sm focus-visible:outline-2 disabled:opacity-50"
       >
-        {{ state.searching ? "搜索中…" : "搜索" }}
+        {{ state.searching ? t("搜索中…") : t("搜索") }}
       </button>
     </form>
     <div class="grid gap-4 md:grid-cols-2">
       <div class="max-h-96 overflow-y-auto rounded border border-white/10">
         <p v-if="!state.searching && !state.candidates.length" class="text-app-muted p-3 text-sm">
-          暂无候选曲目
+          {{ t("暂无候选曲目") }}
         </p>
-        <ul aria-label="歌词候选曲目">
+        <ul :aria-label="t('歌词候选曲目')">
           <li v-for="candidate in state.candidates" :key="`${candidate.provider}:${candidate.id}`">
             <button
               type="button"
@@ -202,7 +203,8 @@ void loadSettings();
                 >{{ candidate.artists.join(" / ") }} · {{ candidate.album }}</span
               >
               <span class="text-app-muted block"
-                >{{ formatTrackDuration(candidate.durationMs) ?? "-" }} · 网易云音乐</span
+                >{{ formatTrackDuration(candidate.durationMs) ?? "-" }} ·
+                {{ t("网易云音乐") }}</span
               >
             </button>
           </li>
@@ -214,16 +216,16 @@ void loadSettings();
           class="focus-visible:outline-app-accent w-full px-3 py-3 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
           @click="search.loadMore()"
         >
-          加载更多
+          {{ t("加载更多") }}
         </button>
       </div>
       <div class="min-w-0">
-        <p v-if="state.previewing" role="status" class="mb-2 text-sm">正在加载歌词…</p>
+        <p v-if="state.previewing" role="status" class="mb-2 text-sm">{{ t("正在加载歌词…") }}</p>
         <textarea
           :value="state.preview"
           readonly
-          aria-label="候选歌词预览"
-          placeholder="选择曲目以预览歌词"
+          :aria-label="t('候选歌词预览')"
+          :placeholder="t('选择曲目以预览歌词')"
           class="focus-visible:outline-app-accent min-h-80 w-full resize-y rounded border border-white/10 bg-black/20 p-3 font-mono text-sm focus-visible:outline-2"
         />
       </div>
@@ -234,7 +236,7 @@ void loadSettings();
         class="focus-visible:outline-app-accent rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2"
         @click="closeSearch"
       >
-        取消
+        {{ t("取消") }}
       </button>
       <button
         type="button"
@@ -246,7 +248,7 @@ void loadSettings();
         class="bg-app-accent focus-visible:outline-app-accent rounded px-4 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
         @click="search.usePreview"
       >
-        {{ state.previewInstrumental ? "标记为无歌词" : "使用此歌词" }}
+        {{ state.previewInstrumental ? t("标记为无歌词") : t("使用此歌词") }}
       </button>
     </footer>
   </dialog>
@@ -260,9 +262,9 @@ void loadSettings();
     @cancel.prevent="pendingText = null"
     @mousedown.stop
   >
-    <h2 id="lyrics-replace-title" class="text-lg font-semibold">替换未保存的歌词？</h2>
+    <h2 id="lyrics-replace-title" class="text-lg font-semibold">{{ t("替换未保存的歌词？") }}</h2>
     <p id="lyrics-replace-description" class="text-app-muted text-sm">
-      文本框中的歌词修改将被替换，仍需保存才会写入文件。
+      {{ t("文本框中的歌词修改将被替换，仍需保存才会写入文件。") }}
     </p>
     <footer class="flex justify-end gap-2">
       <button
@@ -271,7 +273,7 @@ void loadSettings();
         class="focus-visible:outline-app-accent rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2"
         @click="pendingText = null"
       >
-        取消
+        {{ t("取消") }}
       </button>
       <button
         type="button"
@@ -279,7 +281,7 @@ void loadSettings();
         class="bg-app-accent focus-visible:outline-app-accent rounded px-4 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
         @click="confirmReplace"
       >
-        替换
+        {{ t("替换") }}
       </button>
     </footer>
   </dialog>

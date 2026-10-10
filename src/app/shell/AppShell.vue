@@ -8,7 +8,7 @@
 
     <ResizeHandle
       v-show="props.mode === 'workspace'"
-      label="调整左侧栏宽度"
+      :label="t('调整左侧栏宽度')"
       class="col-start-2 row-start-1 max-md:hidden"
       orientation="vertical"
       :value="leftPaneWidth"
@@ -26,7 +26,7 @@
 
     <ResizeHandle
       v-show="props.mode === 'workspace'"
-      label="调整右侧栏宽度"
+      :label="t('调整右侧栏宽度')"
       reverse
       class="col-start-4 row-start-1 max-md:hidden"
       orientation="vertical"
@@ -52,7 +52,7 @@
           <slot name="queue" />
         </div>
         <ResizeHandle
-          label="调整右侧上下区域高度"
+          :label="t('调整右侧上下区域高度')"
           orientation="horizontal"
           :value="rightTopHeight"
           :min-value="MIN_RIGHT_TOP_HEIGHT"
@@ -68,6 +68,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { usePaneSizes } from "@/app/shell/usePaneSizes";
 import ResizeHandle from "@/shared/components/ResizeHandle.vue";

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { setLocale } from "@/shared/i18n/locale";
 import * as Vue from "vue";
 import type { NowPlayingTrack } from "@/features/playback/types";
 import type { TrackDetails } from "@/features/library/types";
@@ -38,6 +39,7 @@ const transition = Vue.defineComponent({
 afterEach(() => {
   finishLeaves();
   for (const app of apps.splice(0)) app.unmount();
+  setLocale("zh-CN");
 });
 
 function finishLeaves() {
@@ -145,7 +147,7 @@ function mountPage(enabled = false) {
   const app = renderer.createApp(Page);
   app.mount(root);
   apps.push(app);
-  const page = findNode(root, (node) => node.props["aria-label"] === "Now playing");
+  const page = findNode(root, (node) => node.props["aria-label"] === "正在播放");
   if (!page) throw new Error("Missing playing page");
   function layers() {
     const result: HostNode[] = [];

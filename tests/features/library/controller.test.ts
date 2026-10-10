@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
+import { setLocale } from "@/shared/i18n/locale";
 import type { LibraryState } from "@/features/library/composables/useLibrary";
 import { notifications, notify } from "@/shared/notifications/center";
 import { useNotification } from "@/shared/notifications/useNotification";
@@ -102,10 +103,35 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const scope of scopes.splice(0)) scope.stop();
+  setLocale("zh-CN");
   notifications.clear();
 });
 
 describe("媒体库 workspace", () => {
+  for (const [failedCount, queueSyncFailed, expected] of [
+    [1, false, "Removed 2 tracks; 1 removals failed. Check the logs."],
+    [0, true, "Removed 2 tracks, but queue synchronization failed. Check the logs."],
+    [
+      1,
+      true,
+      "Removed 2 tracks; 1 removals failed and queue synchronization failed. Check the logs.",
+    ],
+  ] as const) {
+    it(`localizes partial removal counts with ${failedCount} failures and queue sync ${queueSyncFailed}`, async () => {
+      setLocale("en");
+      createWorkspace();
+      page.trackActionRemoval.value = { deletedCount: 2, failedCount, queueSyncFailed };
+      page.trackActionError.value = "原始底层错误";
+      await Vue.nextTick();
+      expect(notifications.items.value[0]).toMatchObject({
+        message: expected,
+        type: "warning",
+        persistent: true,
+      });
+      expect(page.trackActionError.value).toBe("原始底层错误");
+    });
+  }
+
   it("refreshes the playlist catalog only after tracks or albums were actually added", async () => {
     const { workspace } = createWorkspace();
     await workspace.addTracksToExistingPlaylist([track.id], 7);

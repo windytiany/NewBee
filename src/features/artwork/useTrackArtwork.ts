@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
@@ -107,7 +108,7 @@ function subscribeToTrackArtwork(
           logger.warn("artwork", "read_failed", error, { trackId });
           notify({
             type: "warning",
-            message: "封面加载失败，已显示占位图，请查看日志",
+            message: t("封面加载失败，已显示占位图，请查看日志"),
             key: "artwork-read",
           });
           return `读取封面失败，已显示占位图：${message}`;

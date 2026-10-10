@@ -6,11 +6,12 @@
     type="button"
     @click.stop="setSkipped"
   >
-    {{ allSkipped ? "取消跳过" : "跳过" }}
+    {{ allSkipped ? t("取消跳过") : t("跳过") }}
   </button>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, ref } from "vue";
 import { usePlaybackSession } from "@/features/playback/session";
 import { logger } from "@/shared/logging/logger";
@@ -32,7 +33,7 @@ function reportError(error: unknown) {
   logger.error("playback", "skip_update_failed", error);
   notify({
     type: "error",
-    message: "更新跳过标记失败",
+    message: t("更新跳过标记失败"),
     key: "track-skip",
   });
 }

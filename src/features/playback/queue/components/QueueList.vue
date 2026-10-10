@@ -1,6 +1,6 @@
 <template>
   <section
-    :aria-label="props.title"
+    :aria-label="displayTitle"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
     <h2
@@ -8,7 +8,7 @@
       class="shrink-0 px-3 py-2 text-sm font-medium text-white/90"
       tabindex="-1"
     >
-      {{ props.title }}
+      {{ displayTitle }}
     </h2>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
@@ -16,7 +16,7 @@
         v-if="!props.isLoading && props.tracks.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
       >
-        {{ props.emptyMessage }}
+        {{ displayEmptyMessage }}
       </p>
       <ul v-else-if="!props.isLoading" ref="listElement" class="space-y-1">
         <QueueRow
@@ -27,9 +27,9 @@
           :row-key="getTrackRowKey(track)"
           :can-remove-from-queue="props.canRemoveFromQueue"
           :is-context-menu-open="contextMenu?.rowKey === getTrackRowKey(track)"
-          :title="track.title ?? '未知曲目'"
-          :album="track.album ?? '未知专辑'"
-          :duration="formatTrackDuration(track.durationMs) ?? '时长未知'"
+          :title="track.title ?? t('未知曲目')"
+          :album="track.album ?? t('未知专辑')"
+          :duration="formatTrackDuration(track.durationMs) ?? t('时长未知')"
           :is-current-track="getTrackRowKey(track) === props.currentRowKey"
           :is-selected="queueFocus.isSelected(getTrackRowKey(track))"
           :is-focused="queueFocus.isFocused(getTrackRowKey(track))"
@@ -47,7 +47,7 @@
       class="bg-app-interactive fixed z-100 w-52 rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
       role="menu"
-      aria-label="队列曲目操作"
+      :aria-label="t('队列曲目操作')"
       @pointerdown.stop
     >
       <button
@@ -57,7 +57,7 @@
         type="button"
         @click.stop="removeContextMenuItem"
       >
-        从播放队列移除
+        {{ t("从播放队列移除") }}
       </button>
       <EditMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
       <SkipMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
@@ -66,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
@@ -110,13 +111,16 @@ const props = withDefaults(
   {
     tracks: () => [],
     currentRowKey: null,
-    title: "当前曲目列表",
+    title: undefined,
     isLoading: false,
-    emptyMessage: "暂无曲目。",
+    emptyMessage: undefined,
     canRemoveFromQueue: false,
     skippedTrackIds: () => [],
   },
 );
+
+const displayTitle = computed(() => props.title ?? t("当前曲目列表"));
+const displayEmptyMessage = computed(() => props.emptyMessage ?? t("暂无曲目。"));
 
 const visibleRowKeys = computed(() => props.tracks.map(getTrackRowKey));
 const contextTargetTrackIds = computed(() => {

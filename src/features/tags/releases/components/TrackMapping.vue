@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { createMappingDrag } from "@/features/tags/releases/dragMapping";
 import type { MappingDragPreview } from "@/features/tags/releases/dragMapping";
@@ -110,13 +111,13 @@ function durationDiffers(index: number) {
 
 <template>
   <section
-    aria-label="曲目对应关系"
+    :aria-label="t('曲目对应关系')"
     class="flex min-h-0 flex-col gap-1"
     @click.capture="drag.suppressClick($event)"
   >
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-1 text-xs">
       <div class="flex flex-wrap items-center gap-3">
-        <h3 class="font-semibold">曲目对照</h3>
+        <h3 class="font-semibold">{{ t("曲目对照") }}</h3>
         <label
           v-for="field in TAG_FIELDS.filter(({ key }) =>
             ['artist', 'artistSort', 'title', 'trackNumber', 'trackTotal'].includes(key),
@@ -130,7 +131,7 @@ function durationDiffers(index: number) {
             :disabled="disabled || !state.selected"
             class="accent-app-accent"
             @change="editor.toggleField(field.key)"
-          />{{ field.label }}
+          />{{ t(field.label) }}
         </label>
       </div>
       <div class="flex items-center gap-1">
@@ -145,11 +146,11 @@ function durationDiffers(index: number) {
           class="rounded border border-white/15 px-2 py-1 hover:bg-white/10 disabled:opacity-30"
           @click="detachSelected()"
         >
-          解除对应
+          {{ t("解除对应") }}
         </button>
         <button
           type="button"
-          aria-label="上移本地曲目"
+          :aria-label="t('上移本地曲目')"
           :disabled="
             disabled ||
             selectedIndex === null ||
@@ -163,7 +164,7 @@ function durationDiffers(index: number) {
         </button>
         <button
           type="button"
-          aria-label="下移本地曲目"
+          :aria-label="t('下移本地曲目')"
           :disabled="
             disabled ||
             selectedIndex === null ||
@@ -187,7 +188,7 @@ function durationDiffers(index: number) {
             <th class="w-8 px-2 py-2">
               <input
                 type="checkbox"
-                aria-label="选择全部对应曲目"
+                :aria-label="t('选择全部对应曲目')"
                 :checked="allIncluded"
                 :indeterminate="!allIncluded && mappedIds.some((id) => state.included.includes(id))"
                 :disabled="disabled || !mappedIds.length"
@@ -195,13 +196,13 @@ function durationDiffers(index: number) {
                 @change="toggleAll()"
               />
             </th>
-            <th class="w-12 py-2 font-normal">曲号</th>
-            <th class="w-[17%] px-2 py-2 font-normal">艺术家</th>
-            <th class="w-[23%] px-2 py-2 font-normal">标题</th>
-            <th class="w-14 px-2 py-2 font-normal">时间</th>
-            <th class="w-[22%] px-2 py-2 font-normal">原始标题</th>
-            <th class="w-14 px-2 py-2 font-normal">时间</th>
-            <th class="px-2 py-2 font-normal">文件名</th>
+            <th class="w-12 py-2 font-normal">{{ t("曲号") }}</th>
+            <th class="w-[17%] px-2 py-2 font-normal">{{ t("艺术家") }}</th>
+            <th class="w-[23%] px-2 py-2 font-normal">{{ t("标题") }}</th>
+            <th class="w-14 px-2 py-2 font-normal">{{ t("时间") }}</th>
+            <th class="w-[22%] px-2 py-2 font-normal">{{ t("原始标题") }}</th>
+            <th class="w-14 px-2 py-2 font-normal">{{ t("时间") }}</th>
+            <th class="px-2 py-2 font-normal">{{ t("文件名") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -219,7 +220,12 @@ function durationDiffers(index: number) {
               class="bg-white/5"
             >
               <th colspan="8" class="text-app-muted px-2 py-1.5 font-normal">
-                第 {{ row.source.discNumber }} 碟 · {{ row.source.trackTotal }} 首
+                {{
+                  t("第 {disc} 碟 · {count} 首", {
+                    disc: row.source.discNumber,
+                    count: row.source.trackTotal,
+                  })
+                }}
               </th>
             </tr>
             <tr
@@ -243,7 +249,9 @@ function durationDiffers(index: number) {
                 <input
                   v-if="row.source && row.trackId !== null"
                   type="checkbox"
-                  :aria-label="`保存 ${local(row.trackId)?.track.title ?? row.trackId}`"
+                  :aria-label="
+                    t('保存 {title}', { title: local(row.trackId)?.track.title ?? row.trackId })
+                  "
                   :checked="state.included.includes(row.trackId)"
                   :disabled="disabled"
                   class="accent-app-accent"
@@ -261,7 +269,7 @@ function durationDiffers(index: number) {
                   v-if="row.source"
                   type="button"
                   class="block w-full truncate text-left hover:underline"
-                  :aria-label="`查看差异 / 编辑新值：${row.source.title}`"
+                  :aria-label="t('查看差异 / 编辑新值：{title}', { title: row.source.title })"
                   :aria-expanded="expanded === index"
                   @click="expanded = expanded === index ? null : index"
                 >
@@ -282,7 +290,7 @@ function durationDiffers(index: number) {
                   @pointerdown.stop="drag.start(row.trackId, $event)"
                   @click="selectedIndex = index"
                 >
-                  {{ local(row.trackId)?.track.title ?? "无标题" }}
+                  {{ local(row.trackId)?.track.title ?? t("无标题") }}
                 </button>
               </td>
               <td
@@ -302,33 +310,41 @@ function durationDiffers(index: number) {
             <tr v-if="expanded === index && row.source" class="bg-black/10">
               <td colspan="8" class="p-3">
                 <select
-                  :aria-label="`第 ${row.source.discNumber} 碟第 ${row.source.trackNumber} 首对应文件`"
+                  :aria-label="
+                    t('第 {disc} 碟第 {count} 首对应文件', {
+                      disc: row.source.discNumber,
+                      count: row.source.trackNumber,
+                    })
+                  "
                   :value="row.trackId ?? ''"
                   :disabled="disabled"
                   class="bg-app-interactive mb-2 w-full rounded border border-white/15 p-1 text-xs disabled:opacity-50"
                   @change="choose(index, $event)"
                 >
-                  <option value="">无对应文件</option>
+                  <option value="">{{ t("无对应文件") }}</option>
                   <option v-for="{ track } in state.tracks" :key="track.id" :value="track.id">
                     {{ filename(track.path) }}
                   </option>
                 </select>
                 <div class="grid gap-3 md:grid-cols-3">
                   <div v-for="field in TAG_FIELDS" :key="field.key" class="space-y-1 text-xs">
-                    <label :for="`match-${index}-${field.key}`">{{ field.label }}</label>
+                    <label :for="`match-${index}-${field.key}`">{{ t(field.label) }}</label>
                     <p class="text-app-muted break-all">
-                      原值：{{
-                        row.trackId !== null
-                          ? ({ ...local(row.trackId)?.track, ...local(row.trackId)?.values }[
-                              field.key
-                            ] ?? "（空）")
-                          : "无对应文件"
+                      {{
+                        t("原值：{value}", {
+                          value:
+                            row.trackId !== null
+                              ? ({ ...local(row.trackId)?.track, ...local(row.trackId)?.values }[
+                                  field.key
+                                ] ?? t("（空）"))
+                              : t("无对应文件"),
+                        })
                       }}
                     </p>
                     <input
                       :id="`match-${index}-${field.key}`"
                       :value="row.values[field.key] ?? ''"
-                      :placeholder="row.values[field.key] === undefined ? '保留本地' : ''"
+                      :placeholder="row.values[field.key] === undefined ? t('保留本地') : ''"
                       :disabled="disabled || !state.fields.includes(field.key)"
                       class="w-full rounded border border-white/15 bg-black/20 px-2 py-1 disabled:opacity-50"
                       @input="input(index, field.key, $event)"
@@ -340,7 +356,7 @@ function durationDiffers(index: number) {
                         class="hover:underline disabled:opacity-50"
                         @click="editor.setValue(index, field.key, undefined)"
                       >
-                        保留本地
+                        {{ t("保留本地") }}
                       </button>
                     </div>
                   </div>

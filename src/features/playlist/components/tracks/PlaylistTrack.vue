@@ -12,7 +12,7 @@
     >
       <button
         data-item-interaction
-        :aria-label="`拖动重排第 ${trackNumber} 首`"
+        :aria-label="t('拖动重排第 {count} 首', { count: trackNumber })"
         :disabled="isDragDisabled"
         class="text-app-muted focus-visible:bg-app-track grid h-full min-h-10 w-full touch-none place-items-center rounded-sm transition-colors outline-none select-none disabled:cursor-not-allowed disabled:opacity-40"
         :class="isDragging ? 'text-app-accent cursor-grabbing' : 'cursor-grab hover:text-white'"
@@ -44,12 +44,12 @@
             class="truncate font-medium"
             :class="isCurrentTrack ? 'text-app-accent' : 'text-white'"
           >
-            {{ track.title ?? "未知曲目" }}
+            {{ track.title ?? t("未知曲目") }}
           </span>
-          <span class="text-app-muted truncate text-xs">{{ track.artist ?? "未知艺术家" }}</span>
+          <span class="text-app-muted truncate text-xs">{{ track.artist ?? t("未知艺术家") }}</span>
         </span>
         <span class="text-app-muted hidden truncate text-xs sm:block">
-          {{ track.album ?? "未知专辑" }}
+          {{ track.album ?? t("未知专辑") }}
         </span>
         <span class="text-app-muted text-right text-xs tabular-nums">{{ duration }}</span>
       </button>
@@ -58,6 +58,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed } from "vue";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
 import { formatTrackDuration } from "@/features/library/format";
@@ -83,7 +84,7 @@ const props = withDefaults(
   },
 );
 
-const duration = computed(() => formatTrackDuration(props.track.durationMs) ?? "时长未知");
+const duration = computed(() => formatTrackDuration(props.track.durationMs) ?? t("时长未知"));
 
 const emit = defineEmits<{
   select: [modifiers: ItemSelectionModifiers];

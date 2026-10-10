@@ -1,7 +1,13 @@
+import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { ref, watch } from "vue";
 export const pageNames = ["Playing", "Library", "Playlist"] as const;
 export type PageName = (typeof pageNames)[number];
+
+export function pageLabel(page: PageName): string {
+  const sources = { Playing: "正在播放", Library: "音乐库", Playlist: "播放列表" };
+  return t(sources[page]);
+}
 
 const STORAGE_KEY = "newbee.active-page";
 const DEFAULT_PAGE: PageName = "Playing";

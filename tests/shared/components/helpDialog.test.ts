@@ -1,3 +1,4 @@
+import { setLocale } from "@/shared/i18n/locale";
 import { afterEach, describe, expect, it } from "bun:test";
 import { h, nextTick } from "vue";
 import { HelpDialog } from "../../support/helpDialog";
@@ -36,6 +37,7 @@ function createNode(type: string, text = ""): HelpNode {
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();
+  setLocale("zh-CN");
 });
 
 function mountHelp() {
@@ -125,4 +127,18 @@ describe("info help", () => {
       expect(getTextContent(title)).toBe(trigger.props["aria-label"] as string);
     }
   });
+});
+
+it("updates the close action in an open help dialog when the language changes", async () => {
+  const root = mountHelp();
+  click(node(root, (entry) => entry.props["aria-label"] === "操作说明"));
+  await settle();
+  const close = node(root, (entry) => entry.props["aria-label"] === "关闭说明");
+  setLocale("en");
+  await settle();
+  expect(close.props["aria-label"]).toBe("Close help");
+  expect(getTextContent(root)).toContain("按需显示的帮助内容");
+  setLocale("zh-CN");
+  await settle();
+  expect(close.props["aria-label"]).toBe("关闭说明");
 });

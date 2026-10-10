@@ -1,17 +1,17 @@
 <template>
   <section
-    aria-label="播放列表浏览"
+    :aria-label="t('播放列表浏览')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
     <header class="flex shrink-0 items-center justify-between gap-2 px-2 py-1">
-      <h2 class="text-sm font-medium text-white/90">播放列表浏览</h2>
+      <h2 class="text-sm font-medium text-white/90">{{ t("播放列表浏览") }}</h2>
       <button
         ref="createPlaylistButtonElement"
         class="focus-visible:outline-app-accent shrink-0 rounded-full border border-white/15 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-2"
         type="button"
         @click="emit('create')"
       >
-        新建歌单
+        {{ t("新建歌单") }}
       </button>
     </header>
 
@@ -20,7 +20,7 @@
         v-if="!props.isLoading && !props.error && props.playlists.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
       >
-        无歌单
+        {{ t("无歌单") }}
       </p>
       <ul v-if="props.playlists.length > 0" ref="playlistListElement" class="space-y-0.5">
         <PlaylistRow
@@ -46,7 +46,7 @@
       class="bg-app-interactive fixed z-100 w-48 rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
       role="menu"
-      aria-label="歌单操作"
+      :aria-label="t('歌单操作')"
       @pointerdown.stop
     >
       <button
@@ -57,7 +57,7 @@
         type="button"
         @click.stop="requestRename"
       >
-        重命名
+        {{ t("重命名") }}
       </button>
       <div class="my-1 border-t border-white/10" role="separator"></div>
       <button
@@ -67,13 +67,14 @@
         type="button"
         @click.stop="requestDelete"
       >
-        删除歌单
+        {{ t("删除歌单") }}
       </button>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";

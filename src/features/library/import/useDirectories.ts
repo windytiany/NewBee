@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
@@ -25,7 +26,7 @@ export function useDirectories() {
       logger.warn("library.directories", "read_failed", error);
       notify({
         type: "error",
-        message: "读取已保存目录失败，请查看日志",
+        message: t("读取已保存目录失败，请查看日志"),
         key: "library-directories",
       });
     } finally {
@@ -38,7 +39,7 @@ export function useDirectories() {
       const selectedPath = await open({
         directory: true,
         multiple: false,
-        title: "选择音乐库目录",
+        title: t("选择音乐库目录"),
       });
       if (typeof selectedPath !== "string") return;
 
@@ -46,7 +47,7 @@ export function useDirectories() {
       await refreshDirectories();
     } catch (error) {
       logger.warn("library.directories", "add_failed", error);
-      notify({ type: "error", message: "添加目录失败，请查看日志", key: "library-directories" });
+      notify({ type: "error", message: t("添加目录失败，请查看日志"), key: "library-directories" });
     }
   }
 
@@ -56,7 +57,7 @@ export function useDirectories() {
       directories.value = directories.value.filter((saved) => saved.id !== directory.id);
     } catch (error) {
       logger.warn("library.directories", "remove_failed", error);
-      notify({ type: "error", message: "移除目录失败，请查看日志", key: "library-directories" });
+      notify({ type: "error", message: t("移除目录失败，请查看日志"), key: "library-directories" });
     }
   }
 

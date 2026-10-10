@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
+import { locale, setLocale } from "@/shared/i18n/locale";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
 
 import { HelpDialog } from "../../support/helpDialog";
@@ -24,6 +25,7 @@ type DialogBindings = {
   openLogs: () => Promise<void>;
   neteaseEnabled: Vue.Ref<boolean>;
   neteaseLyricsMode: Vue.Ref<Settings["neteaseLyricsMode"]>;
+  selectedLocale: Vue.Ref<Settings["locale"]>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   accentColor: Vue.Ref<Settings["accentColor"]>;
   reducedMotion: Vue.Ref<boolean>;
@@ -38,6 +40,7 @@ type DialogBindings = {
   save: () => Promise<void>;
 };
 const defaults: Settings = {
+  locale: "zh-CN",
   accentColor: AccentColor.DEFAULT_ACCENT_COLOR,
   reducedMotion: false,
   albumCoverBackground: false,
@@ -56,6 +59,7 @@ const source = await Bun.file(
 const output = compileSfc(source, filename, { id: "settings-dialog-test", inlineTemplate: false });
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 afterEach(() => {
+  setLocale("zh-CN");
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
   else Reflect.deleteProperty(globalThis, "window");
 });
@@ -109,6 +113,42 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  for (const savedLocale of ["zh-CN", "en"] as const) {
+    it(`persists locale ${savedLocale} and applies it only after successful saving`, async () => {
+      const initialLocale = savedLocale === "en" ? "zh-CN" : "en";
+      setLocale(initialLocale);
+      let fail = true;
+      const saved: unknown[] = [];
+      const { bindings, element } = createDialog(async (command, args) => {
+        if (command === "get_settings") return { ...defaults, locale: initialLocale };
+        if (fail) throw new Error("Disk unavailable");
+        saved.push(args);
+      });
+      await bindings.show();
+      expect(bindings.selectedLocale.value).toBe(initialLocale);
+      bindings.selectedLocale.value = savedLocale;
+      expect(locale.value).toBe(initialLocale);
+      await bindings.save();
+      expect(locale.value).toBe(initialLocale);
+      expect(element.open).toBe(true);
+      fail = false;
+      await bindings.save();
+      expect(saved).toEqual([{ settings: { ...defaults, locale: savedLocale } }]);
+      expect(locale.value).toBe(savedLocale);
+      expect(element.open).toBe(false);
+    });
+  }
+
+  it("cancel does not apply a language change and reopening restores the saved language", async () => {
+    const { bindings } = createDialog(async () => defaults);
+    await bindings.show();
+    bindings.selectedLocale.value = "en";
+    bindings.close();
+    expect(locale.value).toBe("zh-CN");
+    await bindings.show();
+    expect<Settings["locale"]>(bindings.selectedLocale.value).toBe("zh-CN");
+  });
+
   it("opens only the app log directory and switches detail immediately without persisting it", async () => {
     const calls: Array<[string, unknown]> = [];
     const { bindings } = createDialog(async (command, args) => {
@@ -224,6 +264,22 @@ describe("settings dialog", () => {
       const panel = findNode(root, (node) => node.props.id === "settings-category-panel");
       const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类");
       if (!panel || !navigation) throw new Error("Missing settings panel or navigation");
+      const languageSelect = findNode(panel, (node) => node.props.name === "locale");
+      expect(languageSelect?.type).toBe("select");
+      expect(languageSelect?.children.map((node) => getTextContent(node))).toEqual([
+        "简体中文",
+        "English",
+      ]);
+      setLocale("en");
+      await Vue.nextTick();
+      expect(getTextContent(header).trim()).toBe("Settings");
+      expect(getTextContent(footer)).toContain("Cancel");
+      expect(getTextContent(footer)).toContain("Save");
+      expect(getTextContent(navigation)).toContain("General");
+      expect(getTextContent(navigation)).toContain("Appearance");
+      expect(getTextContent(panel)).toContain("Language");
+      setLocale("zh-CN");
+      await Vue.nextTick();
       for (const [category, included, excluded] of [
         ["常规", "关闭窗口时", "主题色"],
         ["外观", "主题色", "专辑排序"],
@@ -275,6 +331,16 @@ describe("settings dialog", () => {
               color.value === AccentColor.DEFAULT_ACCENT_COLOR,
             );
           }
+          setLocale("en");
+          await Vue.nextTick();
+          expect(getTextContent(panel)).toContain("Accent color");
+          for (const label of ["Green", "Blue", "Purple", "Pink", "Orange"]) {
+            expect(findNode(panel, (node) => node.props["aria-label"] === label)?.type).toBe(
+              "button",
+            );
+          }
+          setLocale("zh-CN");
+          await Vue.nextTick();
           const bluePreset = findNode(panel, (node) => node.props["aria-label"] === "蓝色");
           if (!bluePreset || typeof bluePreset.props.onClick !== "function")
             throw new Error("Missing blue preset");
@@ -408,6 +474,7 @@ describe("settings dialog", () => {
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      locale: "zh-CN",
       accentColor: "#60a5fa",
       reducedMotion: false,
       albumCoverBackground: true,
@@ -512,6 +579,7 @@ describe("settings dialog", () => {
     expect(saved).toEqual([
       {
         settings: {
+          locale: "zh-CN",
           accentColor: "#60a5fa",
           reducedMotion: false,
           albumCoverBackground: true,
@@ -626,6 +694,7 @@ describe("settings dialog", () => {
     bindings.close();
     const secondShow = bindings.show();
     first.resolve({
+      locale: "zh-CN",
       accentColor: "#60a5fa",
       reducedMotion: false,
       albumCoverBackground: true,

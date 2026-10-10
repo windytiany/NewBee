@@ -3,7 +3,7 @@
     <div
       ref="coverElement"
       role="button"
-      aria-label="封面操作"
+      :aria-label="t('封面操作')"
       aria-haspopup="menu"
       :aria-expanded="!!contextMenu"
       :aria-disabled="props.disabled"
@@ -35,7 +35,7 @@
       v-if="contextMenu"
       ref="menuElement"
       role="menu"
-      aria-label="封面操作"
+      :aria-label="t('封面操作')"
       class="bg-app-interactive fixed z-100 w-40 rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
       @pointerdown.stop
@@ -48,7 +48,7 @@
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
         @click.stop="selectCover"
       >
-        替换封面
+        {{ t("替换封面") }}
       </button>
       <button
         type="button"
@@ -57,13 +57,14 @@
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
         @click.stop="removeCover"
       >
-        移除封面
+        {{ t("移除封面") }}
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { onScopeDispose, ref, watch } from "vue";
 import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
 import type { CoverEdit } from "@/features/tags/types";
@@ -153,7 +154,7 @@ async function replaceCover(event: InstanceType<typeof globalThis.Event>) {
   if (props.disabled || !file) return;
   const requestGeneration = ++generation;
   if (!file.size || file.size > MAX_COVER_BYTES) {
-    emit("failed", new Error("封面为空或超过 20 MiB。"));
+    emit("failed", new Error(t("封面为空或超过 20 MiB。")));
     return;
   }
   try {

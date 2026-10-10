@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { pageNames, type PageName } from "@/app/pages";
+import { t } from "@/shared/i18n/locale";
+import { pageNames, pageLabel, type PageName } from "@/app/pages";
 const props = defineProps<{ activePage: PageName }>();
 const emit = defineEmits<{ "update:activePage": [page: PageName] }>();
 </script>
 
 <template>
   <nav
-    aria-label="Main navigation"
+    :aria-label="t('主导航')"
     class="bg-app-interactive inline-flex items-center rounded-full p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
   >
     <button
@@ -22,7 +23,7 @@ const emit = defineEmits<{ "update:activePage": [page: PageName] }>();
       type="button"
       @click="emit('update:activePage', pageName)"
     >
-      {{ pageName }}
+      {{ pageLabel(pageName) }}
     </button>
   </nav>
 </template>

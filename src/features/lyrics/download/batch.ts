@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { reactive, toRef } from "vue";
 import { createLyricsApi } from "@/features/lyrics/api";
@@ -43,7 +44,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
   function report() {
     options.notifications.updateTask({
       key: TASK_KEY,
-      message: `正在更新缺少的歌词 · 已写入 ${state.written} 首`,
+      message: t("正在更新缺少的歌词 · 已写入 {count} 首", { count: state.written }),
       completed: state.completed,
       total: state.total,
       cancelling: state.cancelling,
@@ -118,7 +119,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
     report();
     try {
       const ids = [...new Set(trackIds)];
-      if (!ids.length) throw new Error("没有可下载歌词的曲目。");
+      if (!ids.length) throw new Error(t("没有可下载歌词的曲目。"));
       state.total = ids.length;
       const summary = await cooperation.run(ids);
       outcomes.clear();
@@ -127,7 +128,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         outcomes.set(outcome.trackId, outcome);
       }
       state.cancelling = summary.status === "cancelled";
-      failure = summary.error || (summary.status === "failed" ? "歌词下载批次失败。" : "");
+      failure = summary.error || (summary.status === "failed" ? t("歌词下载批次失败。") : "");
       update();
     } catch (error) {
       failure = error instanceof Error ? error.message : String(error);
@@ -159,12 +160,24 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         type: failure || state.failed ? "warning" : "success",
         persistent: inconsistent || Boolean(state.synchronizationError),
         message: state.synchronizationError
-          ? "歌词已保存，但界面刷新失败，请查看日志"
+          ? t("歌词已保存，但界面刷新失败，请查看日志")
           : inconsistent
-            ? "歌词已写入，但曲库更新失败，请重新扫描"
+            ? t("歌词已写入，但曲库更新失败，请重新扫描")
             : failure
-              ? "歌词更新失败，请查看日志"
-              : `歌词更新${state.cancelling ? "已取消" : "完成"}：写入 ${state.written} 首${state.failed ? `，${state.failed} 首失败（详情见日志）` : ""}`,
+              ? t("歌词更新失败，请查看日志")
+              : state.cancelling
+                ? state.failed
+                  ? t("歌词更新已取消：写入 {count} 首，{failed} 首失败（详情见日志）", {
+                      count: state.written,
+                      failed: state.failed,
+                    })
+                  : t("歌词更新已取消：写入 {count} 首", { count: state.written })
+                : state.failed
+                  ? t("歌词更新完成：写入 {count} 首，{failed} 首失败（详情见日志）", {
+                      count: state.written,
+                      failed: state.failed,
+                    })
+                  : t("歌词更新完成：写入 {count} 首", { count: state.written }),
       });
       state.running = false;
     }
@@ -183,7 +196,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
           options.notifications.notify({
             type: "warning",
             persistent: true,
-            message: "歌词已保存，但界面刷新仍失败，请查看日志",
+            message: t("歌词已保存，但界面刷新仍失败，请查看日志"),
             key: TASK_KEY,
           });
       } finally {

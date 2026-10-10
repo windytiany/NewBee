@@ -32,20 +32,21 @@
         :class="props.isCurrentTrack ? 'text-app-accent' : 'text-white'"
       >
         <span data-album-track-content class="inline-block">
-          {{ props.track.title ?? "未知曲目"
+          {{ props.track.title ?? t("未知曲目")
           }}<span v-if="showArtist" class="text-app-muted ml-3 font-normal"
             >[{{ props.track.artist }}]</span
           >
         </span>
       </span>
       <span class="text-app-muted shrink-0 tabular-nums">
-        {{ formatTrackDuration(props.track.durationMs) ?? "时长未知" }}
+        {{ formatTrackDuration(props.track.durationMs) ?? t("时长未知") }}
       </span>
     </button>
   </li>
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed } from "vue";
 import { AudioLines } from "@lucide/vue";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
@@ -65,7 +66,7 @@ const showArtist = computed(
   () => Boolean(props.track.artist) && props.track.artist !== props.albumArtist,
 );
 const trackLabel = computed(() => {
-  const title = props.track.title ?? "未知曲目";
+  const title = props.track.title ?? t("未知曲目");
   return showArtist.value ? `${title} [${props.track.artist}]` : title;
 });
 

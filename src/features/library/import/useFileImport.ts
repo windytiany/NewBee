@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -19,10 +20,10 @@ export function useLibraryFileImport() {
     try {
       const extensions = await invoke<string[]>("supported_audio_extensions");
       const paths = await open({
-        title: "导入音频文件",
+        title: t("导入音频文件"),
         directory: false,
         multiple: true,
-        filters: [{ name: "支持的音频文件", extensions }],
+        filters: [{ name: t("支持的音频文件"), extensions }],
       });
       if (!paths || paths.length === 0) {
         logger.info("library", "file_import_cancelled", { operationId: id });
@@ -38,14 +39,17 @@ export function useLibraryFileImport() {
       notify({
         type: result.failed > 0 ? "warning" : "success",
         message: result.failed
-          ? `导入完成，${result.failed} 首失败（详情见日志）`
-          : `导入完成：新增 ${result.added} 首，更新 ${result.updated} 首`,
+          ? t("导入完成，{count} 首失败（详情见日志）", { count: result.failed })
+          : t("导入完成：新增 {added} 首，更新 {updated} 首", {
+              added: result.added,
+              updated: result.updated,
+            }),
         key: "library-file-import",
       });
       reportLibraryImport(result);
     } catch (reason) {
       logger.error("library", "file_import_failed", reason, { operationId: id });
-      notify({ type: "error", message: "导入失败，请查看日志", key: "library-file-import" });
+      notify({ type: "error", message: t("导入失败，请查看日志"), key: "library-file-import" });
     } finally {
       isImporting.value = false;
     }

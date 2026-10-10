@@ -2,7 +2,7 @@
   <Teleport :to="target">
     <section
       ref="host"
-      aria-label="通知"
+      :aria-label="t('通知')"
       class="pointer-events-none fixed right-4 bottom-24 z-100 flex max-h-[calc(100dvh-8rem)] w-[min(28rem,calc(100vw-2rem))] flex-col gap-3 overflow-y-auto"
       @click.stop
       @mousedown.stop
@@ -15,20 +15,22 @@
       >
         <p role="status" aria-live="polite">{{ task.message }}</p>
         <progress
-          aria-label="任务进度"
+          :aria-label="t('任务进度')"
           :value="task.completed"
           :max="Math.max(1, task.total)"
           class="accent-app-accent w-full"
         ></progress>
         <div class="flex items-center justify-between gap-3">
-          <span class="text-app-muted">已处理 {{ task.completed }} / {{ task.total }}</span>
+          <span class="text-app-muted">{{
+            t("已处理 {completed} / {total}", { completed: task.completed, total: task.total })
+          }}</span>
           <button
             type="button"
             :disabled="task.cancelling"
             class="focus-visible:outline-app-accent rounded px-3 py-1 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
             @click="task.cancel()"
           >
-            {{ task.cancelling ? "正在取消…" : "取消" }}
+            {{ task.cancelling ? t("正在取消…") : t("取消") }}
           </button>
         </div>
       </article>
@@ -53,7 +55,7 @@
           }}<span v-if="item.count > 1" class="ml-2 text-white/60">×{{ item.count }}</span>
         </p>
         <button
-          aria-label="关闭通知"
+          :aria-label="t('关闭通知')"
           class="focus-visible:outline-app-accent -mr-1 shrink-0 rounded p-1 text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2"
           type="button"
           @click="dismiss(item.id)"
@@ -69,6 +71,7 @@
 import { nextTick, onMounted, onUnmounted, shallowRef } from "vue";
 import { CircleCheck, CircleAlert, Info, TriangleAlert, X } from "@lucide/vue";
 import { notifications } from "@/shared/notifications/center";
+import { t } from "@/shared/i18n/locale";
 
 const tone = {
   success: "text-green-200",

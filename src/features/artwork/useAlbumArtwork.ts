@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onScopeDispose, shallowRef, toValue, watch } from "vue";
 import type { MaybeRefOrGetter } from "vue";
@@ -75,7 +76,7 @@ export function useAlbumArtwork(
               logger.warn("artwork", "album_read_failed", error);
               notify({
                 type: "warning",
-                message: "封面加载失败，已显示占位图，请查看日志",
+                message: t("封面加载失败，已显示占位图，请查看日志"),
                 key: "artwork-read",
               });
               return `读取专辑封面失败：${error instanceof Error ? error.message : String(error)}`;
@@ -165,7 +166,11 @@ function generateBackground(entry: SharedArtwork) {
     });
   } catch (error) {
     logger.warn("artwork", "background_generation_failed", error);
-    notify({ type: "warning", message: "生成专辑背景失败，请查看日志", key: "artwork-background" });
+    notify({
+      type: "warning",
+      message: t("生成专辑背景失败，请查看日志"),
+      key: "artwork-background",
+    });
     publish(entry, {
       ...entry.snapshot,
       error: `生成专辑背景失败：${error instanceof Error ? error.message : String(error)}`,

@@ -1,3 +1,5 @@
+import { t } from "@/shared/i18n/locale";
+
 export const DEFAULT_ACCENT_COLOR = "#1ed760";
 
 export const ACCENT_COLORS = [
@@ -15,6 +17,6 @@ export function normalizeAccentColor(value: string): string | null {
 
 export function applyAccentColor(value: string) {
   const color = normalizeAccentColor(value);
-  if (!color) throw new Error("主题色必须是有效的 #RRGGBB 颜色。");
+  if (!color) throw new Error(t("主题色必须是有效的 #RRGGBB 颜色。"));
   globalThis.document.documentElement.style.setProperty("--app-accent", color);
 }

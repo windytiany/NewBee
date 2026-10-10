@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { computed, markRaw, nextTick, reactive, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { notify } from "@/shared/notifications/center";
@@ -44,7 +45,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
       const message = source.value;
       if (!message) return null;
       logger.error("playlist", key, message);
-      return { type: "error", message: "读取歌单失败，请查看日志", key };
+      return { type: "error", message: t("读取歌单失败，请查看日志"), key };
     });
   }
 
@@ -52,7 +53,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
     const message = page.playlistActionError.value;
     if (!message) return null;
     logger.error("playlist", "action_failed", message);
-    return { type: "error", message: "歌单操作失败，请重试或查看日志", key: "playlist-action" };
+    return { type: "error", message: t("歌单操作失败，请重试或查看日志"), key: "playlist-action" };
   });
 
   function showCreatePlaylistDialog() {
@@ -153,7 +154,11 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
     const result = await page.renamePlaylist(playlistId, name);
     if (result.status === "error") {
       logger.error("playlist", "rename_failed", result.message, { playlistId });
-      notify({ type: "error", message: "重命名歌单失败，请查看日志", key: "playlist-management" });
+      notify({
+        type: "error",
+        message: t("重命名歌单失败，请查看日志"),
+        key: "playlist-management",
+      });
       return;
     }
     if (!isCurrentPlaylistManagementRequest(playlistId, "rename", requestId)) return;
@@ -175,7 +180,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
     const result = await page.deletePlaylist(playlistId);
     if (result.status === "error") {
       logger.error("playlist", "delete_failed", result.message, { playlistId });
-      notify({ type: "error", message: "删除歌单失败，请查看日志", key: "playlist-management" });
+      notify({ type: "error", message: t("删除歌单失败，请查看日志"), key: "playlist-management" });
       return;
     }
     if (!isCurrentPlaylistManagementRequest(playlistId, "delete", requestId)) return;

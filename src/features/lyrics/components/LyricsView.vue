@@ -38,7 +38,7 @@
             { 'px-6': !props.compact },
           ]"
         >
-          {{ props.lyrics.kind === "instrumental" ? "此曲目已标记为无歌词" : "无歌词" }}
+          {{ props.lyrics.kind === "instrumental" ? t("此曲目已标记为无歌词") : t("无歌词") }}
         </div>
         <p
           v-else-if="props.lyrics.kind === 'plain'"
@@ -92,8 +92,8 @@
     <button
       v-if="props.visible && props.lyrics.kind === 'synced' && followState === 'browsing'"
       type="button"
-      aria-label="恢复歌词跟随"
-      title="恢复歌词跟随"
+      :aria-label="t('恢复歌词跟随')"
+      :title="t('恢复歌词跟随')"
       class="bg-app-interactive text-app-muted focus-visible:outline-app-accent hover:bg-app-highlight absolute right-4 bottom-4 z-10 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
       @click="returnToCurrentLyric"
     >
@@ -103,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { ref, shallowRef } from "vue";
 import { RefreshCw } from "@lucide/vue";
 import type { ComponentPublicInstance } from "vue";

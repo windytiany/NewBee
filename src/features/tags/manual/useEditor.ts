@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { reactive, toRefs } from "vue";
 import { notify } from "@/shared/notifications/center";
@@ -58,7 +59,7 @@ export function createTagEditor(options: TagEditorOptions) {
     logger.error("tags", event, error);
     notify({
       type: "error",
-      message: event === "editor_load_failed" ? "读取标签失败，请查看日志" : state.error,
+      message: event === "editor_load_failed" ? t("读取标签失败，请查看日志") : state.error,
       key: "tags-editor",
     });
   }
@@ -89,7 +90,7 @@ export function createTagEditor(options: TagEditorOptions) {
     });
     try {
       const ids = [...new Set(await loadIds())];
-      if (ids.length === 0) throw new Error("没有可编辑的曲目。");
+      if (ids.length === 0) throw new Error(t("没有可编辑的曲目。"));
       const tracks = await options.loadTracks(ids);
       if (!state.open || generation !== loadGeneration) return;
       if (
@@ -97,7 +98,7 @@ export function createTagEditor(options: TagEditorOptions) {
         new Set(tracks.map(({ track }) => track.id)).size !== ids.length ||
         tracks.some(({ track }) => !ids.includes(track.id))
       ) {
-        throw new Error("返回的曲目与编辑目标不匹配。");
+        throw new Error(t("返回的曲目与编辑目标不匹配。"));
       }
       state.tracks = tracks;
       state.draft = createTagDraft(tracks, mode);
@@ -113,7 +114,7 @@ export function createTagEditor(options: TagEditorOptions) {
       if (unavailable.length)
         notify({
           type: "warning",
-          message: `${unavailable.length} 首曲目的标签读取失败或不支持写入。`,
+          message: t("{count} 首曲目的标签读取失败或不支持写入。", { count: unavailable.length }),
         });
     } catch (error) {
       if (state.open && generation === loadGeneration) reportError("editor_load_failed", error);

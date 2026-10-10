@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import { useReleaseEditor } from "@/features/tags/releases/useEditor";
 const props = defineProps<{ album: LibraryAlbumSelection; disabled?: boolean }>();
@@ -20,6 +21,6 @@ function open() {
     class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
     @click.stop="open"
   >
-    根据专辑更新标签
+    {{ t("根据专辑更新标签") }}
   </button>
 </template>

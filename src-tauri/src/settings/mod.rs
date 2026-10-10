@@ -3,6 +3,15 @@ use std::{path::PathBuf, sync::Mutex};
 use tauri::{Manager, State};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub enum Locale {
+    #[default]
+    #[serde(rename = "zh-CN")]
+    ZhCn,
+    #[serde(rename = "en")]
+    En,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum CloseBehavior {
     #[default]
@@ -49,6 +58,7 @@ where
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
+    pub locale: Locale,
     #[serde(deserialize_with = "deserialize_accent_color")]
     pub accent_color: String,
     pub reduced_motion: bool,
@@ -66,6 +76,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            locale: Locale::default(),
             accent_color: "#1ed760".to_owned(),
             reduced_motion: false,
             album_cover_background: false,
@@ -148,9 +159,16 @@ pub async fn save_settings<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     settings: Settings,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<SettingsState>().save(settings))
-        .await
-        .map_err(|error| format!("Could not save settings: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let locale = settings.locale;
+        app.state::<SettingsState>().save(settings)?;
+        if let Err(error) = crate::window::tray::update_locale(&app, locale) {
+            log::warn!("Could not update tray menu language: {error}");
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("Could not save settings: {error}"))?
 }
 
 #[cfg(test)]

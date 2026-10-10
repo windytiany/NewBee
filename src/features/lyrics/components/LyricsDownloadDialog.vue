@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { nextTick, ref, watch } from "vue";
 import { useLyricsConfirmation } from "@/features/lyrics/download/confirmation";
 
@@ -32,10 +33,10 @@ function toggle(id: number, event: InstanceType<typeof globalThis.Event>) {
     @mousedown.stop
   >
     <header class="border-b border-white/10 px-5 py-4">
-      <h2 id="lyrics-download-title" class="text-lg font-semibold">更新缺少的歌词</h2>
+      <h2 id="lyrics-download-title" class="text-lg font-semibold">{{ t("更新缺少的歌词") }}</h2>
     </header>
     <div class="space-y-4 px-5 py-5">
-      <p v-if="state.loading" role="status" class="text-app-muted text-sm">加载中…</p>
+      <p v-if="state.loading" role="status" class="text-app-muted text-sm">{{ t("加载中…") }}</p>
       <template v-if="!state.loading && !state.error">
         <div class="flex items-center gap-3 text-sm">
           <button
@@ -43,27 +44,30 @@ function toggle(id: number, event: InstanceType<typeof globalThis.Event>) {
             class="focus-visible:outline-app-accent rounded px-2 py-1 hover:bg-white/10 focus-visible:outline-2"
             @click="confirmation.selectAll(true)"
           >
-            全选
+            {{ t("全选") }}
           </button>
           <button
             type="button"
             class="focus-visible:outline-app-accent rounded px-2 py-1 hover:bg-white/10 focus-visible:outline-2"
             @click="confirmation.selectAll(false)"
           >
-            全不选
+            {{ t("全不选") }}
           </button>
-          <span class="text-app-muted" aria-live="polite"
-            >已选 {{ state.selected.length }} / {{ state.targets.length }} 首</span
-          >
+          <span class="text-app-muted" aria-live="polite">{{
+            t("已选 {count} / {total} 首", {
+              count: state.selected.length,
+              total: state.targets.length,
+            })
+          }}</span>
         </div>
         <div class="max-h-[50vh] overflow-y-auto rounded border border-white/10">
           <table class="w-full text-left text-sm">
             <thead class="bg-app-surface sticky top-0">
               <tr>
-                <th scope="col" class="px-3 py-2">选择</th>
-                <th scope="col" class="px-3 py-2">曲名</th>
-                <th scope="col" class="px-3 py-2">歌手</th>
-                <th scope="col" class="px-3 py-2">歌词状态</th>
+                <th scope="col" class="px-3 py-2">{{ t("选择") }}</th>
+                <th scope="col" class="px-3 py-2">{{ t("曲名") }}</th>
+                <th scope="col" class="px-3 py-2">{{ t("歌手") }}</th>
+                <th scope="col" class="px-3 py-2">{{ t("歌词状态") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -71,19 +75,23 @@ function toggle(id: number, event: InstanceType<typeof globalThis.Event>) {
                 <td class="px-3 py-2">
                   <input
                     type="checkbox"
-                    :aria-label="`选择 ${track.title || '未知曲目'}`"
+                    :aria-label="t('选择 {title}', { title: track.title || t('未知曲目') })"
                     :checked="state.selected.includes(track.id)"
                     class="accent-app-accent"
                     @change="toggle(track.id, $event)"
                   />
                 </td>
-                <td class="px-3 py-2 break-words">{{ track.title || "未知曲目" }}</td>
+                <td class="px-3 py-2 break-words">{{ track.title || t("未知曲目") }}</td>
                 <td class="text-app-muted px-3 py-2 break-words">
-                  {{ track.artist || "未知歌手" }}
+                  {{ track.artist || t("未知歌手") }}
                 </td>
                 <td class="px-3 py-2">
                   {{
-                    track.noLyrics ? "已标记为无歌词" : track.hasLyrics ? "已有歌词" : "歌词缺失"
+                    track.noLyrics
+                      ? t("已标记为无歌词")
+                      : track.hasLyrics
+                        ? t("已有歌词")
+                        : t("歌词缺失")
                   }}
                 </td>
               </tr>
@@ -98,7 +106,7 @@ function toggle(id: number, event: InstanceType<typeof globalThis.Event>) {
         class="focus-visible:outline-app-accent rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2"
         @click="confirmation.close()"
       >
-        取消
+        {{ t("取消") }}
       </button>
       <button
         type="button"
@@ -106,7 +114,7 @@ function toggle(id: number, event: InstanceType<typeof globalThis.Event>) {
         class="focus-visible:outline-app-accent bg-app-accent rounded px-5 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
         @click="confirmation.confirm()"
       >
-        开始更新
+        {{ t("开始更新") }}
       </button>
     </footer>
   </dialog>

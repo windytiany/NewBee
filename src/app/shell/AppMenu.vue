@@ -3,6 +3,7 @@ export type AppMenuAction = "import" | "scan" | "migrate" | "settings";
 </script>
 
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { ChevronRight } from "@lucide/vue";
 
@@ -166,7 +167,7 @@ onUnmounted(() => {
       ref="menuElement"
       class="bg-app-interactive absolute top-full left-0 z-50 mt-2 w-44 rounded-lg p-1 shadow-xl ring-1 ring-white/10"
       role="menu"
-      aria-label="NewBee 菜单"
+      :aria-label="t('NewBee 菜单')"
       @keydown.stop="onMenuKeydown"
     >
       <div
@@ -189,7 +190,7 @@ onUnmounted(() => {
           @focus="activeSubmenu = null"
           @click="openSubmenu(group.id)"
         >
-          {{ group.label }}
+          {{ t(group.label) }}
           <ChevronRight aria-hidden="true" class="text-app-muted size-4" />
         </button>
         <div
@@ -210,7 +211,7 @@ onUnmounted(() => {
               type="button"
               @click="select(item.action)"
             >
-              {{ item.action === "import" && isImporting ? "正在导入…" : item.label }}
+              {{ item.action === "import" && isImporting ? t("正在导入…") : t(item.label) }}
             </button>
           </div>
         </div>
@@ -225,7 +226,7 @@ onUnmounted(() => {
         @focus="activeSubmenu = null"
         @click="select('settings')"
       >
-        设置
+        {{ t("设置") }}
       </button>
     </div>
   </div>

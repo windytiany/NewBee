@@ -1,3 +1,4 @@
+use crate::settings::{Locale, SettingsState};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -20,14 +21,37 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "显示 NewBee", true, None::<&str>)?;
-    let previous = MenuItem::with_id(app, "previous", "上一首", true, None::<&str>)?;
-    let toggle = MenuItem::with_id(app, "toggle", "播放/暂停", true, None::<&str>)?;
-    let next = MenuItem::with_id(app, "next", "下一首", true, None::<&str>)?;
+fn menu_labels(locale: Locale) -> [&'static str; 5] {
+    match locale {
+        Locale::ZhCn => ["显示 NewBee", "上一首", "播放/暂停", "下一首", "退出"],
+        Locale::En => ["Show NewBee", "Previous", "Play/Pause", "Next", "Quit"],
+    }
+}
+
+fn create_menu<R: tauri::Runtime>(app: &AppHandle<R>, locale: Locale) -> tauri::Result<Menu<R>> {
+    let [show, previous, toggle, next, exit] = menu_labels(locale);
+    let show = MenuItem::with_id(app, "show", show, true, None::<&str>)?;
+    let previous = MenuItem::with_id(app, "previous", previous, true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle", toggle, true, None::<&str>)?;
+    let next = MenuItem::with_id(app, "next", next, true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let exit = MenuItem::with_id(app, "exit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &previous, &toggle, &next, &separator, &exit])?;
+    let exit = MenuItem::with_id(app, "exit", exit, true, None::<&str>)?;
+    Menu::with_items(app, &[&show, &previous, &toggle, &next, &separator, &exit])
+}
+
+pub fn update_locale<R: tauri::Runtime>(app: &AppHandle<R>, locale: Locale) -> tauri::Result<()> {
+    let Some(tray) = app.tray_by_id("main") else {
+        return Ok(());
+    };
+    tray.set_menu(Some(create_menu(app, locale)?))
+}
+
+pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
+    let settings = app
+        .state::<SettingsState>()
+        .get()
+        .map_err(std::io::Error::other)?;
+    let menu = create_menu(app, settings.locale)?;
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("NewBee")
         .menu(&menu)
@@ -59,4 +83,21 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
     }
     tray.build(app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tray_menu_labels_follow_locale() {
+        assert_eq!(
+            menu_labels(Locale::ZhCn),
+            ["显示 NewBee", "上一首", "播放/暂停", "下一首", "退出"]
+        );
+        assert_eq!(
+            menu_labels(Locale::En),
+            ["Show NewBee", "Previous", "Play/Pause", "Next", "Quit"]
+        );
+    }
 }

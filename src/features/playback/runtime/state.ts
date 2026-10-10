@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { readonly, ref, watch } from "vue";
@@ -145,7 +146,7 @@ export function createPlaybackState(invokeCommand: PlaybackCommandInvoker = invo
     if (!track || track.playbackId === null || !trackIds.includes(track.trackId)) return;
     const stopped = await invokeCommand<boolean>("stop_playback", { playbackId: track.playbackId });
     if (!stopped || currentTrack.value?.playbackId !== track.playbackId) {
-      throw new Error("未能确认播放文件已释放，请重试。");
+      throw new Error(t("未能确认播放文件已释放，请重试。"));
     }
     playbackCommandGeneration += 1;
     currentTrack.value = { ...track, playbackId: null };

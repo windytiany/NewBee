@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import QueueList from "@/features/playback/queue/components/QueueList.vue";
 import { usePlaybackSession } from "@/features/playback/session";
 
@@ -12,8 +13,8 @@ const { displayedTracks, skippedTrackIds, activeQueueRowKey } = state;
     :skipped-track-ids="skippedTrackIds"
     :current-row-key="activeQueueRowKey"
     :can-remove-from-queue="true"
-    title="当前曲目列表"
-    empty-message="无曲目"
+    :title="t('当前曲目列表')"
+    :empty-message="t('无曲目')"
     @play-queue-item="playQueueItem"
     @remove-queue-items="removeQueueItems"
   />

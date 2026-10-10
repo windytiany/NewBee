@@ -1,3 +1,4 @@
+import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { createMetadataSave } from "@/features/tags/save";
 import type { MetadataFileEditor } from "@/features/tags/save";
@@ -51,7 +52,7 @@ export function createLyricsBatchCooperation(
         operationId: progress.operationId,
         batchId: activeBatchId,
       });
-      if (accepting) cancellationError = `取消请求失败：${message(error)}`;
+      if (accepting) cancellationError = t("取消请求失败：{error}", { error: message(error) });
     }
   }
   function cancel() {
@@ -69,7 +70,7 @@ export function createLyricsBatchCooperation(
       writeTrackIds: [event.trackId],
       deferSynchronization: true,
       execute: async () => {
-        if (!accepting || cancelling) throw new Error("歌词保存请求已结束或取消");
+        if (!accepting || cancelling) throw new Error(t("歌词保存请求已结束或取消"));
         confirmed = await options.commitStep(event.batchId, event.stepId);
         if (accepting)
           progress.outcome({
@@ -101,7 +102,7 @@ export function createLyricsBatchCooperation(
         batchId: event.batchId,
         trackId: event.trackId,
       });
-      if (accepting) cooperationError = `歌词保存协作失败：${message(error)}`;
+      if (accepting) cooperationError = t("歌词保存协作失败：{error}", { error: message(error) });
     }
   }
   function receive(event: LyricsBatchEvent) {

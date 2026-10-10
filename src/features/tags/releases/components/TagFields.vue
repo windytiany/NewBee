@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/shared/i18n/locale";
 import { computed, onScopeDispose, ref, watch } from "vue";
 import type { createReleaseEditor } from "@/features/tags/releases/useEditor";
 import type { AlbumField } from "@/features/tags/releases/types";
@@ -44,7 +45,9 @@ const original = computed(() =>
       key,
       [
         ...new Set(
-          state.tracks.map(({ track, values }) => String({ ...track, ...values }[key] ?? "（空）")),
+          state.tracks.map(({ track, values }) =>
+            String({ ...track, ...values }[key] ?? t("（空）")),
+          ),
         ),
       ].join(" / "),
     ]),
@@ -65,7 +68,7 @@ function changeCover(event: InstanceType<typeof globalThis.Event>) {
 
 <template>
   <section
-    aria-label="覆盖字段及封面"
+    :aria-label="t('覆盖字段及封面')"
     class="grid min-w-0 grid-cols-[80px_minmax(0,1fr)] gap-[8px]"
   >
     <div class="min-w-0 space-y-1">
@@ -75,11 +78,11 @@ function changeCover(event: InstanceType<typeof globalThis.Event>) {
         <img
           v-if="coverUrl"
           :src="coverUrl"
-          alt="所选发行版本的正面封面"
+          :alt="t('所选发行版本的正面封面')"
           class="size-full object-contain"
         />
         <span v-else class="text-app-muted px-3 text-center text-xs">{{
-          state.loadingCover ? "封面加载中…" : "暂无封面"
+          state.loadingCover ? t("封面加载中…") : t("暂无封面")
         }}</span>
       </div>
       <label class="flex items-center gap-2 text-xs">
@@ -89,19 +92,19 @@ function changeCover(event: InstanceType<typeof globalThis.Event>) {
           :disabled="disabled || !state.cover || state.loadingCover"
           class="accent-app-accent"
           @change="editor.toggleCover()"
-        />替换封面
+        />{{ t("替换封面") }}
       </label>
-      <p v-if="state.writeCover" class="text-app-muted text-xs">将移除全部旧图片。</p>
+      <p v-if="state.writeCover" class="text-app-muted text-xs">{{ t("将移除全部旧图片。") }}</p>
       <select
         v-if="state.covers.length > 1"
-        aria-label="选择正面封面"
+        :aria-label="t('选择正面封面')"
         :value="state.coverId"
         :disabled="disabled || state.loadingCover"
         class="bg-app-interactive w-full rounded border border-white/15 p-1 text-xs"
         @change="changeCover"
       >
         <option v-for="(cover, index) in state.covers" :key="cover.id" :value="cover.id">
-          封面 {{ index + 1 }} {{ cover.comment }}
+          {{ t("封面 {count} {comment}", { count: index + 1, comment: cover.comment }) }}
         </option>
       </select>
     </div>
@@ -119,19 +122,19 @@ function changeCover(event: InstanceType<typeof globalThis.Event>) {
         <label :for="`album-tag-${field.key}`" class="flex items-center gap-1 whitespace-nowrap">
           <input
             type="checkbox"
-            :aria-label="`覆盖${field.label}`"
+            :aria-label="t('覆盖{field}', { field: t(field.label) })"
             :checked="state.fields.includes(field.key)"
             :disabled="disabled || !state.selected"
             class="accent-app-accent"
             @change="editor.toggleField(field.key)"
-          />{{ field.label }}
+          />{{ t(field.label) }}
         </label>
         <input
           :id="`album-tag-${field.key}`"
           :value="common(field.key) ?? ''"
           :disabled="disabled || !state.fields.includes(field.key) || !state.selected"
           :placeholder="state.selected && common(field.key) === undefined ? '—' : ''"
-          :title="`原值：${original[field.key]}`"
+          :title="t('原值：{value}', { value: original[field.key] ?? '' })"
           class="focus:border-app-accent h-[24px] w-full min-w-0 rounded border border-white/15 bg-black/20 px-2 text-xs focus:outline-none disabled:opacity-50"
           @input="input(field.key, $event)"
         />
