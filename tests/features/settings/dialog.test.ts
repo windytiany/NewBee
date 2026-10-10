@@ -12,7 +12,7 @@ import {
 import type { HostNode } from "../../support/hostRenderer";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
-import { THEMES } from "@/features/settings/theme";
+import * as AccentColor from "@/features/settings/accentColor";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 type DialogBindings = {
@@ -25,7 +25,7 @@ type DialogBindings = {
   neteaseEnabled: Vue.Ref<boolean>;
   neteaseLyricsMode: Vue.Ref<Settings["neteaseLyricsMode"]>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
-  theme: Vue.Ref<Settings["theme"]>;
+  accentColor: Vue.Ref<Settings["accentColor"]>;
   reducedMotion: Vue.Ref<boolean>;
   albumCoverBackground: Vue.Ref<boolean>;
   playingCoverBackground: Vue.Ref<boolean>;
@@ -38,7 +38,7 @@ type DialogBindings = {
   save: () => Promise<void>;
 };
 const defaults: Settings = {
-  theme: "spotify",
+  accentColor: AccentColor.DEFAULT_ACCENT_COLOR,
   reducedMotion: false,
   albumCoverBackground: false,
   playingCoverBackground: false,
@@ -63,7 +63,7 @@ afterEach(() => {
 function createDialog(invoke: (command: string, args?: unknown) => Promise<unknown>) {
   const events: string[] = [];
   const feedback: NotificationInput[] = [];
-  const appliedThemes: Settings["theme"][] = [];
+  const appliedColors: Settings["accentColor"][] = [];
   const appliedMotion: boolean[] = [];
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -75,10 +75,10 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     "@/shared/components/HelpDialog.vue": HelpDialog,
     "@tauri-apps/api/core": { invoke, isTauri: () => true },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
-    "@/features/settings/theme": { THEMES },
+    "@/features/settings/accentColor": AccentColor,
     "@/features/settings/appearance": {
       applyAppearance: (settings: Settings) => {
-        appliedThemes.push(settings.theme);
+        appliedColors.push(settings.accentColor);
         appliedMotion.push(settings.reducedMotion);
       },
     },
@@ -97,7 +97,7 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     },
   };
   bindings.dialogElement.value = element;
-  return { bindings, element, events, appliedThemes, appliedMotion, feedback };
+  return { bindings, element, events, appliedColors, appliedMotion, feedback };
 }
 
 function deferred<Value>() {
@@ -163,7 +163,7 @@ describe("settings dialog", () => {
       "@/shared/components/HelpDialog.vue": HelpDialog,
       "@tauri-apps/api/core": { invoke: async () => defaults, isTauri: () => true },
       "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
-      "@/features/settings/theme": { THEMES },
+      "@/features/settings/accentColor": AccentColor,
       "@/features/settings/appearance": { applyAppearance: () => {} },
     };
     const component = evaluateSource<{ default: Vue.Component }>(
@@ -180,6 +180,7 @@ describe("settings dialog", () => {
           tagName: type.toUpperCase(),
           addEventListener: () => {},
           removeEventListener: () => {},
+          getRootNode: () => ({ activeElement: null }),
           showModal() {
             this.open = true;
           },
@@ -199,6 +200,13 @@ describe("settings dialog", () => {
         },
       },
     );
+    const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "Document");
+    const originalShadowRoot = Object.getOwnPropertyDescriptor(globalThis, "ShadowRoot");
+    Object.defineProperty(globalThis, "Document", { configurable: true, value: class Document {} });
+    Object.defineProperty(globalThis, "ShadowRoot", {
+      configurable: true,
+      value: class ShadowRoot {},
+    });
     const root = createHostNode("root");
     const app = renderer.createApp(component);
     const dialog = app.mount(root) as unknown as { show: () => Promise<void> };
@@ -217,8 +225,8 @@ describe("settings dialog", () => {
       const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类");
       if (!panel || !navigation) throw new Error("Missing settings panel or navigation");
       for (const [category, included, excluded] of [
-        ["常规", "关闭窗口时", "主题"],
-        ["外观", "主题", "专辑排序"],
+        ["常规", "关闭窗口时", "主题色"],
+        ["外观", "主题色", "专辑排序"],
         ["媒体库", "专辑排序", "关闭窗口时"],
         ["歌词", "网易云音乐", "关闭窗口时"],
       ] as const) {
@@ -254,6 +262,54 @@ describe("settings dialog", () => {
         await Vue.nextTick();
         expect(getTextContent(panel)).not.toContain(explanation);
         if (category === "外观") {
+          for (const color of AccentColor.ACCENT_COLORS) {
+            const preset = findNode(
+              panel,
+              (node) => node.props["aria-label"] === `${color.label}色`,
+            );
+            if (!preset || typeof preset.props.onClick !== "function")
+              throw new Error("Missing accent color preset");
+            expect(preset.type).toBe("button");
+            expect(preset.props.type).toBe("button");
+            expect(preset.props["aria-pressed"]).toBe(
+              color.value === AccentColor.DEFAULT_ACCENT_COLOR,
+            );
+          }
+          const bluePreset = findNode(panel, (node) => node.props["aria-label"] === "蓝色");
+          if (!bluePreset || typeof bluePreset.props.onClick !== "function")
+            throw new Error("Missing blue preset");
+          bluePreset.props.onClick();
+          await Vue.nextTick();
+          expect(bluePreset.props["aria-pressed"]).toBe(true);
+          expect(
+            findNode(panel, (node) => node.props["aria-label"] === "绿色")?.props["aria-pressed"],
+          ).toBe(false);
+          const picker = findNode(panel, (node) => node.props.name === "accent-color-picker");
+          const textInput = findNode(panel, (node) => node.props.name === "accent-color");
+          expect(picker?.type).toBe("input");
+          expect(picker?.props.type).toBe("color");
+          expect(picker?.props["aria-label"]).toBe("选择自定义主题色");
+          expect(textInput?.type).toBe("input");
+          expect(textInput?.props.type).toBe("text");
+          expect(textInput?.props["aria-label"]).toBe("自定义主题色");
+          expect(textInput?.props.pattern).toBe("#[0-9a-fA-F]{6}");
+          expect(textInput?.props.maxlength).toBe("7");
+          expect(textInput?.props.required).toBe("");
+          if (!picker || !textInput) throw new Error("Missing custom accent color inputs");
+          expect(Reflect.get(picker, "value")).toBe("#60a5fa");
+          expect(Reflect.get(textInput, "value")).toBe("#60a5fa");
+          for (const [input, color] of [
+            [picker, "#123456"],
+            [textInput, "#ABCDEF"],
+          ] as const) {
+            const update = input.props["onUpdate:modelValue"];
+            if (typeof update !== "function") throw new Error("Missing accent color input binding");
+            update(color);
+            await Vue.nextTick();
+            expect(Reflect.get(picker, "value")).toBe(color);
+            expect(Reflect.get(textInput, "value")).toBe(color);
+            expect(bluePreset.props["aria-pressed"]).toBe(false);
+          }
           expect(getTextContent(panel)).toContain("减少动态效果");
           expect(findNode(panel, (node) => node.props.name === "reduced-motion")?.props.type).toBe(
             "checkbox",
@@ -283,29 +339,76 @@ describe("settings dialog", () => {
       }
     } finally {
       app.unmount();
+      if (originalDocument) Object.defineProperty(globalThis, "Document", originalDocument);
+      else Reflect.deleteProperty(globalThis, "Document");
+      if (originalShadowRoot) Object.defineProperty(globalThis, "ShadowRoot", originalShadowRoot);
+      else Reflect.deleteProperty(globalThis, "ShadowRoot");
     }
   });
 
-  for (const option of THEMES) {
+  for (const option of AccentColor.ACCENT_COLORS) {
     it(`persists and applies ${option.value} only after saving`, async () => {
       const calls: unknown[] = [];
-      const { bindings, appliedThemes } = createDialog(async (command, args) => {
+      const { bindings, appliedColors } = createDialog(async (command, args) => {
         if (command === "get_settings") return defaults;
         calls.push(args);
       });
       await bindings.show();
-      bindings.theme.value = option.value;
-      expect(appliedThemes).toEqual([]);
+      bindings.accentColor.value = option.value;
+      expect(appliedColors).toEqual([]);
       await bindings.save();
-      expect(calls).toEqual([{ settings: { ...defaults, theme: option.value } }]);
-      expect(appliedThemes).toEqual([option.value]);
+      expect(calls).toEqual([{ settings: { ...defaults, accentColor: option.value } }]);
+      expect(appliedColors).toEqual([option.value]);
+    });
+  }
+
+  it("normalizes a custom uppercase color before saving and applying it", async () => {
+    const saved: unknown[] = [];
+    const { bindings, element, events, appliedColors } = createDialog(async (command, args) => {
+      if (command === "get_settings") return defaults;
+      saved.push(args);
+    });
+    await bindings.show();
+    bindings.accentColor.value = "#ABCDEF";
+    expect(appliedColors).toEqual([]);
+    await bindings.save();
+    expect(saved).toEqual([{ settings: { ...defaults, accentColor: "#abcdef" } }]);
+    expect(bindings.accentColor.value).toBe("#abcdef");
+    expect(appliedColors).toEqual(["#abcdef"]);
+    expect(events).toEqual([SETTINGS_CHANGED_EVENT]);
+    expect(element.open).toBe(false);
+  });
+
+  for (const invalidColor of ["", "#abc", "#12345678", "#gggggg", "123456"]) {
+    it(`blocks saving invalid accent color ${JSON.stringify(invalidColor)} without discarding edits`, async () => {
+      const calls: string[] = [];
+      const { bindings, element, events, appliedColors, feedback } = createDialog(
+        async (command) => {
+          calls.push(command);
+          return defaults;
+        },
+      );
+      await bindings.show();
+      bindings.accentColor.value = invalidColor;
+      bindings.closeBehavior.value = "exit";
+      await bindings.save();
+      expect(calls).toEqual(["get_settings"]);
+      expect(element.open).toBe(true);
+      expect(bindings.isLoaded.value).toBe(true);
+      expect(bindings.accentColor.value).toBe(invalidColor);
+      expect(bindings.closeBehavior.value).toBe("exit");
+      expect(appliedColors).toEqual([]);
+      expect(events).toEqual([]);
+      expect(feedback).toEqual([
+        { type: "error", message: "主题色必须是有效的 #RRGGBB 颜色", key: "settings-accent-color" },
+      ]);
     });
   }
 
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
-      theme: "tokyoNight",
+      accentColor: "#60a5fa",
       reducedMotion: false,
       albumCoverBackground: true,
       playingCoverBackground: true,
@@ -321,7 +424,7 @@ describe("settings dialog", () => {
     });
     await bindings.show();
     expect(bindings.closeBehavior.value).toBe("exit");
-    expect(bindings.theme.value).toBe("tokyoNight");
+    expect(bindings.accentColor.value).toBe("#60a5fa");
     expect(bindings.albumCoverBackground.value).toBe(true);
     expect(bindings.playingCoverBackground.value).toBe(true);
     expect(bindings.albumSortBy.value).toBe("year");
@@ -329,7 +432,7 @@ describe("settings dialog", () => {
     expect(bindings.neteaseLyricsMode.value).toBe("translated");
     expect(element.open).toBe(true);
     expect(events).toEqual([]);
-    bindings.theme.value = "spotify";
+    bindings.accentColor.value = AccentColor.DEFAULT_ACCENT_COLOR;
     bindings.albumCoverBackground.value = false;
     bindings.playingCoverBackground.value = false;
     bindings.closeBehavior.value = "tray";
@@ -347,7 +450,7 @@ describe("settings dialog", () => {
 
   it("cancel does not save or notify and reopening discards unsaved changes", async () => {
     const calls: string[] = [];
-    const { bindings, events, appliedThemes } = createDialog(async (command) => {
+    const { bindings, events, appliedColors } = createDialog(async (command) => {
       calls.push(command);
       return defaults;
     });
@@ -355,21 +458,26 @@ describe("settings dialog", () => {
     bindings.closeBehavior.value = "exit";
     bindings.albumSortBy.value = "year";
     bindings.albumSortOrder.value = "descending";
-    bindings.theme.value = "catppuccin";
+    bindings.accentColor.value = "#a78bfa";
     bindings.albumCoverBackground.value = true;
     bindings.playingCoverBackground.value = true;
     bindings.neteaseLyricsMode.value = "translated";
     bindings.selectedCategory.value = "appearance";
     bindings.close();
+    expect(appliedColors).toEqual([]);
+    expect(calls).toEqual(["get_settings"]);
+    expect(events).toEqual([]);
     await bindings.show();
     expect<DialogBindings["selectedCategory"]["value"]>(bindings.selectedCategory.value).toBe(
       "general",
     );
-    expect<Settings["theme"]>(bindings.theme.value).toBe("spotify");
+    expect<Settings["accentColor"]>(bindings.accentColor.value).toBe(
+      AccentColor.DEFAULT_ACCENT_COLOR,
+    );
     expect(bindings.albumCoverBackground.value).toBe(false);
     expect(bindings.playingCoverBackground.value).toBe(false);
     expect<Settings["neteaseLyricsMode"]>(bindings.neteaseLyricsMode.value).toBe("original");
-    expect(appliedThemes).toEqual([]);
+    expect(appliedColors).toEqual([]);
     expect<Settings["closeBehavior"]>(bindings.closeBehavior.value).toBe("tray");
     expect<Settings["albumSortBy"]>(bindings.albumSortBy.value).toBe("name");
     expect<Settings["albumSortOrder"]>(bindings.albumSortOrder.value).toBe("ascending");
@@ -379,7 +487,7 @@ describe("settings dialog", () => {
 
   it("preserves edits across categories and saves all categories together", async () => {
     const saved: unknown[] = [];
-    const { bindings, appliedThemes } = createDialog(async (command, args) => {
+    const { bindings, appliedColors } = createDialog(async (command, args) => {
       if (command === "get_settings") return defaults;
       saved.push(args);
     });
@@ -387,7 +495,7 @@ describe("settings dialog", () => {
     expect(bindings.selectedCategory.value).toBe("general");
     bindings.closeBehavior.value = "exit";
     bindings.selectedCategory.value = "appearance";
-    bindings.theme.value = "tokyoNight";
+    bindings.accentColor.value = "#60a5fa";
     bindings.albumCoverBackground.value = true;
     bindings.selectedCategory.value = "library";
     bindings.albumSortBy.value = "year";
@@ -395,16 +503,16 @@ describe("settings dialog", () => {
     bindings.neteaseLyricsMode.value = "bilingual";
     bindings.selectedCategory.value = "general";
     expect(bindings.closeBehavior.value).toBe("exit");
-    expect(bindings.theme.value).toBe("tokyoNight");
+    expect(bindings.accentColor.value).toBe("#60a5fa");
     expect(saved).toEqual([]);
-    expect(appliedThemes).toEqual([]);
+    expect(appliedColors).toEqual([]);
 
     await bindings.save();
 
     expect(saved).toEqual([
       {
         settings: {
-          theme: "tokyoNight",
+          accentColor: "#60a5fa",
           reducedMotion: false,
           albumCoverBackground: true,
           playingCoverBackground: false,
@@ -492,18 +600,20 @@ describe("settings dialog", () => {
   });
 
   it("keeps the dialog open and notifies save failures without applying settings", async () => {
-    const { bindings, element, events, appliedThemes, feedback } = createDialog(async (command) => {
+    const { bindings, element, events, appliedColors, feedback } = createDialog(async (command) => {
       if (command === "get_settings") return defaults;
       throw new Error("Disk unavailable");
     });
     await bindings.show();
+    bindings.accentColor.value = "#ABCDEF";
     await bindings.save();
     expect(element.open).toBe(true);
+    expect(bindings.accentColor.value).toBe("#ABCDEF");
     expect(feedback).toEqual([
       { type: "error", message: "保存设置失败，请查看日志", key: "settings-save" },
     ]);
     expect(JSON.stringify(feedback)).not.toContain("Disk unavailable");
-    expect(appliedThemes).toEqual([]);
+    expect(appliedColors).toEqual([]);
     expect(events).toEqual([]);
   });
 
@@ -516,7 +626,7 @@ describe("settings dialog", () => {
     bindings.close();
     const secondShow = bindings.show();
     first.resolve({
-      theme: "tokyoNight",
+      accentColor: "#60a5fa",
       reducedMotion: false,
       albumCoverBackground: true,
       playingCoverBackground: true,

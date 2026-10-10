@@ -46,23 +46,129 @@ fn rejects_unknown_album_sorting_values() {
 }
 
 #[test]
-fn theme_defaults_and_round_trips() {
-    let settings: Settings = serde_json::from_str(r#"{"closeBehavior":"exit"}"#).unwrap();
-    assert_eq!(settings.theme, Theme::Spotify);
-    for (theme, name) in [
-        (Theme::Spotify, "spotify"),
-        (Theme::TokyoNight, "tokyoNight"),
-        (Theme::Catppuccin, "catppuccin"),
+fn accent_color_defaults_and_round_trips() {
+    for settings in [
+        Settings::default(),
+        serde_json::from_str::<Settings>("{}").unwrap(),
     ] {
+        assert_eq!(settings.accent_color, "#1ed760");
+    }
+    for color in ["#000000", "#ffffff", "#1ed760", "#AbCdEf"] {
         let settings = Settings {
-            theme,
+            accent_color: color.to_owned(),
             ..Settings::default()
         };
         let data = serde_json::to_value(&settings).unwrap();
-        assert_eq!(data["theme"], name);
+        assert_eq!(data["accentColor"], color);
+        assert!(data.get("theme").is_none());
         assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
     }
-    assert!(serde_json::from_str::<Settings>(r#"{"theme":"invalid"}"#).is_err());
+    assert!(serde_json::from_str::<Settings>(r#"{"theme":"spotify"}"#).is_err());
+}
+
+#[test]
+fn accent_color_rejects_invalid_values() {
+    for value in [
+        serde_json::json!(""),
+        serde_json::json!("#abc"),
+        serde_json::json!("123456"),
+        serde_json::json!("#12345678"),
+        serde_json::json!("#12345g"),
+        serde_json::json!(" #123456"),
+        serde_json::json!("#123456\n"),
+        serde_json::json!("#１２３"),
+        serde_json::json!(null),
+        serde_json::json!(123456),
+        serde_json::json!(true),
+        serde_json::json!([]),
+        serde_json::json!({}),
+    ] {
+        assert!(
+            serde_json::from_value::<Settings>(serde_json::json!({"accentColor": value})).is_err()
+        );
+    }
+}
+
+#[test]
+fn accent_color_persists_normalized_and_loads_from_disk() {
+    let path = std::env::temp_dir().join(format!("newbee-accent-{}.json", std::process::id()));
+    let state = SettingsState::load(path.clone()).unwrap();
+    assert_eq!(state.get().unwrap().accent_color, "#1ed760");
+    let app = tauri::test::mock_builder()
+        .manage(state)
+        .build(tauri::generate_context!())
+        .unwrap();
+    let settings = Settings {
+        accent_color: "#AbCdEf".to_owned(),
+        ..Settings::default()
+    };
+    tauri::async_runtime::block_on(save_settings(app.handle().clone(), settings)).unwrap();
+    let expected = Settings {
+        accent_color: "#abcdef".to_owned(),
+        ..Settings::default()
+    };
+    assert_eq!(app.state::<SettingsState>().get().unwrap(), expected);
+    assert_eq!(
+        SettingsState::load(path.clone()).unwrap().get().unwrap(),
+        expected
+    );
+    let data: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(data["accentColor"], "#abcdef");
+    assert!(data.get("theme").is_none());
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn invalid_accent_color_save_preserves_memory_and_disk() {
+    let path =
+        std::env::temp_dir().join(format!("newbee-invalid-accent-{}.json", std::process::id()));
+    let state = SettingsState::load(path.clone()).unwrap();
+    let expected = Settings {
+        accent_color: "#123456".to_owned(),
+        ..Settings::default()
+    };
+    state.save(expected.clone()).unwrap();
+    let original = std::fs::read(&path).unwrap();
+    let invalid = Settings {
+        accent_color: "#bad".to_owned(),
+        ..Settings::default()
+    };
+    assert!(state.save(invalid).is_err());
+    assert_eq!(state.get().unwrap(), expected);
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn accent_color_disk_write_failure_preserves_memory_and_disk() {
+    let path = std::env::temp_dir().join(format!(
+        "newbee-accent-write-failure-{}",
+        std::process::id()
+    ));
+    let state = SettingsState::load(path.clone()).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    let sentinel = path.join("sentinel");
+    std::fs::write(&sentinel, b"unchanged").unwrap();
+    let settings = Settings {
+        accent_color: "#abcdef".to_owned(),
+        ..Settings::default()
+    };
+    assert!(state.save(settings).is_err());
+    assert_eq!(state.get().unwrap(), Settings::default());
+    assert!(path.is_dir());
+    assert_eq!(std::fs::read(&sentinel).unwrap(), b"unchanged");
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn load_rejects_invalid_accent_color_and_legacy_theme() {
+    let path = std::env::temp_dir().join(format!("newbee-accent-load-{}.json", std::process::id()));
+    for data in [r##"{"accentColor":"#12345g"}"##, r#"{"theme":"spotify"}"#] {
+        std::fs::write(&path, data).unwrap();
+        assert!(SettingsState::load(path.clone()).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), data);
+    }
+    std::fs::remove_file(path).unwrap();
 }
 
 #[test]

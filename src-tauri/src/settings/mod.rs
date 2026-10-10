@@ -26,19 +26,31 @@ pub enum AlbumSortOrder {
     Descending,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum Theme {
-    #[default]
-    Spotify,
-    TokyoNight,
-    Catppuccin,
+fn validate_accent_color(color: &str) -> Result<(), String> {
+    if color.len() == 7
+        && color.starts_with('#')
+        && color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
+    {
+        Ok(())
+    } else {
+        Err("Accent color must use #RRGGBB format".to_owned())
+    }
+}
+
+fn deserialize_accent_color<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let color = String::deserialize(deserializer)?;
+    validate_accent_color(&color).map_err(serde::de::Error::custom)?;
+    Ok(color)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
-    pub theme: Theme,
+    #[serde(deserialize_with = "deserialize_accent_color")]
+    pub accent_color: String,
     pub reduced_motion: bool,
     pub album_cover_background: bool,
     pub playing_cover_background: bool,
@@ -54,7 +66,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: Theme::default(),
+            accent_color: "#1ed760".to_owned(),
             reduced_motion: false,
             album_cover_background: false,
             playing_cover_background: false,
@@ -92,7 +104,9 @@ impl SettingsState {
             .map_err(|error| format!("Could not read settings: {error}"))
     }
 
-    fn save(&self, settings: Settings) -> Result<(), String> {
+    fn save(&self, mut settings: Settings) -> Result<(), String> {
+        validate_accent_color(&settings.accent_color)?;
+        settings.accent_color.make_ascii_lowercase();
         let mut providers = std::collections::HashSet::new();
         if settings
             .lyrics_providers

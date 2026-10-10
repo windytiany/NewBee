@@ -12,12 +12,25 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "document");
 });
 
-function createAppearance(desktop: boolean, settings: Pick<Settings, "theme" | "reducedMotion">) {
+function createAppearance(
+  desktop: boolean,
+  settings: Pick<Settings, "accentColor" | "reducedMotion">,
+) {
   const dataset: Record<string, string> = {};
+  const styles: Record<string, string> = {};
   let calls = 0;
   Object.defineProperty(globalThis, "document", {
     configurable: true,
-    value: { documentElement: { dataset } },
+    value: {
+      documentElement: {
+        dataset,
+        style: {
+          setProperty: (key: string, value: string) => {
+            styles[key] = value;
+          },
+        },
+      },
+    },
   });
   const appearance = evaluateSource<typeof import("@/features/settings/appearance")>(output, {
     vue: Vue,
@@ -33,6 +46,7 @@ function createAppearance(desktop: boolean, settings: Pick<Settings, "theme" | "
   return {
     appearance,
     dataset,
+    styles,
     get calls() {
       return calls;
     },
@@ -41,18 +55,20 @@ function createAppearance(desktop: boolean, settings: Pick<Settings, "theme" | "
 
 describe("application appearance restoration", () => {
   for (const reducedMotion of [false, true]) {
-    it(`restores theme and reduced motion ${reducedMotion} from one settings read`, async () => {
-      const test = createAppearance(true, { theme: "catppuccin", reducedMotion });
+    it(`restores accent color and reduced motion ${reducedMotion} from one settings read`, async () => {
+      const test = createAppearance(true, { accentColor: "#123abc", reducedMotion });
       await test.appearance.restoreAppearance();
       expect(test.calls).toBe(1);
-      expect(test.dataset).toEqual({ theme: "catppuccin", reducedMotion: String(reducedMotion) });
+      expect(test.dataset).toEqual({ reducedMotion: String(reducedMotion) });
+      expect(test.styles).toEqual({ "--app-accent": "#123abc" });
     });
   }
 
   it("does not query desktop settings in browser preview", async () => {
-    const test = createAppearance(false, { theme: "spotify", reducedMotion: false });
+    const test = createAppearance(false, { accentColor: "#1ed760", reducedMotion: false });
     await test.appearance.restoreAppearance();
     expect(test.calls).toBe(0);
     expect(test.dataset).toEqual({});
+    expect(test.styles).toEqual({});
   });
 });

@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { applyTheme, THEMES } from "@/features/settings/theme";
+import {
+  ACCENT_COLORS,
+  DEFAULT_ACCENT_COLOR,
+  applyAccentColor,
+  normalizeAccentColor,
+} from "@/features/settings/accentColor";
 
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
 afterEach(() => {
@@ -7,17 +12,50 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "document");
 });
 
-describe("application theme", () => {
-  it("applies all themes to the root, including dialogs outside the app", () => {
-    const dataset: { theme?: string } = {};
+describe("application accent color", () => {
+  it("defaults to Spotify green and applies presets and custom colors at the root", () => {
+    expect(DEFAULT_ACCENT_COLOR).toBe("#1ed760");
+    const styles: Record<string, string> = {};
     Object.defineProperty(globalThis, "document", {
       configurable: true,
-      value: { documentElement: { dataset } },
+      value: {
+        documentElement: {
+          style: {
+            setProperty: (key: string, value: string) => {
+              styles[key] = value;
+            },
+          },
+        },
+      },
     });
-    for (const option of THEMES) {
-      applyTheme(option.value);
-      expect(dataset.theme).toBe(option.value);
+    for (const color of [...ACCENT_COLORS.map(({ value }) => value), "#123456", "#ABCDEF"]) {
+      applyAccentColor(color);
+      expect(styles).toEqual({ "--app-accent": color.toLowerCase() });
     }
+  });
+
+  it("normalizes custom colors and rejects unsupported or unsafe CSS values", () => {
+    expect(normalizeAccentColor(" #ABCDEF ")).toBe("#abcdef");
+    for (const color of [
+      "",
+      "#abc",
+      "#12345678",
+      "#gggggg",
+      "123456",
+      "red",
+      "var(--app-base)",
+      "#123456; color:red",
+    ]) {
+      expect(normalizeAccentColor(color)).toBeNull();
+      expect(() => applyAccentColor(color)).toThrow("主题色必须是有效的 #RRGGBB 颜色。");
+    }
+  });
+
+  it("keeps a single fixed dark palette with the default accent", async () => {
+    const css = await Bun.file("src/app/styles/themes.css").text();
+    expect(css).toContain(`--app-accent: ${DEFAULT_ACCENT_COLOR}`);
+    expect(css).toContain("--app-base: #121212");
+    expect(css).not.toContain("data-theme");
   });
 });
 

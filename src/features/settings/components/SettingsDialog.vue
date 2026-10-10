@@ -3,10 +3,14 @@ import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
-import { THEMES } from "@/features/settings/theme";
+import {
+  ACCENT_COLORS,
+  DEFAULT_ACCENT_COLOR,
+  normalizeAccentColor,
+} from "@/features/settings/accentColor";
 import { applyAppearance } from "@/features/settings/appearance";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
 
@@ -45,7 +49,8 @@ const categories = {
 const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
-const theme = ref<Settings["theme"]>("spotify");
+const accentColor = ref(DEFAULT_ACCENT_COLOR);
+const normalizedAccentColor = computed(() => normalizeAccentColor(accentColor.value));
 const reducedMotion = ref(false);
 const albumCoverBackground = ref(false);
 const playingCoverBackground = ref(false);
@@ -71,7 +76,7 @@ async function show() {
     const settings = await api.get();
     if (requestId !== loadRequestSequence) return;
     closeBehavior.value = settings.closeBehavior;
-    theme.value = settings.theme;
+    accentColor.value = settings.accentColor;
     reducedMotion.value = settings.reducedMotion;
     albumCoverBackground.value = settings.albumCoverBackground;
     playingCoverBackground.value = settings.playingCoverBackground;
@@ -97,11 +102,20 @@ function close() {
 
 async function save() {
   if (!isTauriApp || !isLoaded.value || isLoading.value || isSaving.value) return;
+  const color = normalizedAccentColor.value;
+  if (!color) {
+    notify({
+      type: "error",
+      message: "主题色必须是有效的 #RRGGBB 颜色",
+      key: "settings-accent-color",
+    });
+    return;
+  }
   isSaving.value = true;
   try {
     await api.save({
       closeBehavior: closeBehavior.value,
-      theme: theme.value,
+      accentColor: color,
       reducedMotion: reducedMotion.value,
       albumCoverBackground: albumCoverBackground.value,
       playingCoverBackground: playingCoverBackground.value,
@@ -110,7 +124,8 @@ async function save() {
       lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
       neteaseLyricsMode: neteaseLyricsMode.value,
     });
-    applyAppearance({ theme: theme.value, reducedMotion: reducedMotion.value });
+    accentColor.value = color;
+    applyAppearance({ accentColor: color, reducedMotion: reducedMotion.value });
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
   } catch (reason) {
@@ -203,17 +218,44 @@ defineExpose({ show });
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           >
             <legend class="sr-only">外观</legend>
-            <label class="flex flex-col gap-2 text-sm font-semibold">
-              主题
-              <select
-                v-model="theme"
-                class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
-              >
-                <option v-for="option in THEMES" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
+            <div role="group" aria-labelledby="accent-color-label" class="space-y-3">
+              <h4 id="accent-color-label" class="text-sm font-semibold">主题色</h4>
+              <div class="flex flex-wrap gap-3">
+                <button
+                  v-for="color in ACCENT_COLORS"
+                  :key="color.value"
+                  type="button"
+                  :aria-label="`${color.label}色`"
+                  :aria-pressed="normalizedAccentColor === color.value"
+                  :style="{ backgroundColor: color.value }"
+                  class="focus-visible:outline-app-accent size-8 rounded-full border-2 focus-visible:outline-2 focus-visible:outline-offset-4"
+                  :class="
+                    normalizedAccentColor === color.value ? 'border-white' : 'border-transparent'
+                  "
+                  @click="accentColor = color.value"
+                ></button>
+              </div>
+              <div class="flex items-center gap-3">
+                <input
+                  v-model="accentColor"
+                  type="color"
+                  name="accent-color-picker"
+                  aria-label="选择自定义主题色"
+                  class="focus-visible:outline-app-accent h-9 w-12 cursor-pointer rounded border border-white/10 bg-transparent focus-visible:outline-2"
+                />
+                <input
+                  v-model="accentColor"
+                  type="text"
+                  name="accent-color"
+                  aria-label="自定义主题色"
+                  pattern="#[0-9a-fA-F]{6}"
+                  maxlength="7"
+                  required
+                  spellcheck="false"
+                  class="bg-app-interactive focus-visible:outline-app-accent w-28 rounded-lg border border-white/10 px-3 py-2 text-sm text-white focus-visible:outline-2"
+                />
+              </div>
+            </div>
             <label
               class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
             >

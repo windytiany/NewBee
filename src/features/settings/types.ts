@@ -1,10 +1,9 @@
-import type { Theme } from "@/features/settings/theme";
 import type { LyricsProvider } from "@/features/lyrics/types";
 
 export type NeteaseLyricsMode = "original" | "translated" | "bilingual";
 
 export type Settings = {
-  theme: Theme;
+  accentColor: string;
   reducedMotion: boolean;
   albumCoverBackground: boolean;
   playingCoverBackground: boolean;
