@@ -1,32 +1,12 @@
-import { logger } from "@/shared/logging/logger";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { onMounted, onUnmounted, ref, watch } from "vue";
-import {
-  createSystemMediaCommandHandler,
-  type SystemMediaCommand,
-} from "@/features/playback/runtime/systemMedia";
-import type { PlaybackTransition } from "@/features/playback/types";
 import { PLAYBACK_STATUS_POLL_INTERVAL_MS, usePlaybackSession } from "@/features/playback/session";
 
-export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Promise<boolean>) {
+export function usePlaybackControls() {
   const session = usePlaybackSession();
   const isSeeking = session.state.isSeeking;
   const isSeekInputActive = ref(false);
   const selectedPositionMs = ref(0);
   let playbackStatusPoll: ReturnType<typeof globalThis.setInterval> | null = null;
-  let unlistenSystemMedia: UnlistenFn | null = null;
-  let unlistenTrackTransition: UnlistenFn | null = null;
-  let isUnmounted = false;
-  const handleSystemMediaCommand = createSystemMediaCommandHandler({
-    isCommandPending: () => session.state.isPlaybackCommandPending.value || isSeeking.value,
-    isPlaying: () => session.state.playbackStatus.value.isPlaying,
-    canPlayPrevious: () => session.state.canPlayPrevious.value,
-    canPlayNext: () => session.state.canPlayNext.value,
-    refreshStatus: session.refreshPlaybackStatus,
-    togglePlayback: () => session.togglePlayback(ensureCurrentVolumeIsSynchronized),
-    playPrevious: session.playPreviousTrack,
-    playNext: session.playNextTrack,
-  });
 
   watch(
     isSeeking,
@@ -56,40 +36,6 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   }
 
   onMounted(() => {
-    void listen<PlaybackTransition>("playback-track-started", ({ payload }) => {
-      session.observePlaybackTransition(payload);
-    })
-      .then((unlisten) => {
-        if (isUnmounted) unlisten();
-        else unlistenTrackTransition = unlisten;
-      })
-      .catch((error: unknown) => {
-        logger.warn(
-          "features/playback/composables/useControls",
-          "Could not listen for track transitions.",
-          error,
-        );
-      });
-    void listen<SystemMediaCommand>("system-media-command", ({ payload }) => {
-      void handleSystemMediaCommand(payload).catch((error: unknown) => {
-        logger.warn(
-          "features/playback/composables/useControls",
-          "Could not handle media command.",
-          error,
-        );
-      });
-    })
-      .then((unlisten) => {
-        if (isUnmounted) unlisten();
-        else unlistenSystemMedia = unlisten;
-      })
-      .catch((error: unknown) => {
-        logger.warn(
-          "features/playback/composables/useControls",
-          "Could not listen for media commands.",
-          error,
-        );
-      });
     void session.refreshPlaybackStatus();
     playbackStatusPoll = globalThis.setInterval(
       () => void session.refreshPlaybackStatus(),
@@ -98,9 +44,6 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
   });
 
   onUnmounted(() => {
-    isUnmounted = true;
-    unlistenSystemMedia?.();
-    unlistenTrackTransition?.();
     if (playbackStatusPoll !== null) globalThis.clearInterval(playbackStatusPoll);
   });
 
@@ -111,7 +54,7 @@ export function usePlaybackControls(ensureCurrentVolumeIsSynchronized: () => Pro
     setShuffleEnabled: session.setShuffleEnabled,
     playPreviousTrack: session.playPreviousTrack,
     playNextTrack: session.playNextTrack,
-    togglePlayback: () => session.togglePlayback(ensureCurrentVolumeIsSynchronized),
+    togglePlayback: session.togglePlayback,
     handleSeekInput,
     commitSeek,
   };

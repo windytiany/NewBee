@@ -29,6 +29,11 @@ pub fn run() {
                 app.manage(settings::SettingsState::load(
                     app_data_dir.join("settings.json"),
                 )?);
+                stage = "playback_session";
+                playback::session::initialize(
+                    app.handle(),
+                    app_data_dir.join("playback-session.json"),
+                );
                 stage = "window";
                 window::initialize(app.handle());
                 window::tray::initialize(app.handle())?;
@@ -99,14 +104,8 @@ pub fn run() {
             metadata::releases::get_release_covers,
             metadata::releases::get_release_cover,
             metadata::releases::save::save_album_tags,
-            playback::play_track,
-            playback::prepare_next_track,
-            playback::set_volume,
-            playback::pause,
-            playback::resume,
-            playback::stop_playback,
-            playback::seek_to,
-            playback::playback_status,
+            playback::session::runtime::playback_session_command,
+            playback::session::runtime::playback_session_progress,
             playback::playback_spectrum,
         ])
         .run(tauri::generate_context!());

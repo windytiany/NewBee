@@ -1,4 +1,5 @@
 export const playbackMessages: Record<string, string> = {
+  播放状态读取失败: "Could not read playback status",
   播放控制: "Playback controls",
   上一首: "Previous track",
   暂停: "Pause",

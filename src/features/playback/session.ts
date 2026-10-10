@@ -1,372 +1,397 @@
 import { invoke } from "@tauri-apps/api/core";
-import { createTrackSkipState } from "@/features/playback/queue/skip";
-import { logger } from "@/shared/logging/logger";
+import { listen } from "@tauri-apps/api/event";
 import { computed, readonly, ref, watch } from "vue";
-import { PlaybackQueueCoordinator } from "@/features/playback/queue/coordinator";
-import type {
-  PlaybackQueueSnapshot,
-  QueuePlaybackAttempt,
-} from "@/features/playback/queue/coordinator";
-import {
-  createPlaybackQueueSnapshotWriter,
-  EMPTY_PLAYBACK_QUEUE_SNAPSHOT,
-  loadPlaybackQueueSnapshot,
-} from "@/features/playback/queue/persistence";
-import type { PlaybackQueuePersistenceSnapshot } from "@/features/playback/queue/persistence";
-import { createPlaybackSessionCommands } from "@/features/playback/runtime/commands";
-import { createPlaybackStatusObserver } from "@/features/playback/runtime/status";
-import { createPlaybackState } from "@/features/playback/runtime/state";
+import { t } from "@/shared/i18n/locale";
+import { logger } from "@/shared/logging/logger";
+import type { TrackLyrics } from "@/features/lyrics/types";
 import type {
   PlaybackCommandInvoker,
-  PlaybackStartFailure,
-  PlaybackTransition,
   PlaybackDisplayTrack,
+  PlaybackStatus,
+  PlaybackTrack,
   TrackMetadataUpdate,
 } from "@/features/playback/types";
 
-import type { TrackLyrics } from "@/features/lyrics/types";
-
 export type { PlaybackStatus } from "@/features/playback/types";
-
 export const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
 
-export type PlaybackSessionOptions = {
-  invokeCommand?: PlaybackCommandInvoker;
-  restoredQueueSnapshot?: PlaybackQueuePersistenceSnapshot | null;
+export type PlaybackSessionSnapshot = {
+  revision: number;
+  displayedTracks: PlaybackDisplayTrack[];
+  currentRowKey: string | null;
+  currentTrack: PlaybackTrack | null;
+  currentPlaybackId: number | null;
+  playbackStatus: PlaybackStatus;
+  queuePlaybackError: string;
+  playbackError: string;
+  shuffleEnabled: boolean;
+  repeatOneEnabled: boolean;
+  canPlayPrevious: boolean;
+  canPlayNext: boolean;
+  skippedTrackIds: number[];
+  volume: number;
+  isEditing: boolean;
+  isCommandPending: boolean;
 };
 
+export type QueueTrackRemovalResult =
+  | { status: "not-found" | "removed" | "stop-unconfirmed" | "superseded" }
+  | { status: "stop-failed" | "queue-error"; message: string };
+
+type SessionCommand =
+  | { action: "volume"; volume: number }
+  | { action: "snapshot" | "previous" | "next" | "toggle" | "clear" | "beginSeeking" | "mute" }
+  | {
+      action: "playTracks";
+      tracks: readonly PlaybackDisplayTrack[];
+      startRowKey: string;
+      allowSkipped: boolean;
+    }
+  | { action: "playItem"; rowKey: string }
+  | { action: "seek"; positionMs: number; playbackId: number | null }
+  | { action: "add"; tracks: readonly PlaybackDisplayTrack[]; next: boolean }
+  | { action: "remove"; rowKeys: readonly string[] }
+  | { action: "removeTrack"; trackId: number }
+  | { action: "repeat" | "shuffle"; enabled: boolean }
+  | { action: "beginEditing"; trackIds: readonly number[] }
+  | { action: "endEditing"; token: number }
+  | { action: "updateMetadata"; tracks: readonly TrackMetadataUpdate[] };
+
+export type PlaybackSessionProgress = {
+  revision: number;
+  playbackStatus: PlaybackStatus & { playbackId: number | null };
+};
+
+export type PlaybackSessionReply = {
+  snapshot: PlaybackSessionSnapshot;
+  applied: boolean;
+  removal: QueueTrackRemovalResult | null;
+  editToken: number | null;
+};
+
+type SessionSubscriber = (
+  receive: (snapshot: PlaybackSessionSnapshot) => void,
+) => Promise<() => void>;
+export type PlaybackSessionOptions = {
+  invokeCommand?: PlaybackCommandInvoker;
+  subscribe?: SessionSubscriber;
+};
+
+const emptySnapshot = (): PlaybackSessionSnapshot => ({
+  revision: -1,
+  displayedTracks: [],
+  currentRowKey: null,
+  currentTrack: null,
+  currentPlaybackId: null,
+  playbackStatus: {
+    hasAudio: false,
+    isPlaying: false,
+    hasEnded: false,
+    positionMs: 0,
+    durationMs: 0,
+  },
+  queuePlaybackError: "",
+  playbackError: "",
+  shuffleEnabled: false,
+  repeatOneEnabled: false,
+  canPlayPrevious: false,
+  canPlayNext: false,
+  skippedTrackIds: [],
+  volume: 50,
+  isEditing: false,
+  isCommandPending: false,
+});
+
+/** A versioned projection of the backend session, never a playback scheduler. */
 export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   const invokeCommand = options.invokeCommand ?? invoke;
-  const restoredQueueSnapshot =
-    options.restoredQueueSnapshot === undefined
-      ? loadPlaybackQueueSnapshot()
-      : options.restoredQueueSnapshot;
-  const initialQueueSnapshot = restoredQueueSnapshot ?? EMPTY_PLAYBACK_QUEUE_SNAPSHOT;
-  const restoredStartRowKey = restoredQueueSnapshot?.currentRowKey ?? null;
-  const writeQueueSnapshot = createPlaybackQueueSnapshotWriter(restoredQueueSnapshot);
-  const trackSkip = createTrackSkipState(invokeCommand);
-  const playbackState = createPlaybackState(invokeCommand);
-  const currentTrack = playbackState.currentTrack;
+  const snapshot = ref(emptySnapshot());
+  const requestsPending = ref(0);
+  const statusPending = ref(false);
+  const isSeeking = ref(false);
+  const isTrackSkipPending = ref(false);
+  const adapterError = ref("");
   const sidecarLyrics = ref<TrackLyrics | null>(null);
+  let disposed = false;
+  let unlisten: (() => void) | null = null;
   let sidecarRequest = 0;
+  let seekingVersion = 0;
+  let seekPlaybackId: number | null = null;
+  let seekingRequest: Promise<PlaybackSessionReply> | null = null;
+
+  function receive(next: PlaybackSessionSnapshot) {
+    if (disposed || next.revision < snapshot.value.revision) return;
+    if (isSeeking.value && next.currentPlaybackId !== seekPlaybackId) {
+      isSeeking.value = false;
+      seekingVersion += 1;
+    }
+    snapshot.value = next;
+    adapterError.value = "";
+  }
+
+  async function request(command: SessionCommand, pending = true) {
+    if (
+      isSeeking.value &&
+      [
+        "playTracks",
+        "playItem",
+        "previous",
+        "next",
+        "toggle",
+        "clear",
+        "remove",
+        "removeTrack",
+        "beginEditing",
+      ].includes(command.action)
+    ) {
+      isSeeking.value = false;
+      seekingVersion += 1;
+    }
+    if (pending) requestsPending.value += 1;
+    try {
+      const reply = await invokeCommand<PlaybackSessionReply>("playback_session_command", {
+        command,
+      });
+      receive(reply.snapshot);
+      return reply;
+    } finally {
+      if (pending) requestsPending.value -= 1;
+    }
+  }
+
+  async function refreshPlaybackStatus(): Promise<boolean> {
+    if (statusPending.value || disposed) return false;
+    statusPending.value = true;
+    try {
+      const progress = await invokeCommand<PlaybackSessionProgress>("playback_session_progress");
+      if (disposed || progress.revision < snapshot.value.revision) return false;
+      if (
+        progress.revision > snapshot.value.revision ||
+        progress.playbackStatus.playbackId !== snapshot.value.currentPlaybackId
+      ) {
+        await request({ action: "snapshot" }, false);
+      } else {
+        snapshot.value = { ...snapshot.value, playbackStatus: progress.playbackStatus };
+      }
+      return true;
+    } catch (error) {
+      logger.warn("playback", "status_unavailable", error);
+      adapterError.value = t("播放状态读取失败");
+      return false;
+    } finally {
+      statusPending.value = false;
+    }
+  }
+
+  async function perform(command: SessionCommand, pending = true): Promise<boolean> {
+    try {
+      return (await request(command, pending)).applied;
+    } catch (error) {
+      logger.error("playback", "command_failed", error);
+      adapterError.value = t("播放操作失败，请重试或查看日志");
+      await refreshPlaybackStatus();
+      return false;
+    }
+  }
+
+  const currentTrack = computed(() => snapshot.value.currentTrack);
   watch(
-    () => [currentTrack.value?.trackId ?? null, currentTrack.value?.playbackId ?? null] as const,
+    () => [currentTrack.value?.trackId ?? null, snapshot.value.currentPlaybackId] as const,
     ([trackId, playbackId], previous) => {
       if (trackId === previous?.[0] && playbackId === previous?.[1]) return;
-      // File editing detaches the audio instance, but keeps the listening session.
+      // Editing detaches the audio instance, but retains the listening lyrics.
       if (trackId !== null && trackId === previous?.[0] && playbackId === null) return;
-      const request = ++sidecarRequest;
+      const generation = ++sidecarRequest;
       sidecarLyrics.value = null;
       if (trackId === null || playbackId === null) return;
       void invokeCommand<TrackLyrics | null>("get_playback_sidecar_lyrics", { trackId })
         .then((lyrics) => {
-          if (request === sidecarRequest) sidecarLyrics.value = lyrics ?? null;
+          if (!disposed && generation === sidecarRequest) sidecarLyrics.value = lyrics;
         })
-        .catch((error: unknown) => {
-          logger.warn("lyrics", "sidecar_read_failed", error, { trackId });
-        });
+        .catch((error: unknown) =>
+          logger.warn("lyrics", "sidecar_read_failed", error, { trackId }),
+        );
     },
-    { flush: "sync", immediate: true },
+    { flush: "sync" },
   );
-  const playbackError = ref("");
-  const isSeeking = ref(false);
-  const isSessionCommandPending = ref(false);
-  const displayedTracks = ref<PlaybackDisplayTrack[]>([]);
-  const currentRowKey = ref<string | null>(null);
-  const queuePlaybackError = ref("");
-  const repeatOneEnabled = ref(false);
-  const shuffleEnabled = ref(false);
-  const canPlayPrevious = ref(false);
-  const canPlayNext = ref(false);
-  const isPlaybackCommandPending = computed(
-    () => isSessionCommandPending.value || playbackState.isCommandPending.value,
-  );
-  const canStartRestoredQueue = computed(
-    () =>
-      restoredStartRowKey !== null &&
-      currentRowKey.value === restoredStartRowKey &&
-      displayedTracks.value.some((track) => track.rowKey === restoredStartRowKey),
-  );
-  const activeQueueRowKey = computed(() => {
-    const track = currentTrack.value;
-    const rowKey = currentRowKey.value;
-    if (track === null || track.playbackId === null || rowKey === null) return null;
 
-    return displayedTracks.value.some(
-      (item) => item.rowKey === rowKey && item.trackId === track.trackId,
-    )
-      ? rowKey
-      : null;
-  });
-  const readonlyDisplayedTracks = readonly(displayedTracks);
-  const readonlyCurrentRowKey = readonly(currentRowKey);
-  const readonlyQueuePlaybackError = readonly(queuePlaybackError);
-  const readonlyRepeatOneEnabled = readonly(repeatOneEnabled);
-  const readonlyShuffleEnabled = readonly(shuffleEnabled);
-  const readonlyCanPlayPrevious = readonly(canPlayPrevious);
-  const readonlyCanPlayNext = readonly(canPlayNext);
-
-  function syncQueueState(snapshot: PlaybackQueueSnapshot) {
-    displayedTracks.value = [...snapshot.displayedTracks];
-    currentRowKey.value = snapshot.currentRowKey;
-    if (snapshot.queuePlaybackError && snapshot.queuePlaybackError !== queuePlaybackError.value) {
-      logger.error("playback.queue", "transition_failed", snapshot.queuePlaybackError);
-    }
-    queuePlaybackError.value = snapshot.queuePlaybackError;
-    repeatOneEnabled.value = snapshot.repeatOneEnabled;
-    shuffleEnabled.value = snapshot.shuffleEnabled;
-    canPlayPrevious.value = snapshot.canPlayPrevious;
-    canPlayNext.value = snapshot.canPlayNext;
-  }
-
-  function waitForPlaybackCommand() {
-    if (!isPlaybackCommandPending.value) return Promise.resolve();
-
-    return new Promise<void>((resolve) => {
-      const stopWatching = watch(
-        isPlaybackCommandPending,
-        (isPending) => {
-          if (isPending) return;
-          stopWatching();
-          resolve();
-        },
-        { flush: "sync" },
-      );
-    });
-  }
-
-  async function attemptPlayback(
-    trackId: number,
-    canStart: () => boolean,
-    rowKey: string,
-  ): Promise<QueuePlaybackAttempt> {
-    while (isPlaybackCommandPending.value) {
-      if (!canStart()) return { status: "cancelled" };
-      await waitForPlaybackCommand();
-    }
-    if (!canStart()) return { status: "cancelled" };
-
-    if (!(await playbackState.startTrack(trackId, canStart, rowKey))) {
-      if (!canStart()) return { status: "cancelled" };
-      const failure: PlaybackStartFailure = playbackState.consumePlaybackStartFailure() ?? {
-        kind: "playback-failed",
-        message: playbackState.playbackStartError.value || "播放命令未执行",
-      };
-      return { status: "failed", failure };
-    }
-
-    const playbackId = currentTrack.value?.playbackId;
-    if (playbackId === null || playbackId === undefined) {
-      return {
-        status: "failed",
-        failure: { kind: "playback-failed", message: "未能确认播放实例" },
-      };
-    }
-
-    return { status: "started", playbackId };
-  }
-
-  let preparationRevision = 0;
-  let preparationGeneration = 0;
-  let preparationSignature = "";
-  let preparedSuccessor: { playbackId: number; rowKey: string } | null = null;
-
-  async function synchronizeNextTrack() {
-    const plan = coordinator.gaplessPlan;
-    const signature = JSON.stringify(
-      plan === null ? null : [plan.playbackId, plan.candidates.map((item) => item.rowKey)],
-    );
-    if (signature === preparationSignature) return;
-    preparationSignature = signature;
-    if (
-      plan !== null &&
-      preparedSuccessor?.playbackId === plan.playbackId &&
-      preparedSuccessor.rowKey === plan.candidates[0]?.rowKey
-    )
-      return;
-    preparedSuccessor = null;
-    const generation = ++preparationGeneration;
-    if (plan === null) return;
-    const candidates = plan.candidates.length > 0 ? plan.candidates : [null];
-    for (const item of candidates) {
-      if (generation !== preparationGeneration) return;
+  const subscribe =
+    options.subscribe ??
+    (options.invokeCommand
+      ? null
+      : (receive: (snapshot: PlaybackSessionSnapshot) => void) =>
+          listen<PlaybackSessionSnapshot>("playback-session-changed", ({ payload }) =>
+            receive(payload),
+          ));
+  const ready = (async () => {
+    if (subscribe) {
       try {
-        const accepted = await invokeCommand<boolean>("prepare_next_track", {
-          playbackId: plan.playbackId,
-          revision: ++preparationRevision,
-          trackId: item?.trackId ?? null,
-          rowKey: item?.rowKey ?? null,
-        });
-        if (generation !== preparationGeneration) return;
-        if (accepted) {
-          if (item !== null) {
-            preparedSuccessor = { playbackId: plan.playbackId, rowKey: item.rowKey };
-          }
-          return;
-        }
-        // The backend may already have crossed the boundary. Reconcile via status.
-        await statusObserver.refreshAfterCommand();
-        return;
+        const stop = await subscribe(receive);
+        if (disposed) stop();
+        else unlisten = stop;
       } catch (error) {
-        if (generation !== preparationGeneration) return;
-        logger.warn("playback", "next_track_preparation_failed", error, { trackId: item?.trackId });
-        const message = error instanceof Error ? error.message : String(error);
-        if (item === null) {
-          playbackError.value = `Could not cancel next track: ${message}`;
-          return;
-        }
-        const missingPrefix = "AUDIO_FILE_NOT_FOUND:";
-        coordinator.reportPreparationFailure(item, {
-          kind: message.startsWith(missingPrefix) ? "audio-file-not-found" : "playback-failed",
-          message: message.startsWith(missingPrefix)
-            ? message.slice(missingPrefix.length)
-            : message,
-        });
+        logger.warn("playback", "subscription_failed", error);
+      }
+    }
+    try {
+      await request({ action: "snapshot" }, false);
+    } catch (error) {
+      logger.warn("playback", "status_unavailable", error);
+      adapterError.value = t("播放状态读取失败");
+    }
+  })();
+
+  async function remove(command: SessionCommand): Promise<QueueTrackRemovalResult> {
+    const reply = await request(command);
+    if (reply.removal === null) throw new Error("Missing playback queue removal result");
+    return reply.removal;
+  }
+
+  function beginSeeking() {
+    if (isSeeking.value) return;
+    isSeeking.value = true;
+    seekingVersion += 1;
+    seekPlaybackId = snapshot.value.currentPlaybackId;
+    seekingRequest = request({ action: "beginSeeking" }, false);
+    void seekingRequest.catch((error: unknown) => logger.warn("playback", "seek_failed", error));
+  }
+
+  async function seekTo(positionMs: number) {
+    if (!isSeeking.value) return false;
+    const version = seekingVersion;
+    const playbackId = seekPlaybackId;
+    try {
+      await seekingRequest?.catch((error: unknown) =>
+        logger.warn("playback", "seek_failed", error),
+      );
+      if (!isSeeking.value || version !== seekingVersion) return false;
+      return await perform({ action: "seek", positionMs, playbackId });
+    } finally {
+      if (version === seekingVersion) {
+        isSeeking.value = false;
+        seekingRequest = null;
       }
     }
   }
 
-  function observePlaybackTransition(track: PlaybackTransition): boolean {
-    if (currentTrack.value?.playbackId === track.playbackId) return false;
-    if (currentTrack.value?.playbackId !== track.previousPlaybackId) return false;
-    if (
-      !coordinator.confirmGaplessTransition(
-        track.previousPlaybackId,
-        track.playbackId,
-        track.rowKey,
-        track.trackId,
-      )
-    )
-      return false;
-    return playbackState.adoptTransition(track);
-  }
-
-  async function loadTrackPreferences(): Promise<boolean> {
+  async function withMetadataEditing<T>(
+    trackIds: readonly number[],
+    save: () => Promise<T>,
+  ): Promise<T> {
+    requestsPending.value += 1;
+    let token: number | null = null;
     try {
-      await trackSkip.load();
-      return true;
-    } catch (error) {
-      const message = `读取跳过标记失败：${error instanceof Error ? error.message : String(error)}`;
-      logger.error("playback", "preferences_load_failed", error);
-      playbackError.value = message;
-
-      return false;
+      const reply = await request({ action: "beginEditing", trackIds }, false);
+      token = reply.editToken;
+      if (token === null) throw new Error(t("未能确认播放文件已释放，请重试。"));
+      return await save();
+    } finally {
+      let cleanupFailed = false;
+      try {
+        if (token !== null) await request({ action: "endEditing", token }, false);
+      } catch (error) {
+        // A completed file write remains completed even if releasing the lease fails.
+        // Preserve the callback result/error and expose the playback failure separately.
+        cleanupFailed = true;
+        logger.error("playback", "editing_release_failed", error);
+      } finally {
+        requestsPending.value -= 1;
+        await refreshPlaybackStatus();
+        if (cleanupFailed) adapterError.value = t("播放操作失败，请重试或查看日志");
+      }
     }
   }
 
-  const coordinator = new PlaybackQueueCoordinator(
-    attemptPlayback,
-    (snapshot, persistenceSnapshot) => {
-      syncQueueState(snapshot);
-      writeQueueSnapshot(persistenceSnapshot);
-      void Promise.resolve().then(synchronizeNextTrack);
-    },
-    {
-      isTrackSkipped: trackSkip.isSkipped,
-      loadTrackPreferences,
-      clearPlayback: () => {
-        playbackState.resetCurrentTrack();
-        playbackState.consumePlaybackStartFailure();
-        playbackError.value = "";
-      },
-      stopPlayback: playbackState.stopPlayback,
-      stopStalePlayback: playbackState.stopStalePlayback,
-      finishPlayback: async (playbackId, canFinish) => {
-        await playbackState.finishPlayback(playbackId, canFinish);
-        if (canFinish()) await statusObserver.refreshAfterCommand();
-      },
-    },
-  );
-  coordinator.restoreQueue(initialQueueSnapshot);
-  watch(trackSkip.skippedTrackIds, () => coordinator.refreshTrackPreferences(), { flush: "sync" });
-  void loadTrackPreferences();
-
-  const statusObserver = createPlaybackStatusObserver({
-    invokeCommand,
-    currentTrack,
-    isCommandPending: isPlaybackCommandPending,
-    isSeeking,
-    activeQueueRowKey,
-    playbackError,
-    observePlaybackTransition,
-    observePlaybackState: (playbackId, isPlaying, hasReachedEnd) =>
-      coordinator.observePlaybackState(playbackId, isPlaying, hasReachedEnd),
-  });
-  const commands = createPlaybackSessionCommands({
-    invokeCommand,
-    playbackState,
-    coordinator,
-    currentTrack,
-    currentStatus: statusObserver.internalStatus,
-    displayedTracks: readonlyDisplayedTracks,
-    currentRowKey: readonlyCurrentRowKey,
-    canStartRestoredQueue,
-    restoredStartRowKey,
-    isTrackSkipped: trackSkip.isSkipped,
-    loadTrackPreferences,
-    playbackError,
-    isCommandPending: isPlaybackCommandPending,
-    isSessionCommandPending,
-    isSeeking,
-    refreshStatus: statusObserver.refreshAfterCommand,
-    invalidateStatus: statusObserver.invalidate,
-  });
-  const publicCurrentTrack = readonly(
-    computed(() => {
-      const track = currentTrack.value;
-      if (track === null) return null;
-      return { trackId: track.trackId, title: track.title, artist: track.artist };
-    }),
-  );
-
   const state = Object.freeze({
+    volume: computed(() => snapshot.value.volume),
     sidecarLyrics: readonly(sidecarLyrics),
-    playbackStatus: statusObserver.status,
-    isPlaybackStatusSettled: statusObserver.isSettled,
-    playbackError: readonly(playbackError),
-    currentTrack: publicCurrentTrack,
-    currentPlaybackId: computed(() => currentTrack.value?.playbackId ?? null),
-    isPlaybackCommandPending: readonly(isPlaybackCommandPending),
+    playbackStatus: readonly(computed(() => snapshot.value.playbackStatus)),
+    isPlaybackStatusSettled: computed(() => snapshot.value.revision >= 0 && !statusPending.value),
+    playbackError: computed(() => adapterError.value || snapshot.value.playbackError),
+    currentTrack: readonly(currentTrack),
+    currentPlaybackId: computed(() => snapshot.value.currentPlaybackId),
+    isPlaybackCommandPending: computed(
+      () =>
+        requestsPending.value > 0 || snapshot.value.isEditing || snapshot.value.isCommandPending,
+    ),
     isSeeking: readonly(isSeeking),
-    canStartRestoredQueue: readonly(canStartRestoredQueue),
-    displayedTracks: readonlyDisplayedTracks,
-    currentRowKey: readonlyCurrentRowKey,
-    activeQueueRowKey: readonly(activeQueueRowKey),
-    queuePlaybackError: readonlyQueuePlaybackError,
-    repeatOneEnabled: readonlyRepeatOneEnabled,
-    shuffleEnabled: readonlyShuffleEnabled,
-    canPlayPrevious: readonlyCanPlayPrevious,
-    canPlayNext: readonlyCanPlayNext,
-    playbackStartError: playbackState.playbackStartError,
-    skippedTrackIds: trackSkip.skippedTrackIds,
-    isTrackSkipPending: trackSkip.isPending,
+    canStartRestoredQueue: computed(
+      () => snapshot.value.currentPlaybackId === null && snapshot.value.currentRowKey !== null,
+    ),
+    displayedTracks: readonly(computed(() => snapshot.value.displayedTracks)),
+    currentRowKey: computed(() => snapshot.value.currentRowKey),
+    activeQueueRowKey: computed(() =>
+      snapshot.value.currentPlaybackId !== null ? snapshot.value.currentRowKey : null,
+    ),
+    queuePlaybackError: computed(() => snapshot.value.queuePlaybackError),
+    repeatOneEnabled: computed(() => snapshot.value.repeatOneEnabled),
+    shuffleEnabled: computed(() => snapshot.value.shuffleEnabled),
+    canPlayPrevious: computed(() => snapshot.value.canPlayPrevious),
+    canPlayNext: computed(() => snapshot.value.canPlayNext),
+    playbackStartError: computed(() => snapshot.value.queuePlaybackError),
+    skippedTrackIds: readonly(computed(() => snapshot.value.skippedTrackIds)),
+    isTrackSkipPending: readonly(isTrackSkipPending),
   });
+  const add = (tracks: readonly Omit<PlaybackDisplayTrack, "rowKey">[], next: boolean) =>
+    perform({ action: "add", tracks: tracks.map((track) => ({ ...track, rowKey: "" })), next });
 
   return Object.freeze({
     state,
-    refreshPlaybackStatus: statusObserver.refresh,
-    setTracksSkipped: trackSkip.setTracksSkipped,
-    loadTrackSkipPreferences: trackSkip.load,
-    observePlaybackTransition,
-    updateTrackMetadata: (tracks: readonly TrackMetadataUpdate[]) => {
-      coordinator.updateTrackMetadata(tracks);
-      for (const track of tracks) playbackState.updateTrackMetadata(track);
+    ready,
+    dispose: () => {
+      disposed = true;
+      sidecarRequest += 1;
+      unlisten?.();
     },
-    ...commands,
-    removeQueueItems: coordinator.removeQueueItems.bind(coordinator),
-    removeTrackFromQueue: coordinator.removeTrackFromQueue.bind(coordinator),
-    clearQueue: coordinator.clearQueue.bind(coordinator),
-    addToNext: coordinator.addToNext.bind(coordinator),
-    addTracksToNext: coordinator.addTracksToNext.bind(coordinator),
-    addToQueueEnd: coordinator.addToQueueEnd.bind(coordinator),
-    addTracksToQueueEnd: coordinator.addTracksToQueueEnd.bind(coordinator),
-    setRepeatOneEnabled: coordinator.setRepeatOneEnabled.bind(coordinator),
-    setShuffleEnabled: coordinator.setShuffleEnabled.bind(coordinator),
+    refreshPlaybackStatus,
+    playTracks: (
+      tracks: readonly PlaybackDisplayTrack[],
+      startRowKey: string,
+      allowSkipped = true,
+    ) => perform({ action: "playTracks", tracks, startRowKey, allowSkipped }),
+    playQueueItem: (rowKey: string) => perform({ action: "playItem", rowKey }),
+    playPreviousTrack: () => perform({ action: "previous" }),
+    playNextTrack: () => perform({ action: "next" }),
+    togglePlayback: () => perform({ action: "toggle" }),
+    setVolume: (volume: number) => perform({ action: "volume", volume }, false),
+    toggleMute: () => perform({ action: "mute" }, false),
+    beginSeeking,
+    seekTo,
+    withMetadataEditing,
+    updateTrackMetadata: async (tracks: readonly TrackMetadataUpdate[]) => {
+      await request({ action: "updateMetadata", tracks });
+    },
+    removeQueueItems: (rowKeys: readonly string[]) => remove({ action: "remove", rowKeys }),
+    removeTrackFromQueue: (trackId: number) => remove({ action: "removeTrack", trackId }),
+    clearQueue: () => remove({ action: "clear" }),
+    addToNext: (track: Omit<PlaybackDisplayTrack, "rowKey">) => add([track], true),
+    addTracksToNext: (tracks: readonly Omit<PlaybackDisplayTrack, "rowKey">[]) => add(tracks, true),
+    addToQueueEnd: (track: Omit<PlaybackDisplayTrack, "rowKey">) => add([track], false),
+    addTracksToQueueEnd: (tracks: readonly Omit<PlaybackDisplayTrack, "rowKey">[]) =>
+      add(tracks, false),
+    setRepeatOneEnabled: (enabled: boolean) => perform({ action: "repeat", enabled }),
+    setShuffleEnabled: (enabled: boolean) => perform({ action: "shuffle", enabled }),
+    loadTrackSkipPreferences: async () => {
+      await request({ action: "snapshot" }, false);
+    },
+    setTracksSkipped: async (trackIds: readonly number[], skipped: boolean) => {
+      if (isTrackSkipPending.value || trackIds.length === 0) return false;
+      isTrackSkipPending.value = true;
+      try {
+        await invokeCommand<void>("set_tracks_skipped", {
+          trackIds: [...new Set(trackIds)],
+          skipped,
+        });
+        await request({ action: "snapshot" }, false);
+        return true;
+      } finally {
+        isTrackSkipPending.value = false;
+      }
+    },
   });
 }
 
 let sharedPlaybackSession: ReturnType<typeof createPlaybackSession> | null = null;
-
 export function usePlaybackSession() {
   sharedPlaybackSession ??= createPlaybackSession();
   return sharedPlaybackSession;

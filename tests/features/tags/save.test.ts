@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createMetadataSave } from "@/features/tags/save";
-import { createPlaybackSession } from "@/features/playback/session";
-import type { PlaybackCommandInvoker } from "@/features/playback/types";
+import { playbackFixture } from "../../support/playbackSession";
 import type { TagSaveResult } from "@/features/tags/types";
 
 function result(trackId: number, success = true): TagSaveResult {
@@ -17,44 +16,8 @@ function targets(...ids: number[]) {
   return ids.map((trackId) => ({ trackId, path: `/music/${trackId}.mp3` }));
 }
 function fixture(paused = false, canStop = true) {
-  const calls: string[] = [];
   const synchronized: number[][] = [];
-  let activeId: number | null = null;
-  let nextId = 0;
-  const invokeCommand: PlaybackCommandInvoker = async <T>(
-    command: string,
-    args?: Record<string, unknown>,
-  ) => {
-    calls.push(command);
-    if (command === "get_playback_sidecar_lyrics") return null as T;
-    if (command === "list_skipped_track_ids") return [] as T;
-    if (command === "prepare_next_track") return true as T;
-    if (command === "play_track") {
-      activeId = ++nextId;
-      return {
-        trackId: args?.trackId,
-        playbackId: activeId,
-        title: "Song",
-        artist: "Artist",
-      } as T;
-    }
-    if (command === "stop_playback") {
-      if (canStop) activeId = null;
-      return canStop as T;
-    }
-    if (command === "playback_status") {
-      return {
-        hasAudio: activeId !== null,
-        isPlaying: activeId !== null && !paused,
-        hasEnded: false,
-        playbackId: activeId,
-        positionMs: 0,
-        durationMs: activeId === null ? 0 : 1000,
-      } as T;
-    }
-    throw new Error(`Unexpected command: ${command}`);
-  };
-  const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
+  const { session, calls } = playbackFixture({ paused, canStop });
   const save = createMetadataSave({
     editFiles: session.withMetadataEditing,
     synchronize: (ids) => {
@@ -88,8 +51,8 @@ describe("track metadata save", () => {
         },
       });
       expect(saved).toEqual([result(1)]);
-      expect(calls.indexOf("stop_playback")).toBeLessThan(calls.indexOf("write"));
-      expect(calls.filter((command) => command === "play_track")).toHaveLength(1);
+      expect(calls.indexOf("beginEditing")).toBeLessThan(calls.indexOf("write"));
+      expect(calls.filter((command) => command === "playTracks")).toHaveLength(1);
       expect(session.state.currentRowKey.value).toBe("row:1");
       expect(session.state.displayedTracks.value.map(({ rowKey }) => rowKey)).toEqual([
         "row:1",
@@ -136,7 +99,7 @@ describe("track metadata save", () => {
         return [{ ...result(1), fileWritten: false }];
       },
     });
-    expect(calls).not.toContain("stop_playback");
+    expect(calls.filter((command) => command === "beginEditing")).toHaveLength(1);
     expect(session.state.currentPlaybackId.value).toBe(1);
     expect(synchronized).toEqual([[2], [1]]);
   });
@@ -349,4 +312,49 @@ it("preserves partial file/database outcomes when both the request and UI refres
   await save.retrySynchronization();
   expect(save.state.results).toEqual(saved);
   expect(save.state.synchronizationError).toContain("UI unavailable");
+});
+
+it("preserves actual save outcomes and original request failure if backend endEditing also fails", async () => {
+  const fixture = playbackFixture();
+  await fixture.session.ready;
+  const queue = [1, 2].map((trackId) => ({
+    trackId,
+    rowKey: `row:${trackId}`,
+    title: "Track",
+    album: null,
+    durationMs: 100,
+  }));
+  await fixture.session.playTracks(queue, "row:1");
+  fixture.fail("endEditing", new Error("cleanup unavailable"));
+  const synchronized: number[][] = [];
+  const save = createMetadataSave({
+    editFiles: fixture.session.withMetadataEditing,
+    synchronize: (ids) => {
+      synchronized.push(ids);
+    },
+  });
+  const saved = await save.run({
+    targets: targets(1, 2),
+    writeTrackIds: [1, 2],
+    execute: async (progress) => {
+      progress(result(1));
+      throw new Error("write interrupted");
+    },
+  });
+  expect(saved).toEqual([result(1), { ...result(2, false), error: "write interrupted" }]);
+  expect(save.state.results).toEqual(saved);
+  expect(save.state.error).toBe("write interrupted");
+  expect(save.state.saving).toBe(false);
+  expect(synchronized).toEqual([[1]]);
+  expect(fixture.session.state.currentPlaybackId.value).toBeNull();
+  expect(fixture.session.state.playbackError.value).toBe("播放操作失败，请重试或查看日志");
+});
+
+it("returns completed results even when ending the backend editing lease fails", async () => {
+  const fixture = playbackFixture();
+  await fixture.session.ready;
+  fixture.fail("endEditing", new Error("cleanup unavailable"));
+  const saved = await fixture.session.withMetadataEditing([1], async () => [result(1)]);
+  expect(saved).toEqual([result(1)]);
+  expect(fixture.session.state.playbackError.value).toBe("播放操作失败，请重试或查看日志");
 });

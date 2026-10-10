@@ -2,7 +2,9 @@ use super::{
     AlbumArtistSummary, AlbumSummary, Database, MusicLibraryDirectory, PlaylistReorderError,
     PlaylistSummary, PlaylistTrackSummary, TrackDetails, TrackSummary,
 };
+use crate::playback::session::{synchronize_removal, RemovalResult, SessionCommand};
 use std::path::Path;
+use tauri::Manager;
 
 #[tauri::command]
 pub fn list_music_library_directories(
@@ -133,11 +135,20 @@ pub fn reorder_playlist_items(
 }
 
 #[tauri::command]
-pub fn remove_track_from_library(
+pub async fn remove_track_from_library<R: tauri::Runtime>(
     track_id: i64,
-    state: tauri::State<'_, Database>,
-) -> Result<(), String> {
-    state.remove_track_from_library(track_id)
+    app: tauri::AppHandle<R>,
+) -> Result<RemovalResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<Database>()
+            .remove_track_from_library(track_id)?;
+        Ok(synchronize_removal(
+            &app,
+            SessionCommand::RemoveTrack { track_id },
+        ))
+    })
+    .await
+    .map_err(|error| format!("Could not remove library track: {error}"))?
 }
 
 #[tauri::command]

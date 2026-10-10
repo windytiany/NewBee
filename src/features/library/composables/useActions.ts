@@ -42,7 +42,6 @@ export function useLibraryActions(
     playTracks,
     addTracksToNext: enqueueTracksToNext,
     addTracksToQueueEnd: enqueueTracksToQueueEnd,
-    removeTrackFromQueue,
     clearQueue: clearPlaybackQueue,
   } = playbackSession;
   function errorMessage(error: unknown) {
@@ -124,8 +123,7 @@ export function useLibraryActions(
     ) {
       return Promise.resolve(false);
     }
-    // The current track already uses the session's synchronized volume.
-    return runTrackAction("切换播放状态", () => playbackSession.togglePlayback(async () => true));
+    return runTrackAction("切换播放状态", () => playbackSession.togglePlayback());
   }
 
   function findLibraryTracks(trackIds: readonly number[]) {
@@ -250,30 +248,15 @@ export function useLibraryActions(
     }
   }
 
-  async function removeTrackFromLibraryDatabase(
-    trackId: number,
-  ): Promise<LibraryTrackRemovalResult> {
+  async function deleteLibraryTrack(trackId: number): Promise<LibraryTrackRemovalResult> {
+    let queueResult;
     try {
-      await libraryApi.removeTrack(trackId);
-      return { status: "deleted" };
+      queueResult = await libraryApi.removeTrack(trackId);
     } catch (error) {
       logger.error("library", "remove_failed", error, { trackId });
       const message = "从曲库移除失败，请重试或查看日志";
       trackActionError.value = message;
       return { status: "not-deleted", message };
-    }
-  }
-
-  async function deleteLibraryTrack(trackId: number): Promise<LibraryTrackRemovalResult> {
-    const deletion = await removeTrackFromLibraryDatabase(trackId);
-    if (deletion.status !== "deleted") return deletion;
-
-    let queueResult:
-      Awaited<ReturnType<typeof removeTrackFromQueue>> | { status: "queue-error"; message: string };
-    try {
-      queueResult = await removeTrackFromQueue(trackId);
-    } catch (error) {
-      queueResult = { status: "queue-error", message: errorMessage(error) };
     }
 
     if (queueResult.status === "removed" || queueResult.status === "not-found") {
@@ -382,9 +365,7 @@ export function useLibraryActions(
 
       queueSyncFailed = failures.length > 0;
       for (const track of sourceTracks) {
-        const result = clearsActivePlayback
-          ? await removeTrackFromLibraryDatabase(track.id)
-          : await deleteLibraryTrack(track.id);
+        const result = await deleteLibraryTrack(track.id);
         if (result.status !== "not-deleted") deletedTrackIds.push(track.id);
         else failedCount++;
         if (result.status === "deleted-queue-sync-failed") queueSyncFailed = true;

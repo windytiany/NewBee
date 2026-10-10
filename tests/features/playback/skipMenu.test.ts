@@ -1,7 +1,6 @@
 import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { createTrackSkipState } from "@/features/playback/queue/skip";
-import type { PlaybackCommandInvoker } from "@/features/playback/types";
+import { playbackFixture, playbackSnapshot } from "../../support/playbackSession";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
 
 import {
@@ -27,30 +26,22 @@ async function menu(trackIds: number[], initialSkipped: number[] = [], fail = fa
   const writes: Array<{ trackIds: number[]; skipped: boolean }> = [];
   const errors: string[] = [];
   let closes = 0;
-  const invoke: PlaybackCommandInvoker = async <T>(
-    command: string,
-    args?: Record<string, unknown>,
-  ) => {
-    if (command === "list_skipped_track_ids") return initialSkipped as T;
-    if (command !== "set_tracks_skipped") throw new Error(`Unexpected command: ${command}`);
-    if (fail) throw new Error("database unavailable");
-    writes.push(args as { trackIds: number[]; skipped: boolean });
-    return undefined as T;
-  };
-  const preferences = createTrackSkipState(invoke);
+  const fixture = playbackFixture({
+    initialSnapshot: playbackSnapshot({ skippedTrackIds: initialSkipped }),
+    invokeExtra: (command, args) => {
+      if (command !== "set_tracks_skipped") throw new Error(`Unexpected command: ${command}`);
+      if (fail) throw new Error("database unavailable");
+      writes.push(args as { trackIds: number[]; skipped: boolean });
+    },
+  });
+  await fixture.session.ready;
+  const preferences = fixture.session.state;
   const component = evaluateSource<{ default: Vue.Component }>(
     compileSfc(source, "src/features/playback/queue/components/SkipMenuItem.vue"),
     {
       vue: Vue,
       "@/features/playback/session": {
-        usePlaybackSession: () => ({
-          state: {
-            skippedTrackIds: preferences.skippedTrackIds,
-            isTrackSkipPending: preferences.isPending,
-          },
-          setTracksSkipped: preferences.setTracksSkipped,
-          loadTrackSkipPreferences: preferences.load,
-        }),
+        usePlaybackSession: () => fixture.session,
       },
       "@/shared/notifications/center": {
         notify: ({ message }: { message: string }) => errors.push(message),
@@ -108,7 +99,7 @@ it("reports failed persistence without changing the visible preference", async (
     stopPropagation: () => {},
   });
   expect(h.errors).toEqual(["更新跳过标记失败"]);
-  expect(h.preferences.isSkipped(1)).toBe(true);
+  expect(h.preferences.skippedTrackIds.value).toContain(1);
 });
 
 it("shows the skip icon while keeping queue double-click playback available", async () => {

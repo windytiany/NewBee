@@ -1,19 +1,7 @@
-export type NowPlayingTrack = {
+export type PlaybackTrack = {
   trackId: number;
   title: string | null;
   artist: string | null;
-  playbackId: number | null;
-};
-
-export type PlaybackTransition = NowPlayingTrack & {
-  playbackId: number;
-  rowKey: string;
-  previousPlaybackId: number;
-};
-
-export type PlaybackStartFailure = {
-  kind: "audio-file-not-found" | "playback-failed";
-  message: string;
 };
 
 export type PlaybackCommandInvoker = <T>(

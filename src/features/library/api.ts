@@ -1,3 +1,4 @@
+import type { QueueTrackRemovalResult } from "@/features/playback/session";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AlbumArtistSummary,
@@ -17,6 +18,7 @@ export function createLibraryApi(invokeCommand: LibraryInvoker = invoke) {
     listAlbumTracks: (album: LibraryAlbumSelection) =>
       invokeCommand<TrackSummary[]>("list_album_tracks", album),
     getTrack: (trackId: number) => invokeCommand<TrackDetails | null>("get_track", { trackId }),
-    removeTrack: (trackId: number) => invokeCommand<void>("remove_track_from_library", { trackId }),
+    removeTrack: (trackId: number) =>
+      invokeCommand<QueueTrackRemovalResult>("remove_track_from_library", { trackId }),
   };
 }

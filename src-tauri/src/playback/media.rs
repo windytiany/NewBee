@@ -1,6 +1,6 @@
 use crate::database::{Database, TrackArtwork};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use windows::core::{factory, HSTRING};
 use windows::Foundation::TypedEventHandler;
 use windows::Media::{
@@ -47,9 +47,7 @@ pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             SystemMediaTransportControlsButton::Next => "next",
             _ => return Ok(()),
         };
-        if let Err(error) = event_app.emit("system-media-command", command) {
-            log::warn!("Could not forward Windows media command: {error}");
-        }
+        super::session::system_command(&event_app, command);
         Ok(())
     }))?;
     app.manage(SystemMedia {

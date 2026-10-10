@@ -2,7 +2,7 @@ use crate::settings::{Locale, SettingsState};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    AppHandle, Manager,
 };
 
 fn show_main_window(app: &AppHandle) {
@@ -60,9 +60,7 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
             "show" => show_main_window(app),
             "exit" => app.exit(0),
             command @ ("previous" | "toggle" | "next") => {
-                if let Err(error) = app.emit_to("main", "system-media-command", command) {
-                    log::warn!("Could not forward tray playback command: {error}");
-                }
+                crate::playback::session::system_command(app, command);
             }
             _ => {}
         })

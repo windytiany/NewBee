@@ -59,7 +59,9 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
         if (command === "remove_track_from_library") {
           if (args?.trackId === deleteFailureId) throw new Error("database busy");
           tracks = tracks.filter(({ id }) => id !== args?.trackId);
-          return undefined;
+          return queueFailure
+            ? { status: "stop-failed", message: "device busy" }
+            : { status: "not-found" };
         }
         if (command === "list_playlists") {
           return [
@@ -109,10 +111,6 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     "@/features/playback/session": {
       usePlaybackSession: () => ({
         state: { currentTrack: Vue.ref(null), activeQueueRowKey: Vue.ref(null) },
-        removeTrackFromQueue: async () =>
-          queueFailure
-            ? { status: "stop-failed", message: "device busy" }
-            : { status: "not-found" },
       }),
     },
   };

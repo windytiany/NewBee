@@ -93,6 +93,9 @@ dependencies["@tauri-apps/api/core"] = {
       const error = databaseDeleteFailures.get(trackId);
       if (error) throw error;
       availableTracks = availableTracks.filter((entry) => entry.id !== trackId);
+      if (clearQueueCalls === 0) queueRemovalCalls.push(trackId);
+      if (queueRemovalError) return { status: "queue-error", message: queueRemovalError.message };
+      return queueRemovalResult;
     }
     if (command === "add_track_to_playlist") {
       const trackId = args?.trackId as number;
@@ -166,11 +169,6 @@ dependencies["@/features/playback/session"] = {
     togglePlayback: async () => {
       togglePlaybackCalls++;
       return true;
-    },
-    removeTrackFromQueue: async (trackId: number) => {
-      queueRemovalCalls.push(trackId);
-      if (queueRemovalError) throw queueRemovalError;
-      return queueRemovalResult;
     },
     clearQueue: async () => {
       clearQueueCalls += 1;

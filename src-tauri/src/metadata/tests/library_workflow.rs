@@ -58,6 +58,8 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         .manage(WriteState::default())
         .manage(crate::settings::SettingsState::load(fixture.0.join("settings.json")).unwrap())
         .invoke_handler(tauri::generate_handler![
+            crate::playback::session::runtime::playback_session_command,
+            crate::playback::session::runtime::playback_session_progress,
             commands::list_album_artists,
             commands::list_albums,
             commands::list_album_tracks,
@@ -81,6 +83,10 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         ])
         .build(tauri::generate_context!())
         .unwrap();
+    crate::playback::session::initialize_test_session(
+        app.handle(),
+        fixture.0.join("playback-session.json"),
+    );
     tauri::async_runtime::block_on(crate::import::files::import_music_files(
         vec![path.to_string_lossy().into_owned()],
         None,
@@ -157,9 +163,37 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         call("list_playlist_tracks", json!({"playlistId":playlist}))[0]["playlistItemId"],
         second
     );
+    let queue_rows = json!([
+        {"trackId":1,"rowKey":format!("playlist-item:{first}"),"title":"First","album":"Album","durationMs":100},
+        {"trackId":1,"rowKey":format!("playlist-item:{second}"),"title":"Second","album":"Album","durationMs":100}
+    ]);
+    let playback = call(
+        "playback_session_command",
+        json!({"command":{"action":"playTracks","tracks":queue_rows,"startRowKey":format!("playlist-item:{first}"),"allowSkipped":true}}),
+    );
+    assert_eq!(
+        playback["snapshot"]["displayedTracks"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     call(
         "remove_playlist_items",
         json!({"playlistId":playlist,"playlistItemIds":[first]}),
+    );
+    // Playlist mutations preserve the listening queue, including duplicate rows.
+    let after_playlist_removal = call(
+        "playback_session_command",
+        json!({"command":{"action":"snapshot"}}),
+    );
+    assert_eq!(
+        after_playlist_removal["snapshot"]["displayedTracks"],
+        queue_rows
+    );
+    assert_eq!(
+        after_playlist_removal["snapshot"]["currentPlaybackId"],
+        playback["snapshot"]["currentPlaybackId"]
     );
     call("set_tracks_skipped", json!({"trackIds":[1],"skipped":true}));
     assert_eq!(call("list_skipped_track_ids", json!({})), json!([1]));
@@ -179,7 +213,24 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         .as_str()
         .unwrap()
         .contains("offline-destination"));
-    call("remove_track_from_library", json!({"trackId":1}));
+    assert_eq!(
+        call("remove_track_from_library", json!({"trackId":1})),
+        json!({"status":"removed"})
+    );
+    // The database command itself cleans all queue occurrences. No frontend
+    // follow-up removeTrackFromQueue command participates in this operation.
+    let after_library_removal = call(
+        "playback_session_command",
+        json!({"command":{"action":"snapshot"}}),
+    );
+    assert_eq!(
+        after_library_removal["snapshot"]["displayedTracks"],
+        json!([])
+    );
+    assert_eq!(
+        after_library_removal["snapshot"]["currentTrack"],
+        Value::Null
+    );
     assert_eq!(call("get_track", json!({"trackId":1})), Value::Null);
     assert_eq!(
         call("list_playlist_tracks", json!({"playlistId":playlist})),

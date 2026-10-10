@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { createPlaybackSession } from "@/features/playback/session";
-import type { PlaybackCommandInvoker } from "@/features/playback/types";
+import { playbackFixture } from "../../../support/playbackSession";
 import type { TrackDetails } from "@/features/library/types";
 
 const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
@@ -21,42 +20,7 @@ afterEach(() => {
 });
 
 function fixture(paused = false, canStop = true) {
-  const calls: string[] = [];
-  let activeId: number | null = null;
-  let nextId = 0;
-  const invokeCommand: PlaybackCommandInvoker = async <T>(
-    command: string,
-    args?: Record<string, unknown>,
-  ) => {
-    calls.push(command);
-    if (command === "get_playback_sidecar_lyrics") return null as T;
-    if (command === "list_skipped_track_ids") return [] as T;
-    if (command === "prepare_next_track") return true as T;
-    if (command === "play_track") {
-      activeId = ++nextId;
-      return {
-        trackId: args?.trackId,
-        playbackId: activeId,
-        title: "Old title",
-        artist: "Old artist",
-      } as T;
-    }
-    if (command === "stop_playback") {
-      if (canStop) activeId = null;
-      return canStop as T;
-    }
-    if (command === "playback_status")
-      return {
-        hasAudio: activeId !== null,
-        isPlaying: activeId !== null && !paused,
-        hasEnded: false,
-        playbackId: activeId,
-        positionMs: 0,
-        durationMs: activeId === null ? 0 : 1000,
-      } as T;
-    throw new Error(`Unexpected command: ${command}`);
-  };
-  const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
+  const { session, calls } = playbackFixture({ paused, canStop });
   const queue = [1, 2].map((trackId) => ({
     trackId,
     rowKey: `row:${trackId}`,
@@ -96,7 +60,7 @@ describe("metadata playback synchronization", () => {
         expect(session.state.isPlaybackCommandPending.value).toBe(true);
         expect(session.state.currentTrack.value?.trackId).toBe(1);
         expect(session.state.currentPlaybackId.value).toBeNull();
-        session.updateTrackMetadata([updatedTrack()]);
+        await session.updateTrackMetadata([updatedTrack()]);
         return "saved";
       });
       expect(value).toBe("saved");
@@ -108,10 +72,10 @@ describe("metadata playback synchronization", () => {
       expect(session.state.displayedTracks.value[0]?.title).toBe("New title");
       expect(session.state.currentTrack.value?.title).toBe("New title");
       expect(session.state.playbackStatus.value.hasAudio).toBe(false);
-      expect(calls.filter((command) => command === "play_track")).toHaveLength(1);
-      expect(calls.filter((command) => command === "stop_playback")).toHaveLength(1);
-      expect(await session.togglePlayback(async () => true)).toBe(true);
-      expect(calls.filter((command) => command === "play_track")).toHaveLength(2);
+      expect(calls.filter((command) => command === "playTracks")).toHaveLength(1);
+      expect(calls.filter((command) => command === "beginEditing")).toHaveLength(1);
+      expect(await session.togglePlayback()).toBe(true);
+      expect(calls.filter((command) => ["playTracks", "toggle"].includes(command))).toHaveLength(2);
       expect(session.state.currentRowKey.value).toBe("row:1");
     });
   }
@@ -120,7 +84,7 @@ describe("metadata playback synchronization", () => {
     const { session, calls, queue } = fixture();
     await session.playTracks(queue, "row:1");
     await session.withMetadataEditing([2], async () => {});
-    expect(calls).not.toContain("stop_playback");
+    expect(calls.filter((command) => command === "beginEditing")).toHaveLength(1);
     expect(session.state.currentPlaybackId.value).toBe(1);
   });
 

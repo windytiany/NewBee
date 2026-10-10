@@ -1,539 +1,229 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createPlaybackSession } from "@/features/playback/session";
-import type {
-  PlaybackStatus,
-  PlaybackCommandInvoker,
-  PlaybackDisplayTrack,
-} from "@/features/playback/types";
-
-const CURRENT_TRACK_STORAGE_KEY = "newbee.current-track";
-const PLAYBACK_QUEUE_STORAGE_KEY = "newbee.playback-queue";
-const storedValues = new Map<string, string>();
-const localStorage = {
-  getItem(key: string) {
-    return storedValues.get(key) ?? null;
-  },
-  setItem(key: string, value: string) {
-    storedValues.set(key, value);
-  },
-  removeItem(key: string) {
-    storedValues.delete(key);
-  },
-};
-
-Object.defineProperty(globalThis, "localStorage", {
-  configurable: true,
-  value: localStorage,
-});
+import type { PlaybackSessionReply, PlaybackSessionSnapshot } from "@/features/playback/session";
+import type { PlaybackCommandInvoker } from "@/features/playback/types";
+import { playbackFixture, playbackReply, playbackSnapshot } from "../../support/playbackSession";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
   });
   return { promise, resolve };
 }
+const rows = [1, 2].map((trackId) => ({
+  trackId,
+  rowKey: `row:${trackId}`,
+  title: `Track ${trackId}`,
+  album: null,
+  durationMs: 100,
+}));
 
-function asPlaybackInvoker(
-  handler: (command: string, args?: Record<string, unknown>) => Promise<unknown> | unknown,
-  readsSidecar = false,
-): PlaybackCommandInvoker {
-  return async <T>(command: string, args?: Record<string, unknown>) => {
-    if (command === "list_skipped_track_ids") return [] as T;
-    if (command === "prepare_next_track") return true as T;
-    if (command === "get_playback_sidecar_lyrics" && !readsSidecar) return null as T;
-    return (await handler(command, args)) as T;
-  };
+async function settle() {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-function tracks(...entries: [rowKey: string, trackId: number][]): PlaybackDisplayTrack[] {
-  return entries.map(([rowKey, trackId]) => ({
-    rowKey,
-    trackId,
-    title: rowKey,
-    album: null,
-    durationMs: 100,
-  }));
-}
-
-function noAudioStatus(): PlaybackStatus & { playbackId: number | null } {
-  return {
-    hasAudio: false,
-    isPlaying: false,
-    hasEnded: false,
-    playbackId: null,
-    positionMs: 0,
-    durationMs: 0,
-  };
-}
-
-function playingStatus(
-  playbackId: number,
-  positionMs = 10,
-): PlaybackStatus & { playbackId: number } {
-  return {
-    hasAudio: true,
-    isPlaying: true,
-    hasEnded: false,
-    playbackId,
-    positionMs,
-    durationMs: 100,
-  };
-}
-
-function endedStatus(playbackId: number): PlaybackStatus & { playbackId: number } {
-  return {
-    hasAudio: true,
-    isPlaying: false,
-    hasEnded: true,
-    playbackId,
-    positionMs: 100,
-    durationMs: 100,
-  };
-}
-
-function trackStarted(trackId: number, playbackId: number) {
-  return { trackId, title: `Track ${trackId}`, artist: "Artist", playbackId };
-}
-
-function resetStorage() {
-  storedValues.clear();
-}
-
-async function settlePendingCallbacks() {
-  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
-}
-
-beforeEach(resetStorage);
-
-describe("playback session", () => {
-  it("clears playback and the persisted queue without advancing to another queued track", async () => {
-    let activePlaybackId: number | null = null;
-    const attemptedTrackIds: number[] = [];
-    const stoppedPlaybackIds: number[] = [];
-    const invokeCommand = asPlaybackInvoker((command, args) => {
-      if (command === "playback_status") {
-        return activePlaybackId === null ? noAudioStatus() : playingStatus(activePlaybackId);
-      }
-      if (command === "play_track") {
-        const trackId = args?.trackId as number;
-        attemptedTrackIds.push(trackId);
-        activePlaybackId = trackId + 100;
-        return trackStarted(trackId, activePlaybackId);
-      }
-      if (command === "stop_playback") {
-        stoppedPlaybackIds.push(args?.playbackId as number);
-        activePlaybackId = null;
-        return true;
-      }
-      throw new Error(`Unexpected playback command: ${command}`);
-    });
-    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
-    await session.playTracks(tracks(["album-current", 1], ["other-album", 2]), "album-current");
-    await settlePendingCallbacks();
-
-    expect(
-      JSON.parse(storedValues.get(PLAYBACK_QUEUE_STORAGE_KEY) ?? "null").displayedTracks,
-    ).toHaveLength(2);
-    expect(storedValues.has(CURRENT_TRACK_STORAGE_KEY)).toBe(true);
-
-    expect(await session.clearQueue()).toEqual({ status: "removed" });
-    await settlePendingCallbacks();
-
-    expect(session.state.displayedTracks.value).toEqual([]);
-    expect(session.state.currentRowKey.value).toBeNull();
-    expect(session.state.currentTrack.value).toBeNull();
-    expect(session.state.playbackStatus.value).toEqual({
-      hasAudio: false,
-      isPlaying: false,
-      hasEnded: false,
-      positionMs: 0,
-      durationMs: 0,
-    });
-    expect(storedValues.has(CURRENT_TRACK_STORAGE_KEY)).toBe(false);
-    expect(JSON.parse(storedValues.get(PLAYBACK_QUEUE_STORAGE_KEY) ?? "null")).toEqual({
-      version: 2,
-      displayedTracks: [],
-      currentRowKey: null,
-      nextRowKeys: [],
-      shuffleEnabled: false,
-      repeatOneEnabled: false,
-    });
-    expect(attemptedTrackIds).toEqual([1]);
-    expect(stoppedPlaybackIds).toEqual([101]);
-
-    const restartedSession = createPlaybackSession({ invokeCommand });
-    expect(restartedSession.state.displayedTracks.value).toEqual([]);
-    expect(restartedSession.state.currentTrack.value).toBeNull();
-    expect(restartedSession.state.canStartRestoredQueue.value).toBe(false);
-    expect(await restartedSession.togglePlayback(async () => true)).toBe(false);
-    expect(attemptedTrackIds).toEqual([1]);
-  });
-
-  for (const shuffleEnabled of [false, true]) {
-    it(`rewinds and pauses the final track in ${shuffleEnabled ? "shuffle" : "sequential"} mode while retaining its metadata and queue row`, async () => {
-      let activeStatus = playingStatus(1);
-      const commands: string[] = [];
-      const invokeCommand = asPlaybackInvoker((command, args) => {
-        commands.push(command);
-        if (command === "playback_status") return { ...activeStatus };
-        if (command === "play_track") {
-          activeStatus = playingStatus(1);
-          return trackStarted(args?.trackId as number, 1);
-        }
-        if (command === "pause") {
-          activeStatus = { ...activeStatus, isPlaying: false };
-          return;
-        }
-        if (command === "seek_to") {
-          activeStatus = {
-            ...activeStatus,
-            positionMs: args?.positionMs as number,
-            hasEnded: false,
-          };
-          return;
-        }
-        if (command === "resume") {
-          activeStatus = { ...activeStatus, isPlaying: true };
-          return;
-        }
-        throw new Error(`Unexpected playback command: ${command}`);
-      });
-      const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
-      session.setShuffleEnabled(shuffleEnabled);
-      await session.playTracks(tracks(["a", 1], ["b", 2]), "b");
-      await settlePendingCallbacks();
-      activeStatus = endedStatus(1);
-      expect(await session.refreshPlaybackStatus()).toBe(true);
-      expect(session.state.currentTrack.value?.trackId).toBe(2);
-      expect(session.state.currentRowKey.value).toBe("b");
-      expect(session.state.playbackStatus.value).toEqual({
-        hasAudio: true,
-        isPlaying: false,
-        hasEnded: false,
-        positionMs: 0,
-        durationMs: 100,
-      });
-      expect(session.state.canPlayNext.value).toBe(false);
-      expect(session.state.canPlayPrevious.value).toBe(!shuffleEnabled);
-      const commandsAfterEnd = commands.length;
-      await session.refreshPlaybackStatus();
-      expect(commands.slice(commandsAfterEnd)).toEqual(["playback_status"]);
-      expect(await session.togglePlayback(async () => true)).toBe(true);
-      expect(session.state.playbackStatus.value.isPlaying).toBe(true);
-      expect(commands.filter((command) => command === "play_track")).toHaveLength(1);
-      activeStatus = endedStatus(1);
-      await session.refreshPlaybackStatus();
-      expect(session.state.playbackStatus.value.positionMs).toBe(0);
-      expect(commands.filter((command) => command === "pause")).toHaveLength(2);
-    });
-  }
-
-  it("does not rewind a newer track when the end reset is superseded", async () => {
-    const pauseStarted = deferred<void>();
-    const releasePause = deferred<void>();
-    let activeStatus = playingStatus(1);
-    let playbackId = 0;
-    const seekPositions: number[] = [];
-    const invokeCommand = asPlaybackInvoker((command, args) => {
-      if (command === "playback_status") return { ...activeStatus };
-      if (command === "play_track") {
-        playbackId += 1;
-        activeStatus = playingStatus(playbackId);
-        return trackStarted(args?.trackId as number, playbackId);
-      }
-      if (command === "pause") {
-        pauseStarted.resolve();
-        return releasePause.promise;
-      }
-      if (command === "seek_to") {
-        seekPositions.push(args?.positionMs as number);
-        return;
-      }
-      throw new Error(`Unexpected playback command: ${command}`);
-    });
-    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
-    await session.playTracks(tracks(["a", 1], ["b", 2]), "b");
-    await settlePendingCallbacks();
-    activeStatus = endedStatus(1);
-    const ending = session.refreshPlaybackStatus();
-    await pauseStarted.promise;
-    const starting = session.playQueueItem("a");
-    releasePause.resolve();
-    await ending;
-    expect(await starting).toBe(true);
-    await settlePendingCallbacks();
-    expect(seekPositions).toEqual([]);
-    expect(session.state.currentTrack.value?.trackId).toBe(1);
-    expect(session.state.playbackStatus.value.isPlaying).toBe(true);
-    expect(session.state.playbackStatus.value.positionMs).toBe(10);
-  });
-
-  it("cleans up A when the later B intent supersedes its pending start", async () => {
-    const firstStartStarted = deferred<void>();
-    const releaseFirstStart = deferred<ReturnType<typeof trackStarted>>();
-    const attemptedTrackIds: number[] = [];
-    const stoppedPlaybackIds: number[] = [];
-    let activePlaybackId: number | null = null;
-    const invokeCommand = asPlaybackInvoker(async (command, args) => {
-      if (command === "playback_status") {
-        return activePlaybackId === null ? noAudioStatus() : playingStatus(activePlaybackId);
-      }
-      if (command === "play_track") {
-        const trackId = args?.trackId as number;
-        attemptedTrackIds.push(trackId);
-        if (trackId === 1) {
-          activePlaybackId = 101;
-          firstStartStarted.resolve();
-          return releaseFirstStart.promise;
-        }
-        activePlaybackId = 202;
-        return trackStarted(trackId, 202);
-      }
-      if (command === "stop_playback") {
-        const playbackId = args?.playbackId as number;
-        stoppedPlaybackIds.push(playbackId);
-        if (activePlaybackId === playbackId) activePlaybackId = null;
-        return true;
-      }
-      throw new Error(`Unexpected playback command: ${command}`);
-    });
-    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
-
-    const startingA = session.playTracks(tracks(["a", 1], ["b", 2]), "a");
-    await firstStartStarted.promise;
-    const startingB = session.playTracks(tracks(["b", 2]), "b");
-    releaseFirstStart.resolve(trackStarted(1, 101));
-
-    expect(await startingA).toBe(false);
-    expect(await startingB).toBe(true);
-    expect(attemptedTrackIds).toEqual([1, 2]);
-    expect(stoppedPlaybackIds).toEqual([101]);
-    expect(session.state.currentTrack.value?.trackId).toBe(2);
-    expect(session.state.currentRowKey.value).toBe("b");
-  });
-
-  it("discards an older status response after the current playback changes", async () => {
-    const firstStatusStarted = deferred<void>();
-    const releaseFirstStatus = deferred<
-      ReturnType<typeof playingStatus> | ReturnType<typeof endedStatus>
-    >();
-    const secondStatusStarted = deferred<void>();
-    const releaseSecondStatus = deferred<ReturnType<typeof playingStatus>>();
-    let statusCalls = 0;
-    let activePlaybackId: number | null = null;
-    const invokeCommand = asPlaybackInvoker((command, args) => {
-      if (command === "playback_status") {
-        statusCalls += 1;
-        if (statusCalls === 1) {
-          firstStatusStarted.resolve();
-          return releaseFirstStatus.promise;
-        }
-        if (statusCalls === 2) {
-          secondStatusStarted.resolve();
-          return releaseSecondStatus.promise;
-        }
-        return activePlaybackId === null ? noAudioStatus() : playingStatus(activePlaybackId, 25);
-      }
-      if (command === "play_track") {
-        const trackId = args?.trackId as number;
-        activePlaybackId = trackId === 1 ? 11 : 22;
-        return trackStarted(trackId, activePlaybackId);
-      }
-      throw new Error(`Unexpected playback command: ${command}`);
-    });
-    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
-
-    await session.playTracks(tracks(["a", 1], ["b", 2], ["c", 3]), "a");
-    await firstStatusStarted.promise;
-    const startingB = session.playQueueItem("b");
-    await secondStatusStarted.promise;
-    releaseSecondStatus.resolve(playingStatus(11, 99));
-    expect(await startingB).toBe(true);
-    await settlePendingCallbacks();
-
-    releaseFirstStatus.resolve(endedStatus(11));
-    await settlePendingCallbacks();
-    expect(session.state.playbackStatus.value.positionMs).toBe(0);
-    expect(session.state.currentTrack.value?.trackId).toBe(2);
-    expect(session.state.currentRowKey.value).toBe("b");
-
-    expect(await session.refreshPlaybackStatus()).toBe(true);
-    expect(session.state.playbackStatus.value.positionMs).toBe(25);
-  });
-
-  it("ignores an old end event while pausing and honors the paused state", async () => {
-    const pauseStarted = deferred<void>();
-    const releasePause = deferred<void>();
-    const oldPollStarted = deferred<void>();
-    const releaseOldPoll = deferred<ReturnType<typeof endedStatus>>();
-    let shouldDeferPoll = false;
-    let activeStatus: PlaybackStatus & { playbackId: number } = playingStatus(1);
-    const attemptedTrackIds: number[] = [];
-    const invokeCommand = asPlaybackInvoker((command, args) => {
-      if (command === "playback_status") {
-        if (shouldDeferPoll) {
-          shouldDeferPoll = false;
-          oldPollStarted.resolve();
-          return releaseOldPoll.promise;
-        }
-        return activeStatus;
-      }
-      if (command === "play_track") {
-        const trackId = args?.trackId as number;
-        attemptedTrackIds.push(trackId);
-        activeStatus = playingStatus(1);
-        return trackStarted(trackId, 1);
-      }
-      if (command === "pause") {
-        pauseStarted.resolve();
-        return releasePause.promise.then(() => {
-          activeStatus = endedStatus(1);
-        });
-      }
-      throw new Error(`Unexpected playback command: ${command}`);
-    });
-    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
-    await session.playTracks(tracks(["a", 1], ["b", 2]), "a");
-    await settlePendingCallbacks();
-
-    shouldDeferPoll = true;
-    void session.refreshPlaybackStatus();
-    await oldPollStarted.promise;
-    const toggling = session.togglePlayback(async () => true);
-    await pauseStarted.promise;
-    releaseOldPoll.resolve(endedStatus(1));
-    await settlePendingCallbacks();
-    expect(attemptedTrackIds).toEqual([1]);
-
-    releasePause.resolve();
-    expect(await toggling).toBe(true);
-    await session.refreshPlaybackStatus();
-
-    expect(attemptedTrackIds).toEqual([1]);
-    expect(session.state.playbackStatus.value.hasEnded).toBe(true);
-  });
-
-  it("ignores an old end event during seeking and advances from the post-seek status", async () => {
-    const oldPollStarted = deferred<void>();
-    const releaseOldPoll = deferred<ReturnType<typeof endedStatus>>();
-    let shouldDeferPoll = false;
-    let activePlaybackId = 0;
-    let activeStatus: PlaybackStatus & { playbackId: number } = playingStatus(1);
-    const attemptedTrackIds: number[] = [];
-    const invokeCommand = asPlaybackInvoker((command, args) => {
-      if (command === "playback_status") {
-        if (shouldDeferPoll) {
-          shouldDeferPoll = false;
-          oldPollStarted.resolve();
-          return releaseOldPoll.promise;
-        }
-        return activeStatus;
-      }
-      if (command === "play_track") {
-        const trackId = args?.trackId as number;
-        activePlaybackId += 1;
-        attemptedTrackIds.push(trackId);
-        activeStatus = playingStatus(activePlaybackId);
-        return trackStarted(trackId, activePlaybackId);
-      }
-      if (command === "seek_to") {
-        activeStatus = endedStatus(activePlaybackId);
-        return undefined;
-      }
-      throw new Error(`Unexpected playback command: ${command}`);
-    });
-    const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
-    await session.playTracks(tracks(["a", 1], ["b", 2]), "a");
-    await settlePendingCallbacks();
-
-    shouldDeferPoll = true;
-    void session.refreshPlaybackStatus();
-    await oldPollStarted.promise;
-    session.beginSeeking();
-    releaseOldPoll.resolve(endedStatus(activePlaybackId));
-    await settlePendingCallbacks();
-    expect(attemptedTrackIds).toEqual([1]);
-
-    expect(await session.seekTo(100)).toBe(true);
-    expect(attemptedTrackIds).toEqual([1, 2]);
-    expect(session.state.currentTrack.value?.trackId).toBe(2);
-    expect(session.state.currentRowKey.value).toBe("b");
-  });
-
-  it("does not autoplay a restored queue and starts from its selected row on first play", async () => {
-    storedValues.set(
-      CURRENT_TRACK_STORAGE_KEY,
-      JSON.stringify({ trackId: 999, title: "Old track", artist: "Old artist" }),
-    );
-    const restoredTracks = tracks(["before", 11], ["selected", 22], ["after", 33]);
-    const attemptedTrackIds: number[] = [];
-    let activePlaybackId: number | null = null;
-    const invokeCommand = asPlaybackInvoker((command, args) => {
-      if (command === "playback_status") {
-        return activePlaybackId === null ? noAudioStatus() : playingStatus(activePlaybackId);
-      }
-      if (command === "play_track") {
-        const trackId = args?.trackId as number;
-        attemptedTrackIds.push(trackId);
-        activePlaybackId = 1;
-        return trackStarted(trackId, activePlaybackId);
-      }
-      throw new Error(`Unexpected playback command: ${command}`);
-    });
-    const session = createPlaybackSession({
-      invokeCommand,
-      restoredQueueSnapshot: {
-        displayedTracks: restoredTracks,
-        currentRowKey: "selected",
-        nextRowKeys: [],
+describe("backend playback session adapter", () => {
+  it("loads the restored projection without issuing any playback command or writing localStorage", async () => {
+    const fixture = playbackFixture({
+      initialSnapshot: playbackSnapshot({
+        displayedTracks: rows,
+        currentRowKey: "row:2",
         shuffleEnabled: true,
         repeatOneEnabled: true,
+      }),
+    });
+    await fixture.session.ready;
+    expect(fixture.calls).toEqual(["snapshot"]);
+    expect(fixture.session.state.displayedTracks.value).toEqual(rows);
+    expect(fixture.session.state.currentPlaybackId.value).toBeNull();
+    expect(fixture.session.state.canStartRestoredQueue.value).toBe(true);
+    await fixture.session.togglePlayback();
+    expect(fixture.calls).toEqual(["snapshot", "toggle"]);
+    expect(fixture.session.state.currentRowKey.value).toBe("row:2");
+  });
+
+  it("sends typed queue commands and never computes navigation or preload candidates", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    await fixture.session.playTracks(rows, "row:1", false);
+    await fixture.session.playPreviousTrack();
+    await fixture.session.playNextTrack();
+    await fixture.session.setShuffleEnabled(true);
+    await fixture.session.setRepeatOneEnabled(true);
+    await fixture.session.addTracksToNext(rows);
+    expect(fixture.commands.slice(1)).toEqual([
+      { action: "playTracks", tracks: rows, startRowKey: "row:1", allowSkipped: false },
+      { action: "previous" },
+      { action: "next" },
+      { action: "shuffle", enabled: true },
+      { action: "repeat", enabled: true },
+      { action: "add", tracks: rows.map((track) => ({ ...track, rowKey: "" })), next: true },
+    ]);
+  });
+
+  it("status polling displays an ended projection without advancing playback", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    await fixture.session.playTracks(rows, "row:1");
+    fixture.emit({
+      playbackStatus: {
+        hasAudio: true,
+        isPlaying: false,
+        hasEnded: true,
+        positionMs: 100,
+        durationMs: 100,
       },
     });
+    await fixture.session.refreshPlaybackStatus();
+    expect(fixture.calls).toEqual(["snapshot", "playTracks", "progress"]);
+    expect(fixture.session.state.currentRowKey.value).toBe("row:1");
+    expect(fixture.session.state.playbackStatus.value.hasEnded).toBe(true);
+  });
 
-    expect(attemptedTrackIds).toEqual([]);
-    expect(session.state.currentTrack.value?.trackId).toBe(999);
-    expect(session.state.canStartRestoredQueue.value).toBe(true);
-    expect(await session.togglePlayback(async () => true)).toBe(true);
+  it("backend events update every field and discard late lower-revision command replies", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    const old = deferred<PlaybackSessionReply>();
+    fixture.defer(old.promise);
+    const command = fixture.session.playTracks(rows, "row:1");
+    fixture.emit({
+      revision: 10,
+      displayedTracks: rows,
+      currentRowKey: "row:2",
+      currentPlaybackId: 99,
+      currentTrack: { trackId: 2, title: "New", artist: null },
+      skippedTrackIds: [1],
+      canPlayPrevious: true,
+    });
+    const revision = fixture.snapshot.revision;
+    old.resolve(playbackReply(playbackSnapshot({ revision: revision - 1, currentRowKey: "old" })));
+    await command;
+    expect(fixture.session.state.currentRowKey.value).toBe("row:2");
+    expect(fixture.session.state.currentPlaybackId.value).toBe(99);
+    expect(fixture.session.state.skippedTrackIds.value).toEqual([1]);
+    expect(fixture.session.state.canPlayPrevious.value).toBe(true);
+  });
 
-    expect(attemptedTrackIds).toEqual([22]);
-    expect(session.state.currentTrack.value?.trackId).toBe(22);
-    expect(session.state.currentRowKey.value).toBe("selected");
-    expect(session.state.shuffleEnabled.value).toBe(true);
-    expect(session.state.repeatOneEnabled.value).toBe(true);
+  it("an older status response cannot overwrite a newer subscribed playback instance", async () => {
+    const old = deferred<PlaybackSessionReply>();
+    let receive: (snapshot: PlaybackSessionSnapshot) => void = () => {};
+    const invokeCommand: PlaybackCommandInvoker = async <T>() => (await old.promise) as T;
+    const session = createPlaybackSession({
+      invokeCommand,
+      subscribe: async (listener) => {
+        receive = listener;
+        return () => {};
+      },
+    });
+    await Promise.resolve();
+    receive(
+      playbackSnapshot({
+        revision: 4,
+        currentPlaybackId: 44,
+        currentTrack: { trackId: 4, title: "New", artist: null },
+      }),
+    );
+    old.resolve(playbackReply(playbackSnapshot({ revision: 3 })));
+    await session.ready;
+    expect(session.state.currentPlaybackId.value).toBe(44);
+  });
+
+  it("seeking keeps only UI preview state and passes the expected playback instance to backend", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    await fixture.session.playTracks(rows, "row:1");
+    fixture.session.beginSeeking();
+    expect(fixture.session.state.isSeeking.value).toBe(true);
+    expect(await fixture.session.seekTo(75)).toBe(true);
+    expect(fixture.commands.slice(-2)).toEqual([
+      { action: "beginSeeking" },
+      { action: "seek", positionMs: 75, playbackId: 1 },
+    ]);
+    expect(fixture.session.state.isSeeking.value).toBe(false);
+  });
+
+  it("retains sidecar lyrics when editing detaches playback, ignores stale reads, and rereads on real restart", async () => {
+    const first = deferred<unknown>();
+    const reads: number[] = [];
+    const second = { kind: "plain", text: "Second" } as const;
+    const fixture = playbackFixture({
+      invokeExtra: (name, args) => {
+        if (name !== "get_playback_sidecar_lyrics") throw new Error(`Unexpected command ${name}`);
+        reads.push(args?.trackId as number);
+        return reads.length === 1 ? first.promise : second;
+      },
+    });
+    await fixture.session.ready;
+    await fixture.session.playTracks(rows, "row:1");
+    await fixture.session.playQueueItem("row:2");
+    first.resolve({ kind: "plain", text: "Stale" });
+    await settle();
+    expect(fixture.session.state.sidecarLyrics.value).toEqual(second);
+    await fixture.session.withMetadataEditing([2], async () => {});
+    expect(fixture.session.state.sidecarLyrics.value).toEqual(second);
+    expect(reads).toEqual([1, 2]);
+    await fixture.session.togglePlayback();
+    await settle();
+    expect(reads).toEqual([1, 2, 2]);
+  });
+
+  it("forwards removal outcomes instead of claiming a failed or superseded removal succeeded", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    for (const removal of [
+      { status: "stop-unconfirmed" },
+      { status: "superseded" },
+      { status: "stop-failed", message: "busy" },
+    ] as const) {
+      fixture.defer(Promise.resolve(playbackReply(fixture.snapshot, { removal })));
+      expect(await fixture.session.removeQueueItems(["row:1"])).toEqual(removal);
+    }
+  });
+
+  it("disposes the subscription and ignores late events and sidecar replies", async () => {
+    const late = deferred<unknown>();
+    const fixture = playbackFixture({ invokeExtra: () => late.promise });
+    await fixture.session.ready;
+    await fixture.session.playTracks(rows, "row:1");
+    fixture.session.dispose();
+    fixture.emit({ currentRowKey: "row:2" });
+    late.resolve({ kind: "plain", text: "Late" });
+    await settle();
+    expect(fixture.session.state.currentRowKey.value).toBe("row:1");
+    expect(fixture.session.state.sidecarLyrics.value).toBeNull();
+  });
+
+  it("loads skip preferences from authoritative snapshots and only publishes confirmed database writes", async () => {
+    let fail = false;
+    const fixture = playbackFixture({
+      initialSnapshot: playbackSnapshot({ skippedTrackIds: [1] }),
+      invokeExtra: () => {
+        if (fail) throw new Error("write failed");
+      },
+    });
+    await fixture.session.ready;
+    await fixture.session.setTracksSkipped([2, 2], true);
+    expect(fixture.session.state.skippedTrackIds.value).toEqual([1, 2]);
+    fail = true;
+    await expect(fixture.session.setTracksSkipped([1], false)).rejects.toThrow("write failed");
+    expect(fixture.session.state.skippedTrackIds.value).toEqual([1, 2]);
+    expect(fixture.session.state.isTrackSkipPending.value).toBe(false);
   });
 });
 
-it("retains sidecar lyrics for controls and ignores stale session results", async () => {
-  const first = deferred<unknown>();
-  let playbackId = 0;
-  const reads: number[] = [];
-  const session = createPlaybackSession({
-    restoredQueueSnapshot: null,
-    invokeCommand: asPlaybackInvoker((command, args) => {
-      if (command === "play_track") return trackStarted(args?.trackId as number, ++playbackId);
-      if (command === "playback_status") return playingStatus(playbackId);
-      if (command === "get_playback_sidecar_lyrics") {
-        reads.push(args?.trackId as number);
-        return reads.length === 1
-          ? first.promise
-          : { kind: "synced", lines: [{ startMs: 1000, text: "second" }] };
-      }
-      if (["pause", "resume", "seek_to"].includes(command)) return;
-      throw new Error(`Unexpected command ${command}`);
-    }, true),
-  });
-  await session.playTracks(tracks(["one", 1], ["two", 2]), "one");
-  await session.playQueueItem("two");
-  await settlePendingCallbacks();
-  first.resolve({ kind: "synced", lines: [{ startMs: 1000, text: "stale" }] });
-  await settlePendingCallbacks();
-  expect(session.state.sidecarLyrics.value).toEqual({
-    kind: "synced",
-    lines: [{ startMs: 1000, text: "second" }],
-  });
-  await session.togglePlayback(async () => true);
-  await session.seekTo(20);
-  expect(reads).toEqual([1, 2]);
+it("does not send a late seek after a newer track operation replaces the preview", async () => {
+  const fixture = playbackFixture();
+  await fixture.session.ready;
+  await fixture.session.playTracks(rows, "row:1");
+  const begin = deferred<PlaybackSessionReply>();
+  fixture.defer(begin.promise);
+  const oldSnapshot = fixture.snapshot;
+  fixture.session.beginSeeking();
+  const seeking = fixture.session.seekTo(99);
+  await fixture.session.playQueueItem("row:2");
+  begin.resolve(playbackReply(oldSnapshot));
+  expect(await seeking).toBe(false);
+  expect(fixture.commands.filter((command) => command.action === "seek")).toEqual([]);
+  expect(fixture.session.state.currentRowKey.value).toBe("row:2");
 });

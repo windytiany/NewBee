@@ -98,7 +98,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             save_state(window.app_handle());
             match window.state::<SettingsState>().close_behavior() {
                 CloseBehavior::Tray => {
-                    // Keep the webview alive for queue controls and track transitions.
+                    // Keep the existing UI state when closing to the tray.
                     if let Err(error) = window.hide() {
                         log::warn!("Could not hide main window: {error}");
                     }

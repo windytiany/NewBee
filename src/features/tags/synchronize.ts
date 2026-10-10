@@ -17,7 +17,9 @@ export function createTagSynchronization(
     invalidateAlbumArtworkCache();
     globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
     const updated = await Promise.all(trackIds.map(library.getTrack));
-    session.updateTrackMetadata(updated.filter((track): track is TrackDetails => track !== null));
+    await session.updateTrackMetadata(
+      updated.filter((track): track is TrackDetails => track !== null),
+    );
   }
   return { tracks, artwork: tracks };
 }

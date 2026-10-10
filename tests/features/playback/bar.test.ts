@@ -7,8 +7,8 @@ import { compileSfc, evaluateSource } from "../../support/moduleLoader";
 import { createHostNode, createHostRenderer } from "../../support/hostRenderer";
 import type { HostNode } from "../../support/hostRenderer";
 import { createPlaybackSession } from "@/features/playback/session";
-import type { PlaybackCommandInvoker } from "@/features/playback/types";
-import type { InternalPlaybackStatus } from "@/features/playback/runtime/status";
+import { playbackFixture, playbackReply } from "../../support/playbackSession";
+import type { PlaybackStatus } from "@/features/playback/types";
 import { useNotification } from "@/shared/notifications/useNotification";
 import { notifications } from "@/shared/notifications/center";
 
@@ -27,7 +27,7 @@ function deferred<Value>() {
 function status(
   playbackId: number | null,
   isPlaying = playbackId !== null,
-): InternalPlaybackStatus {
+): PlaybackStatus & { playbackId: number | null } {
   return {
     playbackId,
     hasAudio: playbackId !== null,
@@ -76,7 +76,7 @@ const modules: Record<string, unknown> = {
       setShuffleEnabled: activeSession.setShuffleEnabled,
       playPreviousTrack: activeSession.playPreviousTrack,
       playNextTrack: activeSession.playNextTrack,
-      togglePlayback: () => activeSession.togglePlayback(async () => true),
+      togglePlayback: () => activeSession.togglePlayback(),
       handleSeekInput: () => {},
       commitSeek: () => {},
     }),
@@ -86,7 +86,6 @@ const modules: Record<string, unknown> = {
       volume: Vue.ref(100),
       volumeError: Vue.ref(""),
       toggleMute: () => {},
-      ensureCurrentVolumeIsSynchronized: async () => true,
     }),
   },
 };
@@ -146,43 +145,45 @@ async function settle() {
 
 function setupPlayback() {
   const nextStart = deferred<ReturnType<typeof started>>();
-  const nextStatus = deferred<InternalPlaybackStatus>();
+  const nextStatus = deferred<PlaybackStatus & { playbackId: number | null }>();
+  const fixture = playbackFixture();
   let deferNextStatus = false;
-  let activeStatus = status(null);
-  const handler = (command: string, args?: Record<string, unknown>) => {
-    if (command === "get_playback_sidecar_lyrics") return null;
-    if (command === "playback_status") {
-      return deferNextStatus && activeStatus.playbackId === 2 ? nextStatus.promise : activeStatus;
-    }
-    if (command === "play_track") {
-      const trackId = args?.trackId as number;
-      if (trackId === 2)
-        return nextStart.promise.then((track) => {
-          activeStatus = status(2);
-          return track;
-        });
-      activeStatus = status(trackId);
-      return started(trackId);
-    }
-    if (command === "stop_playback") {
-      activeStatus = status(null);
-      return true;
-    }
-    if (command === "pause") {
-      activeStatus = { ...activeStatus, isPlaying: false };
-      return;
-    }
-    if (command === "resume") {
-      activeStatus = { ...activeStatus, isPlaying: true };
-      return;
-    }
-    throw new Error(`Unexpected command: ${command}`);
-  };
-  const invokeCommand: PlaybackCommandInvoker = async <Result>(
-    command: string,
-    args?: Record<string, unknown>,
-  ) => (command === "list_skipped_track_ids" ? [] : await handler(command, args)) as Result;
-  const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
+  const snapshotForSecond = () => ({
+    ...fixture.snapshot,
+    revision: fixture.snapshot.revision + 1,
+    currentPlaybackId: 2,
+    currentRowKey: "b",
+    currentTrack: { trackId: 2, title: "Track 2", artist: "Artist" },
+    playbackStatus: status(2),
+    isCommandPending: false,
+    canPlayNext: false,
+    canPlayPrevious: true,
+  });
+  // This is a backend reply, not a frontend queue scheduler.
+  const backendNext = nextStart.promise.then(() => playbackReply(snapshotForSecond()));
+  const originalNext = fixture.session.playNextTrack;
+  const session = Object.freeze({
+    ...fixture.session,
+    playNextTrack: () => {
+      fixture.defer(
+        backendNext.catch(() =>
+          playbackReply(
+            {
+              ...fixture.snapshot,
+              revision: fixture.snapshot.revision + 1,
+              currentTrack: null,
+              currentRowKey: null,
+              currentPlaybackId: null,
+              playbackStatus: status(null),
+              queuePlaybackError: "audio unavailable",
+            },
+            { applied: false },
+          ),
+        ),
+      );
+      return originalNext();
+    },
+  });
   return {
     session,
     nextStart,
@@ -190,8 +191,29 @@ function setupPlayback() {
     deferNextStatus: () => {
       deferNextStatus = true;
     },
-    endTrack: () => {
-      activeStatus = { ...status(1, false), hasEnded: true, positionMs: 100 };
+    endTrack: async () => {
+      if (fixture.snapshot.displayedTracks.length === 1) {
+        fixture.emit({ playbackStatus: { ...status(1, false), positionMs: 0 } });
+        return;
+      }
+      fixture.emit({
+        isCommandPending: true,
+        playbackStatus: { ...status(1, false), hasEnded: true, positionMs: 100 },
+      });
+      await nextStart.promise;
+      fixture.emit(snapshotForSecond());
+      if (deferNextStatus) {
+        fixture.deferQuery(
+          nextStatus.promise.then((playbackStatus) =>
+            playbackReply({
+              ...fixture.snapshot,
+              revision: fixture.snapshot.revision + 1,
+              playbackStatus,
+            }),
+          ),
+        );
+        void session.refreshPlaybackStatus();
+      }
     },
   };
 }
@@ -257,7 +279,7 @@ describe("playback bar button", () => {
     expect(options.children[2]).toBe(spectrum);
     expect(spectrum.props["data-playback-id"]).toBe(1);
     expect(spectrum.props["data-active"]).toBe(true);
-    await session.togglePlayback(async () => true);
+    await session.togglePlayback();
     await settle();
     expect(spectrum.props["data-active"]).toBe(false);
   });
@@ -281,8 +303,7 @@ describe("playback bar button", () => {
     await startQueue(session);
     const root = mountBar(session);
     expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
-    endTrack();
-    const advancing = session.refreshPlaybackStatus();
+    const advancing = endTrack();
     await settle();
     expect(session.state.isPlaybackCommandPending.value).toBe(true);
     expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
@@ -297,8 +318,7 @@ describe("playback bar button", () => {
     await startQueue(session);
     const root = mountBar(session);
     deferNextStatus();
-    endTrack();
-    const advancing = session.refreshPlaybackStatus();
+    const advancing = endTrack();
     await settle();
     nextStart.resolve(started(2));
     await advancing;
@@ -322,7 +342,7 @@ describe("playback bar button", () => {
     );
     await settle();
     const root = mountBar(session);
-    endTrack();
+    await endTrack();
     await session.refreshPlaybackStatus();
     await settle();
     expect(playButton(root).props["aria-label"]).toBe(t("播放"));
@@ -359,10 +379,10 @@ describe("playback bar button", () => {
     const { session } = setupPlayback();
     await startQueue(session);
     const root = mountBar(session);
-    await session.togglePlayback(async () => true);
+    await session.togglePlayback();
     await settle();
     expect(playButton(root).props["aria-label"]).toBe(t("播放"));
-    await session.togglePlayback(async () => true);
+    await session.togglePlayback();
     await settle();
     expect(playButton(root).props["aria-label"]).toBe(t("暂停"));
   });

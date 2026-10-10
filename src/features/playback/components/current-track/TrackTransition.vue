@@ -35,10 +35,10 @@ import { shallowRef, watch } from "vue";
 import { useTrackArtworkPresentation } from "@/features/artwork/useTrackArtworkPresentation";
 import type { TrackArtworkStatus } from "@/features/artwork/useTrackArtwork";
 import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
-import type { NowPlayingTrack } from "@/features/playback/types";
+import type { PlaybackTrack } from "@/features/playback/types";
 import type { TrackDetails } from "@/features/library/types";
 
-type PresentationTrack = Pick<NowPlayingTrack, "trackId" | "title" | "artist">;
+type PresentationTrack = Pick<PlaybackTrack, "trackId" | "title" | "artist">;
 type DisplayedTrack = {
   key: number;
   track: PresentationTrack | null;
@@ -71,7 +71,7 @@ watch(
   [() => props.track, currentTrackDetails, isLoading, status, url, currentTrackDetailsError, error],
   ([track, details, detailsLoading, artworkStatus, , detailsError]) => {
     const loading = !!track && (detailsLoading || artworkStatus === "loading");
-    if (loading && displayed.value && displayed.value.artworkStatus !== "loading") return;
+    if (loading && displayed.value?.track && displayed.value.artworkStatus !== "loading") return;
 
     const artwork = present(loading);
     displayed.value = {

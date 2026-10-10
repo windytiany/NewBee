@@ -42,7 +42,11 @@ function fixture() {
     },
   );
   const synchronize = createTagSynchronization(
-    { updateTrackMetadata: (tracks) => updates.push(tracks) },
+    {
+      updateTrackMetadata: async (tracks) => {
+        updates.push(tracks);
+      },
+    },
     invokeCommand,
   );
   return {

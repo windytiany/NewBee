@@ -1,6 +1,10 @@
 mod continuous;
 #[cfg(windows)]
 pub(crate) mod media;
+mod persistence;
+mod queue;
+pub(crate) mod session;
+mod session_audio;
 mod spectrum;
 
 use crate::database::Database;
@@ -17,7 +21,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 
 pub struct PlaybackState {
     active: Mutex<Option<ActivePlayback>>,
@@ -45,7 +49,7 @@ struct ActivePlayback {
     sample_rate: SampleRate,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackStatus {
     has_audio: bool,
@@ -92,13 +96,12 @@ impl PlaybackError {
     }
 }
 
-#[tauri::command]
-pub fn play_track(
-    _app: tauri::AppHandle,
+pub(crate) fn play_track(
+    _app: &tauri::AppHandle,
     track_id: i64,
     row_key: Option<String>,
-    database: State<'_, Database>,
-    state: State<'_, PlaybackState>,
+    database: &Database,
+    state: &PlaybackState,
 ) -> Result<NowPlayingTrack, String> {
     let track = database
         .get_track_for_playback(track_id)?
@@ -113,7 +116,7 @@ pub fn play_track(
     };
     let prepared = prepare_track(Path::new(&track.path), now_playing.clone())
         .map_err(PlaybackError::into_play_command_message)?;
-    start_playback(prepared, &state, &_app).map_err(PlaybackError::into_message)?;
+    start_playback(prepared, state, _app).map_err(PlaybackError::into_message)?;
 
     #[cfg(windows)]
     {
@@ -129,8 +132,8 @@ pub fn play_track(
                 .and_then(|name| name.to_str())
                 .unwrap_or("");
             media::set_track(
-                &_app,
-                &database,
+                _app,
+                database,
                 track_id,
                 track.title.as_deref().unwrap_or(fallback_title),
                 track.artist.as_deref().unwrap_or(""),
@@ -141,14 +144,13 @@ pub fn play_track(
     Ok(now_playing)
 }
 
-#[tauri::command]
-pub async fn prepare_next_track(
+pub(crate) fn prepare_next_track(
     playback_id: u64,
     revision: u64,
     track_id: Option<i64>,
     row_key: Option<String>,
-    database: State<'_, Database>,
-    state: State<'_, PlaybackState>,
+    database: &Database,
+    state: &PlaybackState,
 ) -> Result<bool, String> {
     let (continuous, channels, sample_rate) = {
         let active = state
@@ -181,18 +183,13 @@ pub async fn prepare_next_track(
         row_key,
         previous_playback_id: Some(playback_id),
     };
-    let next = tauri::async_runtime::spawn_blocking(move || {
-        prepare_track(Path::new(&track.path), now_playing)
-            .map(|track| normalize_track(track, channels, sample_rate))
-            .map_err(PlaybackError::into_play_command_message)
-    })
-    .await
-    .map_err(|error| format!("Could not prepare next track: {error}"))??;
+    let next = prepare_track(Path::new(&track.path), now_playing)
+        .map(|track| normalize_track(track, channels, sample_rate))
+        .map_err(PlaybackError::into_play_command_message)?;
     Ok(continuous.prepare(playback_id, revision, next))
 }
 
-#[tauri::command]
-pub fn set_volume(volume: u8, state: State<'_, PlaybackState>) -> Result<(), String> {
+pub(crate) fn set_volume(volume: u8, state: &PlaybackState) -> Result<(), String> {
     if volume > 100 {
         return Err("Volume must be between 0 and 100".to_owned());
     }
@@ -214,8 +211,7 @@ pub fn set_volume(volume: u8, state: State<'_, PlaybackState>) -> Result<(), Str
     Ok(())
 }
 
-#[tauri::command]
-pub fn pause(_app: tauri::AppHandle, state: State<'_, PlaybackState>) -> Result<(), String> {
+pub(crate) fn pause(_app: &tauri::AppHandle, state: &PlaybackState) -> Result<(), String> {
     let active = state
         .active
         .lock()
@@ -225,12 +221,11 @@ pub fn pause(_app: tauri::AppHandle, state: State<'_, PlaybackState>) -> Result<
         .ok_or_else(|| "No audio is loaded".to_owned())?;
     playback.player.pause();
     #[cfg(windows)]
-    media::set_playback(&_app, true, false);
+    media::set_playback(_app, true, false);
     Ok(())
 }
 
-#[tauri::command]
-pub fn resume(_app: tauri::AppHandle, state: State<'_, PlaybackState>) -> Result<(), String> {
+pub(crate) fn resume(_app: &tauri::AppHandle, state: &PlaybackState) -> Result<(), String> {
     let active = state
         .active
         .lock()
@@ -240,15 +235,14 @@ pub fn resume(_app: tauri::AppHandle, state: State<'_, PlaybackState>) -> Result
         .ok_or_else(|| "No audio is loaded".to_owned())?;
     playback.player.play();
     #[cfg(windows)]
-    media::set_playback(&_app, true, !playback.continuous.snapshot().ended);
+    media::set_playback(_app, true, !playback.continuous.snapshot().ended);
     Ok(())
 }
 
-#[tauri::command]
-pub fn stop_playback(
-    _app: tauri::AppHandle,
+pub(crate) fn stop_playback(
+    _app: &tauri::AppHandle,
     playback_id: u64,
-    state: State<'_, PlaybackState>,
+    state: &PlaybackState,
 ) -> Result<bool, String> {
     let mut active = state
         .active
@@ -266,12 +260,11 @@ pub fn stop_playback(
     };
     playback.player.stop();
     #[cfg(windows)]
-    media::set_playback(&_app, false, false);
+    media::set_playback(_app, false, false);
     Ok(true)
 }
 
-#[tauri::command]
-pub fn seek_to(position_ms: u64, state: State<'_, PlaybackState>) -> Result<(), String> {
+pub(crate) fn seek_to(position_ms: u64, state: &PlaybackState) -> Result<(), String> {
     let mut active = state
         .active
         .lock()
@@ -321,11 +314,7 @@ impl PlaybackState {
     }
 }
 
-#[tauri::command]
-pub fn playback_status(
-    _app: tauri::AppHandle,
-    state: State<'_, PlaybackState>,
-) -> Result<PlaybackStatus, String> {
+pub(crate) fn playback_status(state: &PlaybackState) -> Result<PlaybackStatus, String> {
     let active = state
         .active
         .lock()
@@ -345,9 +334,6 @@ pub fn playback_status(
 
     let snapshot = playback.continuous.snapshot();
     let has_ended = snapshot.ended;
-    #[cfg(windows)]
-    media::set_playback(&_app, true, !playback.player.is_paused() && !has_ended);
-
     Ok(PlaybackStatus {
         has_audio: true,
         is_playing: !playback.player.is_paused() && !has_ended,
@@ -428,9 +414,6 @@ fn start_playback(
                 track.title.as_deref().unwrap_or(""),
                 track.artist.as_deref().unwrap_or(""),
             );
-            if let Err(error) = app.emit("playback-track-started", &track) {
-                log::warn!("Could not notify track transition: {error}");
-            }
         }
     });
     let (player, spectrum) = connect_source(output.mixer(), source, *volume as f32 / 100.0);

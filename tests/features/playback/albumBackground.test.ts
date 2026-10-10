@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { setLocale } from "@/shared/i18n/locale";
 import * as Vue from "vue";
-import type { NowPlayingTrack } from "@/features/playback/types";
+import type { PlaybackTrack } from "@/features/playback/types";
 import type { TrackDetails } from "@/features/library/types";
 import type { AlbumArtworkSelection } from "@/features/artwork/useAlbumArtwork";
 import { compileSfc, evaluateSource } from "../../support/moduleLoader";
@@ -69,11 +69,10 @@ function details(id: number, album: string, albumArtist = "Album artist"): Track
 
 function mountPage(enabled = false) {
   const preference = Vue.ref(enabled);
-  const currentTrack = Vue.ref<NowPlayingTrack | null>({
+  const currentTrack = Vue.ref<PlaybackTrack | null>({
     trackId: 1,
     title: "Song",
     artist: "Track artist",
-    playbackId: 1,
   });
   const requests: Array<{ trackId: number; resolve: (value: TrackDetails | null) => void }> = [];
   const selections: Array<AlbumArtworkSelection | null> = [];
@@ -221,7 +220,7 @@ describe("播放页专辑封面背景", () => {
     page.requests[0]!.resolve(details(1, "First album"));
     await settle();
     const oldLayer = page.layers()[0];
-    page.currentTrack.value = { trackId: 2, title: "New song", artist: null, playbackId: 2 };
+    page.currentTrack.value = { trackId: 2, title: "New song", artist: null };
     await settle();
     expect(page.layers()).toEqual([oldLayer]);
     expect(JSON.stringify(backgroundImages(page))).toContain("First album");
@@ -258,7 +257,7 @@ describe("播放页专辑封面背景", () => {
     page.requests[0]!.resolve(details(1, "Album"));
     await settle();
     const layer = page.layers()[0];
-    page.currentTrack.value = { trackId: 2, title: "New song", artist: null, playbackId: 2 };
+    page.currentTrack.value = { trackId: 2, title: "New song", artist: null };
     await settle();
     page.requests[1]!.resolve(details(2, "Album"));
     await settle();
@@ -270,9 +269,9 @@ describe("播放页专辑封面背景", () => {
     const page = mountPage(true);
     page.requests[0]!.resolve(details(1, "First album"));
     await settle();
-    page.currentTrack.value = { trackId: 2, title: null, artist: null, playbackId: 2 };
+    page.currentTrack.value = { trackId: 2, title: null, artist: null };
     await settle();
-    page.currentTrack.value = { trackId: 3, title: null, artist: null, playbackId: 3 };
+    page.currentTrack.value = { trackId: 3, title: null, artist: null };
     await settle();
     page.requests[1]!.resolve(details(2, "Second album"));
     await settle();
@@ -291,7 +290,7 @@ describe("播放页专辑封面背景", () => {
     const page = mountPage(true);
     page.requests[0]!.resolve(details(1, "Album"));
     await settle();
-    page.currentTrack.value = { trackId: 2, title: null, artist: null, playbackId: 2 };
+    page.currentTrack.value = { trackId: 2, title: null, artist: null };
     await settle();
     page.preference.value = false;
     await settle();
@@ -317,7 +316,7 @@ describe("播放页专辑封面背景", () => {
     page.missingArtwork.value = false;
     await settle();
     expect(page.layers()).toHaveLength(1);
-    page.currentTrack.value = { trackId: 2, title: null, artist: null, playbackId: 2 };
+    page.currentTrack.value = { trackId: 2, title: null, artist: null };
     await settle();
     expect(page.layers()).toHaveLength(1);
     page.requests[1]!.resolve(null);

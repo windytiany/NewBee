@@ -196,7 +196,7 @@ import {
   VolumeX,
 } from "@lucide/vue";
 
-const { volume, volumeError, toggleMute, ensureCurrentVolumeIsSynchronized } = usePlaybackVolume();
+const { volume, volumeError, toggleMute } = usePlaybackVolume();
 const isVolumePopoverOpen = ref(false);
 const isHorizontalVolumeVisible = ref(false);
 const volumeControl = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
@@ -268,7 +268,7 @@ const {
   togglePlayback,
   handleSeekInput,
   commitSeek,
-} = usePlaybackControls(ensureCurrentVolumeIsSynchronized);
+} = usePlaybackControls();
 
 onUnmounted(() => {
   volumeLayoutQuery?.removeEventListener("change", updateVolumeLayout);

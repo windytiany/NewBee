@@ -3,10 +3,10 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { effectScope } from "vue";
-import { createPlaybackSession } from "@/features/playback/session";
+import { playbackFixture } from "../../support/playbackSession";
 import { useLyrics } from "@/features/lyrics/composables/useLyrics";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
-import type { PlaybackCommandInvoker, PlaybackDisplayTrack } from "@/features/playback/types";
+import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import type { TrackLyrics } from "@/features/lyrics/types";
 
 const tracks: PlaybackDisplayTrack[] = [1, 2].map((trackId) => ({
@@ -34,11 +34,7 @@ for (const validSidecar of [true, false]) {
     writeFileSync(path, initialText);
     writeFileSync(join(directory, "2.lrc"), "[00:02]sidecar changed");
     const reads: number[] = [];
-    const preparations: number[] = [];
-    const seeks: unknown[] = [];
     let embedded: TrackLyrics = { kind: "instrumental" };
-    let playbackId = 0;
-    let isPlaying = true;
     const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
     const window = new EventTarget();
@@ -47,64 +43,28 @@ for (const validSidecar of [true, false]) {
       configurable: true,
       value: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
     });
-    const invokeCommand: PlaybackCommandInvoker = async <T>(
-      command: string,
-      args?: Record<string, unknown>,
-    ) => {
-      if (command === "list_skipped_track_ids") return [] as T;
-      if (command === "play_track")
-        return {
-          trackId: args?.trackId,
-          playbackId: ++playbackId,
-          title: "song",
-          artist: null,
-        } as T;
-      if (command === "prepare_next_track") {
-        if (typeof args?.trackId === "number") preparations.push(args.trackId);
-        return true as T;
-      }
-      if (command === "playback_status")
-        return {
-          hasAudio: true,
-          playbackId,
-          isPlaying,
-          hasEnded: false,
-          positionMs: 0,
-          durationMs: 10000,
-        } as T;
-      if (command === "pause") {
-        isPlaying = false;
-        return undefined as T;
-      }
-      if (command === "resume") {
-        isPlaying = true;
-        return undefined as T;
-      }
-      if (command === "seek_to") {
-        seeks.push(args?.positionMs);
-        return undefined as T;
-      }
-      if (command === "stop_playback") return true as T;
-      if (command === "get_track_lyrics") return embedded as T;
-      if (command === "get_playback_sidecar_lyrics") {
-        const id = args?.trackId;
-        if (typeof id !== "number") throw new Error("Missing trackId");
-        reads.push(id);
-        const text = readFileSync(join(directory, `${id}.lrc`), "utf8");
-        // Command boundary adapter for the real fixture. Rust IPC tests verify parsing.
-        return (
-          text === "[00:01]sidecar original"
+    const fixture = playbackFixture({
+      invokeExtra: (command, args) => {
+        if (command === "set_tracks_skipped") return;
+        if (command === "get_track_lyrics") return embedded;
+        if (command === "get_playback_sidecar_lyrics") {
+          const id = args?.trackId;
+          if (typeof id !== "number") throw new Error("Missing trackId");
+          reads.push(id);
+          const text = readFileSync(join(directory, `${id}.lrc`), "utf8");
+          // Command boundary adapter for the real fixture. Rust IPC tests verify parsing.
+          return text === "[00:01]sidecar original"
             ? original
             : text === "[00:02]sidecar changed"
               ? changed
-              : null
-        ) as T;
-      }
-      throw new Error(`Unexpected command ${command}`);
-    };
+              : null;
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    });
+    const { session, invokeCommand } = fixture;
     const scope = effectScope();
     try {
-      const session = createPlaybackSession({ invokeCommand, restoredQueueSnapshot: null });
       const lyrics = scope.run(() =>
         useLyrics({
           currentTrack: session.state.currentTrack,
@@ -115,18 +75,22 @@ for (const validSidecar of [true, false]) {
       )!;
       await session.playTracks(tracks, "1");
       await settle();
-      expect(preparations).toContain(2);
+      expect(fixture.calls).toContain("playTracks");
       expect(reads).toEqual([1]);
       expect(lyrics.state.value).toEqual({
         status: "ready",
         lyrics: validSidecar ? original : { kind: "instrumental" },
       });
       writeFileSync(path, "[00:02]sidecar changed");
-      await session.togglePlayback(async () => true);
-      await session.togglePlayback(async () => true);
+      await session.togglePlayback();
+      await session.togglePlayback();
       session.beginSeeking();
       expect(await session.seekTo(3000)).toBe(true);
-      expect(seeks).toEqual([3000]);
+      expect(
+        fixture.commands
+          .filter((command) => command.action === "seek")
+          .map((command) => command.positionMs),
+      ).toEqual([3000]);
       expect(lyrics.state.value).toEqual({
         status: "ready",
         lyrics: validSidecar ? original : { kind: "instrumental" },
@@ -147,17 +111,11 @@ for (const validSidecar of [true, false]) {
       await settle();
       expect(reads).toEqual([1, 1]);
       expect(lyrics.state.value).toEqual({ status: "ready", lyrics: changed });
-      const previousPlaybackId = session.state.currentPlaybackId.value!;
-      expect(
-        session.observePlaybackTransition({
-          previousPlaybackId,
-          playbackId: previousPlaybackId + 1,
-          rowKey: "2",
-          trackId: 2,
-          title: "two",
-          artist: null,
-        }),
-      ).toBe(true);
+      fixture.emit({
+        currentPlaybackId: session.state.currentPlaybackId.value! + 1,
+        currentRowKey: "2",
+        currentTrack: { trackId: 2, title: "two", artist: null },
+      });
       await settle();
       expect(reads).toEqual([1, 1, 2]);
       expect(lyrics.state.value).toEqual({ status: "ready", lyrics: changed });

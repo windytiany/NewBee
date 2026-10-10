@@ -1,44 +1,12 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import {
-  createPlaybackSession,
+  type createPlaybackSession,
   PLAYBACK_STATUS_POLL_INTERVAL_MS,
 } from "@/features/playback/session";
-import * as systemMedia from "@/features/playback/runtime/systemMedia";
+import { playbackFixture } from "../../support/playbackSession";
 import { transpileScript, evaluateSource } from "../../support/moduleLoader";
 
-const storedValues = new Map<string, string>();
-const localStorage = {
-  getItem(key: string) {
-    return storedValues.get(key) ?? null;
-  },
-  setItem(key: string, value: string) {
-    storedValues.set(key, value);
-  },
-  removeItem(key: string) {
-    storedValues.delete(key);
-  },
-};
-const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
-Object.defineProperty(globalThis, "localStorage", { configurable: true, value: localStorage });
-afterEach(() => {
-  if (originalStorage) Object.defineProperty(globalThis, "localStorage", originalStorage);
-  else Reflect.deleteProperty(globalThis, "localStorage");
-});
-
-const invoke = mock(async (command: string) => {
-  if (command === "playback_status") {
-    return {
-      hasAudio: false,
-      isPlaying: false,
-      hasEnded: false,
-      playbackId: null,
-      positionMs: 0,
-      durationMs: 0,
-    };
-  }
-  throw new Error(`Unexpected playback command: ${command}`);
-});
 let session: ReturnType<typeof createPlaybackSession>;
 const { usePlaybackControls } = evaluateSource<
   typeof import("@/features/playback/composables/useControls")
@@ -55,7 +23,6 @@ const { usePlaybackControls } = evaluateSource<
         throw new Error("Unmounted playback controls should not subscribe to desktop events.");
       },
     },
-    "@/features/playback/runtime/systemMedia": systemMedia,
     "@/features/playback/session": {
       PLAYBACK_STATUS_POLL_INTERVAL_MS,
       usePlaybackSession: () => session,
@@ -69,21 +36,20 @@ describe("playback controls progress input", () => {
     const scope = Vue.effectScope();
     globalThis.console.warn = () => {};
     try {
+      const fixture = playbackFixture();
       const controls = scope.run(() => {
-        session = createPlaybackSession({
-          invokeCommand: async <Result>(command: string) =>
-            (command === "list_skipped_track_ids" ? [] : await invoke(command)) as Result,
-          restoredQueueSnapshot: null,
-        });
-        return usePlaybackControls(async () => true);
+        session = fixture.session;
+        return usePlaybackControls();
       });
       if (!controls) throw new Error("Playback controls were not created.");
-      controls.handleSeekInput({ target: { value: "375" } } as unknown as Event);
+      const event = new Event("input");
+      Object.defineProperty(event, "target", { value: { value: "375" } });
+      controls.handleSeekInput(event);
 
       expect(controls.isSeeking.value).toBe(true);
       expect(controls.selectedPositionMs.value).toBe(375);
       expect(controls.playbackStatus.value.positionMs).toBe(0);
-      expect(invoke).not.toHaveBeenCalled();
+      expect(fixture.commands.map((command) => command.action)).toEqual(["beginSeeking"]);
     } finally {
       scope.stop();
       globalThis.console.warn = originalConsoleWarn;
