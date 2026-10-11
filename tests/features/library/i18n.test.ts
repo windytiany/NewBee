@@ -17,9 +17,9 @@ import {
 
 const components = new Map<string, Vue.Component>();
 for (const path of [
-  "library/components/artists/ArtistRow.vue",
-  "library/components/albums/AlbumTrack.vue",
-  "playlist/components/tracks/PlaylistTrack.vue",
+  "library/browser/artists/ArtistRow.vue",
+  "library/browser/albums/AlbumTrack.vue",
+  "playlist/tracks/PlaylistTrack.vue",
 ]) {
   const filename = `src/features/${path}`;
   const source = readFileSync(filename, "utf8");
@@ -101,7 +101,7 @@ describe("library and playlist translations", () => {
   });
 
   it("updates artist album counts when the locale changes without remounting", async () => {
-    const root = mount("library/components/artists/ArtistRow.vue", {
+    const root = mount("library/browser/artists/ArtistRow.vue", {
       name: "演出者数据",
       albumCount: 3,
       isSelected: false,
@@ -118,7 +118,7 @@ describe("library and playlist translations", () => {
   });
 
   it("updates album track fallback text and computed labels without remounting", async () => {
-    const root = mount("library/components/albums/AlbumTrack.vue", {
+    const root = mount("library/browser/albums/AlbumTrack.vue", {
       track: {
         id: 1,
         title: null,
@@ -144,7 +144,7 @@ describe("library and playlist translations", () => {
   });
 
   it("updates playlist drag aria-labels and computed durations without remounting", async () => {
-    const root = mount("playlist/components/tracks/PlaylistTrack.vue", {
+    const root = mount("playlist/tracks/PlaylistTrack.vue", {
       track: {
         playlistItemId: 1,
         trackId: 2,

@@ -6,7 +6,7 @@ import { createHostNode, createHostRenderer, findNode } from "../../../support/h
 import type { PlaylistTrackSummary } from "@/features/playlist/types";
 
 function createPlaylistTrackComponent(source: string) {
-  const output = compileSfc(source, "src/features/playlist/components/tracks/PlaylistTrack.vue", {
+  const output = compileSfc(source, "src/features/playlist/tracks/PlaylistTrack.vue", {
     id: "playlist-track-drag-test",
   });
   const modules: Record<string, unknown> = {
@@ -18,10 +18,7 @@ function createPlaylistTrackComponent(source: string) {
 
 const playlistTrack = createPlaylistTrackComponent(
   await Bun.file(
-    new URL(
-      "../../../../src/features/playlist/components/tracks/PlaylistTrack.vue",
-      import.meta.url,
-    ),
+    new URL("../../../../src/features/playlist/tracks/PlaylistTrack.vue", import.meta.url),
   ).text(),
 );
 const track: PlaylistTrackSummary = {

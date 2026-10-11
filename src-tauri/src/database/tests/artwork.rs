@@ -1,5 +1,6 @@
-use crate::database::{write::WriteState, Database};
-use crate::import::tests::support::TestFiles;
+use crate::data::write::WriteState;
+use crate::database::Database;
+use crate::library::import::tests::support::TestFiles;
 use tauri::Manager;
 
 fn invoke(
@@ -48,7 +49,7 @@ fn scanned_directory_cover_is_available_for_tracks_albums_and_playlists_offline(
         .manage(database)
         .manage(WriteState::default())
         .invoke_handler(tauri::generate_handler![
-            crate::import::directory::scan_music_library,
+            crate::library::import::directory::scan_music_library,
             crate::artwork::get_track_artwork,
             crate::artwork::get_album_artwork
         ])
@@ -125,8 +126,8 @@ impl ArtworkLibrary {
             .manage(database)
             .manage(WriteState::default())
             .invoke_handler(tauri::generate_handler![
-                crate::import::directory::scan_music_library,
-                crate::import::files::import_music_files,
+                crate::library::import::directory::scan_music_library,
+                crate::library::import::files::import_music_files,
                 crate::artwork::get_track_artwork,
                 crate::artwork::get_album_artwork,
             ])
@@ -765,7 +766,7 @@ fn association_replacement_during_derivation_does_not_publish_old_thumbnail() {
             .update_metadata_cover_and_lyrics(
                 1,
                 &[],
-                Some(&crate::database::ArtworkContent {
+                Some(&crate::artwork::model::ArtworkContent {
                     mime_type: "image/png".into(),
                     image: b"replacement".to_vec(),
                 }),

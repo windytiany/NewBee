@@ -3,7 +3,7 @@ import * as Vue from "vue";
 import { createRenderer, ref } from "vue";
 import { transpileScript, evaluateSource } from "../../support/module/loader";
 
-import type { useLibraryBrowser } from "@/features/library/composables/useBrowser";
+import type { useLibraryBrowser } from "@/features/library/browser/useBrowser";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 
 const artist = { albumArtist: "Artist", albumCount: 1 };
@@ -115,7 +115,7 @@ dependencies["@/features/library/events"] = {
   },
 };
 
-dependencies["@/features/library/composables/useSelection"] = {
+dependencies["@/features/library/browser/useSelection"] = {
   useLibrarySelection: () => ({
     selectedGroup,
     selectedAlbum,
@@ -183,7 +183,7 @@ const { useLibraryBrowser: createLibraryPage } = evaluateSource<{
 }>(
   transpileScript(
     await Bun.file(
-      new URL("../../../src/features/library/composables/useBrowser.ts", import.meta.url),
+      new URL("../../../src/features/library/browser/useBrowser.ts", import.meta.url),
     ).text(),
   ),
   dependencies,

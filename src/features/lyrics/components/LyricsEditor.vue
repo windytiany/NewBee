@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import type { TrackDetails } from "@/features/library/types";
-import LyricsSearch from "@/features/lyrics/components/LyricsSearch.vue";
+import LyricsSearch from "@/features/lyrics/download/LyricsSearch.vue";
 
 const props = defineProps<{
   track: TrackDetails;

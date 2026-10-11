@@ -1,8 +1,8 @@
 use super::{manifest, Directory};
 use crate::{
-    artwork::encoding,
+    artwork::{encoding, model::ArtworkContent},
     backup::{apply_pending_restore, archive, restore},
-    database::{ArtworkContent, Database},
+    database::Database,
     metadata::model::LyricsMarkAction,
 };
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};

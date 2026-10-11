@@ -1,4 +1,5 @@
-use crate::database::{Database, TrackArtwork};
+use crate::artwork::model::TrackArtwork;
+use crate::database::Database;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use windows::core::{factory, HSTRING};

@@ -1,6 +1,6 @@
 use super::support::{change, Fixture};
 use crate::{
-    database::{Database, TrackWriteInput},
+    database::{model::TrackWriteInput, Database},
     metadata::{
         files,
         model::{LyricsMarkAction, MetadataField},
@@ -51,7 +51,7 @@ fn deleted_cover_and_file_only_fields_sync_or_report_database_failure_and_retry(
     );
     assert!(matches!(
         database.get_track_artwork(1).unwrap(),
-        Some(crate::database::TrackArtwork::Available { .. })
+        Some(crate::artwork::model::TrackArtwork::Available { .. })
     ));
     connection
         .execute_batch("DROP TRIGGER fail_delete_cover")
@@ -66,7 +66,7 @@ fn deleted_cover_and_file_only_fields_sync_or_report_database_failure_and_retry(
     assert!(saved.file_written && saved.database_updated);
     assert!(matches!(
         database.get_track_artwork(1).unwrap(),
-        Some(crate::database::TrackArtwork::NoArtwork)
+        Some(crate::artwork::model::TrackArtwork::NoArtwork)
     ));
     let snapshot = database.get_editing_snapshot(1).unwrap();
     assert_eq!(snapshot.values[&MetadataField::Label], "new label");
@@ -158,7 +158,9 @@ fn writes_selected_fields_and_updates_the_confirmed_database_snapshot() {
     );
     assert!(result.file_written && result.database_updated);
     assert_eq!(
-        crate::lyrics::local::embedded_lyrics_text(&lofty::read_from_path(&path).unwrap()),
+        crate::metadata::files::lyrics::embedded_lyrics_text(
+            &lofty::read_from_path(&path).unwrap()
+        ),
         Some(lyrics)
     );
     let after = serde_json::to_value(database.get_track(1).unwrap().unwrap()).unwrap();
@@ -323,7 +325,7 @@ fn cover_database_failure_rolls_back_metadata_and_retry_repairs_both() {
     );
     assert!(matches!(
         database.get_track_artwork(1).unwrap(),
-        Some(crate::database::TrackArtwork::NoArtwork)
+        Some(crate::artwork::model::TrackArtwork::NoArtwork)
     ));
     let file = lofty::read_from_path(&path).unwrap();
     assert_eq!(file.primary_tag().unwrap().title().as_deref(), Some("new"));
@@ -373,7 +375,7 @@ fn failed_file_write_with_cover_does_not_update_database() {
     );
     assert!(matches!(
         database.get_track_artwork(1).unwrap(),
-        Some(crate::database::TrackArtwork::NoArtwork)
+        Some(crate::artwork::model::TrackArtwork::NoArtwork)
     ));
 }
 

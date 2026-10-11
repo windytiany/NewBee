@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import type { Component } from "vue";
-import type { useLibraryBrowser } from "@/features/library/composables/useBrowser";
+import type { useLibraryBrowser } from "@/features/library/browser/useBrowser";
 import type { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import type { AlbumSummary } from "@/features/library/types";
@@ -9,10 +9,10 @@ import { compileSfc, evaluateSource, transpileScript } from "../../support/modul
 import { createHostNode, createHostRenderer, findNode } from "../../support/host/renderer";
 
 const browserSource = await Bun.file(
-  new URL("../../../src/features/library/composables/useBrowser.ts", import.meta.url),
+  new URL("../../../src/features/library/browser/useBrowser.ts", import.meta.url),
 ).text();
 const albumBrowserSource = await Bun.file(
-  new URL("../../../src/features/library/components/albums/AlbumBrowser.vue", import.meta.url),
+  new URL("../../../src/features/library/browser/albums/AlbumBrowser.vue", import.meta.url),
 ).text();
 const artworkSource = await Bun.file(
   new URL("../../../src/features/artwork/useAlbumArtwork.ts", import.meta.url),
@@ -66,15 +66,15 @@ function mountBrowser() {
     "@/features/settings/composables/useCoverBackground": {
       useCoverBackground: () => Vue.ref(false),
     },
-    "@/features/library/components/albums/AlbumDetail.vue": {
+    "@/features/library/browser/albums/AlbumDetail.vue": {
       __esModule: true,
       default: placeholder,
     },
-    "@/features/library/components/albums/AlbumContextMenu.vue": {
+    "@/features/library/browser/albums/AlbumContextMenu.vue": {
       __esModule: true,
       default: placeholder,
     },
-    "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": {
+    "@/features/playlist/creation/CreatePlaylistDialog.vue": {
       __esModule: true,
       default: placeholder,
     },

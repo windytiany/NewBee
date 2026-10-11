@@ -3,9 +3,9 @@ import { toRef } from "vue";
 import { usePlaylist } from "@/features/playlist/composables/usePlaylist";
 import type { PlaylistCatalog } from "@/features/playlist/types";
 import SidePane from "@/shared/components/SidePane.vue";
-import PlaylistList from "@/features/playlist/components/list/PlaylistList.vue";
-import PlaylistBrowser from "@/features/playlist/components/tracks/PlaylistBrowser.vue";
-import CreatePlaylistDialog from "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue";
+import PlaylistList from "@/features/playlist/list/PlaylistList.vue";
+import PlaylistBrowser from "@/features/playlist/tracks/PlaylistBrowser.vue";
+import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDialog.vue";
 import DeletePlaylistDialog from "@/features/playlist/components/dialogs/DeletePlaylistDialog.vue";
 import RenamePlaylistDialog from "@/features/playlist/components/dialogs/RenamePlaylistDialog.vue";
 

@@ -1,14 +1,26 @@
-use super::{providers, LyricsCandidate, LyricsContent, LyricsProvider, LyricsSearchResults};
-
-use crate::{
-    database::{Database, TrackDetails},
-    settings::SettingsState,
+use super::{
+    model::LyricsDownloadTarget, providers, LyricsCandidate, LyricsContent, LyricsProvider,
+    LyricsSearchResults,
 };
+
+use crate::{database::Database, library::model::TrackDetails, settings::SettingsState};
 use std::{
     path::Path,
     sync::atomic::{AtomicBool, Ordering},
 };
 use tauri::{Manager, State};
+
+#[tauri::command]
+pub(crate) async fn get_lyrics_download_targets<R: tauri::Runtime>(
+    track_ids: Vec<i64>,
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<LyricsDownloadTarget>, String> {
+    let track_ids = crate::metadata::model::validate_track_ids(&track_ids)?;
+    crate::database::blocking(app, move |database| {
+        database.lyrics_download_targets(&track_ids)
+    })
+    .await
+}
 
 pub(super) fn provider_set(state: &SettingsState) -> Result<providers::LyricsProviderSet, String> {
     providers::LyricsProviderSet::from_settings(state.get()?)

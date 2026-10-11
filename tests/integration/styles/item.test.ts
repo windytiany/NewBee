@@ -20,11 +20,11 @@ type SfcFile = {
 };
 
 const componentPaths = [
-  "../../../src/features/playlist/components/list/PlaylistRow.vue",
-  "../../../src/features/playlist/components/tracks/PlaylistTrack.vue",
-  "../../../src/features/library/components/artists/ArtistRow.vue",
-  "../../../src/features/library/components/albums/AlbumCard.vue",
-  "../../../src/features/library/components/albums/AlbumTrack.vue",
+  "../../../src/features/playlist/list/PlaylistRow.vue",
+  "../../../src/features/playlist/tracks/PlaylistTrack.vue",
+  "../../../src/features/library/browser/artists/ArtistRow.vue",
+  "../../../src/features/library/browser/albums/AlbumCard.vue",
+  "../../../src/features/library/browser/albums/AlbumTrack.vue",
   "../../../src/features/playback/queue/components/QueueRow.vue",
 ] as const;
 const componentFiles: SfcFile[] = await Promise.all(

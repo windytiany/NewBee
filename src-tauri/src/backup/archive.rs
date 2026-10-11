@@ -89,7 +89,7 @@ impl Manifest {
 }
 
 pub(super) fn read(path: &Path) -> Result<Manifest, String> {
-    let connection = crate::database::backup::validate_backup_database(path)?;
+    let connection = crate::database::snapshot::validate_backup_database(path)?;
     let (size, count): (i64, i64) = connection.query_row(
         "SELECT coalesce(max(length(CAST(json AS BLOB))), 0), count(*) FROM newbee_backup_manifest", [],
         |row| Ok((row.get(0)?, row.get(1)?)),

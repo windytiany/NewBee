@@ -1,6 +1,8 @@
 use super::{download, LyricsContent, LyricsProvider};
 use crate::{
-    database::{write::WriteGuard, write::WriteState, Database, TrackDetails},
+    data::write::{WriteGuard, WriteState},
+    database::Database,
+    library::model::TrackDetails,
     metadata::{
         model::{
             normalize_changes, validate_track_ids, LyricsMarkAction, MetadataChange, MetadataField,

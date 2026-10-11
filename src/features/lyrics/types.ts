@@ -1,4 +1,4 @@
-import type { TagSaveResult } from "@/features/tags/types";
+import type { MetadataSaveResult } from "@/features/metadata/types";
 
 export type LyricLine = {
   startMs: number;
@@ -38,7 +38,7 @@ export type LyricsContent =
 export type LyricsBatchOutcome = {
   trackId: number;
   kind: "available" | "instrumental" | "missing" | "failed";
-  result: TagSaveResult | null;
+  result: MetadataSaveResult | null;
   error: string | null;
 };
 export type LyricsBatchSummary = {

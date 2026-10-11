@@ -1,23 +1,6 @@
 use super::Database;
-use crate::metadata::model::validate_track_ids;
+use crate::lyrics::model::{LyricsDownloadTarget, LyricsSnapshot};
 use rusqlite::OptionalExtension;
-use serde::Serialize;
-use tauri::State;
-
-pub(crate) struct LyricsSnapshot {
-    pub(crate) text: Option<String>,
-    pub(crate) no_lyrics: bool,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct LyricsDownloadTarget {
-    id: i64,
-    title: Option<String>,
-    artist: Option<String>,
-    has_lyrics: bool,
-    no_lyrics: bool,
-}
 
 impl Database {
     pub(crate) fn get_lyrics(&self, track_id: i64) -> Result<LyricsSnapshot, String> {
@@ -66,13 +49,4 @@ impl Database {
             })
             .collect()
     }
-}
-
-#[tauri::command]
-pub(crate) fn get_lyrics_download_targets(
-    track_ids: Vec<i64>,
-    state: State<'_, Database>,
-) -> Result<Vec<LyricsDownloadTarget>, String> {
-    let track_ids = validate_track_ids(&track_ids)?;
-    state.lyrics_download_targets(&track_ids)
 }

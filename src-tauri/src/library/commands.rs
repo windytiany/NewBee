@@ -1,0 +1,120 @@
+use super::model::{
+    AlbumArtistSummary, AlbumSummary, MusicLibraryDirectory, TrackDetails, TrackSummary,
+};
+use crate::database::blocking;
+use crate::playback::session::{synchronize_removal, RemovalResult, SessionCommand};
+use std::path::Path;
+use tauri::{Emitter, Manager};
+
+#[tauri::command]
+pub async fn list_music_library_directories<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<MusicLibraryDirectory>, String> {
+    blocking(app, |database| database.list_music_library_directories()).await
+}
+
+#[tauri::command]
+pub async fn add_music_library_directory<R: tauri::Runtime>(
+    path: String,
+    app: tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    blocking(app, move |database| {
+        let canonical_path = Path::new(&path)
+            .canonicalize()
+            .map_err(|error| format!("Could not open selected directory: {error}"))?;
+        if !canonical_path.is_dir() {
+            return Err("The selected path is not a directory".to_owned());
+        }
+        let path = canonical_path.to_string_lossy().into_owned();
+        database.add_music_library_directory(&path)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_music_library_directory<R: tauri::Runtime>(
+    id: i64,
+    app: tauri::AppHandle<R>,
+) -> Result<(), String> {
+    blocking(app, move |database| {
+        database.remove_music_library_directory(id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn migrate_library_paths<R: tauri::Runtime>(
+    old_path: String,
+    new_path: String,
+    app: tauri::AppHandle<R>,
+) -> Result<usize, String> {
+    let guard = app.state::<crate::data::write::WriteState>().acquire()?;
+    blocking(app, move |database| {
+        let _guard = guard;
+        database.migrate_library_paths(&old_path, &new_path)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_album_artists<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<AlbumArtistSummary>, String> {
+    blocking(app, |database| database.list_album_artists()).await
+}
+
+#[tauri::command]
+pub async fn list_albums<R: tauri::Runtime>(
+    album_artist: Option<String>,
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<AlbumSummary>, String> {
+    let settings = app.state::<crate::settings::SettingsState>().get()?;
+    blocking(app, move |database| {
+        database.list_albums(
+            album_artist,
+            settings.album_sort_by,
+            settings.album_sort_order,
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_album_tracks<R: tauri::Runtime>(
+    album_artist: Option<String>,
+    album: Option<String>,
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<TrackSummary>, String> {
+    blocking(app, move |database| {
+        database.list_album_tracks(album_artist, album)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_track_from_library<R: tauri::Runtime>(
+    track_id: i64,
+    app: tauri::AppHandle<R>,
+) -> Result<RemovalResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<crate::database::Database>()
+            .remove_track_from_library(track_id)?;
+        if let Err(error) = app.emit(crate::playback::statistics::CHANGED_EVENT, ()) {
+            log::warn!("Could not publish playback statistics removal: {error}");
+        }
+        Ok(synchronize_removal(
+            &app,
+            SessionCommand::RemoveTrack { track_id },
+        ))
+    })
+    .await
+    .map_err(|error| format!("Could not remove library track: {error}"))?
+}
+
+#[tauri::command]
+pub async fn get_track<R: tauri::Runtime>(
+    track_id: i64,
+    app: tauri::AppHandle<R>,
+) -> Result<Option<TrackDetails>, String> {
+    blocking(app, move |database| database.get_track(track_id)).await
+}

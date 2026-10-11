@@ -3,7 +3,8 @@ use super::{
     model::{LyricsMarkAction, MetadataChange, MetadataField},
     MetadataSaveResult,
 };
-use crate::database::{ArtworkContent, Database};
+use crate::artwork::model::ArtworkContent;
+use crate::database::Database;
 use lofty::picture::Picture;
 use std::path::Path;
 

@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::lyrics::{parse_embedded_lyrics, TrackLyrics};
+use crate::lyrics::{model::TrackLyrics, parsing::parse};
 use std::path::Path;
 use tauri::Manager;
 
@@ -36,7 +36,7 @@ fn read_sidecar(audio: &Path) -> Option<TrackLyrics> {
     };
     // Metadata-only and malformed LRC tags are not plain lyrics.
     // Reuse embedded parsing for both timed lyrics and untagged plain text.
-    match parse_embedded_lyrics(text.trim_start_matches('\u{feff}')) {
+    match parse(text.trim_start_matches('\u{feff}')) {
         TrackLyrics::Synced { lines } if lines.iter().any(|line| !line.text.trim().is_empty()) => {
             Some(TrackLyrics::Synced { lines })
         }

@@ -47,15 +47,15 @@ function useTestItemFocusList() {
 }
 
 function createPlaylistBrowserComponent(source: string) {
-  const output = compileSfc(source, "src/features/playlist/components/tracks/PlaylistBrowser.vue", {
+  const output = compileSfc(source, "src/features/playlist/tracks/PlaylistBrowser.vue", {
     id: "playlist-drag-preview-test",
   });
   const icon = createIcon();
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon, X: icon },
-    "@/features/tags/manual/components/EditMenuItem.vue": icon,
-    "@/features/lyrics/components/DownloadMenuItem.vue": icon,
+    "@/features/metadata/manual/components/EditMenuItem.vue": icon,
+    "@/features/lyrics/download/DownloadMenuItem.vue": icon,
     "@/features/playback/queue/components/SkipMenuItem.vue": icon,
     "@/shared/interaction/useContextMenu": {
       useContextMenu: () => ({
@@ -72,7 +72,7 @@ function createPlaylistBrowserComponent(source: string) {
         return { begin: () => {}, cancel: () => {}, dispose: () => {} };
       },
     },
-    "@/features/playlist/components/tracks/PlaylistTrack.vue": {
+    "@/features/playlist/tracks/PlaylistTrack.vue": {
       __esModule: true,
       default: Vue.defineComponent({
         props: ["track", "dropPosition"],
@@ -103,10 +103,7 @@ function createPlaylistBrowserComponent(source: string) {
 
 const playlistBrowser = createPlaylistBrowserComponent(
   await Bun.file(
-    new URL(
-      "../../../../src/features/playlist/components/tracks/PlaylistBrowser.vue",
-      import.meta.url,
-    ),
+    new URL("../../../../src/features/playlist/tracks/PlaylistBrowser.vue", import.meta.url),
   ).text(),
 );
 

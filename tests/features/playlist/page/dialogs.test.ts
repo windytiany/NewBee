@@ -217,17 +217,17 @@ const appModules: Record<string, unknown> = {
   "@/features/settings/shortcuts/useShortcuts": { useShortcuts() {} },
   ...vueModules,
   "@/shared/notifications/useNotification": { useNotification },
-  "@/features/lyrics/components/LyricsDownloadDialog.vue": {
+  "@/features/lyrics/download/LyricsDownloadDialog.vue": {
     __esModule: true,
     default: passiveComponent,
   },
-  "@/features/tags/manual/components/TagEditorDialog.vue": {
+  "@/features/metadata/manual/components/TagEditorDialog.vue": {
     __esModule: true,
     default: passiveComponent,
   },
   "@/shared/notifications/NotificationHost.vue": { __esModule: true, default: passiveComponent },
   "@/app/pages": { usePersistentActivePage: () => ({ activePage }) },
-  "@/features/library/composables/useBrowser": { useLibraryBrowser: emptyLibraryPage },
+  "@/features/library/browser/useBrowser": { useLibraryBrowser: emptyLibraryPage },
   "@/features/playback/session": {
     usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
   },
@@ -260,16 +260,16 @@ const appModules: Record<string, unknown> = {
       refreshPlaylists: async () => {},
     }),
   },
-  "@/features/tags/releases/components/ReleaseTagDialog.vue": {
+  "@/features/metadata/releases/components/ReleaseTagDialog.vue": {
     __esModule: true,
     default: passiveComponent,
   },
   "@/features/playback/pages/NowPlayingPage.vue": { __esModule: true, default: passiveComponent },
-  "@/features/playback/components/controls/PlaybackBar.vue": {
+  "@/features/playback/controls/PlaybackBar.vue": {
     __esModule: true,
     default: passiveComponent,
   },
-  "@/features/library/components/albums/AlbumBrowser.vue": {
+  "@/features/library/browser/albums/AlbumBrowser.vue": {
     __esModule: true,
     default: passiveComponent,
   },
@@ -281,11 +281,11 @@ const appModules: Record<string, unknown> = {
     __esModule: true,
     default: passiveComponent,
   },
-  "@/features/library/components/artists/ArtistList.vue": {
+  "@/features/library/browser/artists/ArtistList.vue": {
     __esModule: true,
     default: passiveComponent,
   },
-  "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": {
+  "@/features/playlist/creation/CreatePlaylistDialog.vue": {
     __esModule: true,
     default: passiveComponent,
   },
@@ -293,11 +293,11 @@ const appModules: Record<string, unknown> = {
     __esModule: true,
     default: deleteDialogComponent,
   },
-  "@/features/playlist/components/tracks/PlaylistBrowser.vue": {
+  "@/features/playlist/tracks/PlaylistBrowser.vue": {
     __esModule: true,
     default: PlaylistBrowser,
   },
-  "@/features/playlist/components/list/PlaylistList.vue": {
+  "@/features/playlist/list/PlaylistList.vue": {
     __esModule: true,
     default: PlaylistList,
   },
@@ -320,7 +320,7 @@ const appModules: Record<string, unknown> = {
     __esModule: true,
     default: passiveComponent,
   },
-  "@/features/playback/components/current/TrackInfoPanel.vue": {
+  "@/features/playback/current/TrackInfoPanel.vue": {
     __esModule: true,
     default: passiveComponent,
   },

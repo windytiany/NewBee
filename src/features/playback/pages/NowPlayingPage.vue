@@ -80,19 +80,19 @@ import { t } from "@/shared/i18n/locale";
 import { computed, shallowRef, watch } from "vue";
 import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
-import { useTrackDetails } from "@/features/playback/composables/useTrackDetails";
+import { useTrackDetails } from "@/features/playback/current/useTrackDetails";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import type { AlbumBackground } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LyricsView from "@/features/lyrics/components/LyricsView.vue";
-import TrackPresentation from "@/features/playback/components/current/TrackPresentation.vue";
+import TrackPresentation from "@/features/playback/current/TrackPresentation.vue";
 import { canSeekLyrics, seekToLyric } from "@/features/lyrics/seek";
 import { useLyrics } from "@/features/lyrics/composables/useLyrics";
 import {
   useDisplayMode,
   type PlaybackDisplayMode as Presentation,
-} from "@/features/playback/composables/useDisplayMode";
+} from "@/features/playback/current/useDisplayMode";
 
 const { presentation } = useDisplayMode();
 const session = usePlaybackSession();

@@ -1,9 +1,7 @@
-mod cover;
-mod files;
 mod library;
 mod lyrics;
 mod model;
 mod releases;
 mod save;
 mod snapshot;
-mod support;
+pub(crate) mod support;

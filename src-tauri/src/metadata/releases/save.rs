@@ -1,6 +1,7 @@
 use super::CoverData;
 use crate::{
-    database::{write::WriteState, Database},
+    data::write::WriteState,
+    database::Database,
     metadata::{
         files,
         model::{

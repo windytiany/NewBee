@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::database::TrackWriteInput;
+use crate::database::model::TrackWriteInput;
 use crate::lyrics::default_providers;
 use std::cell::RefCell;
 

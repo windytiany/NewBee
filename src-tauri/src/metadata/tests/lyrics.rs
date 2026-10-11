@@ -1,7 +1,7 @@
 use super::support::{change, Fixture};
 use crate::{
     database::Database,
-    lyrics::local::embedded_lyrics_text,
+    metadata::files::lyrics::embedded_lyrics_text,
     metadata::{
         files,
         model::{LyricsMarkAction, MetadataField},

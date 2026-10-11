@@ -4,7 +4,7 @@ import { ARTWORK_SIZES } from "@/features/artwork/size";
 
 it("frontend and backend accept exactly the same three physical pixel sizes", () => {
   const rust = readFileSync(
-    new URL("../../../src-tauri/src/artwork/cache.rs", import.meta.url),
+    new URL("../../../src-tauri/src/artwork/request.rs", import.meta.url),
     "utf8",
   );
   const sizes = rust.match(/const SIZES: \[u32; 3\] = \[([\d, ]+)\];/);

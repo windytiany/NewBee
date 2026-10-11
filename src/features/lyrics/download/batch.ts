@@ -5,7 +5,7 @@ import { createLyricsApi } from "@/features/lyrics/api";
 import { createLyricsBatchCooperation } from "@/features/lyrics/download/cooperation";
 import type { LyricsBatchCooperationOptions } from "@/features/lyrics/download/cooperation";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
-import { createMetadataSave } from "@/features/tags/save";
+import { createMetadataSave } from "@/features/metadata/save";
 import { notifications } from "@/shared/notifications/center";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { LyricsBatchEvent, LyricsBatchOutcome } from "@/features/lyrics/types";

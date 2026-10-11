@@ -1,12 +1,16 @@
 pub(crate) mod cache;
 mod clipboard;
 pub(crate) mod encoding;
+pub(crate) mod model;
+pub(crate) mod reading;
+mod request;
 pub(crate) mod transfer;
 
-use crate::database::{Database, TrackArtwork};
+use crate::database::Database;
+use model::TrackArtwork;
 use tauri::{ipc::Response, Manager};
 
-use cache::validate_size;
+use request::validate_size;
 
 #[tauri::command]
 pub(crate) async fn get_track_artwork<R: tauri::Runtime>(

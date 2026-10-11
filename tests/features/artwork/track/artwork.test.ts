@@ -94,7 +94,7 @@ await loadSourceModules(
   [
     "features/artwork/useTrackArtwork.ts",
     "features/artwork/useTrackArtworkPresentation.ts",
-    "features/playback/composables/useTrackDetails.ts",
+    "features/playback/current/useTrackDetails.ts",
   ],
   dependencies,
 );
@@ -102,8 +102,8 @@ const artworkModule = dependencies[
   "@/features/artwork/useTrackArtwork"
 ] as typeof import("@/features/artwork/useTrackArtwork");
 const trackInfoModule = dependencies[
-  "@/features/playback/composables/useTrackDetails"
-] as typeof import("@/features/playback/composables/useTrackDetails");
+  "@/features/playback/current/useTrackDetails"
+] as typeof import("@/features/playback/current/useTrackDetails");
 const { useTrackArtwork, invalidateTrackArtworkCache } = artworkModule;
 const measuredArtworkSize = ref<number | null>(null);
 const playingTrack = ref<{ trackId: number; title: string; artist: string } | null>(null);
@@ -122,7 +122,7 @@ function createTrackArtworkComponent(
     "@/features/playback/session": {
       usePlaybackSession: () => ({ state: { currentTrack: playingTrack } }),
     },
-    "@/features/playback/components/current/TrackTransition.vue": {
+    "@/features/playback/current/TrackTransition.vue": {
       __esModule: true,
       get default() {
         return transitionArtworkComponent;
@@ -132,7 +132,7 @@ function createTrackArtworkComponent(
       DiscAlbum: () => Vue.h("span", { "data-test": "fallback" }, "fallback"),
       Disc3: () => Vue.h("span", { "data-test": "fallback" }, "fallback"),
     },
-    "@/features/playback/composables/useTrackDetails": trackInfoModule,
+    "@/features/playback/current/useTrackDetails": trackInfoModule,
   };
   return evaluateSource<{ default: Vue.Component }>(output, modules).default;
 }
@@ -145,32 +145,23 @@ const trackArtworkComponent = createTrackArtworkComponent(
 
 const transitionArtworkComponent = createTrackArtworkComponent(
   await Bun.file(
-    new URL(
-      "../../../../src/features/playback/components/current/TrackTransition.vue",
-      import.meta.url,
-    ),
+    new URL("../../../../src/features/playback/current/TrackTransition.vue", import.meta.url),
   ).text(),
-  "src/features/playback/components/current/TrackTransition.vue",
+  "src/features/playback/current/TrackTransition.vue",
 );
 
 const presentationArtworkComponent = createTrackArtworkComponent(
   await Bun.file(
-    new URL(
-      "../../../../src/features/playback/components/current/TrackPresentation.vue",
-      import.meta.url,
-    ),
+    new URL("../../../../src/features/playback/current/TrackPresentation.vue", import.meta.url),
   ).text(),
-  "src/features/playback/components/current/TrackPresentation.vue",
+  "src/features/playback/current/TrackPresentation.vue",
 );
 
 const infoArtworkComponent = createTrackArtworkComponent(
   await Bun.file(
-    new URL(
-      "../../../../src/features/playback/components/current/TrackInfoPanel.vue",
-      import.meta.url,
-    ),
+    new URL("../../../../src/features/playback/current/TrackInfoPanel.vue", import.meta.url),
   ).text(),
-  "src/features/playback/components/current/TrackInfoPanel.vue",
+  "src/features/playback/current/TrackInfoPanel.vue",
 );
 
 function createDetails(trackId: number): TrackDetails {

@@ -1,11 +1,12 @@
 pub(crate) mod batch;
 pub(crate) mod download;
-pub(crate) mod local;
+pub(crate) mod embedded;
+pub mod model;
+pub(crate) mod parsing;
 mod providers;
 pub(crate) mod sidecar;
 pub(crate) use providers::NeteaseLyricsMode;
 
-pub use local::{parse_embedded_lyrics, LyricLine, TrackLyrics};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]

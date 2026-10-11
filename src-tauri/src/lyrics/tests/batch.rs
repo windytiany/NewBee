@@ -1,5 +1,6 @@
 use super::*;
-use crate::lyrics::{default_providers, local::embedded_lyrics_text};
+use crate::lyrics::default_providers;
+use crate::metadata::files::lyrics::embedded_lyrics_text;
 use lofty::{
     config::WriteOptions,
     prelude::*,

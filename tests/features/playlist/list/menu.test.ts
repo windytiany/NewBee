@@ -92,9 +92,9 @@ const TrackArtwork = Vue.defineComponent({
 });
 const playlistItem = createComponent(
   await Bun.file(
-    new URL("../../../../src/features/playlist/components/list/PlaylistRow.vue", import.meta.url),
+    new URL("../../../../src/features/playlist/list/PlaylistRow.vue", import.meta.url),
   ).text(),
-  "src/features/playlist/components/list/PlaylistRow.vue",
+  "src/features/playlist/list/PlaylistRow.vue",
   "playlist-list-item-context-test",
   {
     vue: Vue,
@@ -104,15 +104,15 @@ const playlistItem = createComponent(
 );
 const playlistList = createComponent(
   await Bun.file(
-    new URL("../../../../src/features/playlist/components/list/PlaylistList.vue", import.meta.url),
+    new URL("../../../../src/features/playlist/list/PlaylistList.vue", import.meta.url),
   ).text(),
-  "src/features/playlist/components/list/PlaylistList.vue",
+  "src/features/playlist/list/PlaylistList.vue",
   "playlist-list-context-test",
   {
     vue: Vue,
     "@/shared/interaction/useContextMenu": { useContextMenu: useTestContextMenu },
     "@/shared/interaction/item/useSelection": { useItemSelection: useTestItemFocusList },
-    "@/features/playlist/components/list/PlaylistRow.vue": {
+    "@/features/playlist/list/PlaylistRow.vue": {
       __esModule: true,
       default: playlistItem,
     },

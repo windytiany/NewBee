@@ -27,12 +27,9 @@ interface DialogNode extends HostTree<DialogNode> {
 
 const dialogOutput = compileSfc(
   await Bun.file(
-    new URL(
-      "../../../../src/features/playlist/components/dialogs/CreatePlaylistDialog.vue",
-      import.meta.url,
-    ),
+    new URL("../../../../src/features/playlist/creation/CreatePlaylistDialog.vue", import.meta.url),
   ).text(),
-  "src/features/playlist/components/dialogs/CreatePlaylistDialog.vue",
+  "src/features/playlist/creation/CreatePlaylistDialog.vue",
 );
 const originals = new Map(
   ["document", "Document", "ShadowRoot"].map((key) => [

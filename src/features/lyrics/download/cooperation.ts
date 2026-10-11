@@ -1,8 +1,8 @@
 import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
-import { createMetadataSave } from "@/features/tags/save";
-import type { MetadataFileEditor } from "@/features/tags/save";
-import type { TagSaveResult } from "@/features/tags/types";
+import { createMetadataSave } from "@/features/metadata/save";
+import type { MetadataFileEditor } from "@/features/metadata/save";
+import type { MetadataSaveResult } from "@/features/metadata/types";
 import type {
   LyricsBatchEvent,
   LyricsBatchOutcome,
@@ -15,7 +15,7 @@ export type LyricsBatchCooperationOptions = {
     receive: (event: LyricsBatchEvent) => void,
     operationId: string,
   ) => Promise<LyricsBatchSummary>;
-  commitStep: (batchId: number, stepId: number) => Promise<TagSaveResult>;
+  commitStep: (batchId: number, stepId: number) => Promise<MetadataSaveResult>;
   completeStep: (batchId: number, stepId: number, error: string | null) => Promise<void>;
   cancel: (batchId: number) => Promise<void>;
   editFiles: MetadataFileEditor;
@@ -63,7 +63,7 @@ export function createLyricsBatchCooperation(
     if (!accepting || cancelling) return;
     // Isolated save state lets terminal results close a run without waiting on expired preparation.
     const saving = createMetadataSave({ editFiles: options.editFiles, synchronize: () => {} });
-    let confirmed: TagSaveResult | null = null;
+    let confirmed: MetadataSaveResult | null = null;
     await saving.run({
       operationId: progress.operationId,
       targets: [{ trackId: event.trackId, path: event.path }],

@@ -82,7 +82,7 @@ import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { formatTrackDuration } from "@/features/library/format";
 import QueueRow from "@/features/playback/queue/components/QueueRow.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
-import EditMenuItem from "@/features/tags/manual/components/EditMenuItem.vue";
+import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 
 type Track = PlaybackDisplayTrack;
 

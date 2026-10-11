@@ -10,7 +10,7 @@ import {
 } from "../../../support/host/renderer";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 
-const source = await Bun.file("src/features/lyrics/components/DownloadMenuItem.vue").text();
+const source = await Bun.file("src/features/lyrics/download/DownloadMenuItem.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();

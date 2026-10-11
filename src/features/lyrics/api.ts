@@ -10,7 +10,7 @@ import type {
   LyricsSearchResults,
   TrackLyrics,
 } from "@/features/lyrics/types";
-import type { TagSaveResult } from "@/features/tags/types";
+import type { MetadataSaveResult } from "@/features/metadata/types";
 
 type LyricsInvoker = <Result>(command: string, args?: Record<string, unknown>) => Promise<Result>;
 
@@ -34,7 +34,7 @@ export function createLyricsApi(invokeCommand: LyricsInvoker = invoke) {
         operationId,
       }),
     commitStep: (batchId: number, stepId: number) =>
-      invokeCommand<TagSaveResult>("commit_lyrics_download_step", { batchId, stepId }),
+      invokeCommand<MetadataSaveResult>("commit_lyrics_download_step", { batchId, stepId }),
     completeStep: (batchId: number, stepId: number, error: string | null) =>
       invokeCommand<void>("complete_lyrics_download_step", { batchId, stepId, error }),
     cancel: (batchId: number) => invokeCommand<void>("cancel_lyrics_download", { batchId }),

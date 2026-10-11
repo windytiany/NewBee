@@ -2,7 +2,7 @@ mod continuous;
 #[cfg(windows)]
 pub(crate) mod media;
 mod persistence;
-mod queue;
+pub(crate) mod queue;
 pub(crate) mod session;
 mod spectrum;
 pub(crate) mod statistics;

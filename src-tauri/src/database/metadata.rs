@@ -1,4 +1,5 @@
-use super::{ArtworkContent, Database};
+use super::Database;
+use crate::artwork::model::ArtworkContent;
 use crate::metadata::model::{LyricsMarkAction, MetadataChange, MetadataField};
 use rusqlite::params;
 
@@ -54,7 +55,7 @@ impl Database {
         changes: &[MetadataChange],
         cover: Option<&ArtworkContent>,
         action: LyricsMarkAction,
-        confirmed: Option<&super::TrackWriteInput>,
+        confirmed: Option<&super::model::TrackWriteInput>,
     ) -> Result<(), String> {
         let mut connection = self.connection()?;
         let transaction = connection

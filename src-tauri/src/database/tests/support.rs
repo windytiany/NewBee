@@ -1,7 +1,7 @@
 use super::super::Database;
 use rusqlite::params;
 
-pub(super) fn insert_track(
+pub(crate) fn insert_track(
     database: &Database,
     id: i64,
     album_artist: Option<&str>,
@@ -27,7 +27,7 @@ pub(super) fn insert_track(
     if let Some(image) = artwork {
         let image_id = super::super::artwork::persist_image(
             &connection,
-            &super::super::ArtworkContent {
+            &crate::artwork::model::ArtworkContent {
                 mime_type: "image/png".into(),
                 image: image.to_vec(),
             },

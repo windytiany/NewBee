@@ -67,8 +67,8 @@ const dependencies: Record<string, unknown> = {
       };
     },
   },
-  "@/features/library/composables/useTrackColumns": { useTrackColumns: () => Vue.ref(2) },
-  "@/features/library/components/albums/AlbumTrack.vue": {
+  "@/features/library/browser/albums/useTrackColumns": { useTrackColumns: () => Vue.ref(2) },
+  "@/features/library/browser/albums/AlbumTrack.vue": {
     __esModule: true,
     default: Vue.defineComponent({
       props: ["track"],
@@ -83,25 +83,25 @@ const dependencies: Record<string, unknown> = {
           }),
     }),
   },
-  "@/features/tags/manual/components/EditMenuItem.vue": passiveComponent,
-  "@/features/lyrics/components/DownloadMenuItem.vue": passiveComponent,
+  "@/features/metadata/manual/components/EditMenuItem.vue": passiveComponent,
+  "@/features/lyrics/download/DownloadMenuItem.vue": passiveComponent,
   "@/features/playback/queue/components/SkipMenuItem.vue": passiveComponent,
-  "@/features/library/components/albums/AlbumContextMenu.vue": passiveComponent,
-  "@/features/playlist/components/dialogs/CreatePlaylistDialog.vue": passiveComponent,
+  "@/features/library/browser/albums/AlbumContextMenu.vue": passiveComponent,
+  "@/features/playlist/creation/CreatePlaylistDialog.vue": passiveComponent,
   "@/features/library/api": {
     createLibraryApi: () => ({ listAlbumTracks: async () => [] }),
   },
 };
 await loadSourceModules(
   [
-    "features/library/components/albums/AlbumCard.vue",
-    "features/library/components/albums/AlbumDetail.vue",
-    "features/library/components/albums/AlbumBrowser.vue",
+    "features/library/browser/albums/AlbumCard.vue",
+    "features/library/browser/albums/AlbumDetail.vue",
+    "features/library/browser/albums/AlbumBrowser.vue",
   ],
   dependencies,
 );
 const AlbumBrowser = (
-  dependencies["@/features/library/components/albums/AlbumBrowser.vue"] as {
+  dependencies["@/features/library/browser/albums/AlbumBrowser.vue"] as {
     default: Vue.Component;
   }
 ).default;

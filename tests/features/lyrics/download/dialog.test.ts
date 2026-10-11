@@ -11,7 +11,7 @@ import {
 } from "../../../support/host/renderer";
 import type { HostNode } from "../../../support/host/renderer";
 
-const source = await Bun.file("src/features/lyrics/components/LyricsDownloadDialog.vue").text();
+const source = await Bun.file("src/features/lyrics/download/LyricsDownloadDialog.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
   setLocale("zh-CN");

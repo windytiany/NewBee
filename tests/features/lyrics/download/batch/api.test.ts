@@ -2,7 +2,7 @@ import { expect, it } from "bun:test";
 import * as Vue from "vue";
 import type { createLyricsBatch } from "@/features/lyrics/download/batch";
 import type { LyricsBatchEvent } from "@/features/lyrics/types";
-import type { TagSaveResult } from "@/features/tags/types";
+import type { MetadataSaveResult } from "@/features/metadata/types";
 import { evaluateSource, transpileScript } from "../../../../support/module/loader";
 
 it("wires the production batch through a Channel and round commands without frontend begin/fetch/finish or snapshot reads", async () => {
@@ -16,7 +16,7 @@ it("wires the production batch through a Channel and round commands without fron
   class TestChannel {
     onmessage: (event: LyricsBatchEvent) => void = () => {};
   }
-  const result: TagSaveResult = {
+  const result: MetadataSaveResult = {
     trackId: 7,
     path: "7.mp3",
     fileWritten: false,

@@ -1,3 +1,4 @@
+use super::request::{validate_size, SIZES};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
@@ -8,18 +9,10 @@ use std::{
     time::SystemTime,
 };
 
-pub(crate) const SIZES: [u32; 3] = [128, 512, 2048];
 pub(crate) const ENCODING: &str = "webp1";
 pub(crate) const CAPACITY: u64 = 256 * 1024 * 1024;
 const MAGIC: &[u8; 8] = b"NBART001";
 const HEADER: usize = 40;
-
-pub(crate) fn validate_size(size: Option<u32>) -> Result<(), String> {
-    if size.is_some_and(|size| !SIZES.contains(&size)) {
-        return Err("封面尺寸必须为 128、512 或 2048".into());
-    }
-    Ok(())
-}
 
 pub(crate) struct Cache {
     root: PathBuf,

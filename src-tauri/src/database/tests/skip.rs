@@ -56,7 +56,7 @@ fn schema_adds_skip_preferences_to_existing_libraries_without_changing_tracks() 
     let connection = rusqlite::Connection::open_in_memory().unwrap();
     connection.execute_batch("CREATE TABLE tracks (id INTEGER PRIMARY KEY, album_artist TEXT, album TEXT); INSERT INTO tracks (id) VALUES (1);").unwrap();
     connection
-        .execute_batch(&super::super::schema_sql())
+        .execute_batch(super::super::schema::definition())
         .unwrap();
     connection
         .execute("INSERT INTO skipped_tracks (track_id) VALUES (1)", [])

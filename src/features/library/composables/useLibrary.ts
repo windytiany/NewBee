@@ -2,7 +2,7 @@ import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { nextTick, reactive, ref, markRaw } from "vue";
 import type { Ref } from "vue";
-import { useLibraryBrowser } from "@/features/library/composables/useBrowser";
+import { useLibraryBrowser } from "@/features/library/browser/useBrowser";
 import type { LibraryAlbumSelection, TrackSummary } from "@/features/library/types";
 import { useNotification } from "@/shared/notifications/useNotification";
 import type { PlaylistSummary } from "@/features/playlist/types";

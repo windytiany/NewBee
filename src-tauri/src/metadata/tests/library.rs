@@ -1,7 +1,11 @@
 use super::support::{change, Fixture};
 use crate::{
-    database::{commands, write::WriteState, Database},
+    data::write::WriteState,
+    database::Database,
+    library::commands,
     metadata::{files, model::MetadataField},
+    playback::queue::commands as queue,
+    playlist::commands as playlist,
 };
 use serde_json::{json, Value};
 use tauri::Manager;
@@ -64,20 +68,20 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
             commands::list_albums,
             commands::list_album_tracks,
             commands::get_track,
-            commands::create_playlist,
-            commands::rename_playlist,
-            commands::delete_playlist,
-            commands::add_track_to_playlist,
-            commands::list_playlists,
-            commands::list_playlist_tracks,
-            commands::reorder_playlist_items,
-            commands::remove_playlist_items,
-            commands::set_tracks_skipped,
-            commands::list_skipped_track_ids,
+            playlist::create_playlist,
+            playlist::rename_playlist,
+            playlist::delete_playlist,
+            playlist::add_track_to_playlist,
+            playlist::list_playlists,
+            playlist::list_playlist_tracks,
+            playlist::reorder_playlist_items,
+            playlist::remove_playlist_items,
+            queue::set_tracks_skipped,
+            queue::list_skipped_track_ids,
             commands::migrate_library_paths,
             commands::remove_track_from_library,
             crate::metadata::get_editable_tracks,
-            crate::lyrics::local::get_track_lyrics,
+            crate::lyrics::embedded::get_track_lyrics,
             crate::artwork::get_track_artwork,
             crate::artwork::get_album_artwork,
         ])
@@ -87,7 +91,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         app.handle(),
         fixture.0.join("playback-session.json"),
     );
-    tauri::async_runtime::block_on(crate::import::files::import_music_files(
+    tauri::async_runtime::block_on(crate::library::import::files::import_music_files(
         vec![path.to_string_lossy().into_owned()],
         None,
         app.handle().clone(),
@@ -258,7 +262,7 @@ fn save_command_retains_each_file_and_database_outcome_when_database_is_locked()
         .invoke_handler(tauri::generate_handler![commands::get_track])
         .build(tauri::generate_context!())
         .unwrap();
-    tauri::async_runtime::block_on(crate::import::files::import_music_files(
+    tauri::async_runtime::block_on(crate::library::import::files::import_music_files(
         paths
             .iter()
             .map(|path| path.to_string_lossy().into_owned())
@@ -380,7 +384,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
         .build(tauri::generate_context!())
         .unwrap();
     let scan = || {
-        tauri::async_runtime::block_on(crate::import::directory::scan_music_library(
+        tauri::async_runtime::block_on(crate::library::import::directory::scan_music_library(
             None,
             app.handle().clone(),
             app.state(),

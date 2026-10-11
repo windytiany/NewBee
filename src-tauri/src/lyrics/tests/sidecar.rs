@@ -1,4 +1,5 @@
-use crate::database::{write::WriteState, Database};
+use crate::data::write::WriteState;
+use crate::database::Database;
 use tauri::Manager;
 
 #[test]
@@ -29,12 +30,12 @@ fn playback_reads_only_same_name_lrc_without_changing_embedded_snapshot() {
         .manage(WriteState::default())
         .invoke_handler(tauri::generate_handler![
             super::sidecar::get_playback_sidecar_lyrics,
-            crate::lyrics::local::get_track_lyrics,
+            crate::lyrics::embedded::get_track_lyrics,
             crate::metadata::get_editable_tracks
         ])
         .build(tauri::generate_context!())
         .unwrap();
-    tauri::async_runtime::block_on(crate::import::files::import_music_files(
+    tauri::async_runtime::block_on(crate::library::import::files::import_music_files(
         vec![audio.to_string_lossy().into_owned()],
         None,
         app.handle().clone(),
@@ -132,7 +133,7 @@ fn playback_reads_only_same_name_lrc_without_changing_embedded_snapshot() {
     assert!(results[0].file_written && results[0].database_updated);
     let tagged = lofty::read_from_path(&audio).unwrap();
     assert_eq!(
-        crate::lyrics::local::embedded_lyrics_text(&tagged),
+        crate::metadata::files::lyrics::embedded_lyrics_text(&tagged),
         Some("saved embedded")
     );
     assert_eq!(

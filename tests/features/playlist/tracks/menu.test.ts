@@ -124,7 +124,7 @@ function useTestItemFocusList(scope: string | Vue.Ref<string>) {
 }
 
 function createComponent(source: string) {
-  const output = compileSfc(source, "src/features/playlist/components/tracks/PlaylistBrowser.vue", {
+  const output = compileSfc(source, "src/features/playlist/tracks/PlaylistBrowser.vue", {
     id: "playlist-browser-test",
   });
   const icon = Vue.defineComponent({ setup: () => () => null });
@@ -177,10 +177,10 @@ function createComponent(source: string) {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@lucide/vue": { DiscAlbum: icon, Play: icon, X: icon },
-    "@/features/lyrics/components/DownloadMenuItem.vue": Vue.defineComponent({
+    "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,
     }),
-    "@/features/tags/manual/components/EditMenuItem.vue": Vue.defineComponent({
+    "@/features/metadata/manual/components/EditMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
         Vue.h("button", { "data-edit-targets": JSON.stringify(props.trackIds) }, "编辑"),
@@ -193,7 +193,7 @@ function createComponent(source: string) {
     "@/shared/interaction/useContextMenu": contextMenuModule,
     "@/shared/interaction/item/useSelection": { useItemSelection: useTestItemFocusList },
     "@/features/playlist/ordering/drag": dragReorderModule,
-    "@/features/playlist/components/tracks/PlaylistTrack.vue": {
+    "@/features/playlist/tracks/PlaylistTrack.vue": {
       __esModule: true,
       default: PlaylistTrack,
     },
@@ -204,10 +204,7 @@ function createComponent(source: string) {
 
 const playlistBrowser = createComponent(
   await Bun.file(
-    new URL(
-      "../../../../src/features/playlist/components/tracks/PlaylistBrowser.vue",
-      import.meta.url,
-    ),
+    new URL("../../../../src/features/playlist/tracks/PlaylistBrowser.vue", import.meta.url),
   ).text(),
 );
 

@@ -1,6 +1,5 @@
 mod artwork;
-mod cache;
 mod library;
 mod playlist;
 mod skip;
-mod support;
+pub(crate) mod support;

@@ -1,8 +1,11 @@
 use super::ipc::{assert_color, fixture, invoke};
 use crate::{
     artwork::{get_album_artwork, get_track_artwork},
-    database::{write::WriteState, Database},
-    import::{directory::scan_music_library, files::import_music_files, tests::support::TestFiles},
+    data::write::WriteState,
+    database::Database,
+    library::import::{
+        directory::scan_music_library, files::import_music_files, tests::support::TestFiles,
+    },
     metadata::{
         files,
         releases::{save::save_album_tags, CoverData},

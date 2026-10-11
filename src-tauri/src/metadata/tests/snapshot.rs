@@ -1,7 +1,6 @@
 use super::support::Fixture;
 use crate::{
-    database::{write::WriteState, Database},
-    import::files::import_music_files,
+    data::write::WriteState, database::Database, library::import::files::import_music_files,
 };
 use tauri::Manager;
 
@@ -75,7 +74,7 @@ fn scan_reports_missing_audio_without_erasing_the_snapshot_or_playlist() {
         .build(tauri::generate_context!())
         .unwrap();
     let scan = || {
-        tauri::async_runtime::block_on(crate::import::directory::scan_music_library(
+        tauri::async_runtime::block_on(crate::library::import::directory::scan_music_library(
             None,
             app.handle().clone(),
             app.state(),
@@ -185,7 +184,7 @@ fn every_scan_reparses_audio_without_sidecar_reads_and_clears_confirmed_removals
         .build(tauri::generate_context!())
         .unwrap();
     let scan = || {
-        tauri::async_runtime::block_on(crate::import::directory::scan_music_library(
+        tauri::async_runtime::block_on(crate::library::import::directory::scan_music_library(
             None,
             app.handle().clone(),
             app.state(),
@@ -250,7 +249,7 @@ fn every_scan_reparses_audio_without_sidecar_reads_and_clears_confirmed_removals
         .is_none());
     assert!(matches!(
         app.state::<Database>().get_track_artwork(1).unwrap(),
-        Some(crate::database::TrackArtwork::NoArtwork)
+        Some(crate::artwork::model::TrackArtwork::NoArtwork)
     ));
     assert_eq!(
         std::fs::read_to_string(&sidecar).unwrap(),
@@ -499,7 +498,9 @@ fn release_command_and_lyrics_editor_write_only_selected_embedded_content() {
     .unwrap();
     assert!(results[0].file_written && results[0].database_updated);
     assert_eq!(
-        crate::lyrics::local::embedded_lyrics_text(&lofty::read_from_path(&path).unwrap()),
+        crate::metadata::files::lyrics::embedded_lyrics_text(
+            &lofty::read_from_path(&path).unwrap()
+        ),
         Some("new embedded")
     );
     assert_eq!(

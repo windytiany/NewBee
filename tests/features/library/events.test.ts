@@ -4,7 +4,7 @@ import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 import type * as LibraryChanges from "@/features/library/events";
 import type * as LibraryScan from "@/features/library/import/useScan";
-import type * as LibraryPage from "@/features/library/composables/useBrowser";
+import type * as LibraryPage from "@/features/library/browser/useBrowser";
 import type * as PlaylistPage from "@/features/playlist/composables/usePage";
 import type { NotificationInput } from "@/shared/notifications/center";
 
@@ -12,7 +12,7 @@ const outputs = new Map<string, string>();
 for (const path of [
   "features/library/events",
   "features/library/import/useScan",
-  "features/library/composables/useBrowser",
+  "features/library/browser/useBrowser",
   "features/playlist/composables/useState",
   "features/playlist/composables/usePage",
 ]) {
@@ -88,7 +88,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
       notify: (notice: NotificationInput) => notices.push(notice),
     },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT: "settings-changed" },
-    "@/features/library/composables/useSelection": {
+    "@/features/library/browser/useSelection": {
       useLibrarySelection: () => ({
         selectedGroup,
         selectedAlbum,
@@ -121,7 +121,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   }
   const changes = load<typeof LibraryChanges>("features/library/events");
   const scan = load<typeof LibraryScan>("features/library/import/useScan").useLibraryScan();
-  const { useLibraryBrowser } = load<typeof LibraryPage>("features/library/composables/useBrowser");
+  const { useLibraryBrowser } = load<typeof LibraryPage>("features/library/browser/useBrowser");
   load("features/playlist/composables/useState");
   const { usePlaylistPage } = load<typeof PlaylistPage>("features/playlist/composables/usePage");
   globalThis.window.addEventListener(changes.LIBRARY_CHANGED_EVENT, () => effects.push("refresh"));

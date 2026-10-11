@@ -28,7 +28,7 @@ fn old_schema(connection: &Connection, version: i64) {
     ).unwrap();
     // Create the other business tables, without referencing the new digest index.
     connection
-        .execute_batch(&crate::database::schema_sql().replace(
+        .execute_batch(&crate::database::schema::definition().replace(
             "CREATE INDEX IF NOT EXISTS idx_artwork_images_digest ON artwork_images(digest);",
             "",
         ))

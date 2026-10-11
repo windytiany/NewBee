@@ -10,7 +10,7 @@ import type {
   LyricsBatchSummary,
   LyricsContent,
 } from "@/features/lyrics/types";
-import type { TagSaveResult } from "@/features/tags/types";
+import type { MetadataSaveResult } from "@/features/metadata/types";
 import type { NotificationInput, TaskNotification } from "@/shared/notifications/center";
 
 function deferred<T>() {
@@ -20,7 +20,7 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function saved(trackId: number, success = true): TagSaveResult {
+function saved(trackId: number, success = true): MetadataSaveResult {
   return {
     trackId,
     path: `${trackId}.mp3`,
@@ -60,7 +60,7 @@ function setup(
     trackId: number;
     stepId: number;
     content: "available" | "instrumental";
-    result: TagSaveResult | null;
+    result: MetadataSaveResult | null;
     committing: boolean;
     done: ReturnType<typeof deferred<string | null>>;
   } | null = null;
@@ -373,7 +373,7 @@ describe("lyrics batch", () => {
 
   it("waits for accepted commits and editing cleanup after cancellation", async () => {
     const committing = deferred<void>();
-    const response = deferred<TagSaveResult>();
+    const response = deferred<MetadataSaveResult>();
     const complete = deferred<LyricsBatchSummary>();
     const calls: string[] = [];
     const result = setup({

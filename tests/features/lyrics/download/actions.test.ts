@@ -15,7 +15,7 @@ afterEach(() => {
   notifications.clear();
   for (const scope of scopes.splice(0)) scope.stop();
 });
-const source = await Bun.file("src/features/lyrics/components/LyricsSearch.vue").text();
+const source = await Bun.file("src/features/lyrics/download/LyricsSearch.vue").text();
 const output = compileSfc(source, "LyricsSearch.vue", { inlineTemplate: false });
 type Dialog = { open: boolean; showModal: () => void; close: () => void };
 type Bindings = {

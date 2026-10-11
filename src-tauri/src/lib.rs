@@ -1,11 +1,13 @@
 mod artwork;
 mod backup;
+mod data;
 mod database;
-mod import;
+mod library;
 mod logging;
 pub mod lyrics;
 mod metadata;
 mod playback;
+mod playlist;
 mod settings;
 mod shortcuts;
 mod window;
@@ -14,7 +16,7 @@ mod window;
 pub fn run() {
     let result = tauri::Builder::default()
         .manage(playback::PlaybackState::default())
-        .manage(database::write::WriteState::default())
+        .manage(data::write::WriteState::default())
         .manage(backup::BackupState::default())
         .manage(lyrics::batch::LyricsBatchState::default())
         .setup(|app| {
@@ -101,16 +103,16 @@ pub fn run() {
             shortcuts::run_shortcut,
             shortcuts::set_shortcuts_suspended,
             shortcuts::get_shortcuts_error,
-            database::commands::list_music_library_directories,
-            database::commands::add_music_library_directory,
-            database::commands::remove_music_library_directory,
-            database::commands::migrate_library_paths,
-            import::directory::scan_music_library,
-            import::supported_audio_extensions,
-            import::files::import_music_files,
-            lyrics::local::get_track_lyrics,
+            library::commands::list_music_library_directories,
+            library::commands::add_music_library_directory,
+            library::commands::remove_music_library_directory,
+            library::commands::migrate_library_paths,
+            library::import::directory::scan_music_library,
+            library::import::supported_audio_extensions,
+            library::import::files::import_music_files,
+            lyrics::embedded::get_track_lyrics,
             lyrics::sidecar::get_playback_sidecar_lyrics,
-            database::lyrics::get_lyrics_download_targets,
+            lyrics::download::get_lyrics_download_targets,
             lyrics::download::search_lyrics_candidates,
             lyrics::download::get_candidate_lyrics,
             lyrics::download::find_track_lyrics,
@@ -118,22 +120,22 @@ pub fn run() {
             lyrics::batch::commit_lyrics_download_step,
             lyrics::batch::complete_lyrics_download_step,
             lyrics::batch::cancel_lyrics_download,
-            database::commands::list_album_artists,
-            database::commands::list_albums,
+            library::commands::list_album_artists,
+            library::commands::list_albums,
             artwork::get_album_artwork,
-            database::commands::list_album_tracks,
-            database::commands::remove_track_from_library,
-            database::commands::create_playlist,
-            database::commands::rename_playlist,
-            database::commands::delete_playlist,
-            database::commands::add_track_to_playlist,
-            database::commands::list_playlists,
-            database::commands::list_playlist_tracks,
-            database::commands::remove_playlist_items,
-            database::commands::reorder_playlist_items,
-            database::commands::list_skipped_track_ids,
-            database::commands::set_tracks_skipped,
-            database::commands::get_track,
+            library::commands::list_album_tracks,
+            library::commands::remove_track_from_library,
+            playlist::commands::create_playlist,
+            playlist::commands::rename_playlist,
+            playlist::commands::delete_playlist,
+            playlist::commands::add_track_to_playlist,
+            playlist::commands::list_playlists,
+            playlist::commands::list_playlist_tracks,
+            playlist::commands::remove_playlist_items,
+            playlist::commands::reorder_playlist_items,
+            playback::queue::commands::list_skipped_track_ids,
+            playback::queue::commands::set_tracks_skipped,
+            library::commands::get_track,
             artwork::get_track_artwork,
             artwork::transfer::has_clipboard_artwork,
             artwork::transfer::read_clipboard_artwork,

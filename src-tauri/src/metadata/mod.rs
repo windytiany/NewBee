@@ -5,7 +5,9 @@ pub(crate) mod save;
 #[cfg(test)]
 mod tests;
 
-use crate::database::{write::WriteState, Database, TrackDetails};
+use crate::data::write::WriteState;
+use crate::database::Database;
+use crate::library::model::TrackDetails;
 use model::{normalize_changes, validate_track_ids, LyricsMarkAction, MetadataField};
 use serde::Serialize;
 use tauri::{ipc::Channel, Manager, State};

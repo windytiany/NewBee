@@ -38,14 +38,14 @@ const page = {
 };
 const modules: Record<string, unknown> = {
   vue: Vue,
-  "@/features/library/composables/useBrowser": { useLibraryBrowser: () => page },
+  "@/features/library/browser/useBrowser": { useLibraryBrowser: () => page },
   "@/shared/notifications/center": { notify },
   "@/shared/notifications/useNotification": { useNotification },
 };
 const passiveComponent = { __esModule: true, default: Vue.defineComponent(() => () => null) };
 for (const path of [
-  "features/library/components/albums/AlbumBrowser.vue",
-  "features/library/components/artists/ArtistList.vue",
+  "features/library/browser/albums/AlbumBrowser.vue",
+  "features/library/browser/artists/ArtistList.vue",
   "shared/components/SidePane.vue",
   "features/library/components/dialogs/DeleteAlbumDialog.vue",
   "features/library/components/dialogs/DeleteTrackDialog.vue",

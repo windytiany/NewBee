@@ -7,9 +7,9 @@ use std::{
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
-pub(super) struct Fixture(pub(super) PathBuf);
+pub(in crate::metadata) struct Fixture(pub(in crate::metadata) PathBuf);
 impl Fixture {
-    pub(super) fn new() -> Self {
+    pub(in crate::metadata) fn new() -> Self {
         let path = std::env::temp_dir().join(format!(
             "newbee-metadata-test-{}-{}",
             std::process::id(),
@@ -18,7 +18,7 @@ impl Fixture {
         fs::create_dir_all(&path).unwrap();
         Self(path)
     }
-    pub(super) fn wav(&self) -> PathBuf {
+    pub(in crate::metadata) fn wav(&self) -> PathBuf {
         let path = self.0.join("track.wav");
         let mut bytes = Vec::new();
         bytes.extend_from_slice(b"RIFF");
@@ -45,11 +45,11 @@ impl Drop for Fixture {
 }
 // The existing fixture contains complete ADTS frames. Repeating them makes a
 // legal approximately 140-second AAC stream without re-encoding its payload.
-pub(super) fn long_aac_audio() -> Vec<u8> {
+pub(in crate::metadata) fn long_aac_audio() -> Vec<u8> {
     include_bytes!("../../../fixtures/silence.aac").repeat(1024)
 }
 
-pub(super) fn change(field: MetadataField, value: Option<&str>) -> MetadataChange {
+pub(in crate::metadata) fn change(field: MetadataField, value: Option<&str>) -> MetadataChange {
     MetadataChange {
         values: Vec::new(),
         field,

@@ -218,11 +218,11 @@ fn decode_lyrics(
 }
 
 fn bilingual_lyrics(original: &str, translated: &str) -> String {
-    use crate::lyrics::{parse_embedded_lyrics, TrackLyrics};
+    use crate::lyrics::{model::TrackLyrics, parsing::parse};
 
-    if let TrackLyrics::Synced { lines } = parse_embedded_lyrics(original) {
+    if let TrackLyrics::Synced { lines } = parse(original) {
         let mut translations = std::collections::BTreeMap::new();
-        if let TrackLyrics::Synced { lines } = parse_embedded_lyrics(translated) {
+        if let TrackLyrics::Synced { lines } = parse(translated) {
             for line in lines {
                 if !line.text.trim().is_empty() {
                     translations.entry(line.start_ms).or_insert(line.text);
@@ -252,7 +252,7 @@ fn bilingual_lyrics(original: &str, translated: &str) -> String {
         .lines()
         .map(|line| {
             let translation = translations.next().unwrap_or_default();
-            let text = match parse_embedded_lyrics(translation) {
+            let text = match parse(translation) {
                 TrackLyrics::Synced { lines } => lines
                     .into_iter()
                     .next()

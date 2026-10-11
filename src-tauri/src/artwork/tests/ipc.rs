@@ -1,5 +1,6 @@
 use super::super::{get_album_artwork, get_track_artwork};
-use crate::database::{ArtworkContent, Database, TrackWriteInput};
+use crate::artwork::model::ArtworkContent;
+use crate::database::{model::TrackWriteInput, Database};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::io::Cursor;
 use tauri::ipc::{InvokeBody, InvokeResponseBody};
@@ -360,7 +361,7 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
 fn artwork_commands_accept_only_the_three_shared_sizes() {
     let webview = webview(Database::open(":memory:").unwrap());
     for command in ["get_track_artwork", "get_album_artwork"] {
-        for size in super::super::cache::SIZES {
+        for size in super::super::request::SIZES {
             assert!(invoke(
                 &webview,
                 command,

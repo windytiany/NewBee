@@ -1,20 +1,7 @@
-use super::{Database, PlaylistSummary, PlaylistTrackSummary};
+use super::Database;
+use crate::playlist::model::{PlaylistReorderError, PlaylistSummary, PlaylistTrackSummary};
 use rusqlite::{params, OptionalExtension};
-use serde::Serialize;
 use std::collections::HashSet;
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "code", rename_all = "snake_case")]
-pub enum PlaylistReorderError {
-    ItemSetMismatch { message: String },
-    Failed { message: String },
-}
-
-impl From<String> for PlaylistReorderError {
-    fn from(message: String) -> Self {
-        Self::Failed { message }
-    }
-}
 
 impl Database {
     pub fn create_playlist(&self, name: &str) -> Result<i64, String> {

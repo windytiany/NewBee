@@ -3,8 +3,8 @@ import { toRef } from "vue";
 import { useLibrary } from "@/features/library/composables/useLibrary";
 import type { PlaylistCatalog } from "@/features/playlist/types";
 import SidePane from "@/shared/components/SidePane.vue";
-import ArtistList from "@/features/library/components/artists/ArtistList.vue";
-import AlbumBrowser from "@/features/library/components/albums/AlbumBrowser.vue";
+import ArtistList from "@/features/library/browser/artists/ArtistList.vue";
+import AlbumBrowser from "@/features/library/browser/albums/AlbumBrowser.vue";
 import DeleteAlbumDialog from "@/features/library/components/dialogs/DeleteAlbumDialog.vue";
 import DeleteTrackDialog from "@/features/library/components/dialogs/DeleteTrackDialog.vue";
 

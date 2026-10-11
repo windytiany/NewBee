@@ -125,7 +125,7 @@ function mountPage(enabled = false) {
           };
         },
       },
-      "@/features/playback/composables/useDisplayMode": {
+      "@/features/playback/current/useDisplayMode": {
         useDisplayMode: () => ({ presentation }),
       },
       "@/features/lyrics/composables/useLyrics": {
@@ -138,7 +138,7 @@ function mountPage(enabled = false) {
       },
       "@/features/lyrics/seek": { canSeekLyrics: () => false, seekToLyric: async () => false },
       "@/features/lyrics/components/LyricsView.vue": placeholder,
-      "@/features/playback/components/current/TrackPresentation.vue": placeholder,
+      "@/features/playback/current/TrackPresentation.vue": placeholder,
     },
   );
   const renderer = createHostRenderer(createNode);

@@ -1,4 +1,5 @@
-use crate::database::{ArtworkContent, TrackWriteInput};
+use crate::artwork::model::ArtworkContent;
+use crate::database::model::TrackWriteInput;
 use lofty::{
     file::FileType,
     picture::PictureType,
@@ -74,7 +75,8 @@ pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String>
         channels: properties.channels().map(i64::from),
         artwork,
         editing: Some(editing),
-        lyrics: crate::lyrics::local::embedded_lyrics_text(&tagged_file).map(str::to_owned),
+        lyrics: crate::metadata::files::lyrics::embedded_lyrics_text(&tagged_file)
+            .map(str::to_owned),
     }))
 }
 
