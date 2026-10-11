@@ -1,11 +1,17 @@
 use rusqlite::Connection;
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 pub(super) fn initialize_schema(connection: &mut Connection) -> rusqlite::Result<()> {
     let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
     if version == SCHEMA_VERSION {
         return Ok(());
+    }
+    if version == 4 {
+        let transaction = connection.transaction()?;
+        transaction.execute_batch(include_str!("playback_statistics.sql"))?;
+        transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+        return transaction.commit();
     }
     let has_tables: bool = connection.query_row(
         "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%')",

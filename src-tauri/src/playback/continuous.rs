@@ -5,6 +5,7 @@ use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use super::NowPlayingTrack;
+use crate::playback_statistics::qualification::Playthrough;
 
 pub struct PreparedTrack {
     pub track: NowPlayingTrack,
@@ -43,8 +44,10 @@ impl ContinuousPlayback {
                 self.samples.load(Ordering::Relaxed) as f64
                     / f64::from(control.channels.get())
                     / f64::from(control.sample_rate.get()),
-            )
-            .min(snapshot.duration);
+            );
+            if !snapshot.duration.is_zero() {
+                snapshot.position = snapshot.position.min(snapshot.duration);
+            }
         }
         snapshot
     }
@@ -77,14 +80,22 @@ pub struct ContinuousSource {
     exhausted: bool,
     position_samples: u64,
     skipped_tracks: Arc<RwLock<HashSet<i64>>>,
+    statistics: mpsc::Sender<i64>,
+    playthrough: Playthrough,
 }
 
 impl ContinuousSource {
     pub fn new(
         current: PreparedTrack,
         skipped_tracks: Arc<RwLock<HashSet<i64>>>,
+        statistics: mpsc::Sender<i64>,
     ) -> (Self, ContinuousPlayback, mpsc::Receiver<NowPlayingTrack>) {
         let (transitions, receiver) = mpsc::channel();
+        let playthrough = Playthrough::new(
+            current.duration,
+            u64::from(current.source.sample_rate().get())
+                * u64::from(current.source.channels().get()),
+        );
         let playback = ContinuousPlayback {
             control: Arc::new(Mutex::new(Control {
                 snapshot: TrackSnapshot {
@@ -108,6 +119,8 @@ impl ContinuousSource {
                 exhausted: false,
                 position_samples: 0,
                 skipped_tracks,
+                statistics,
+                playthrough,
             },
             playback,
             receiver,
@@ -123,12 +136,22 @@ impl Iterator for ContinuousSource {
             if !self.exhausted {
                 if let Some(sample) = self.current.source.next() {
                     self.position_samples += 1;
+                    if self.playthrough.observe(self.position_samples, false) {
+                        if let Err(error) = self.statistics.send(self.current.track.track_id) {
+                            log::error!("Playback statistics recorder is unavailable: {error}");
+                        }
+                    }
                     self.playback
                         .samples
                         .store(self.position_samples, Ordering::Relaxed);
                     return Some(sample);
                 }
                 self.exhausted = true;
+                if self.playthrough.observe(self.position_samples, true) {
+                    if let Err(error) = self.statistics.send(self.current.track.track_id) {
+                        log::error!("Playback statistics recorder is unavailable: {error}");
+                    }
+                }
             }
 
             let mut control = self.playback.control.lock().unwrap();
@@ -160,6 +183,11 @@ impl Iterator for ContinuousSource {
             drop(control);
             drop(skipped_tracks);
             let _ = self.transitions.send(next.track.clone());
+            self.playthrough = Playthrough::new(
+                next.duration,
+                u64::from(next.source.sample_rate().get())
+                    * u64::from(next.source.channels().get()),
+            );
             self.current = next;
             self.exhausted = false;
             // Consume the next track in this same call, with no silence between tracks.
@@ -189,14 +217,17 @@ impl Source for ContinuousSource {
     }
 
     fn try_seek(&mut self, position: Duration) -> Result<(), rodio::source::SeekError> {
+        let samples = (position.as_secs_f64()
+            * f64::from(self.sample_rate().get())
+            * f64::from(self.channels().get())) as u64;
         self.current.source.try_seek(position)?;
+        if samples != self.position_samples {
+            self.playthrough.seek();
+        }
         self.exhausted = false;
         let mut control = self.playback.control.lock().unwrap();
         control.snapshot.ended = false;
-        let samples = position.as_secs_f64()
-            * f64::from(self.sample_rate().get())
-            * f64::from(self.channels().get());
-        self.position_samples = samples as u64;
+        self.position_samples = samples;
         self.playback
             .samples
             .store(self.position_samples, Ordering::Relaxed);
@@ -204,6 +235,9 @@ impl Source for ContinuousSource {
     }
 }
 
+#[cfg(test)]
+#[path = "tests/continuous_statistics.rs"]
+mod statistics_tests;
 #[cfg(test)]
 #[path = "tests/continuous.rs"]
 mod tests;

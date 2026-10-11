@@ -5,6 +5,7 @@ mod logging;
 pub mod lyrics;
 mod metadata;
 mod playback;
+mod playback_statistics;
 mod settings;
 mod shortcuts;
 mod window;
@@ -30,6 +31,8 @@ pub fn run() {
                 app.manage(settings::SettingsState::load(
                     app_data_dir.join("settings.json"),
                 )?);
+                stage = "playback_statistics";
+                playback_statistics::initialize(app.handle());
                 stage = "playback_session";
                 playback::session::initialize(
                     app.handle(),
@@ -118,6 +121,7 @@ pub fn run() {
             playback::session::runtime::playback_session_command,
             playback::session::runtime::playback_session_progress,
             playback::playback_spectrum,
+            playback_statistics::list_playback_statistics,
         ])
         .run(tauri::generate_context!());
     if let Err(error) = &result {

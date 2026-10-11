@@ -33,7 +33,8 @@ fn spectrum_uses_player_output_and_rejects_inactive_playback_instances() {
         duration: Duration::from_secs_f64(2048.0 * 8.0 / 48000.0),
         source: Box::new(SamplesBuffer::new(channels, sample_rate, samples)),
     };
-    let (source, continuous, _) = ContinuousSource::new(prepared, Default::default());
+    let (source, continuous, _) =
+        ContinuousSource::new(prepared, Default::default(), std::sync::mpsc::channel().0);
     let (mixer, mut output) = rodio::mixer::mixer(channels, sample_rate);
     let (player, spectrum) = connect_source(&mixer, source, 1.0);
     *state.active.lock().unwrap() = Some(ActivePlayback {

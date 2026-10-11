@@ -11,6 +11,7 @@ mod library;
 pub(crate) mod lyrics;
 mod metadata;
 mod paths;
+mod playback_statistics;
 mod playlist;
 mod schema;
 mod skip;
@@ -21,10 +22,12 @@ pub(crate) mod write;
 pub use playlist::PlaylistReorderError;
 
 fn schema_sql() -> String {
-    include_str!("schema.sql").replace(
+    let mut sql = include_str!("schema.sql").replace(
         "__MAX_ARTWORK_SIZE__",
         &crate::artwork::MAX_ARTWORK_SIZE.to_string(),
-    )
+    );
+    sql.push_str(include_str!("playback_statistics.sql"));
+    sql
 }
 
 pub struct Database {

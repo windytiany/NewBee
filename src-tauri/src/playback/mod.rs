@@ -273,7 +273,11 @@ pub(crate) fn seek_to(position_ms: u64, state: &PlaybackState) -> Result<(), Str
         .as_mut()
         .ok_or_else(|| "No audio is loaded".to_owned())?;
     let snapshot = playback.continuous.snapshot();
-    let position = Duration::from_millis(position_ms.min(duration_ms(snapshot.duration)));
+    let position = Duration::from_millis(if snapshot.duration.is_zero() {
+        position_ms
+    } else {
+        position_ms.min(duration_ms(snapshot.duration))
+    });
     playback
         .player
         .try_seek(position)
@@ -347,9 +351,7 @@ pub(crate) fn playback_status(state: &PlaybackState) -> Result<PlaybackStatus, S
 
 fn prepare_track(path: &Path, track: NowPlayingTrack) -> Result<PreparedTrack, PlaybackError> {
     let source = open_decoder(path)?;
-    let duration = source
-        .total_duration()
-        .ok_or_else(|| PlaybackError::Other("Could not determine audio duration".to_owned()))?;
+    let duration = source.total_duration().unwrap_or_default();
     Ok(PreparedTrack {
         track,
         duration,
@@ -393,6 +395,9 @@ fn start_playback(
     let (source, continuous, transitions) = ContinuousSource::new(
         normalize_track(prepared, channels, sample_rate),
         app.state::<Database>().skipped_tracks(),
+        app.state::<crate::playback_statistics::StatisticsRecorder>()
+            .0
+            .clone(),
     );
     let app = app.clone();
     std::thread::spawn(move || {

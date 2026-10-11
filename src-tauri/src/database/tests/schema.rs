@@ -13,6 +13,40 @@ fn initializes_new_databases_and_can_reopen_them() {
 }
 
 #[test]
+fn upgrades_version_four_without_changing_library_data() {
+    let mut connection = Connection::open_in_memory().unwrap();
+    connection
+        .execute_batch(&crate::database::schema_sql())
+        .unwrap();
+    connection.execute_batch("DROP TABLE track_play_statistics; PRAGMA user_version = 4; INSERT INTO tracks (path, title) VALUES ('song.mp3', 'Song'); INSERT INTO skipped_tracks VALUES (1);").unwrap();
+    initialize_schema(&mut connection).unwrap();
+    initialize_schema(&mut connection).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT title FROM tracks WHERE id = 1", [], |row| row
+                .get::<_, String>(0))
+            .unwrap(),
+        "Song"
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT track_id FROM skipped_tracks", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    connection
+        .execute("INSERT INTO track_play_statistics VALUES (1, 1)", [])
+        .unwrap();
+    assert_eq!(
+        connection
+            .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .unwrap(),
+        SCHEMA_VERSION
+    );
+}
+
+#[test]
 fn rejects_old_schema_without_modifying_it() {
     let mut connection = Connection::open_in_memory().unwrap();
     connection.execute_batch("CREATE TABLE tracks (id INTEGER PRIMARY KEY, path TEXT); INSERT INTO tracks VALUES (42, 'song.mp3');").unwrap();

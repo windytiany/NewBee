@@ -4,7 +4,7 @@ use super::{
 };
 use crate::playback::session::{synchronize_removal, RemovalResult, SessionCommand};
 use std::path::Path;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[tauri::command]
 pub fn list_music_library_directories(
@@ -142,6 +142,9 @@ pub async fn remove_track_from_library<R: tauri::Runtime>(
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<Database>()
             .remove_track_from_library(track_id)?;
+        if let Err(error) = app.emit(crate::playback_statistics::CHANGED_EVENT, ()) {
+            log::warn!("Could not publish playback statistics removal: {error}");
+        }
         Ok(synchronize_removal(
             &app,
             SessionCommand::RemoveTrack { track_id },

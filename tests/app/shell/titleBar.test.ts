@@ -10,6 +10,7 @@ type Bindings = {
   libraryScanDialog: Vue.Ref<Dialog | null>;
   pathMigrationDialog: Vue.Ref<Dialog | null>;
   settingsDialog: Vue.Ref<Dialog | null>;
+  playbackStatisticsDialog: Vue.Ref<Dialog | null>;
   onMenuSelect: (action: AppMenuAction) => Promise<void>;
 };
 
@@ -31,6 +32,7 @@ it("routes brand menu selections to existing import and dialog actions", async (
     "@/features/library/import/ScanDialog.vue": { default: {} },
     "@/features/library/paths/PathMigrationDialog.vue": { default: {} },
     "@/features/settings/components/SettingsDialog.vue": { default: {} },
+    "@/features/playback-statistics/PlaybackStatisticsDialog.vue": { default: {} },
     "@/features/library/import/useFileImport": {
       useLibraryFileImport: () => ({
         isImporting: Vue.ref(false),
@@ -60,9 +62,15 @@ it("routes brand menu selections to existing import and dialog actions", async (
     },
   };
 
-  for (const action of ["import", "scan", "migrate", "settings"] as const) {
+  bindings.playbackStatisticsDialog.value = {
+    show: () => {
+      actions.push("statistics");
+    },
+  };
+
+  for (const action of ["import", "scan", "migrate", "statistics", "settings"] as const) {
     await bindings.onMenuSelect(action);
   }
 
-  expect(actions).toEqual(["import", "scan", "migrate", "settings"]);
+  expect(actions).toEqual(["import", "scan", "migrate", "statistics", "settings"]);
 });

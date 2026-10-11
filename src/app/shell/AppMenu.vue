@@ -1,5 +1,5 @@
 <script lang="ts">
-export type AppMenuAction = "import" | "scan" | "migrate" | "settings";
+export type AppMenuAction = "import" | "scan" | "migrate" | "statistics" | "settings";
 </script>
 
 <script setup lang="ts">
@@ -18,7 +18,14 @@ const groups = [
       { action: "scan", label: "扫描文件夹" },
     ],
   },
-  { id: "tools", label: "工具", items: [{ action: "migrate", label: "路径迁移" }] },
+  {
+    id: "tools",
+    label: "工具",
+    items: [
+      { action: "migrate", label: "路径迁移" },
+      { action: "statistics", label: "播放统计" },
+    ],
+  },
 ] as const;
 type SubmenuId = (typeof groups)[number]["id"];
 type MenuContainer = InstanceType<typeof globalThis.HTMLDivElement>;
