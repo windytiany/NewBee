@@ -37,12 +37,19 @@ pub fn remove_music_library_directory(
 }
 
 #[tauri::command]
-pub fn migrate_track_paths(
+pub async fn migrate_library_paths<R: tauri::Runtime>(
     old_path: String,
     new_path: String,
-    state: tauri::State<'_, Database>,
+    app: tauri::AppHandle<R>,
 ) -> Result<usize, String> {
-    state.migrate_track_paths(&old_path, &new_path)
+    let guard = app.state::<super::write::WriteState>().acquire()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
+        app.state::<Database>()
+            .migrate_library_paths(&old_path, &new_path)
+    })
+    .await
+    .map_err(|error| format!("路径迁移失败：{error}"))?
 }
 
 #[tauri::command]

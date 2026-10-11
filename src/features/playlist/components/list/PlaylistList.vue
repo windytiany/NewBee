@@ -15,7 +15,7 @@
       </button>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+    <div v-persistent-scroll="'playlist:list'" class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       <p
         v-if="!props.isLoading && !props.error && props.playlists.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
@@ -84,6 +84,7 @@ import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
 import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import type { PlaylistSummary } from "@/features/playlist/types";
 import PlaylistRow from "@/features/playlist/components/list/PlaylistRow.vue";

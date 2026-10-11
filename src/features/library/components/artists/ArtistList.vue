@@ -41,7 +41,7 @@
       </div>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+    <div v-persistent-scroll="'library:artists'" class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       <p
         v-if="!props.isLoading && !props.error && props.artists.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
@@ -73,6 +73,7 @@ import { t } from "@/shared/i18n/locale";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
 import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import type { AlbumArtistSummary } from "@/features/library/types";
 import ArtistRow from "@/features/library/components/artists/ArtistRow.vue";

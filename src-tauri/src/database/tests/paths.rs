@@ -28,7 +28,7 @@ fn paths(database: &Database) -> Vec<String> {
 }
 
 #[test]
-fn replaces_literal_prefixes_and_preserves_suffixes() {
+fn matches_directory_boundaries_and_preserves_suffixes() {
     let database = database(&[
         "/旧音乐/专辑/曲目.flac",
         "/旧音乐备份/song.mp3",
@@ -36,14 +36,16 @@ fn replaces_literal_prefixes_and_preserves_suffixes() {
         "/旧音乐",
     ]);
     assert_eq!(
-        database.migrate_track_paths("/旧音乐", "/新音乐").unwrap(),
-        3
+        database
+            .migrate_library_paths("/旧音乐", "/新音乐")
+            .unwrap(),
+        2
     );
     assert_eq!(
         paths(&database),
         [
             "/新音乐/专辑/曲目.flac",
-            "/新音乐备份/song.mp3",
+            "/旧音乐备份/song.mp3",
             "/other/旧音乐/song.mp3",
             "/新音乐",
         ]
@@ -53,7 +55,7 @@ fn replaces_literal_prefixes_and_preserves_suffixes() {
 #[test]
 fn treats_sql_wildcards_and_quotes_as_literal_characters() {
     let database = database(&["/a%_'/song.flac", "/abcd/song.flac"]);
-    assert_eq!(database.migrate_track_paths("/a%_'", "/new").unwrap(), 1);
+    assert_eq!(database.migrate_library_paths("/a%_'", "/new").unwrap(), 1);
     assert_eq!(paths(&database), ["/new/song.flac", "/abcd/song.flac"]);
 }
 
@@ -62,13 +64,13 @@ fn handles_windows_drive_and_unc_canonical_paths() {
     let database = database(&[r"\\?\C:\音乐\a.flac", r"\\?\UNC\server\share\a.flac"]);
     assert_eq!(
         database
-            .migrate_track_paths("C:/音乐/", "D:/Music/")
+            .migrate_library_paths("C:/音乐/", "D:/Music/")
             .unwrap(),
         1
     );
     assert_eq!(
         database
-            .migrate_track_paths(r"\\server\share", r"\\other\music")
+            .migrate_library_paths(r"\\server\share", r"\\other\music")
             .unwrap(),
         1
     );
@@ -83,7 +85,7 @@ fn matches_noncanonical_windows_paths_too() {
     let database = database(&[r"C:\Music\a.flac"]);
     assert_eq!(
         database
-            .migrate_track_paths(r"C:\Music", r"D:\Music")
+            .migrate_library_paths(r"C:\Music", r"D:\Music")
             .unwrap(),
         1
     );
@@ -94,7 +96,7 @@ fn matches_noncanonical_windows_paths_too() {
 fn supports_overlapping_prefixes_without_transient_collisions() {
     let database = database(&["/a/song.flac", "/a/nested/song.flac"]);
     assert_eq!(
-        database.migrate_track_paths("/a/", "/a/nested/").unwrap(),
+        database.migrate_library_paths("/a/", "/a/nested/").unwrap(),
         2
     );
     assert_eq!(
@@ -106,8 +108,11 @@ fn supports_overlapping_prefixes_without_transient_collisions() {
 #[test]
 fn unrelated_equivalent_windows_paths_do_not_block_migration() {
     let database = database(&[r"C:\Music\a.flac", r"\\?\C:\Music\a.flac", "/old/song.flac"]);
-    assert_eq!(database.migrate_track_paths("/missing", "/new").unwrap(), 0);
-    assert_eq!(database.migrate_track_paths("/old", "/new").unwrap(), 1);
+    assert_eq!(
+        database.migrate_library_paths("/missing", "/new").unwrap(),
+        0
+    );
+    assert_eq!(database.migrate_library_paths("/old", "/new").unwrap(), 1);
     assert_eq!(paths(&database)[2], "/new/song.flac");
 }
 
@@ -115,7 +120,7 @@ fn unrelated_equivalent_windows_paths_do_not_block_migration() {
 fn rejects_equivalent_windows_destination_paths() {
     let database = database(&[r"C:\Music\a.flac", r"D:\Music\a.flac"]);
     assert!(database
-        .migrate_track_paths(r"C:\Music", r"D:\Music")
+        .migrate_library_paths(r"C:\Music", r"D:\Music")
         .is_err());
     assert_eq!(paths(&database), [r"C:\Music\a.flac", r"D:\Music\a.flac"]);
 }
@@ -123,7 +128,7 @@ fn rejects_equivalent_windows_destination_paths() {
 #[test]
 fn matches_case_sensitively_and_preserves_filename_whitespace() {
     let database = database(&["/old/song.flac ", "/Old/song.flac"]);
-    assert_eq!(database.migrate_track_paths("/old", "/new").unwrap(), 1);
+    assert_eq!(database.migrate_library_paths("/old", "/new").unwrap(), 1);
     assert_eq!(paths(&database), ["/new/song.flac ", "/Old/song.flac"]);
 }
 
@@ -131,7 +136,7 @@ fn matches_case_sensitively_and_preserves_filename_whitespace() {
 fn rejects_conflicts_without_partial_changes() {
     let database = database(&["/old/a.flac", "/old/b.flac", "/new/b.flac"]);
     assert!(database
-        .migrate_track_paths("/old", "/new")
+        .migrate_library_paths("/old", "/new")
         .unwrap_err()
         .contains("冲突"));
     assert_eq!(
@@ -152,12 +157,12 @@ fn rolls_back_when_an_update_fails() {
          BEGIN SELECT RAISE(ABORT, 'test failure'); END;",
         )
         .unwrap();
-    assert!(database.migrate_track_paths("/old", "/new").is_err());
+    assert!(database.migrate_library_paths("/old", "/new").is_err());
     assert_eq!(paths(&database), ["/old/a.flac", "/old/b.flac"]);
 }
 
 #[test]
-fn keeps_metadata_artwork_playlist_items_and_scan_directories() {
+fn migrates_sources_and_directories_without_changing_library_relationships() {
     let database = database(&["/old/song.flac"]);
     {
         let connection = database.connection().unwrap();
@@ -169,7 +174,7 @@ fn keeps_metadata_artwork_playlist_items_and_scan_directories() {
              INSERT INTO music_library_directories (path) VALUES ('/old');",
         ).unwrap();
     }
-    assert_eq!(database.migrate_track_paths("/old", "/new").unwrap(), 1);
+    assert_eq!(database.migrate_library_paths("/old", "/new").unwrap(), 3);
     let details = database.get_track(1).unwrap().unwrap();
     assert_eq!(details.path(), "/new/song.flac");
     assert_eq!(details.title.as_deref(), Some("title"));
@@ -180,8 +185,74 @@ fn keeps_metadata_artwork_playlist_items_and_scan_directories() {
     ));
     assert_eq!(
         database.list_music_library_directories().unwrap()[0].path,
+        "/new"
+    );
+    let source: String = database
+        .connection()
+        .unwrap()
+        .query_row("SELECT source_path FROM track_artwork", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(source, "/new/song.flac");
+}
+
+#[test]
+fn converts_windows_suffixes_to_unix_and_back() {
+    let database = database(&[r"\\?\C:\Music\专辑\song.flac", r"C:\Music-old\other.flac"]);
+    assert_eq!(
+        database
+            .migrate_library_paths("C:/Music/", "/home/me/Music/")
+            .unwrap(),
+        1
+    );
+    assert_eq!(paths(&database)[0], "/home/me/Music/专辑/song.flac");
+    assert_eq!(paths(&database)[1], r"C:\Music-old\other.flac");
+    assert_eq!(
+        database
+            .migrate_library_paths("/home/me/Music", "D:/Music")
+            .unwrap(),
+        1
+    );
+    assert_eq!(paths(&database)[0], r"\\?\D:\Music\专辑\song.flac");
+}
+
+#[test]
+fn directory_conflicts_roll_back_tracks_and_artwork_sources() {
+    let database = database(&["/old/song.flac"]);
+    database
+        .connection()
+        .unwrap()
+        .execute_batch("INSERT INTO music_library_directories (path) VALUES ('/old'), ('/new');")
+        .unwrap();
+    assert!(database.migrate_library_paths("/old", "/new").is_err());
+    assert_eq!(paths(&database), ["/old/song.flac"]);
+    assert_eq!(
+        database.list_music_library_directories().unwrap()[0].path,
         "/old"
     );
+}
+
+#[test]
+fn updates_directory_only_locations_and_handles_root_boundaries() {
+    let database = database(&["/old/song.flac"]);
+    database
+        .connection()
+        .unwrap()
+        .execute(
+            "INSERT INTO music_library_directories (path) VALUES ('/empty')",
+            [],
+        )
+        .unwrap();
+    assert_eq!(database.migrate_library_paths("/empty", "/new").unwrap(), 1);
+    assert_eq!(
+        database.list_music_library_directories().unwrap()[0].path,
+        "/new"
+    );
+    assert_eq!(database.migrate_library_paths("/old", "/").unwrap(), 1);
+    assert_eq!(paths(&database), ["/song.flac"]);
+    assert_eq!(database.migrate_library_paths("/", "C:/Music/").unwrap(), 2);
+    assert_eq!(paths(&database), [r"\\?\C:\Music\song.flac"]);
 }
 
 #[test]
@@ -193,8 +264,11 @@ fn rejects_empty_identical_and_null_prefixes_and_counts_no_matches() {
         ("/old", "/old"),
         ("/old", "/new\0"),
     ] {
-        assert!(database.migrate_track_paths(old, new).is_err());
+        assert!(database.migrate_library_paths(old, new).is_err());
     }
-    assert_eq!(database.migrate_track_paths("/missing", "/new").unwrap(), 0);
+    assert_eq!(
+        database.migrate_library_paths("/missing", "/new").unwrap(),
+        0
+    );
     assert_eq!(paths(&database), ["/old/song.flac"]);
 }

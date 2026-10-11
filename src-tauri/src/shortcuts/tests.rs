@@ -54,6 +54,52 @@ fn ids(bindings: &[Binding]) -> HashSet<u32> {
 }
 
 #[test]
+fn restore_clears_only_invalid_duplicate_or_occupied_bindings() {
+    let mut config = ShortcutSettings {
+        previous: definition("Ctrl+Unknown", false),
+        next: definition("Ctrl+KeyN", true),
+        toggle_playback: definition("Space", false),
+        toggle_window: definition("Space", true),
+    };
+    let blocked = "Ctrl+KeyN".parse::<Shortcut>().unwrap().id();
+    let mut registry = FakeRegistration {
+        blocked: HashSet::from([blocked]),
+        ..FakeRegistration::default()
+    };
+    let mut runtime = ShortcutRuntime::default();
+    let errors = restore_configuration(&mut config, &mut runtime, &mut registry);
+    assert_eq!(errors.len(), 3);
+    assert_eq!(config.previous, ShortcutBinding::default());
+    assert_eq!(config.next, ShortcutBinding::default());
+    assert_eq!(config.toggle_window, ShortcutBinding::default());
+    assert_eq!(config.toggle_playback, definition("Space", false));
+    assert!(registry.active.is_empty());
+    assert!(config.parse().is_ok());
+    runtime.set_suspended(true, &mut registry).unwrap();
+    runtime.set_suspended(false, &mut registry).unwrap();
+    assert!(registry.active.is_empty());
+}
+
+#[test]
+fn restore_preserves_usable_global_and_local_bindings() {
+    let mut config = settings("Ctrl+KeyP", "Ctrl+KeyN");
+    config.toggle_playback = definition("Space", false);
+    let mut registry = FakeRegistration::default();
+    let mut runtime = ShortcutRuntime::default();
+    assert!(restore_configuration(&mut config, &mut runtime, &mut registry).is_empty());
+    let previous = "Ctrl+KeyP".parse::<Shortcut>().unwrap().id();
+    assert_eq!(registry.active.len(), 2);
+    assert_eq!(
+        runtime.event(previous, ShortcutState::Pressed),
+        Some(ShortcutAction::Previous)
+    );
+    runtime.set_suspended(true, &mut registry).unwrap();
+    assert!(registry.active.is_empty());
+    runtime.set_suspended(false, &mut registry).unwrap();
+    assert_eq!(registry.active.len(), 2);
+}
+
+#[test]
 fn settings_contract_defaults_and_preserves_accelerators() {
     let defaults = ShortcutSettings::default();
     for binding in [

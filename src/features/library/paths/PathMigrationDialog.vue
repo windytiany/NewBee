@@ -2,7 +2,6 @@
 import { t } from "@/shared/i18n/locale";
 import { ref } from "vue";
 import { usePathMigration } from "@/features/library/paths/usePathMigration";
-import HelpDialog from "@/shared/components/HelpDialog.vue";
 
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const { oldPath, newPath, isMigrating, isTauriApp, migrate: migratePaths } = usePathMigration();
@@ -39,22 +38,6 @@ defineExpose({ show });
       <header class="flex items-center justify-between border-b border-white/10 px-5 py-4">
         <div class="flex items-center gap-2">
           <h2 id="path-migration-title" class="text-lg font-semibold">{{ t("路径迁移") }}</h2>
-          <HelpDialog :label="t('路径迁移说明')">
-            <p>
-              {{
-                t(
-                  "仅更新数据库中的曲目路径，不移动或检查实际文件，不修改扫描目录配置。 曲目信息、封面和歌单关系保持不变。",
-                )
-              }}
-            </p>
-            <p>
-              {{
-                t(
-                  "按字面前缀匹配，区分大小写，只替换开头，后续路径保持不变。 末尾的路径分隔符也参与替换，请在两处保持一致。 Windows 路径支持普通写法和 \\\\?\\ 写法。路径冲突时整批回滚。",
-                )
-              }}
-            </p>
-          </HelpDialog>
         </div>
       </header>
       <fieldset :disabled="!isTauriApp || isMigrating" class="space-y-4 px-5 py-5">

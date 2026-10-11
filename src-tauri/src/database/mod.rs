@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 mod artwork;
+pub(crate) mod backup;
 pub(crate) mod commands;
 pub(crate) use artwork::ArtworkUpdate;
 mod library;

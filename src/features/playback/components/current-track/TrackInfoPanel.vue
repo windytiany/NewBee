@@ -1,5 +1,6 @@
 <template>
   <section
+    v-persistent-scroll="JSON.stringify(['playback', 'details', currentTrack?.trackId])"
     :aria-label="t('曲目信息')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto text-white"
   >
@@ -52,6 +53,7 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { ref } from "vue";
+import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
 import { useArtworkSize } from "@/features/artwork/useArtworkSize";
 import { Disc3 } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";

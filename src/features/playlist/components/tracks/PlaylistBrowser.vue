@@ -54,6 +54,7 @@
 
       <div
         ref="trackScrollContainerElement"
+        v-persistent-scroll="JSON.stringify(['playlist', props.playlist?.id])"
         class="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8"
       >
         <div
@@ -197,6 +198,7 @@ import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
 import { DiscAlbum, Files, Play } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
 import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import { createPlaylistDragReorder } from "@/features/playlist/ordering/drag";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";

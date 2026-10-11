@@ -1,8 +1,11 @@
 import { createApp } from "vue";
-import App from "@/app/App.vue";
 import "@/app/styles/main.css";
 import { showMainWindow } from "@/app/startup";
 import { installErrorLogging } from "@/app/logging";
+import { restoreInterfaceState } from "@/features/backup/interfaceState";
+import { logger } from "@/shared/logging/logger";
+import { notify } from "@/shared/notifications/center";
+import { t } from "@/shared/i18n/locale";
 
 globalThis.document.addEventListener(
   "contextmenu",
@@ -12,8 +15,18 @@ globalThis.document.addEventListener(
   { capture: true },
 );
 
-const app = createApp(App);
-installErrorLogging(app);
-app.mount("#app");
+async function start() {
+  try {
+    await restoreInterfaceState();
+  } catch (error) {
+    logger.error("backup", "interface_restore_failed", error);
+    notify({ type: "error", message: t("恢复界面状态失败，请查看日志"), key: "backup-restore" });
+  }
+  const { default: App } = await import("@/app/App.vue");
+  const app = createApp(App);
+  installErrorLogging(app);
+  app.mount("#app");
+  await showMainWindow();
+}
 
-void showMainWindow();
+void start();

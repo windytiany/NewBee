@@ -74,7 +74,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
             commands::remove_playlist_items,
             commands::set_tracks_skipped,
             commands::list_skipped_track_ids,
-            commands::migrate_track_paths,
+            commands::migrate_library_paths,
             commands::remove_track_from_library,
             crate::metadata::get_editable_tracks,
             crate::lyrics::local::get_track_lyrics,
@@ -204,10 +204,10 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         .into_owned();
     assert_eq!(
         call(
-            "migrate_track_paths",
+            "migrate_library_paths",
             json!({"oldPath":original_root,"newPath":new_root})
         ),
-        1
+        2
     );
     assert!(call("get_track", json!({"trackId":1}))["path"]
         .as_str()

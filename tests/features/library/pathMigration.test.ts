@@ -68,7 +68,7 @@ function createDialog(
 }
 
 describe("path migration dialog", () => {
-  it("keeps migration rules behind the info button without hiding the form", async () => {
+  it("shows the migration form without explanatory help", async () => {
     const component = evaluateSource<{ default: Vue.Component }>(
       compileSfc(dialogSource, "src/features/library/paths/PathMigrationDialog.vue"),
       {
@@ -104,20 +104,7 @@ describe("path migration dialog", () => {
       expect(findNode(root, (node) => node.props["aria-label"] === "关闭路径迁移")).toBeNull();
       expect(getTextContent(root)).not.toContain("按字面前缀匹配");
       expect(getTextContent(root)).not.toContain("不移动或检查实际文件");
-      const help = findNode(root, (node) => node.props["aria-label"] === "路径迁移说明");
-      if (!help || typeof help.props.onClick !== "function")
-        throw new Error("Missing migration help");
-      help.props.onClick();
-      await Vue.nextTick();
-      expect(getTextContent(root)).toContain("按字面前缀匹配");
-      expect(getTextContent(root)).toContain("不移动或检查实际文件");
-      expect(getTextContent(root)).toContain("路径冲突时整批回滚");
-      const close = findNode(root, (node) => node.props["aria-label"] === "关闭说明");
-      if (!close || typeof close.props.onClick !== "function")
-        throw new Error("Missing help close button");
-      close.props.onClick();
-      await Vue.nextTick();
-      expect(getTextContent(root)).not.toContain("按字面前缀匹配");
+      expect(findNode(root, (node) => node.props["aria-label"] === "路径迁移说明")).toBeNull();
       expect(getTextContent(root)).toContain("新路径");
     } finally {
       app.unmount();
@@ -133,7 +120,7 @@ describe("path migration dialog", () => {
     bindings.oldPath.value = " C:\\Music\\ ";
     await bindings.migrate();
     expect(calls).toEqual([
-      ["migrate_track_paths", { oldPath: "C:\\Music\\", newPath: "D:\\Music\\" }],
+      ["migrate_library_paths", { oldPath: "C:\\Music\\", newPath: "D:\\Music\\" }],
     ]);
     expect(notices[0]?.type).toBe("success");
     expect(notices[0]?.message).toContain("12");
@@ -144,7 +131,7 @@ describe("path migration dialog", () => {
     const { bindings, element, notices } = createDialog(async () => 0);
     await bindings.migrate();
     expect(notices).toEqual([
-      { type: "warning", message: "没有匹配原路径的曲目", key: "library-path-migration" },
+      { type: "warning", message: "没有匹配原路径的记录", key: "library-path-migration" },
     ]);
     expect(element.open).toBe(true);
     expect(bindings.oldPath.value).toBe("C:\\Music\\");

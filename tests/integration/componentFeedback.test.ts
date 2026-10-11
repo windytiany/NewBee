@@ -47,10 +47,11 @@ describe("组件反馈边界", () => {
     for (const path of [
       "features/settings/components/SettingsDialog.vue",
       "features/library/import/ScanDialog.vue",
-      "features/library/paths/PathMigrationDialog.vue",
     ]) {
       expect(template(path)).toContain("<HelpDialog");
     }
+    expect(template("features/library/paths/PathMigrationDialog.vue")).not.toContain("<HelpDialog");
+    expect(template("features/backup/components/BackupOptions.vue")).not.toContain("<HelpDialog");
     expect(template("features/tags/manual/components/TagEditorDialog.vue")).toContain(
       "未保存的修改将丢失。",
     );

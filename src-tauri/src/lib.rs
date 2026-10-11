@@ -1,4 +1,5 @@
 mod artwork;
+mod backup;
 mod database;
 mod import;
 mod logging;
@@ -15,6 +16,7 @@ pub fn run() {
     let result = tauri::Builder::default()
         .manage(playback::PlaybackState::default())
         .manage(database::write::WriteState::default())
+        .manage(backup::BackupState::default())
         .manage(lyrics::batch::LyricsBatchState::default())
         .setup(|app| {
             use tauri::Manager;
@@ -24,6 +26,18 @@ pub fn run() {
             let setup = (|| {
                 let app_data_dir = app.path().app_data_dir()?;
                 std::fs::create_dir_all(&app_data_dir)?;
+                stage = "restore";
+                app.manage(backup::lock_data_directory(&app_data_dir)?);
+                let restoring = match backup::apply_pending_restore(&app_data_dir) {
+                    Ok(restored) => restored,
+                    Err(error) => {
+                        backup::abort_pending_restore(&app_data_dir)?;
+                        log::error!("event=backup_restore_failed error={error}");
+                        app.state::<backup::BackupState>()
+                            .report_restore_error(error)?;
+                        false
+                    }
+                };
                 stage = "database";
                 let database_path = app_data_dir.join("music-library.sqlite3");
                 app.manage(database::Database::open(database_path)?);
@@ -42,7 +56,7 @@ pub fn run() {
                 window::initialize(app.handle());
                 window::tray::initialize(app.handle())?;
                 stage = "shortcuts";
-                shortcuts::initialize(app.handle());
+                shortcuts::initialize(app.handle(), restoring);
                 #[cfg(windows)]
                 if let Err(error) = playback::media::initialize(app.handle()) {
                     log::warn!("Could not initialize Windows media controls: {error}");
@@ -74,13 +88,20 @@ pub fn run() {
             window::show_main_window,
             settings::get_settings,
             settings::save_settings,
+            backup::export_backup,
+            backup::inspect_backup,
+            backup::restore_backup,
+            backup::open_backups_directory,
+            backup::get_restored_interface_state,
+            backup::get_backup_restore_error,
+            backup::acknowledge_interface_restore,
             shortcuts::run_shortcut,
             shortcuts::set_shortcuts_suspended,
             shortcuts::get_shortcuts_error,
             database::commands::list_music_library_directories,
             database::commands::add_music_library_directory,
             database::commands::remove_music_library_directory,
-            database::commands::migrate_track_paths,
+            database::commands::migrate_library_paths,
             import::directory::scan_music_library,
             import::supported_audio_extensions,
             import::files::import_music_files,

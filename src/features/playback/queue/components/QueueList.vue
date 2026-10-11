@@ -11,7 +11,7 @@
       {{ displayTitle }}
     </h2>
 
-    <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
+    <div v-persistent-scroll="'playback:queue'" class="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
       <p
         v-if="!props.isLoading && props.tracks.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
@@ -75,6 +75,7 @@
 import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
 import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";

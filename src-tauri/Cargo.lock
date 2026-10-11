@@ -372,6 +372,9 @@ name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bytemuck"
@@ -2500,6 +2503,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sqlite3-parser",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -3888,6 +3892,22 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "sqlite3-parser"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbb44bfd84bfd1bde5ee215dd0b27d10c3c601a1b7cf03a91c7d6f607f2a10f7"
+dependencies = [
+ "bitflags 2.13.2",
+ "bumpalo",
+ "cc",
+ "fallible-iterator",
+ "indexmap 2.14.2",
+ "log",
+ "memchr",
+ "serde",
 ]
 
 [[package]]

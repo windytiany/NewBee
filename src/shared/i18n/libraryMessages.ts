@@ -8,8 +8,6 @@ export const libraryMessages: Record<string, string> = {
   专辑曲目操作: "Album track actions",
   专辑演出者: "Album artist",
   专辑演出者列表: "Album artists",
-  "仅更新数据库中的曲目路径，不移动或检查实际文件，不修改扫描目录配置。 曲目信息、封面和歌单关系保持不变。":
-    "Only track paths in the database are updated. Files are not moved or checked, and scan directories are unchanged. Track information, artwork, and playlist entries are preserved.",
   从库中删除: "Remove from library",
   从当前歌单移除: "Remove from playlist",
   从曲库中删除专辑: "Remove album from library",
@@ -40,7 +38,7 @@ export const libraryMessages: Record<string, string> = {
   "已从曲库移除 {count} 首，队列同步失败，请查看日志":
     "Removed {count} tracks, but queue synchronization failed. Check the logs.",
   已保存目录: "Saved directories",
-  "已更新 {count} 首曲目的路径": "Updated paths for {count} tracks",
+  "已更新 {count} 条路径": "Updated {count} paths",
   "已添加 {count} 首到歌单": "Added {count} tracks to playlist",
   "已添加 {count} 首，{failed} 首失败（详情见日志）":
     "Added {count} tracks; {failed} failed (see logs)",
@@ -53,8 +51,6 @@ export const libraryMessages: Record<string, string> = {
   扫描文件夹: "Scan folders",
   扫描说明: "Scan help",
   "拖动重排第 {count} 首": "Drag to reorder track {count}",
-  "按字面前缀匹配，区分大小写，只替换开头，后续路径保持不变。 末尾的路径分隔符也参与替换，请在两处保持一致。 Windows 路径支持普通写法和 \\\\?\\ 写法。路径冲突时整批回滚。":
-    "Prefixes are matched literally and case-sensitively. Only the prefix is replaced; the rest of the path is unchanged. Trailing separators are included in the replacement, so use them consistently in both paths. Windows paths support standard and extended-length forms. Path conflicts roll back the entire batch.",
   播放专辑: "Play album",
   播放列表: "Playlist",
   播放列表浏览: "Playlists",
@@ -93,7 +89,7 @@ export const libraryMessages: Record<string, string> = {
   "正在删除…": "Deleting…",
   "正在扫描…": "Scanning…",
   "正在迁移…": "Migrating…",
-  没有匹配原路径的曲目: "No tracks match the old path",
+  没有匹配原路径的记录: "No records match the old path",
   添加为下一首: "Play next",
   添加到播放列表: "Add to playlist",
   添加到队尾: "Add to queue",
@@ -120,7 +116,6 @@ export const libraryMessages: Record<string, string> = {
   "读取歌单失败，请查看日志": "Could not load playlists. Check the logs.",
   路径迁移: "Migrate paths",
   "路径迁移失败，请查看日志": "Path migration failed. Check the logs.",
-  路径迁移说明: "Path migration help",
   迁移路径: "Migrate paths",
   选择目标歌单: "Select target playlist",
   选择音乐库目录: "Select music library directory",

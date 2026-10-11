@@ -8,9 +8,7 @@ impl WriteState {
     pub(crate) fn acquire(&self) -> Result<WriteGuard, String> {
         self.0
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .map_err(|_| {
-                "音乐库扫描、导入、标签保存或歌词下载任务正在运行，请稍后重试".to_owned()
-            })?;
+            .map_err(|_| "数据写入或备份任务正在运行，请稍后重试".to_owned())?;
         Ok(WriteGuard(Arc::clone(&self.0)))
     }
 }

@@ -17,6 +17,9 @@ pub(super) enum Request {
     Progress {
         reply: mpsc::Sender<Result<SessionProgress, String>>,
     },
+    Backup {
+        reply: mpsc::Sender<SavedSession>,
+    },
 }
 
 #[derive(Serialize)]
@@ -62,6 +65,17 @@ impl PlaybackSession {
             .map_err(|_| "Playback session is unavailable".to_owned())?;
         Ok(receiver)
     }
+}
+
+pub(crate) fn backup_snapshot(app: &AppHandle) -> Result<SavedSession, String> {
+    let (reply, receiver) = mpsc::channel();
+    app.state::<PlaybackSession>()
+        .requests
+        .send(Request::Backup { reply })
+        .map_err(|_| "Playback session is unavailable".to_owned())?;
+    receiver
+        .recv_timeout(Duration::from_secs(10))
+        .map_err(|error| format!("Could not back up playback session: {error}"))
 }
 
 pub fn initialize(app: &AppHandle, path: PathBuf) {
@@ -179,6 +193,12 @@ pub(super) fn run_worker<A: SessionAudio>(
             }
         };
         match request {
+            Request::Backup { reply } => {
+                if changed {
+                    publish_change(&mut session, &mut persistence, &mut publish);
+                }
+                let _ = reply.send(session.saved());
+            }
             Request::Progress { reply } => {
                 if changed {
                     publish_change(&mut session, &mut persistence, &mut publish);

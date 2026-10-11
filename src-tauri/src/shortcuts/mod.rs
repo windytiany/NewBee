@@ -48,6 +48,50 @@ impl ShortcutAction {
 }
 
 impl ShortcutSettings {
+    fn binding_mut(&mut self, action: ShortcutAction) -> &mut ShortcutBinding {
+        match action {
+            ShortcutAction::Previous => &mut self.previous,
+            ShortcutAction::Next => &mut self.next,
+            ShortcutAction::TogglePlayback => &mut self.toggle_playback,
+            ShortcutAction::ToggleWindow => &mut self.toggle_window,
+        }
+    }
+
+    fn parse_for_restore(&mut self) -> (Vec<Binding>, Vec<String>) {
+        let mut bindings = Vec::new();
+        let mut errors = Vec::new();
+        let mut seen = HashSet::new();
+        for action in [
+            ShortcutAction::Previous,
+            ShortcutAction::Next,
+            ShortcutAction::TogglePlayback,
+            ShortcutAction::ToggleWindow,
+        ] {
+            let definition = self.binding_mut(action);
+            if definition.shortcut.is_empty() {
+                continue;
+            }
+            match definition.shortcut.parse::<Shortcut>() {
+                Ok(shortcut) if seen.insert(shortcut.id()) => bindings.push(Binding {
+                    shortcut,
+                    action,
+                    text: definition.shortcut.clone(),
+                    global: definition.global,
+                }),
+                result => {
+                    errors.push(match result {
+                        Err(error) => {
+                            format!("Invalid shortcut '{}': {error}", definition.shortcut)
+                        }
+                        Ok(_) => format!("Duplicate shortcut '{}'", definition.shortcut),
+                    });
+                    *definition = ShortcutBinding::default();
+                }
+            }
+        }
+        (bindings, errors)
+    }
+
     fn parse(&self) -> Result<Vec<Binding>, String> {
         let mut bindings = Vec::new();
         let mut seen = HashSet::new();
@@ -103,21 +147,46 @@ impl<R: Runtime> Registration for AppRegistration<'_, R> {
     }
 }
 
-pub fn initialize(app: &AppHandle) {
+fn restore_configuration(
+    settings: &mut ShortcutSettings,
+    runtime: &mut ShortcutRuntime,
+    registry: &mut impl Registration,
+) -> Vec<String> {
+    let (bindings, mut errors) = settings.parse_for_restore();
+    for (action, error) in runtime.restore(bindings, registry) {
+        *settings.binding_mut(action) = ShortcutBinding::default();
+        errors.push(error);
+    }
+    errors
+}
+
+pub fn initialize(app: &AppHandle, restoring: bool) {
     let (sender, receiver) = mpsc::channel();
     app.manage(ShortcutsState {
         events: Some(sender),
         ..ShortcutsState::default()
     });
     let result = (|| {
-        let settings = app.state::<SettingsState>().get()?;
-        let bindings = settings.shortcuts.parse()?;
+        let mut settings = app.state::<SettingsState>().get()?;
         let state = app.state::<ShortcutsState>();
         let mut runtime = state
             .runtime
             .lock()
             .map_err(|error| format!("Could not initialize shortcuts: {error}"))?;
-        runtime.initialize(bindings, &mut AppRegistration(app))
+        if !restoring {
+            return runtime.initialize(settings.shortcuts.parse()?, &mut AppRegistration(app));
+        }
+        let errors = restore_configuration(
+            &mut settings.shortcuts,
+            &mut runtime,
+            &mut AppRegistration(app),
+        );
+        app.state::<SettingsState>().save(settings)?;
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!("已清空不可用的快捷键：{}", errors.join("; ")))
+        }
     })();
     if let Err(error) = result {
         log::warn!("Could not initialize global shortcuts: {error}");

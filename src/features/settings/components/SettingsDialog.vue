@@ -22,6 +22,9 @@ import {
 } from "@/features/settings/accentColor";
 import { applyAppearance } from "@/features/settings/appearance";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
+import BackupOptions from "@/features/backup/components/BackupOptions.vue";
+
+const isBackingUp = ref(false);
 
 const api = createSettingsApi(invoke);
 const detailedLogging = ref(false);
@@ -55,6 +58,7 @@ const categories = {
   lyrics: "歌词",
   shortcuts: "快捷键",
   diagnostics: "诊断",
+  backup: "备份",
 } as const;
 const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
@@ -178,13 +182,14 @@ async function show() {
 }
 
 function close() {
-  if (isSaving.value) return;
+  if (isSaving.value || isBackingUp.value) return;
   dialogElement.value?.close();
   onDialogClosed();
 }
 
 async function save() {
-  if (!isTauriApp || !isLoaded.value || isLoading.value || isSaving.value) return;
+  if (!isTauriApp || !isLoaded.value || isLoading.value || isSaving.value || isBackingUp.value)
+    return;
   const color = normalizedAccentColor.value;
   if (!color) {
     notify({
@@ -257,6 +262,7 @@ defineExpose({ show });
             v-for="(label, category) in categories"
             :key="category"
             :aria-current="selectedCategory === category ? 'true' : undefined"
+            :disabled="isBackingUp"
             aria-controls="settings-category-panel"
             class="focus-visible:outline-app-accent mb-1 w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
             :class="
@@ -280,7 +286,7 @@ defineExpose({ show });
               {{ t(categories[selectedCategory]) }}
             </h3>
             <HelpDialog
-              v-if="selectedCategory !== 'shortcuts'"
+              v-if="selectedCategory !== 'shortcuts' && selectedCategory !== 'backup'"
               :key="selectedCategory"
               :label="t(`${categories[selectedCategory]}设置说明`)"
             >
@@ -547,6 +553,7 @@ defineExpose({ show });
               </label>
             </div>
           </fieldset>
+          <BackupOptions v-else-if="selectedCategory === 'backup'" @busy="isBackingUp = $event" />
           <fieldset v-else-if="selectedCategory === 'diagnostics'" :disabled="!isTauriApp">
             <legend class="sr-only">{{ t("诊断日志") }}</legend>
             <button
@@ -601,15 +608,16 @@ defineExpose({ show });
       <footer class="flex shrink-0 justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
           class="focus-visible:outline-app-accent rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-          :disabled="isSaving"
+          :disabled="isSaving || isBackingUp"
           type="button"
           @click="close"
         >
           {{ t("取消") }}
         </button>
         <button
+          v-if="selectedCategory !== 'backup'"
           class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+          :disabled="!isTauriApp || !isLoaded || isLoading || isSaving || isBackingUp"
           type="submit"
         >
           {{ isSaving ? t("正在保存…") : t("保存") }}

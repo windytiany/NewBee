@@ -41,7 +41,7 @@ impl VolumePreferences {
 }
 
 impl SavedSession {
-    fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), String> {
         self.queue.validate()?;
         self.volume.validate()?;
         if self

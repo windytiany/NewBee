@@ -1,6 +1,7 @@
 <template>
   <section
     ref="browserElement"
+    v-persistent-scroll="JSON.stringify(['library', artist?.albumArtist, selectedAlbum])"
     aria-labelledby="album-browser-heading"
     :aria-busy="props.trackActionPending || props.albumsLoading"
     class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 [scrollbar-gutter:stable] flex-col overflow-y-auto text-white"
@@ -109,6 +110,7 @@
 import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
+import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";

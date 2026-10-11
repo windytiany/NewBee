@@ -24,17 +24,16 @@ export function usePathMigration() {
     }
     isMigrating.value = true;
     try {
-      const count = await invoke<number>("migrate_track_paths", {
+      const count = await invoke<number>("migrate_library_paths", {
         oldPath: source,
         newPath: target,
       });
       logger.info("library", "paths_migrated", { count });
-      if (count > 0)
-        notify({ type: "success", message: t("已更新 {count} 首曲目的路径", { count }) });
+      if (count > 0) notify({ type: "success", message: t("已更新 {count} 条路径", { count }) });
       else {
         notify({
           type: "warning",
-          message: t("没有匹配原路径的曲目"),
+          message: t("没有匹配原路径的记录"),
           key: "library-path-migration",
         });
       }

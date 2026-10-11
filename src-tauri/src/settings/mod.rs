@@ -117,7 +117,7 @@ impl SettingsState {
             .map_err(|error| format!("Could not read settings: {error}"))
     }
 
-    fn save(&self, mut settings: Settings) -> Result<(), String> {
+    pub(crate) fn save(&self, mut settings: Settings) -> Result<(), String> {
         validate_accent_color(&settings.accent_color)?;
         settings.accent_color.make_ascii_lowercase();
         let mut providers = std::collections::HashSet::new();

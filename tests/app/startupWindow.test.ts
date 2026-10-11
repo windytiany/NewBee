@@ -21,7 +21,7 @@ afterEach(() => {
   }
 });
 
-function start(isTauriApp = true) {
+function start(isTauriApp = true, restored: Promise<void> = Promise.resolve()) {
   const events: string[] = [];
   const frames: Array<() => void> = [];
   let finishRendering!: () => void;
@@ -42,6 +42,14 @@ function start(isTauriApp = true) {
       nextTick: () => rendered,
     },
     "@/app/logging": { installErrorLogging: () => {} },
+    "@/shared/notifications/center": { notify: () => events.push("restore-error") },
+    "@/features/backup/interfaceState": {
+      restoreInterfaceState: async () => {
+        if (!isTauriApp) return;
+        events.push("restore-interface");
+        await restored;
+      },
+    },
     "@/app/App.vue": { default: {} },
     "@/app/styles/main.css": {},
     "@/features/settings/preferences": {
@@ -68,21 +76,47 @@ describe("startup window visibility", () => {
     expect(config.app.windows[0].backgroundColor).toBe("#121212");
   });
 
-  it("restores and shows only after DOM updates and the first painted frame", async () => {
+  it("restores interface before mounting and shows only after DOM updates and the first painted frame", async () => {
     const startup = start();
-    expect(startup.events).toEqual(["mount", "restore-preferences"]);
+    expect(startup.events).toEqual(["restore-interface"]);
+    await settle();
+    expect(startup.events).toEqual(["restore-interface", "mount", "restore-preferences"]);
     expect(startup.frames).toHaveLength(0);
     startup.finishRendering();
     await settle();
-    expect(startup.events).toEqual(["mount", "restore-preferences"]);
+    expect(startup.events).toEqual(["restore-interface", "mount", "restore-preferences"]);
     expect(startup.frames).toHaveLength(1);
     startup.frames.shift()?.();
     await settle();
-    expect(startup.events).toEqual(["mount", "restore-preferences"]);
+    expect(startup.events).toEqual(["restore-interface", "mount", "restore-preferences"]);
     expect(startup.frames).toHaveLength(1);
     startup.frames.shift()?.();
     await settle();
-    expect(startup.events).toEqual(["mount", "restore-preferences", "show_main_window"]);
+    expect(startup.events).toEqual([
+      "restore-interface",
+      "mount",
+      "restore-preferences",
+      "show_main_window",
+    ]);
+  });
+
+  it("does not mount while restored local storage is pending", async () => {
+    let finishRestore!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finishRestore = resolve;
+    });
+    const startup = start(true, pending);
+    await settle();
+    expect(startup.events).toEqual(["restore-interface"]);
+    expect(startup.frames).toHaveLength(0);
+    finishRestore();
+    await settle();
+    expect(startup.events).toEqual(["restore-interface", "mount", "restore-preferences"]);
+    startup.finishRendering();
+    await settle();
+    startup.frames.shift()?.();
+    startup.frames.shift()?.();
+    await settle();
   });
 
   it("does not request another restore on subsequent paint frames", async () => {
@@ -93,7 +127,28 @@ describe("startup window visibility", () => {
     startup.frames.shift()?.();
     await settle();
     expect(startup.frames).toHaveLength(0);
-    expect(startup.events).toEqual(["mount", "restore-preferences", "show_main_window"]);
+    expect(startup.events).toEqual([
+      "restore-interface",
+      "mount",
+      "restore-preferences",
+      "show_main_window",
+    ]);
+  });
+
+  it("reports restore failure and still opens the preserved application data", async () => {
+    const startup = start(true, Promise.reject(new Error("restore failed")));
+    startup.finishRendering();
+    await settle();
+    startup.frames.shift()?.();
+    startup.frames.shift()?.();
+    await settle();
+    expect(startup.events).toEqual([
+      "restore-interface",
+      "restore-error",
+      "mount",
+      "restore-preferences",
+      "show_main_window",
+    ]);
   });
 
   it("keeps browser preview independent of desktop window APIs", async () => {

@@ -1,6 +1,8 @@
-use super::persistence::{SavedSession, VolumePreferences};
+pub(crate) use super::persistence::SavedSession;
+use super::persistence::VolumePreferences;
 use super::queue::{Queue, QueueTrack, MAX_SAFE_INTEGER};
 use super::{NowPlayingTrack, PlaybackStatus};
+pub(crate) use runtime::backup_snapshot;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};

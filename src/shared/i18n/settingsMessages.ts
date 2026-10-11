@@ -1,5 +1,16 @@
 export const settingsMessages: Record<string, string> = {
   设置: "Settings",
+  备份: "Backup",
+  导出备份: "Export backup",
+  导入备份: "Import backup",
+  导入并重启: "Import and restart",
+  打开备份目录: "Open backup folder",
+  备份已导出: "Backup exported",
+  备份操作失败: "Backup operation failed",
+  "正在处理…": "Working…",
+  "恢复界面状态失败，请查看日志": "Could not restore interface state. Check the logs.",
+  "将覆盖当前设置和媒体库，并重启应用。导入前会自动备份当前数据。":
+    "This replaces your settings and library and restarts the app. Your current data will be backed up first.",
   设置分类: "Settings categories",
   常规: "General",
   外观: "Appearance",

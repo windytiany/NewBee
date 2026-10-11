@@ -25,7 +25,7 @@ import type { NotificationInput } from "@/shared/notifications/center";
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
   selectedCategory: Vue.Ref<
-    "general" | "appearance" | "library" | "lyrics" | "shortcuts" | "diagnostics"
+    "general" | "appearance" | "library" | "lyrics" | "shortcuts" | "diagnostics" | "backup"
   >;
   shortcuts: Vue.Ref<Settings["shortcuts"]>;
   selectedShortcutAction: Vue.Ref<ShortcutAction>;
@@ -45,6 +45,7 @@ type DialogBindings = {
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
   isLoaded: Vue.Ref<boolean>;
   isLoading: Vue.Ref<boolean>;
+  isBackingUp: Vue.Ref<boolean>;
   show: () => Promise<void>;
   close: () => void;
   save: () => Promise<void>;
@@ -92,6 +93,7 @@ function createDialog(
     vue: Vue,
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/shared/components/HelpDialog.vue": HelpDialog,
+    "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
     "@tauri-apps/api/core": {
       invoke: async (command: string, args?: unknown) => {
         if (command === "set_shortcuts_suspended") {
@@ -140,6 +142,24 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("blocks settings saving and closing while backup is pending", async () => {
+    const calls: string[] = [];
+    const { bindings, element } = createDialog(async (command) => {
+      calls.push(command);
+      return defaults;
+    });
+    await bindings.show();
+    bindings.selectedCategory.value = "backup";
+    bindings.isBackingUp.value = true;
+    bindings.close();
+    await bindings.save();
+    expect(element.open).toBe(true);
+    expect(calls).toEqual(["get_settings"]);
+    bindings.isBackingUp.value = false;
+    bindings.close();
+    expect(element.open).toBe(false);
+  });
+
   it("suspends before loading, restores on close and does not share shortcut references", async () => {
     const { bindings, suspensions } = createDialog(async () => {
       expect(suspensions[suspensions.length - 1]).toBe(true);
@@ -293,6 +313,9 @@ describe("settings dialog", () => {
         notify: (input: NotificationInput) => feedback.push(input),
       },
       "@/shared/components/HelpDialog.vue": HelpDialog,
+      "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({
+        template: "<div />",
+      }),
       "@tauri-apps/api/core": {
         invoke: async (command: string, args?: { settings: Settings; suspended: boolean }) => {
           if (command === "set_shortcuts_suspended" && args) suspensions.push(args.suspended);

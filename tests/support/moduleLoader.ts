@@ -1,7 +1,12 @@
 import { loggingDependencies } from "./logging";
 import * as i18n from "@/shared/i18n/locale";
 
-const sharedDependencies = { ...loggingDependencies, "@/shared/i18n/locale": i18n };
+const sharedDependencies = {
+  ...loggingDependencies,
+  "@/shared/i18n/locale": i18n,
+  // Host-renderer component tests have no DOM. Exercise scroll hooks with event targets separately.
+  "@/shared/interaction/persistentScroll": { vPersistentScroll: {} },
+};
 import { readFileSync } from "node:fs";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";

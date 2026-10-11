@@ -71,6 +71,25 @@ impl ShortcutRuntime {
         }
     }
 
+    pub fn restore(
+        &mut self,
+        desired: Vec<Binding>,
+        registry: &mut impl Registration,
+    ) -> Vec<(ShortcutAction, String)> {
+        let mut failures = Vec::new();
+        for binding in desired {
+            if binding.global {
+                if let Err(error) = registry.register(&binding) {
+                    failures.push((binding.action, error));
+                    continue;
+                }
+                self.active.push(binding.clone());
+            }
+            self.desired.push(binding);
+        }
+        failures
+    }
+
     pub fn initialize(
         &mut self,
         desired: Vec<Binding>,
