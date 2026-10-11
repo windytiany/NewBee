@@ -1,3 +1,6 @@
+mod clipboard;
+pub(crate) mod transfer;
+
 use crate::database::{Database, TrackArtwork};
 use std::io::Cursor;
 use tauri::{ipc::Response, Manager};

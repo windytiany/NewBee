@@ -42,6 +42,13 @@ function mountEditor(
   initial: CoverEdit | null = null,
   disabled = false,
   trackId: number | null = 1,
+  transfer: Partial<{
+    hasClipboardCover: () => Promise<boolean>;
+    readClipboardCover: () => Promise<number[]>;
+    readOriginalCover: (trackId: number) => Promise<number[]>;
+    saveCover: (data: number[], isCurrent: () => boolean) => Promise<void>;
+  }> = {},
+  artworkStatus: "loading" | "ready" | "fallback" = "ready",
 ) {
   const props = Vue.reactive({ cover: initial, disabled, trackId });
   const changes: CoverEdit[] = [];
@@ -53,12 +60,20 @@ function mountEditor(
     compileSfc(source, "TagCoverEditor.vue"),
     {
       vue: Vue,
+      "@/features/artwork/coverTransfer": {
+        hasClipboardCover: async () => false,
+        readClipboardCover: async () => [],
+        readOriginalCover: async () => [],
+        saveCover: async () => {},
+        ...transfer,
+      },
       "@/features/artwork/components/TrackArtwork.vue": Vue.defineComponent({
         props: ["trackId"],
-        setup:
-          (artworkProps, { slots }) =>
-          () =>
-            Vue.h("artwork", { trackId: artworkProps.trackId }, slots.default?.()),
+        emits: ["status"],
+        setup: (artworkProps, { slots, emit }) => {
+          emit("status", artworkStatus);
+          return () => Vue.h("artwork", { trackId: artworkProps.trackId }, slots.default?.());
+        },
       }),
       "@/shared/interaction/useContextMenu": {
         useContextMenu: () => ({
@@ -162,6 +177,183 @@ describe("tag cover editor", () => {
     expect(position.value).toEqual({ x: 40, y: 60 });
     expect(getTextContent(menu)).toContain("替换封面");
     expect(getTextContent(menu)).toContain("移除封面");
+  });
+
+  it("disables paste and export when no image is available", async () => {
+    const { root, open } = mountEditor();
+    open();
+    await Vue.nextTick();
+    expect(menuButton(root, "粘贴封面").props.disabled).toBe(true);
+    expect(menuButton(root, "保存封面").props.disabled).toBe(true);
+  });
+
+  it("checks each menu opening and rereads the clipboard on paste", async () => {
+    let available = false;
+    let checks = 0;
+    let reads = 0;
+    const { root, open, request, changes } = mountEditor(null, false, 1, {
+      hasClipboardCover: async () => {
+        checks++;
+        return available;
+      },
+      readClipboardCover: async () => {
+        reads++;
+        return [9, 8];
+      },
+    });
+    open();
+    await Vue.nextTick();
+    expect(menuButton(root, "粘贴封面").props.disabled).toBe(true);
+    request.value = null;
+    available = true;
+    open();
+    await Vue.nextTick();
+    await Vue.nextTick();
+    expect(menuButton(root, "粘贴封面").props.disabled).toBe(false);
+    click(menuButton(root, "粘贴封面"));
+    await Vue.nextTick();
+    expect(checks).toBe(2);
+    expect(reads).toBe(1);
+    expect(changes).toEqual([{ action: "replace", data: [9, 8] }]);
+    await Vue.nextTick();
+    expect(findNode(root, (node) => node.type === "img")?.props.src).toMatch(/^blob:/);
+  });
+
+  it("reports a changed or unreadable clipboard without changing the cover", async () => {
+    for (const readClipboardCover of [
+      async () => [],
+      async () => {
+        throw new Error("clipboard locked");
+      },
+    ]) {
+      const { root, open, changes, failures } = mountEditor(null, false, 1, {
+        hasClipboardCover: async () => true,
+        readClipboardCover,
+      });
+      open();
+      await Vue.nextTick();
+      click(menuButton(root, "粘贴封面"));
+      await Vue.nextTick();
+      expect(changes).toEqual([]);
+      expect(failures).toHaveLength(1);
+    }
+  });
+
+  it("exports original bytes or the unsaved preview without editing tags", async () => {
+    for (const cover of [
+      null,
+      { action: "replace", data: [4, 5] },
+    ] satisfies Array<CoverEdit | null>) {
+      const saved: number[][] = [];
+      const loaded: number[] = [];
+      const { root, open, changes } = mountEditor(cover, false, 7, {
+        readOriginalCover: async (trackId) => {
+          loaded.push(trackId);
+          return [1, 2, 3];
+        },
+        saveCover: async (data, isCurrent) => {
+          expect(isCurrent()).toBe(true);
+          saved.push(data);
+        },
+      });
+      open();
+      await Vue.nextTick();
+      await Vue.nextTick();
+      expect(menuButton(root, "保存封面").props.disabled).toBe(false);
+      click(menuButton(root, "保存封面"));
+      await Vue.nextTick();
+      expect(saved).toEqual([cover?.action === "replace" ? [4, 5] : [1, 2, 3]]);
+      expect(loaded).toEqual(cover === null ? [7] : []);
+      expect(changes).toEqual([]);
+    }
+  });
+
+  for (const status of ["loading", "fallback"] as const) {
+    it(`disables export while the original image is ${status}`, async () => {
+      const { root, open } = mountEditor(
+        null,
+        false,
+        1,
+        { readOriginalCover: async () => [1] },
+        status,
+      );
+      open();
+      await Vue.nextTick();
+      await Vue.nextTick();
+      expect(menuButton(root, "保存封面").props.disabled).toBe(true);
+    });
+  }
+
+  it("disables export after removal even with an original track", async () => {
+    const { root, open } = mountEditor({ action: "delete" }, false, 1, {
+      readOriginalCover: async () => [1],
+    });
+    open();
+    await Vue.nextTick();
+    expect(menuButton(root, "保存封面").props.disabled).toBe(true);
+  });
+
+  it("reports export failures without changing the preview", async () => {
+    const error = new Error("write failed");
+    const { root, open, failures, changes } = mountEditor(
+      { action: "replace", data: [4] },
+      false,
+      null,
+      {
+        saveCover: async () => {
+          throw error;
+        },
+      },
+    );
+    open();
+    await Vue.nextTick();
+    click(menuButton(root, "保存封面"));
+    await Vue.nextTick();
+    expect(failures).toEqual([error]);
+    expect(changes).toEqual([]);
+    expect(findNode(root, (node) => node.type === "img")).not.toBeNull();
+  });
+
+  for (const change of ["track", "cover", "disabled", "unmount"] as const) {
+    it(`ignores pending clipboard data after ${change}`, async () => {
+      let resolve: (data: number[]) => void = () => {};
+      const pending = new Promise<number[]>((done) => {
+        resolve = done;
+      });
+      const { root, open, props, app, changes, failures } = mountEditor(null, false, 1, {
+        hasClipboardCover: async () => true,
+        readClipboardCover: () => pending,
+      });
+      open();
+      await Vue.nextTick();
+      click(menuButton(root, "粘贴封面"));
+      if (change === "track") props.trackId = 2;
+      else if (change === "cover") props.cover = { action: "delete" };
+      else if (change === "disabled") props.disabled = true;
+      else app.unmount();
+      resolve([8]);
+      await Vue.nextTick();
+      expect(changes).toEqual([]);
+      expect(failures).toEqual([]);
+    });
+  }
+
+  it("ignores menu checks after close or a later opening", async () => {
+    let resolve: (available: boolean) => void = () => {};
+    let checks = 0;
+    const pending = new Promise<boolean>((done) => {
+      resolve = done;
+    });
+    const { root, open, request } = mountEditor(null, false, 1, {
+      hasClipboardCover: () => (++checks === 1 ? pending : Promise.resolve(false)),
+    });
+    open();
+    request.value = null;
+    open();
+    await Vue.nextTick();
+    resolve(true);
+    await Vue.nextTick();
+    expect(menuButton(root, "粘贴封面").props.disabled).toBe(true);
   });
 
   it("opens the image picker from the menu and applies replacement data with a preview", async () => {

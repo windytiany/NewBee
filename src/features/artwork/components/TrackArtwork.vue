@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, toRef } from "vue";
+import { ref, toRef, watch } from "vue";
 import { useArtworkSize } from "@/features/artwork/useArtworkSize";
 import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
 
@@ -34,4 +34,6 @@ const props = withDefaults(
 const coverElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const size = useArtworkSize(coverElement);
 const { status, url } = useTrackArtwork(toRef(props, "trackId"), size);
+const emit = defineEmits<{ status: [status: "loading" | "ready" | "fallback"] }>();
+watch(status, (value) => emit("status", value), { immediate: true });
 </script>
