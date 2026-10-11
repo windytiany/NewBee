@@ -207,7 +207,7 @@ fn export_delete_album_import_accepts_equivalent_schema_line_endings() {
         if let Err(error) = archive::read(&exported) {
             panic!("导出、删除专辑后必须能够导入同结构备份；换行={ending:?}，实际错误：{error}");
         }
-        restore::stage(&directory.0, &database, &current, &exported).unwrap();
+        restore::stage(&directory.0, &database, Some(&current), &exported).unwrap();
         database.close_test_connection();
         assert!(apply_pending_restore(&directory.0).unwrap());
         let restored = Database::open(directory.0.join("music-library.sqlite3")).unwrap();
@@ -384,7 +384,7 @@ fn equivalent_schema_spelling_can_be_imported_and_restores_deleted_album() {
             database.remove_track_from_library(1).unwrap();
             assert!(database.get_track(1).unwrap().is_none());
             archive::read(&exported).unwrap();
-            restore::stage(&directory.0, &database, &current, &exported).unwrap();
+            restore::stage(&directory.0, &database, Some(&current), &exported).unwrap();
             database.close_test_connection();
             assert!(apply_pending_restore(&directory.0).unwrap());
             let restored = Database::open(directory.0.join("music-library.sqlite3")).unwrap();
@@ -525,7 +525,7 @@ fn inline_table_constraints_and_declaration_order_restore_the_same_structure() {
     archive::write(&database, &current, &exported).unwrap();
     database.remove_track_from_library(1).unwrap();
     archive::read(&exported).unwrap();
-    restore::stage(&directory.0, &database, &current, &exported).unwrap();
+    restore::stage(&directory.0, &database, Some(&current), &exported).unwrap();
     database.close_test_connection();
     assert!(apply_pending_restore(&directory.0).unwrap());
     let restored = Database::open(directory.0.join("music-library.sqlite3")).unwrap();
@@ -709,7 +709,7 @@ fn incompatible_schema_is_rejected_before_staging_or_replacing_original_data() {
             "{label}"
         );
         assert_eq!(
-            restore::stage(&target.0, &original, &current, &exported).unwrap_err(),
+            restore::stage(&target.0, &original, Some(&current), &exported).unwrap_err(),
             "备份数据库与当前版本不兼容",
             "{label}"
         );
@@ -945,7 +945,7 @@ fn staging_restore_saves_original_data_first_and_keeps_the_backup_after_restore(
     current
         .interface
         .insert("newbee.active-page".into(), "Playlist".into());
-    restore::stage(&target.0, &original, &current, &imported).unwrap();
+    restore::stage(&target.0, &original, Some(&current), &imported).unwrap();
     assert_eq!(
         original.get_track(1).unwrap().unwrap().title(),
         Some("original song")
@@ -985,7 +985,7 @@ fn automatic_backup_failure_does_not_stage_or_change_the_original() {
     make_backup(&source.0, &imported);
     let original = fixture(&target.0);
     fs::write(target.0.join("backups"), "occupied").unwrap();
-    assert!(restore::stage(&target.0, &original, &manifest(), &imported).is_err());
+    assert!(restore::stage(&target.0, &original, Some(&manifest()), &imported).is_err());
     assert_eq!(
         original.get_track(1).unwrap().unwrap().title(),
         Some("song")
@@ -994,6 +994,63 @@ fn automatic_backup_failure_does_not_stage_or_change_the_original() {
     assert!(!target.0.join("settings.json").exists());
     assert!(!target.0.join("playback-session.json").exists());
     assert!(!target.0.join(restore::INTERFACE_FILE).exists());
+}
+
+#[test]
+fn restore_without_safety_backup_does_not_access_backup_directory() {
+    let source = Directory::new();
+    let target = Directory::new();
+    let imported = source.0.join("import.newbee");
+    make_backup(&source.0, &imported);
+    let original = fixture(&target.0);
+    let connection = Connection::open(target.0.join("music-library.sqlite3")).unwrap();
+    connection
+        .execute("UPDATE tracks SET title = 'original song'", [])
+        .unwrap();
+    drop(connection);
+    fs::write(target.0.join("backups"), "occupied").unwrap();
+    restore::stage(&target.0, &original, None, &imported).unwrap();
+    assert_eq!(
+        original.get_track(1).unwrap().unwrap().title(),
+        Some("original song")
+    );
+    original.close_test_connection();
+    assert!(apply_pending_restore(&target.0).unwrap());
+    let restored = Database::open(target.0.join("music-library.sqlite3")).unwrap();
+    assert_eq!(
+        restored.get_track(1).unwrap().unwrap().title(),
+        Some("song")
+    );
+    assert_eq!(
+        fs::read_to_string(target.0.join("backups")).unwrap(),
+        "occupied"
+    );
+}
+
+#[test]
+fn skipping_safety_backup_still_validates_import_before_changing_original_data() {
+    let source = Directory::new();
+    let target = Directory::new();
+    let imported = source.0.join("import.newbee");
+    make_backup(&source.0, &imported);
+    let original = fixture(&target.0);
+    let connection = Connection::open(&imported).unwrap();
+    connection
+        .execute_batch("ALTER TABLE tracks ADD COLUMN unexpected TEXT;")
+        .unwrap();
+    drop(connection);
+    fs::write(target.0.join("settings.json"), "original settings").unwrap();
+    assert!(restore::stage(&target.0, &original, None, &imported).is_err());
+    assert_eq!(
+        original.get_track(1).unwrap().unwrap().title(),
+        Some("song")
+    );
+    assert_eq!(
+        fs::read_to_string(target.0.join("settings.json")).unwrap(),
+        "original settings"
+    );
+    assert!(!target.0.join("backups").exists());
+    assert!(!target.0.join(restore::PENDING_FILE).exists());
 }
 
 #[test]

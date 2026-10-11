@@ -9,8 +9,9 @@ export const settingsMessages: Record<string, string> = {
   备份操作失败: "Backup operation failed",
   "正在处理…": "Working…",
   "恢复界面状态失败，请查看日志": "Could not restore interface state. Check the logs.",
-  "将覆盖当前设置和媒体库，并重启应用。导入前会自动备份当前数据。":
-    "This replaces your settings and library and restarts the app. Your current data will be backed up first.",
+  备份当前状态: "Back up current state",
+  "将覆盖当前设置和媒体库，并重启应用。":
+    "This replaces your settings and library and restarts the app.",
   设置分类: "Settings categories",
   常规: "General",
   外观: "Appearance",

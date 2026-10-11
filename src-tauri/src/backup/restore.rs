@@ -17,19 +17,21 @@ const FILES: &[&str] = &[
 pub(super) fn stage(
     root: &Path,
     database: &crate::database::Database,
-    current: &Manifest,
+    current: Option<&Manifest>,
     source: &Path,
 ) -> Result<(), String> {
     archive::read(source)?;
-    let directory = root.join("backups");
-    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-    let workspace = Workspace::new(root)?;
-    let automatic = workspace.0.join("before-restore.newbee");
-    archive::write(database, current, &automatic)?;
-    archive::publish(
-        &automatic,
-        &directory.join(format!("before-restore-{}.newbee", archive::nonce())),
-    )?;
+    if let Some(current) = current {
+        let directory = root.join("backups");
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let workspace = Workspace::new(root)?;
+        let automatic = workspace.0.join("before-restore.newbee");
+        archive::write(database, current, &automatic)?;
+        archive::publish(
+            &automatic,
+            &directory.join(format!("before-restore-{}.newbee", archive::nonce())),
+        )?;
+    }
     archive::publish(source, &root.join(PENDING_FILE))
 }
 

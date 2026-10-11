@@ -173,6 +173,7 @@ pub(crate) async fn restore_backup(
     app: AppHandle,
     token: String,
     interface: InterfaceState,
+    backup_current: bool,
 ) -> Result<(), String> {
     let guard = app.state::<WriteState>().acquire()?;
     let worker_app = app.clone();
@@ -186,8 +187,17 @@ pub(crate) async fn restore_backup(
             .ok_or("请重新选择备份文件")?;
         let source = current.workspace.0.join("snapshot.newbee");
         let root = data_directory(&app)?;
-        let current_manifest = snapshot(&app, interface)?;
-        restore::stage(&root, &app.state::<Database>(), &current_manifest, &source)?;
+        let current_manifest = if backup_current {
+            Some(snapshot(&app, interface)?)
+        } else {
+            None
+        };
+        restore::stage(
+            &root,
+            &app.state::<Database>(),
+            current_manifest.as_ref(),
+            &source,
+        )?;
         *state
             .restart_guard
             .lock()

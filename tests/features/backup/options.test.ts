@@ -11,6 +11,9 @@ const output = compileSfc(source, "src/features/backup/components/BackupOptions.
 });
 type Bindings = {
   busy: Vue.Ref<boolean>;
+  backupCurrent: Vue.Ref<boolean>;
+  confirmationDialog: Vue.Ref<{ showModal: () => void; close: () => void } | null>;
+  finishConfirmation: (confirmed: boolean) => void;
   exportBackup: () => Promise<void>;
   importBackup: () => Promise<void>;
   openBackups: () => Promise<void>;
@@ -19,23 +22,27 @@ function options({
   invoke = async () => undefined,
   save = async () => "export.newbee",
   open = async () => "import.newbee",
-  ask = async () => true,
   desktop = true,
 }: {
   invoke?: (command: string, args?: unknown) => Promise<unknown>;
   save?: () => Promise<string | null>;
   open?: () => Promise<string | null>;
-  ask?: () => Promise<boolean>;
   desktop?: boolean;
 } = {}) {
   const feedback: NotificationInput[] = [];
   const busyEvents: boolean[] = [];
+  const dialogEvents: string[] = [];
+  let opened!: () => void;
+  let unmount = () => {};
+  const confirmationOpened = new Promise<void>((resolve) => {
+    opened = resolve;
+  });
   const component = evaluateSource<{
     default: { setup: (props: object, context: object) => Bindings };
   }>(output, {
-    vue: Vue,
+    vue: { ...Vue, onBeforeUnmount: (callback: () => void) => (unmount = callback) },
     "@tauri-apps/api/core": { invoke, isTauri: () => desktop },
-    "@tauri-apps/plugin-dialog": { save, open, ask },
+    "@tauri-apps/plugin-dialog": { save, open },
     "@/features/backup/interfaceState": {
       captureInterfaceState: () => ({ "newbee.active-page": "Library" }),
     },
@@ -47,7 +54,14 @@ function options({
     {},
     { expose: () => {}, emit: (_event: string, busy: boolean) => busyEvents.push(busy) },
   );
-  return { bindings, feedback, busyEvents };
+  bindings.confirmationDialog.value = {
+    showModal: () => {
+      dialogEvents.push("open");
+      opened();
+    },
+    close: () => dialogEvents.push("close"),
+  };
+  return { bindings, feedback, busyEvents, dialogEvents, confirmationOpened, unmount };
 }
 
 describe("backup options", () => {
@@ -66,55 +80,102 @@ describe("backup options", () => {
     expect(busyEvents).toEqual([true, false]);
   });
 
-  it("validates before asking for confirmation and imports the inspected snapshot token", async () => {
+  it("validates before confirmation and backs up current state by default", async () => {
     const calls: unknown[] = [];
-    const { bindings } = options({
+    const { bindings, confirmationOpened, busyEvents } = options({
       invoke: async (command, args) => {
         calls.push([command, args]);
         return "candidate-token";
       },
-      ask: async () => {
-        expect(calls).toEqual([["inspect_backup", { path: "import.newbee" }]]);
-        return true;
-      },
     });
+    const importing = bindings.importBackup();
+    await confirmationOpened;
+    expect(calls).toEqual([["inspect_backup", { path: "import.newbee" }]]);
+    expect(bindings.backupCurrent.value).toBe(true);
+    expect(bindings.busy.value).toBe(true);
     await bindings.importBackup();
+    bindings.finishConfirmation(true);
+    await importing;
+    expect(busyEvents).toEqual([true, false]);
     expect(calls).toEqual([
       ["inspect_backup", { path: "import.newbee" }],
       [
         "restore_backup",
-        { token: "candidate-token", interface: { "newbee.active-page": "Library" } },
+        {
+          token: "candidate-token",
+          interface: { "newbee.active-page": "Library" },
+          backupCurrent: true,
+        },
       ],
     ]);
   });
 
   it("does not import invalid backups or cancelled confirmations", async () => {
     const calls: string[] = [];
-    let confirmations = 0;
     const invalid = options({
       invoke: async (command) => {
         calls.push(command);
         throw new Error("incompatible backup");
       },
-      ask: async () => {
-        confirmations++;
-        return true;
-      },
     });
     await invalid.bindings.importBackup();
     expect(calls).toEqual(["inspect_backup"]);
-    expect(confirmations).toBe(0);
+    expect(invalid.dialogEvents).toEqual([]);
     expect(invalid.feedback[0]?.message).toContain("incompatible backup");
     const cancelled = options({
       invoke: async (command) => {
         calls.push(command);
         return "token";
       },
-      ask: async () => false,
     });
-    await cancelled.bindings.importBackup();
+    const importing = cancelled.bindings.importBackup();
+    await cancelled.confirmationOpened;
+    cancelled.bindings.finishConfirmation(false);
+    await importing;
     expect(calls).toEqual(["inspect_backup", "inspect_backup"]);
     expect(cancelled.feedback).toEqual([]);
+  });
+
+  it("lets users skip the safety backup and resets the choice on the next import", async () => {
+    const calls: unknown[] = [];
+    const { bindings, confirmationOpened } = options({
+      invoke: async (command, args) => {
+        calls.push([command, args]);
+        return "token";
+      },
+    });
+    const importing = bindings.importBackup();
+    await confirmationOpened;
+    bindings.backupCurrent.value = false;
+    bindings.finishConfirmation(true);
+    await importing;
+    expect(calls[1]).toEqual([
+      "restore_backup",
+      { token: "token", interface: { "newbee.active-page": "Library" }, backupCurrent: false },
+    ]);
+    const retry = bindings.importBackup();
+    await Vue.nextTick();
+    await Vue.nextTick();
+    expect(bindings.backupCurrent.value).toBe(true);
+    bindings.finishConfirmation(false);
+    await retry;
+    expect(calls).toHaveLength(3);
+  });
+
+  it("cancels pending confirmation on unmount without restoring", async () => {
+    const calls: string[] = [];
+    const view = options({
+      invoke: async (command) => {
+        calls.push(command);
+        return "token";
+      },
+    });
+    const importing = view.bindings.importBackup();
+    await view.confirmationOpened;
+    view.unmount();
+    await importing;
+    expect(calls).toEqual(["inspect_backup"]);
+    expect(view.bindings.busy.value).toBe(false);
   });
 
   it("does nothing after file-dialog cancellation or outside the desktop app", async () => {
