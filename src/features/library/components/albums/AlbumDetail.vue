@@ -60,6 +60,8 @@
       v-if="!props.tracksLoading && !props.tracksError && props.tracks.length > 0"
       ref="trackListElement"
       class="relative grid gap-x-8 gap-y-6"
+      @keydown="trackKeyboard.onKeydown"
+      @focusin="trackKeyboard.onFocusin"
     >
       <ol
         v-for="disc in trackDiscs"
@@ -219,6 +221,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { ChevronRight, Pause, Play, X } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
 import type { AlbumSummary, TrackSummary } from "@/features/library/types";
 import type { AlbumBackground } from "@/features/artwork/background";
@@ -324,6 +327,22 @@ const trackFocus = useItemSelection(trackListScope);
 const visibleTrackKeys = computed(() =>
   trackDiscs.value.flatMap((disc) => disc.tracks.map((track) => String(track.id))),
 );
+
+const trackKeyboard = createItemKeyboard({
+  getItemKeys: () => visibleTrackKeys.value,
+  itemSelector: "button[data-album-track-row]",
+  grid: true,
+  onFocus: (key) => {
+    if (!trackFocus.isFocused(key)) trackFocus.focusItem(key);
+  },
+  onMove: (key, event) => trackFocus.selectItem(key, visibleTrackKeys.value, event),
+  onActivate: (key) => {
+    if (!props.trackActionPending && !props.playbackCommandPending && !props.tracksLoading) {
+      emit("playTrack", Number(key));
+    }
+  },
+  onEscape: () => emit("close"),
+});
 
 watch(visibleTrackKeys, (itemKeys) => trackFocus.syncVisibleItems(itemKeys), {
   immediate: true,

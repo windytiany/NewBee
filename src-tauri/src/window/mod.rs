@@ -52,9 +52,50 @@ pub fn initialize(app: &AppHandle) {
     });
 }
 
-pub fn is_ready(app: &AppHandle) -> bool {
+pub fn is_ready<R: tauri::Runtime>(app: &AppHandle<R>) -> bool {
     app.try_state::<WindowLifecycle>()
         .is_some_and(|lifecycle| lifecycle.ready.load(Ordering::Acquire))
+}
+
+pub fn restore_main_window(app: &AppHandle) -> Result<(), String> {
+    if !is_ready(app) {
+        return Ok(());
+    }
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window is unavailable".to_owned())?;
+    window
+        .show()
+        .and_then(|_| window.unminimize())
+        .and_then(|_| window.set_focus())
+        .map_err(|error| format!("Could not restore main window: {error}"))
+}
+
+fn should_hide(visible: bool, minimized: bool) -> bool {
+    visible && !minimized
+}
+
+pub fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
+    if !is_ready(app) {
+        return Ok(());
+    }
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window is unavailable".to_owned())?;
+    let visible = window
+        .is_visible()
+        .map_err(|error| format!("Could not check main window visibility: {error}"))?;
+    let minimized = window
+        .is_minimized()
+        .map_err(|error| format!("Could not check main window minimization: {error}"))?;
+    if should_hide(visible, minimized) {
+        save_state(app);
+        window
+            .hide()
+            .map_err(|error| format!("Could not hide main window: {error}"))
+    } else {
+        restore_main_window(app)
+    }
 }
 
 fn save_state(app: &AppHandle) {
@@ -107,5 +148,40 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn window_actions_wait_for_frontend_readiness() {
+        let app = tauri::test::mock_builder()
+            .build(tauri::generate_context!())
+            .unwrap();
+        assert!(!is_ready(app.handle()));
+        let (save_requests, _receiver) = mpsc::channel();
+        app.manage(WindowLifecycle {
+            ready: AtomicBool::new(false),
+            save_requests,
+        });
+        assert!(!is_ready(app.handle()));
+        app.state::<WindowLifecycle>()
+            .ready
+            .store(true, Ordering::Release);
+        assert!(is_ready(app.handle()));
+    }
+
+    #[test]
+    fn toggle_hides_only_a_visible_non_minimized_window() {
+        for (visible, minimized, hide) in [
+            (true, false, true),
+            (true, true, false),
+            (false, false, false),
+            (false, true, false),
+        ] {
+            assert_eq!(should_hide(visible, minimized), hide);
+        }
     }
 }

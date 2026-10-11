@@ -22,7 +22,13 @@
       >
         {{ t("无歌单") }}
       </p>
-      <ul v-if="props.playlists.length > 0" ref="playlistListElement" class="space-y-0.5">
+      <ul
+        v-if="props.playlists.length > 0"
+        ref="playlistListElement"
+        class="space-y-0.5"
+        @keydown="keyboard.onKeydown"
+        @focusin="keyboard.onFocusin"
+      >
         <PlaylistRow
           v-for="playlist in props.playlists"
           :key="playlist.id"
@@ -78,6 +84,7 @@ import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import type { PlaylistSummary } from "@/features/playlist/types";
 import PlaylistRow from "@/features/playlist/components/list/PlaylistRow.vue";
 
@@ -104,6 +111,17 @@ const createPlaylistButtonElement = ref<InstanceType<typeof globalThis.HTMLButto
 const contextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const playlistItemKeys = computed(() => props.playlists.map((playlist) => String(playlist.id)));
+const keyboard = createItemKeyboard({
+  getItemKeys: () => playlistItemKeys.value,
+  itemSelector: "button[data-playlist-id]",
+  onFocus: (key) => {
+    if (!playlistFocus.isFocused(key)) playlistFocus.focusItem(key);
+  },
+  onMove: (key) => {
+    const playlist = props.playlists.find((entry) => String(entry.id) === key);
+    if (playlist) selectPlaylist(playlist);
+  },
+});
 type PlaylistContextMenuRequest = {
   playlistId: number;
   x: number;

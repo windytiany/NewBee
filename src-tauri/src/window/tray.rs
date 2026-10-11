@@ -6,17 +6,7 @@ use tauri::{
 };
 
 fn show_main_window(app: &AppHandle) {
-    if !super::is_ready(app) {
-        return;
-    }
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-    if let Err(error) = window
-        .show()
-        .and_then(|_| window.unminimize())
-        .and_then(|_| window.set_focus())
-    {
+    if let Err(error) = super::restore_main_window(app) {
         log::warn!("Could not restore main window: {error}");
     }
 }

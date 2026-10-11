@@ -214,6 +214,7 @@ const emptyLibraryPage = () => ({
   removeTrackFromLibrary: async () => ({ status: "not-deleted", message: "" }),
 });
 const appModules: Record<string, unknown> = {
+  "@/features/settings/shortcuts/useShortcuts": { useShortcuts() {} },
   ...vueModules,
   "@/shared/notifications/useNotification": { useNotification },
   "@/features/lyrics/components/LyricsDownloadDialog.vue": {

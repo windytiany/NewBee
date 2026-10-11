@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { shallowRef } from "vue";
 import { usePersistentActivePage } from "@/app/pages";
+import { useShortcuts } from "@/features/settings/shortcuts/useShortcuts";
 import type { PlaylistCatalog } from "@/features/playlist/types";
 import LibraryPage from "@/features/library/pages/LibraryPage.vue";
 import PlaylistPage from "@/features/playlist/pages/PlaylistPage.vue";
@@ -15,6 +16,7 @@ import QueuePanel from "@/features/playback/queue/components/QueuePanel.vue";
 import TrackInfoPanel from "@/features/playback/components/current-track/TrackInfoPanel.vue";
 import TitleBar from "@/app/shell/TitleBar.vue";
 
+useShortcuts();
 const { activePage } = usePersistentActivePage();
 const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
 </script>

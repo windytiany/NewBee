@@ -79,6 +79,8 @@
         <ol
           v-else-if="!props.isLoadingTracks && !props.playlistsError && !props.tracksError"
           ref="trackListElement"
+          @keydown="keyboard.onKeydown"
+          @focusin="keyboard.onFocusin"
         >
           <PlaylistTrack
             v-for="(track, index) in props.tracks"
@@ -195,6 +197,7 @@ import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
 import { DiscAlbum, Files, Play } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import { createPlaylistDragReorder } from "@/features/playlist/ordering/drag";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
 import type { PlaylistSummary, PlaylistTrackSummary } from "@/features/playlist/types";
@@ -289,6 +292,24 @@ const emit = defineEmits<{
   removePlaylistItems: [playlistItemIds: number[]];
   reorderPlaylistItems: [orderedPlaylistItemIds: number[]];
 }>();
+
+const keyboard = createItemKeyboard({
+  getItemKeys: () =>
+    props.isLoadingTracks || props.isPlaylistActionPending || dragPreview.value
+      ? []
+      : visibleTrackKeys.value,
+  itemSelector: "button[data-playlist-track-select]",
+  onFocus: (key) => {
+    if (!playlistTrackFocus.isFocused(key)) playlistTrackFocus.focusItem(key);
+  },
+  onMove: (key, event) => {
+    playlistTrackFocus.selectItem(key, visibleTrackKeys.value, event);
+  },
+  onActivate: (key) => {
+    const track = props.tracks.find((entry) => String(entry.playlistItemId) === key);
+    if (track) emit("playTrack", track.playlistItemId);
+  },
+});
 
 function getTrackRowKey(playlistItemId: number) {
   return `playlist-item:${playlistItemId}`;

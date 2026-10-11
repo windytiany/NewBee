@@ -59,6 +59,7 @@ where
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
     pub locale: Locale,
+    pub shortcuts: crate::shortcuts::ShortcutSettings,
     #[serde(deserialize_with = "deserialize_accent_color")]
     pub accent_color: String,
     pub reduced_motion: bool,
@@ -77,6 +78,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             locale: Locale::default(),
+            shortcuts: crate::shortcuts::ShortcutSettings::default(),
             accent_color: "#1ed760".to_owned(),
             reduced_motion: false,
             album_cover_background: false,
@@ -132,8 +134,17 @@ impl SettingsState {
             .map_err(|error| format!("Could not update settings: {error}"))?;
         let data = serde_json::to_vec_pretty(&settings)
             .map_err(|error| format!("Could not serialize settings: {error}"))?;
-        std::fs::write(&self.path, data)
-            .map_err(|error| format!("Could not save settings: {error}"))?;
+        let temporary = self.path.with_extension("json.tmp");
+        std::fs::write(&temporary, data)
+            .and_then(|_| std::fs::rename(&temporary, &self.path))
+            .map_err(|error| {
+                if let Err(cleanup) = std::fs::remove_file(&temporary) {
+                    if cleanup.kind() != std::io::ErrorKind::NotFound {
+                        log::warn!("Could not remove temporary settings: {cleanup}");
+                    }
+                }
+                format!("Could not save settings: {error}")
+            })?;
         *current = settings;
         Ok(())
     }
@@ -155,13 +166,19 @@ pub fn get_settings(state: State<'_, SettingsState>) -> Result<Settings, String>
 }
 
 #[tauri::command]
-pub async fn save_settings<R: tauri::Runtime>(
+pub async fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<(), String> {
+    save_settings_for_app(app, settings).await
+}
+
+async fn save_settings_for_app<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     settings: Settings,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let locale = settings.locale;
-        app.state::<SettingsState>().save(settings)?;
+        crate::shortcuts::save_configuration(&app, &settings.shortcuts.clone(), || {
+            app.state::<SettingsState>().save(settings)
+        })?;
         if let Err(error) = crate::window::tray::update_locale(&app, locale) {
             log::warn!("Could not update tray menu language: {error}");
         }

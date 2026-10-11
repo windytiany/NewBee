@@ -96,13 +96,14 @@ fn accent_color_persists_normalized_and_loads_from_disk() {
     assert_eq!(state.get().unwrap().accent_color, "#1ed760");
     let app = tauri::test::mock_builder()
         .manage(state)
+        .manage(crate::shortcuts::ShortcutsState::default())
         .build(tauri::generate_context!())
         .unwrap();
     let settings = Settings {
         accent_color: "#AbCdEf".to_owned(),
         ..Settings::default()
     };
-    tauri::async_runtime::block_on(save_settings(app.handle().clone(), settings)).unwrap();
+    tauri::async_runtime::block_on(save_settings_for_app(app.handle().clone(), settings)).unwrap();
     let expected = Settings {
         accent_color: "#abcdef".to_owned(),
         ..Settings::default()
@@ -300,6 +301,7 @@ fn reduced_motion_persists_and_loads_from_disk() {
     assert!(!state.get().unwrap().reduced_motion);
     let app = tauri::test::mock_builder()
         .manage(state)
+        .manage(crate::shortcuts::ShortcutsState::default())
         .build(tauri::generate_context!())
         .unwrap();
     for reduced_motion in [true, false] {
@@ -307,8 +309,11 @@ fn reduced_motion_persists_and_loads_from_disk() {
             reduced_motion,
             ..Settings::default()
         };
-        tauri::async_runtime::block_on(save_settings(app.handle().clone(), settings.clone()))
-            .unwrap();
+        tauri::async_runtime::block_on(save_settings_for_app(
+            app.handle().clone(),
+            settings.clone(),
+        ))
+        .unwrap();
         assert_eq!(app.state::<SettingsState>().get().unwrap(), settings);
         assert_eq!(
             SettingsState::load(path.clone()).unwrap().get().unwrap(),
@@ -350,6 +355,7 @@ fn locale_persists_and_loads_from_disk() {
     let state = SettingsState::load(path.clone()).unwrap();
     let app = tauri::test::mock_builder()
         .manage(state)
+        .manage(crate::shortcuts::ShortcutsState::default())
         .build(tauri::generate_context!())
         .unwrap();
     for locale in [Locale::En, Locale::ZhCn] {
@@ -357,8 +363,11 @@ fn locale_persists_and_loads_from_disk() {
             locale,
             ..Settings::default()
         };
-        tauri::async_runtime::block_on(save_settings(app.handle().clone(), settings.clone()))
-            .unwrap();
+        tauri::async_runtime::block_on(save_settings_for_app(
+            app.handle().clone(),
+            settings.clone(),
+        ))
+        .unwrap();
         assert_eq!(app.state::<SettingsState>().get().unwrap(), settings);
         assert_eq!(
             SettingsState::load(path.clone()).unwrap().get().unwrap(),
@@ -366,4 +375,39 @@ fn locale_persists_and_loads_from_disk() {
         );
     }
     std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn shortcuts_use_per_action_scope_and_reject_legacy_contract() {
+    let defaults = serde_json::to_value(Settings::default()).unwrap();
+    for action in ["previous", "next", "togglePlayback", "toggleWindow"] {
+        assert_eq!(
+            defaults["shortcuts"][action],
+            serde_json::json!({"shortcut": "", "global": false})
+        );
+    }
+    assert!(defaults["shortcuts"].get("global").is_none());
+    let data = serde_json::json!({"shortcuts": {
+        "previous": {"shortcut": "Ctrl+KeyA", "global": true},
+        "next": {"shortcut": "Ctrl+KeyB", "global": false},
+        "togglePlayback": {"shortcut": "Space", "global": false},
+        "toggleWindow": {"shortcut": "Ctrl+KeyD", "global": true}
+    }});
+    let settings = serde_json::from_value::<Settings>(data.clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(settings).unwrap()["shortcuts"],
+        data["shortcuts"]
+    );
+    for shortcuts in [
+        serde_json::json!({"global": false}),
+        serde_json::json!({"previous": "Ctrl+KeyA"}),
+        serde_json::json!({"previous": {"shortcut": "Ctrl+KeyA", "global": "true"}}),
+        serde_json::json!({"previous": {"shortcut": 1, "global": false}}),
+        serde_json::json!({"previous": {"shortcut": "", "global": false, "unknown": true}}),
+    ] {
+        assert!(
+            serde_json::from_value::<Settings>(serde_json::json!({"shortcuts": shortcuts}))
+                .is_err()
+        );
+    }
 }

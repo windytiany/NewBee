@@ -221,6 +221,7 @@ async function createComponent(source: string) {
   ]) {
     modules[name] = defaultModule(passiveComponent);
   }
+  modules["@/features/settings/shortcuts/useShortcuts"] = { useShortcuts: () => {} };
   await loadLibraryModules(modules);
   await loadPlaylistModules(modules);
   return evaluateSource<{ default: Vue.Component }>(output, modules).default;

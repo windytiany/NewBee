@@ -48,7 +48,12 @@
       >
         {{ t("无演出者") }}
       </p>
-      <ul v-if="props.artists.length > 0" class="space-y-0.5">
+      <ul
+        v-if="props.artists.length > 0"
+        class="space-y-0.5"
+        @keydown="artistKeyboard.onKeydown"
+        @focusin="artistKeyboard.onFocusin"
+      >
         <ArtistRow
           v-for="artist in props.artists"
           :key="getArtistKey(artist.albumArtist)"
@@ -68,6 +73,7 @@ import { t } from "@/shared/i18n/locale";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import type { AlbumArtistSummary } from "@/features/library/types";
 import ArtistRow from "@/features/library/components/artists/ArtistRow.vue";
 
@@ -87,6 +93,18 @@ const artistFocus = useItemSelection(artistListScope);
 const artistItemKeys = computed(() =>
   props.artists.map((artist) => getArtistKey(artist.albumArtist)),
 );
+
+const artistKeyboard = createItemKeyboard({
+  getItemKeys: () => artistItemKeys.value,
+  itemSelector: "button[data-item-interaction]",
+  onFocus: (key) => {
+    if (!artistFocus.isFocused(key)) artistFocus.focusItem(key);
+  },
+  onMove: (key) => {
+    const artist = props.artists.find((entry) => getArtistKey(entry.albumArtist) === key);
+    if (artist) selectArtist(artist);
+  },
+});
 
 watch(artistItemKeys, (itemKeys) => artistFocus.syncVisibleItems(itemKeys), { immediate: true });
 

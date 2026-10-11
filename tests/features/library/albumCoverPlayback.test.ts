@@ -8,7 +8,14 @@ const icon = Vue.defineComponent(() => () => null);
 const playbackIcon = (name: string) =>
   Vue.defineComponent(() => () => Vue.h("svg", { "data-icon": name }));
 const passive = { __esModule: true, default: icon };
+const keyboardEvents: unknown[] = [];
 const modules: Record<string, unknown> = {
+  "@/shared/interaction/itemKeyboard": {
+    createItemKeyboard: () => ({
+      onKeydown: (event: unknown) => keyboardEvents.push(event),
+      onFocusin() {},
+    }),
+  },
   vue: Vue,
   "@lucide/vue": {
     DiscAlbum: icon,
@@ -67,6 +74,7 @@ const AlbumBrowser = (
   modules["@/features/library/components/albums/AlbumBrowser.vue"] as { default: Vue.Component }
 ).default;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+const originalElement = Object.getOwnPropertyDescriptor(globalThis, "Element");
 const apps: Array<{ unmount: () => void }> = [];
 
 const albumTracks: TrackSummary[] = [
@@ -160,6 +168,7 @@ function mountBrowser(selected = false, initialState: Partial<PlaybackState> = {
     handler();
   }
   return {
+    root,
     app,
     plays,
     toggles,
@@ -178,6 +187,53 @@ afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
   else Reflect.deleteProperty(globalThis, "window");
+  if (originalElement) Object.defineProperty(globalThis, "Element", originalElement);
+  else Reflect.deleteProperty(globalThis, "Element");
+  keyboardEvents.length = 0;
+});
+
+describe("library album keyboard with expanded detail", () => {
+  class AlbumTarget {
+    closest(selector: string) {
+      return selector === "button[data-album-card]" ? this : null;
+    }
+  }
+
+  for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"]) {
+    it(`${key} only transfers album focus to tracks for ArrowDown`, () => {
+      Object.defineProperty(globalThis, "Element", { configurable: true, value: AlbumTarget });
+      const browser = mountBrowser(true, { tracks: albumTracks, tracksLoading: false });
+      const section = findNode(browser.root, (node) => node.type === "section");
+      if (!section) throw new Error("Missing browser section");
+      let focused = 0;
+      let scrolled = 0;
+      let prevented = 0;
+      let stopped = 0;
+      const track = {
+        focus: () => focused++,
+        scrollIntoView: () => scrolled++,
+      };
+      Object.assign(section, {
+        querySelector: (selector: string) =>
+          selector === "button[data-album-track-row]" ? track : null,
+      });
+      const handler = section.props.onKeydown;
+      if (typeof handler !== "function") throw new Error("Missing keyboard handler");
+      const event = {
+        key,
+        target: new AlbumTarget(),
+        preventDefault: () => prevented++,
+        stopPropagation: () => stopped++,
+      };
+      handler(event);
+      expect(focused).toBe(key === "ArrowDown" ? 1 : 0);
+      expect(scrolled).toBe(key === "ArrowDown" ? 1 : 0);
+      expect(prevented).toBe(key === "Enter" ? 0 : 1);
+      expect(stopped).toBe(key === "Enter" ? 0 : 1);
+      expect(keyboardEvents).toEqual(key === "Enter" ? [event] : []);
+      expect(browser.selectedAlbum.value?.album).toBe("Album");
+    });
+  }
 });
 
 describe("library album cover playback", () => {

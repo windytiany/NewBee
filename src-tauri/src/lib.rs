@@ -6,6 +6,7 @@ pub mod lyrics;
 mod metadata;
 mod playback;
 mod settings;
+mod shortcuts;
 mod window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -37,6 +38,8 @@ pub fn run() {
                 stage = "window";
                 window::initialize(app.handle());
                 window::tray::initialize(app.handle())?;
+                stage = "shortcuts";
+                shortcuts::initialize(app.handle());
                 #[cfg(windows)]
                 if let Err(error) = playback::media::initialize(app.handle()) {
                     log::warn!("Could not initialize Windows media controls: {error}");
@@ -52,6 +55,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(shortcuts::handle_global_event)
+                .build(),
+        )
+        .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window::STATE_FLAGS)
                 .skip_initial_state("main")
@@ -63,6 +71,9 @@ pub fn run() {
             window::show_main_window,
             settings::get_settings,
             settings::save_settings,
+            shortcuts::run_shortcut,
+            shortcuts::set_shortcuts_suspended,
+            shortcuts::get_shortcuts_error,
             database::commands::list_music_library_directories,
             database::commands::add_music_library_directory,
             database::commands::remove_music_library_directory,

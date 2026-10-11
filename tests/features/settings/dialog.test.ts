@@ -13,12 +13,22 @@ import {
 import type { HostNode } from "../../support/hostRenderer";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
+import {
+  cloneShortcuts,
+  DEFAULT_SHORTCUTS,
+  SHORTCUT_ACTIONS,
+  type ShortcutAction,
+} from "@/features/settings/shortcuts/bindings";
 import * as AccentColor from "@/features/settings/accentColor";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
-  selectedCategory: Vue.Ref<"general" | "appearance" | "library" | "lyrics" | "diagnostics">;
+  selectedCategory: Vue.Ref<
+    "general" | "appearance" | "library" | "lyrics" | "shortcuts" | "diagnostics"
+  >;
+  shortcuts: Vue.Ref<Settings["shortcuts"]>;
+  selectedShortcutAction: Vue.Ref<ShortcutAction>;
   detailedLogging: Vue.Ref<boolean>;
   isChangingLogging: Vue.Ref<boolean>;
   changeLogging: () => Promise<void>;
@@ -50,6 +60,7 @@ const defaults: Settings = {
   albumSortOrder: "ascending",
   lyricsProviders: ["netease"],
   neteaseLyricsMode: "original",
+  shortcuts: cloneShortcuts(DEFAULT_SHORTCUTS),
 };
 
 const filename = "src/features/settings/components/SettingsDialog.vue";
@@ -64,8 +75,12 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "window");
 });
 
-function createDialog(invoke: (command: string, args?: unknown) => Promise<unknown>) {
+function createDialog(
+  invoke: (command: string, args?: unknown) => Promise<unknown>,
+  suspend: (suspended: boolean) => Promise<void> = async () => {},
+) {
   const events: string[] = [];
+  const suspensions: boolean[] = [];
   const feedback: NotificationInput[] = [];
   const appliedColors: Settings["accentColor"][] = [];
   const appliedMotion: boolean[] = [];
@@ -77,7 +92,19 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     vue: Vue,
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/shared/components/HelpDialog.vue": HelpDialog,
-    "@tauri-apps/api/core": { invoke, isTauri: () => true },
+    "@tauri-apps/api/core": {
+      invoke: async (command: string, args?: unknown) => {
+        if (command === "set_shortcuts_suspended") {
+          suspensions.push(
+            Boolean(args && typeof args === "object" && "suspended" in args && args.suspended),
+          );
+          await suspend(suspensions[suspensions.length - 1]!);
+          return;
+        }
+        return invoke(command, args);
+      },
+      isTauri: () => true,
+    },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
     "@/features/settings/accentColor": AccentColor,
     "@/features/settings/appearance": {
@@ -101,7 +128,7 @@ function createDialog(invoke: (command: string, args?: unknown) => Promise<unkno
     },
   };
   bindings.dialogElement.value = element;
-  return { bindings, element, events, appliedColors, appliedMotion, feedback };
+  return { bindings, element, events, appliedColors, appliedMotion, feedback, suspensions };
 }
 
 function deferred<Value>() {
@@ -113,6 +140,59 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("suspends before loading, restores on close and does not share shortcut references", async () => {
+    const { bindings, suspensions } = createDialog(async () => {
+      expect(suspensions[suspensions.length - 1]).toBe(true);
+      return defaults;
+    });
+    await bindings.show();
+    expect(suspensions).toEqual([true]);
+    bindings.shortcuts.value.previous.shortcut = "Ctrl+KeyP";
+    expect(defaults.shortcuts.previous.shortcut).toBe("");
+    expect(DEFAULT_SHORTCUTS.previous.shortcut).toBe("");
+    bindings.close();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(suspensions).toEqual([true, false]);
+    await bindings.show();
+    expect(bindings.shortcuts.value).toEqual(defaults.shortcuts);
+  });
+
+  it("blocks loading when suspension fails and restores shortcuts", async () => {
+    let loads = 0;
+    const { bindings, suspensions, feedback } = createDialog(
+      async () => {
+        loads++;
+        return defaults;
+      },
+      async (suspended) => {
+        if (suspended) throw new Error("Unavailable");
+      },
+    );
+    await bindings.show();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(loads).toBe(0);
+    expect(bindings.isLoaded.value).toBe(false);
+    expect(suspensions).toEqual([true, false]);
+    expect(feedback[feedback.length - 1]?.key).toBe("settings-load");
+  });
+
+  it("restores after load failure but keeps suspension after save failure", async () => {
+    let failLoad = true;
+    const { bindings, element, suspensions } = createDialog(async (command) => {
+      if (command === "get_settings" && !failLoad) return defaults;
+      throw new Error("Unavailable");
+    });
+    await bindings.show();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(suspensions).toEqual([true, false]);
+    bindings.close();
+    failLoad = false;
+    await bindings.show();
+    await bindings.save();
+    expect(suspensions[suspensions.length - 1]).toBe(true);
+    expect(element.open).toBe(true);
+  });
+
   for (const savedLocale of ["zh-CN", "en"] as const) {
     it(`persists locale ${savedLocale} and applies it only after successful saving`, async () => {
       const initialLocale = savedLocale === "en" ? "zh-CN" : "en";
@@ -196,12 +276,35 @@ describe("settings dialog", () => {
     expect(bindings.detailedLogging.value).toBe(true);
   });
 
-  it("renders settings with category navigation and only cancel/save footer actions", async () => {
+  it("renders categories and records, clears and persists shortcuts without help text", async () => {
+    const saved: Settings[] = [];
+    const suspensions: boolean[] = [];
+    const feedback: NotificationInput[] = [];
+    let failSave = false;
+    const events: string[] = [];
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { dispatchEvent: (event: Event) => events.push(event.type) },
+    });
+    let persisted = { ...defaults, shortcuts: cloneShortcuts(DEFAULT_SHORTCUTS) };
     const modules: Record<string, unknown> = {
       vue: Vue,
-      "@/shared/notifications/center": { notify: () => {} },
+      "@/shared/notifications/center": {
+        notify: (input: NotificationInput) => feedback.push(input),
+      },
       "@/shared/components/HelpDialog.vue": HelpDialog,
-      "@tauri-apps/api/core": { invoke: async () => defaults, isTauri: () => true },
+      "@tauri-apps/api/core": {
+        invoke: async (command: string, args?: { settings: Settings; suspended: boolean }) => {
+          if (command === "set_shortcuts_suspended" && args) suspensions.push(args.suspended);
+          if (command === "get_settings") return persisted;
+          if (command === "save_settings" && args) {
+            if (failSave) throw "Shortcut already registered";
+            saved.push(args.settings);
+            persisted = args.settings;
+          }
+        },
+        isTauri: () => true,
+      },
       "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
       "@/features/settings/accentColor": AccentColor,
       "@/features/settings/appearance": { applyAppearance: () => {} },
@@ -403,8 +506,280 @@ describe("settings dialog", () => {
           ]);
         }
       }
+      const shortcutsButton = findNode(
+        navigation,
+        (node) => node.type === "button" && getTextContent(node).trim() === "快捷键",
+      );
+      if (!shortcutsButton || typeof shortcutsButton.props.onClick !== "function")
+        throw new Error("Missing shortcuts category");
+      shortcutsButton.props.onClick();
+      await Vue.nextTick();
+      expect(findNode(panel, (node) => node.props["aria-label"] === "快捷键设置说明")).toBeNull();
+      expect(getTextContent(panel)).not.toContain("缺少日期");
+      for (const label of ["上一首", "下一首", "播放/暂停", "窗口切换", "全局生效"])
+        expect(getTextContent(panel)).toContain(label);
+      const table = findNode(panel, (node) => node.type === "table");
+      if (!table) throw new Error("Missing shortcut table");
+      const rows = SHORTCUT_ACTIONS.map((action) => {
+        const row = findNode(table, (node) => node.props["data-shortcut-action"] === action);
+        if (!row) throw new Error("Missing shortcut action row");
+        return row;
+      });
+      expect(rows).toHaveLength(4);
+      const headings = findNode(table, (node) => node.type === "thead");
+      expect(headings?.children[0]?.children.map((node) => getTextContent(node))).toEqual([
+        "操作",
+        "快捷键",
+        "全局",
+      ]);
+      const recorders: HostNode[] = [];
+      const collectRecorders = (node: HostNode) => {
+        if (node.props["data-shortcut-recorder"] === "") recorders.push(node);
+        node.children.forEach(collectRecorders);
+      };
+      collectRecorders(panel);
+      expect(recorders).toHaveLength(1);
+      const selectAction = async (action: ShortcutAction) => {
+        const row = rows[SHORTCUT_ACTIONS.indexOf(action)]!;
+        const button = findNode(row, (node) => node.type === "button");
+        if (!button || typeof button.props.onClick !== "function")
+          throw new Error("Missing action selector");
+        button.props.onClick();
+        await Vue.nextTick();
+        expect(button.props["aria-pressed"]).toBe(true);
+      };
+      for (const action of SHORTCUT_ACTIONS) {
+        await selectAction(action);
+        const recorder = findNode(panel, (node) => node.props.name === "shortcut-recorder");
+        if (!recorder || typeof recorder.props.onKeydown !== "function")
+          throw new Error("Missing shortcut recorder");
+        expect(recorder.props.readonly).toBe("");
+        expect(recorder.props["data-shortcut-recorder"]).toBe("");
+        expect(recorder.props.placeholder).toBeUndefined();
+        expect(Reflect.get(recorder, "value")).toBe("");
+        let prevented = false;
+        let stopped = false;
+        const press = (key: string, code: string, ctrlKey = false, isComposing = false) =>
+          recorder.props.onKeydown instanceof Function &&
+          recorder.props.onKeydown({
+            key,
+            code,
+            ctrlKey,
+            altKey: false,
+            shiftKey: false,
+            metaKey: false,
+            isComposing,
+            preventDefault: () => {
+              prevented = true;
+            },
+            stopPropagation: () => {
+              stopped = true;
+            },
+          });
+        press("Control", "ControlLeft", true);
+        press("a", "KeyA", true, true);
+        await Vue.nextTick();
+        expect(Reflect.get(recorder, "value")).toBe("");
+        press("a", "KeyA", true);
+        await Vue.nextTick();
+        expect(prevented).toBe(true);
+        expect(stopped).toBe(true);
+        expect(Reflect.get(recorder, "value")).toBe("Ctrl + A");
+        const originalInput = Object.getOwnPropertyDescriptor(globalThis, "HTMLInputElement");
+        let blurred = false;
+        class Input {
+          blur() {
+            blurred = true;
+          }
+        }
+        Object.defineProperty(globalThis, "HTMLInputElement", { configurable: true, value: Input });
+        try {
+          recorder.props.onKeydown({
+            key: "Escape",
+            code: "Escape",
+            isComposing: false,
+            target: new Input(),
+            preventDefault() {},
+            stopPropagation() {},
+          });
+        } finally {
+          if (originalInput) Object.defineProperty(globalThis, "HTMLInputElement", originalInput);
+          else Reflect.deleteProperty(globalThis, "HTMLInputElement");
+        }
+        expect(blurred).toBe(true);
+        expect(Reflect.get(recorder, "value")).toBe("Ctrl + A");
+        press("Delete", "Delete");
+        await Vue.nextTick();
+        expect(Reflect.get(recorder, "value")).toBe("");
+        press("a", "KeyA", true);
+        await Vue.nextTick();
+        const row = recorder.parent;
+        if (!row) throw new Error("Missing shortcut row");
+        const clear = findNode(row, (node) => node.type === "button");
+        if (!clear || typeof clear.props.onClick !== "function") throw new Error("Missing clear");
+        clear.props.onClick();
+        await Vue.nextTick();
+        expect(Reflect.get(recorder, "value")).toBe("");
+        press("a", "KeyA", true);
+        press("Backspace", "Backspace");
+        await Vue.nextTick();
+        expect(Reflect.get(recorder, "value")).toBe("");
+      }
+      await selectAction("previous");
+      const previous = findNode(panel, (node) => node.props.name === "shortcut-recorder");
+      const global = findNode(panel, (node) => node.props.name === "shortcuts-global");
+      const form = findNode(root, (node) => node.type === "form");
+      if (
+        !previous ||
+        typeof previous.props.onKeydown !== "function" ||
+        !global ||
+        typeof global.props["onUpdate:modelValue"] !== "function" ||
+        !form ||
+        typeof form.props.onSubmit !== "function"
+      )
+        throw new Error("Missing shortcut controls");
+      previous.props.onKeydown({
+        key: "p",
+        code: "KeyP",
+        ctrlKey: true,
+        altKey: false,
+        shiftKey: false,
+        metaKey: false,
+        isComposing: false,
+        preventDefault() {},
+        stopPropagation() {},
+      });
+      global.props["onUpdate:modelValue"](true);
+      await Vue.nextTick();
+      expect(Reflect.get(global, "checked")).toBe(true);
+      expect(getTextContent(rows[0]!)).toContain("Ctrl + P");
+      expect(getTextContent(rows[0]!)).toContain("全局");
+      await selectAction("next");
+      expect(Reflect.get(previous, "value")).toBe("");
+      expect(Reflect.get(global, "checked")).toBe(false);
+      previous.props.onKeydown({
+        key: "n",
+        code: "KeyN",
+        ctrlKey: true,
+        altKey: false,
+        shiftKey: false,
+        metaKey: false,
+        isComposing: false,
+        preventDefault() {},
+        stopPropagation() {},
+      });
+      await Vue.nextTick();
+      expect(getTextContent(rows[0]!)).toContain("Ctrl + P");
+      expect(getTextContent(rows[1]!)).toContain("Ctrl + N");
+      expect(getTextContent(rows[1]!)).not.toContain("全局");
+      expect(getTextContent(rows[2]!)).not.toContain("Ctrl");
+      expect(getTextContent(rows[3]!)).not.toContain("Ctrl");
+      await selectAction("previous");
+      expect(Reflect.get(previous, "value")).toBe("Ctrl + P");
+      expect(Reflect.get(global, "checked")).toBe(true);
+      const clearSelected = findNode(
+        panel,
+        (node) => node.type === "button" && getTextContent(node).trim() === "清除",
+      );
+      if (!clearSelected || typeof clearSelected.props.onClick !== "function")
+        throw new Error("Missing clear selected shortcut");
+      clearSelected.props.onClick();
+      await Vue.nextTick();
+      expect(Reflect.get(previous, "value")).toBe("");
+      expect(Reflect.get(global, "checked")).toBe(true);
+      expect(getTextContent(rows[1]!)).toContain("Ctrl + N");
+      previous.props.onKeydown({
+        key: "p",
+        code: "KeyP",
+        ctrlKey: true,
+        altKey: false,
+        shiftKey: false,
+        metaKey: false,
+        isComposing: false,
+        preventDefault() {},
+        stopPropagation() {},
+      });
+      expect(persisted.shortcuts).toEqual(cloneShortcuts(DEFAULT_SHORTCUTS));
+      failSave = true;
+      await form.props.onSubmit({ preventDefault() {} });
+      await Vue.nextTick();
+      expect(saved).toEqual([]);
+      expect(feedback[feedback.length - 1]?.message).toBe(
+        "保存设置失败: Shortcut already registered",
+      );
+      expect(
+        Reflect.get(
+          findNode(root, (node) => node.type === "dialog")!,
+          "open",
+        ),
+      ).toBe(true);
+      expect(Reflect.get(previous, "value")).toBe("Ctrl + P");
+      expect(Reflect.get(global, "checked")).toBe(true);
+      await selectAction("next");
+      expect(Reflect.get(previous, "value")).toBe("Ctrl + N");
+      expect(Reflect.get(global, "checked")).toBe(false);
+      failSave = false;
+      await form.props.onSubmit({ preventDefault() {} });
+      expect(saved[0]?.shortcuts).toEqual({
+        ...cloneShortcuts(DEFAULT_SHORTCUTS),
+        previous: { shortcut: "Ctrl+KeyP", global: true },
+        next: { shortcut: "Ctrl+KeyN", global: false },
+      });
+      expect(events).toEqual([SETTINGS_CHANGED_EVENT]);
+      expect(
+        Reflect.get(
+          findNode(root, (node) => node.type === "dialog")!,
+          "open",
+        ),
+      ).toBe(false);
+      await dialog.show();
+      await Vue.nextTick();
+      shortcutsButton.props.onClick();
+      await Vue.nextTick();
+      expect(
+        Reflect.get(
+          findNode(panel, (node) => node.props.name === "shortcut-recorder")!,
+          "value",
+        ),
+      ).toBe("Ctrl + P");
+      const reopenedGlobal = findNode(panel, (node) => node.props.name === "shortcuts-global");
+      expect(reopenedGlobal && Reflect.get(reopenedGlobal, "checked")).toBe(true);
+      const reopenedNext = findNode(panel, (node) => node.props["data-shortcut-action"] === "next");
+      const reopenedNextButton =
+        reopenedNext && findNode(reopenedNext, (node) => node.type === "button");
+      if (!reopenedNextButton || typeof reopenedNextButton.props.onClick !== "function")
+        throw new Error("Missing reopened next action");
+      reopenedNextButton.props.onClick();
+      await Vue.nextTick();
+      expect(
+        Reflect.get(
+          findNode(panel, (node) => node.props.name === "shortcut-recorder")!,
+          "value",
+        ),
+      ).toBe("Ctrl + N");
+      expect(reopenedGlobal && Reflect.get(reopenedGlobal, "checked")).toBe(false);
+      const nativeDialog = findNode(root, (node) => node.type === "dialog");
+      if (
+        !nativeDialog ||
+        typeof nativeDialog.props.onCancel !== "function" ||
+        typeof nativeDialog.props.onClose !== "function"
+      )
+        throw new Error("Missing close handlers");
+      nativeDialog.props.onCancel({ preventDefault() {} });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(suspensions[suspensions.length - 1]).toBe(false);
+      await dialog.show();
+      nativeDialog.props.onClose();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(suspensions[suspensions.length - 1]).toBe(true);
+      Reflect.set(nativeDialog, "open", false);
+      nativeDialog.props.onClose();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(suspensions[suspensions.length - 1]).toBe(false);
     } finally {
       app.unmount();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(suspensions[suspensions.length - 1]).toBe(false);
       if (originalDocument) Object.defineProperty(globalThis, "Document", originalDocument);
       else Reflect.deleteProperty(globalThis, "Document");
       if (originalShadowRoot) Object.defineProperty(globalThis, "ShadowRoot", originalShadowRoot);
@@ -484,6 +859,7 @@ describe("settings dialog", () => {
       albumSortOrder: "descending",
       lyricsProviders: ["netease"],
       neteaseLyricsMode: "translated",
+      shortcuts: cloneShortcuts(DEFAULT_SHORTCUTS),
     };
     const { bindings, element, events } = createDialog(async (command, args) => {
       calls.push([command, args]);
@@ -589,6 +965,7 @@ describe("settings dialog", () => {
           albumSortOrder: "descending",
           lyricsProviders: ["netease"],
           neteaseLyricsMode: "bilingual",
+          shortcuts: cloneShortcuts(DEFAULT_SHORTCUTS),
         },
       },
     ]);
@@ -678,9 +1055,9 @@ describe("settings dialog", () => {
     expect(element.open).toBe(true);
     expect(bindings.accentColor.value).toBe("#ABCDEF");
     expect(feedback).toEqual([
-      { type: "error", message: "保存设置失败，请查看日志", key: "settings-save" },
+      { type: "error", message: "保存设置失败: Disk unavailable", key: "settings-save" },
     ]);
-    expect(JSON.stringify(feedback)).not.toContain("Disk unavailable");
+    expect(JSON.stringify(feedback)).toContain("Disk unavailable");
     expect(appliedColors).toEqual([]);
     expect(events).toEqual([]);
   });
@@ -691,8 +1068,12 @@ describe("settings dialog", () => {
     let calls = 0;
     const { bindings } = createDialog(() => (++calls === 1 ? first.promise : second.promise));
     const firstShow = bindings.show();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toBe(1);
     bindings.close();
     const secondShow = bindings.show();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toBe(2);
     first.resolve({
       locale: "zh-CN",
       accentColor: "#60a5fa",
@@ -704,6 +1085,7 @@ describe("settings dialog", () => {
       albumSortOrder: "descending",
       lyricsProviders: ["netease"],
       neteaseLyricsMode: "translated",
+      shortcuts: cloneShortcuts(DEFAULT_SHORTCUTS),
     });
     await firstShow;
     expect(bindings.isLoading.value).toBe(true);

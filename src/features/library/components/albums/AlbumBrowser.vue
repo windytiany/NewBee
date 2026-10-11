@@ -1,8 +1,11 @@
 <template>
   <section
+    ref="browserElement"
     aria-labelledby="album-browser-heading"
     :aria-busy="props.trackActionPending || props.albumsLoading"
     class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 [scrollbar-gutter:stable] flex-col overflow-y-auto text-white"
+    @keydown="handleAlbumKeydown"
+    @focusin="albumKeyboard.onFocusin"
   >
     <template v-if="props.artist">
       <header class="shrink-0 px-5 py-6 sm:px-8 sm:py-8">
@@ -104,7 +107,8 @@
 
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
@@ -194,6 +198,47 @@ const albumListScope = computed(() =>
 const albumFocus = useItemSelection(albumListScope);
 
 const albumItemKeys = computed(() => props.albums.map(getAlbumKey));
+const browserElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const albumKeyboard = createItemKeyboard({
+  getItemKeys: () => albumItemKeys.value,
+  itemSelector: "button[data-album-card]",
+  grid: true,
+  onFocus: (key) => {
+    if (!albumFocus.isFocused(key)) albumFocus.focusItem(key);
+  },
+  onMove: (key) => albumFocus.focusItem(key),
+  onActivate: (key) => {
+    const album = props.albums.find((entry) => getAlbumKey(entry) === key);
+    if (!album) return;
+    if (props.selectedAlbum) playAlbum(album);
+    else toggleAlbum(album);
+  },
+});
+
+function handleAlbumKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+  if (
+    !props.selectedAlbum ||
+    !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
+  ) {
+    albumKeyboard.onKeydown(event);
+    return;
+  }
+  if (event.defaultPrevented || event.altKey || event.metaKey || event.isComposing) return;
+  if (
+    !(event.target instanceof globalThis.Element) ||
+    !event.target.closest("button[data-album-card]")
+  )
+    return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.key !== "ArrowDown") return;
+  const track = browserElement.value?.querySelector<InstanceType<typeof globalThis.HTMLElement>>(
+    "button[data-album-track-row]",
+  );
+  track?.focus({ preventScroll: true });
+  track?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
 
 watch(albumItemKeys, (itemKeys) => albumFocus.syncVisibleItems(itemKeys), { immediate: true });
 
@@ -258,6 +303,12 @@ function playAlbum(album: AlbumSummary) {
 function closeAlbum(album: AlbumSummary) {
   albumFocus.focusItem(getAlbumKey(album));
   emit("selectAlbum", null);
+  void nextTick(() => {
+    const index = props.albums.findIndex((entry) => getAlbumKey(entry) === getAlbumKey(album));
+    browserElement.value
+      ?.querySelectorAll<InstanceType<typeof globalThis.HTMLElement>>("button[data-album-card]")
+      [index]?.focus({ preventScroll: true });
+  });
 }
 
 const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);

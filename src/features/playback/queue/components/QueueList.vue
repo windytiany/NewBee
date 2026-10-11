@@ -18,7 +18,13 @@
       >
         {{ displayEmptyMessage }}
       </p>
-      <ul v-else-if="!props.isLoading" ref="listElement" class="space-y-1">
+      <ul
+        v-else-if="!props.isLoading"
+        ref="listElement"
+        class="space-y-1"
+        @keydown="keyboard.onKeydown"
+        @focusin="keyboard.onFocusin"
+      >
         <QueueRow
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
@@ -69,6 +75,7 @@
 import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
 import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { formatTrackDuration } from "@/features/library/format";
@@ -134,6 +141,16 @@ const emit = defineEmits<{
   playQueueItem: [rowKey: string];
   removeQueueItems: [rowKeys: string[]];
 }>();
+
+const keyboard = createItemKeyboard({
+  getItemKeys: () => visibleRowKeys.value,
+  itemSelector: "button[data-item-interaction]",
+  onFocus: (key) => {
+    if (!queueFocus.isFocused(key)) queueFocus.focusItem(key);
+  },
+  onMove: (key, event) => selectTrack(key, event),
+  onActivate: (key) => emit("playQueueItem", key),
+});
 
 function openQueueContextMenu(request: QueueContextMenuTrigger) {
   if (!props.canRemoveFromQueue) return;

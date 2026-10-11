@@ -4,9 +4,17 @@ import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
+import {
+  DEFAULT_SHORTCUTS,
+  SHORTCUT_ACTIONS,
+  cloneShortcuts,
+  formatShortcut,
+  shortcutFromEvent,
+  type ShortcutAction,
+} from "@/features/settings/shortcuts/bindings";
 import {
   ACCENT_COLORS,
   DEFAULT_ACCENT_COLOR,
@@ -45,6 +53,7 @@ const categories = {
   appearance: "外观",
   library: "媒体库",
   lyrics: "歌词",
+  shortcuts: "快捷键",
   diagnostics: "诊断",
 } as const;
 const selectedCategory = ref<keyof typeof categories>("general");
@@ -60,21 +69,89 @@ const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const neteaseEnabled = ref(true);
 const neteaseLyricsMode = ref<Settings["neteaseLyricsMode"]>("original");
+const shortcuts = ref(cloneShortcuts(DEFAULT_SHORTCUTS));
+const selectedShortcutAction = ref<ShortcutAction>("previous");
+const selectedBinding = computed(() => shortcuts.value[selectedShortcutAction.value]);
+const shortcutLabels: Record<ShortcutAction, string> = {
+  previous: "上一首",
+  next: "下一首",
+  togglePlayback: "播放/暂停",
+  toggleWindow: "窗口切换",
+};
+
+function recordShortcut(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+  if (event.isComposing) return;
+  if (
+    event.key === "Escape" &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.metaKey
+  ) {
+    if (event.target instanceof globalThis.HTMLInputElement) event.target.blur();
+    return;
+  }
+  if (
+    (event.key === "Backspace" || event.key === "Delete") &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.metaKey
+  ) {
+    selectedBinding.value.shortcut = "";
+    return;
+  }
+  const shortcut = shortcutFromEvent(event);
+  if (shortcut !== null) selectedBinding.value.shortcut = shortcut;
+}
+
 const isLoading = ref(false);
 const isLoaded = ref(false);
 const isSaving = ref(false);
 const isTauriApp = isTauri();
 let loadRequestSequence = 0;
+let suspensionUpdates = Promise.resolve();
+
+function setShortcutsSuspended(suspended: boolean) {
+  const update = suspensionUpdates
+    .catch(() => {})
+    .then(() => invoke<void>("set_shortcuts_suspended", { suspended }));
+  suspensionUpdates = update;
+  return update;
+}
+
+function restoreShortcuts() {
+  if (!isTauriApp) return;
+  void setShortcutsSuspended(false).catch((reason: unknown) => {
+    logger.error("settings", "shortcuts_restore_failed", reason);
+    notify({ type: "error", message: t("恢复快捷键失败，请查看日志"), key: "settings-shortcuts" });
+  });
+}
+
+function onDialogClosed() {
+  if (dialogElement.value?.open) return;
+  ++loadRequestSequence;
+  isLoading.value = false;
+  restoreShortcuts();
+}
+
+onUnmounted(() => {
+  ++loadRequestSequence;
+  restoreShortcuts();
+});
 
 async function show() {
   if (dialogElement.value?.open) return;
   selectedCategory.value = "general";
+  selectedShortcutAction.value = "previous";
   dialogElement.value?.showModal();
   isLoaded.value = false;
   const requestId = ++loadRequestSequence;
   if (!isTauriApp) return;
   isLoading.value = true;
   try {
+    await setShortcutsSuspended(true);
+    if (requestId !== loadRequestSequence) return;
     const settings = await api.get();
     if (requestId !== loadRequestSequence) return;
     selectedLocale.value = settings.locale;
@@ -87,11 +164,13 @@ async function show() {
     albumSortOrder.value = settings.albumSortOrder;
     neteaseEnabled.value = settings.lyricsProviders.includes("netease");
     neteaseLyricsMode.value = settings.neteaseLyricsMode;
+    shortcuts.value = cloneShortcuts(settings.shortcuts);
     isLoaded.value = true;
   } catch (reason) {
     if (requestId === loadRequestSequence) {
       logger.error("settings", "load_failed", reason);
       notify({ type: "error", message: t("读取设置失败，请查看日志"), key: "settings-load" });
+      restoreShortcuts();
     }
   } finally {
     if (requestId === loadRequestSequence) isLoading.value = false;
@@ -101,6 +180,7 @@ async function show() {
 function close() {
   if (isSaving.value) return;
   dialogElement.value?.close();
+  onDialogClosed();
 }
 
 async function save() {
@@ -117,6 +197,7 @@ async function save() {
   isSaving.value = true;
   try {
     await api.save({
+      shortcuts: cloneShortcuts(shortcuts.value),
       locale: selectedLocale.value,
       closeBehavior: closeBehavior.value,
       accentColor: color,
@@ -133,9 +214,16 @@ async function save() {
     applyAppearance({ accentColor: color, reducedMotion: reducedMotion.value });
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
+    onDialogClosed();
   } catch (reason) {
     logger.error("settings", "save_failed", reason);
-    notify({ type: "error", message: t("保存设置失败，请查看日志"), key: "settings-save" });
+    const detail =
+      reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "";
+    notify({
+      type: "error",
+      message: detail ? `${t("保存设置失败")}: ${detail}` : t("保存设置失败，请查看日志"),
+      key: "settings-save",
+    });
   } finally {
     isSaving.value = false;
   }
@@ -149,7 +237,8 @@ defineExpose({ show });
     ref="dialogElement"
     aria-labelledby="settings-dialog-title"
     class="bg-app-surface m-auto w-[min(48rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
-    @cancel="isSaving && $event.preventDefault()"
+    @cancel.prevent="close"
+    @close="onDialogClosed"
     @click.self="close"
     @mousedown.stop
   >
@@ -191,6 +280,7 @@ defineExpose({ show });
               {{ t(categories[selectedCategory]) }}
             </h3>
             <HelpDialog
+              v-if="selectedCategory !== 'shortcuts'"
               :key="selectedCategory"
               :label="t(`${categories[selectedCategory]}设置说明`)"
             >
@@ -377,6 +467,85 @@ defineExpose({ show });
                 <option value="bilingual">{{ t("双语歌词") }}</option>
               </select>
             </label>
+          </fieldset>
+          <fieldset
+            v-else-if="selectedCategory === 'shortcuts'"
+            :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+            class="space-y-5"
+          >
+            <legend class="sr-only">{{ t("快捷键") }}</legend>
+            <div class="overflow-x-auto rounded-lg border border-white/10">
+              <table class="w-full text-left text-sm">
+                <thead class="text-app-muted bg-white/5">
+                  <tr>
+                    <th scope="col" class="px-3 py-2 font-medium">{{ t("操作") }}</th>
+                    <th scope="col" class="px-3 py-2 font-medium">{{ t("快捷键") }}</th>
+                    <th scope="col" class="px-3 py-2 font-medium">{{ t("全局") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="action in SHORTCUT_ACTIONS"
+                    :key="action"
+                    :data-shortcut-action="action"
+                    :class="
+                      selectedShortcutAction === action ? 'bg-app-accent/15' : 'hover:bg-white/5'
+                    "
+                    @click="selectedShortcutAction = action"
+                  >
+                    <td class="px-3 py-2">
+                      <button
+                        type="button"
+                        :aria-pressed="selectedShortcutAction === action"
+                        class="focus-visible:outline-app-accent w-full text-left focus-visible:outline-2"
+                        @click="selectedShortcutAction = action"
+                      >
+                        {{ t(shortcutLabels[action]) }}
+                      </button>
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap">
+                      {{ formatShortcut(shortcuts[action].shortcut) }}
+                    </td>
+                    <td class="px-3 py-2">{{ shortcuts[action].global ? t("全局") : "" }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="space-y-3">
+              <h4 class="text-sm font-semibold">{{ t(shortcutLabels[selectedShortcutAction]) }}</h4>
+              <label for="shortcut-recorder" class="block text-sm font-semibold">
+                {{ t("快捷键") }}
+              </label>
+              <div class="flex gap-2">
+                <input
+                  id="shortcut-recorder"
+                  name="shortcut-recorder"
+                  :value="formatShortcut(selectedBinding.shortcut)"
+                  data-shortcut-recorder
+                  type="text"
+                  readonly
+                  class="bg-app-interactive focus-visible:outline-app-accent min-w-0 flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white focus-visible:outline-2"
+                  @keydown.prevent.stop="recordShortcut($event)"
+                />
+                <button
+                  type="button"
+                  :disabled="!selectedBinding.shortcut"
+                  class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
+                  @click="selectedBinding.shortcut = ''"
+                >
+                  {{ t("清除") }}
+                </button>
+              </div>
+              <label class="flex cursor-pointer items-center gap-3 text-sm font-semibold">
+                <input
+                  v-model="selectedBinding.global"
+                  name="shortcuts-global"
+                  type="checkbox"
+                  class="accent-app-accent"
+                />
+                {{ t("全局生效") }}
+              </label>
+            </div>
           </fieldset>
           <fieldset v-else-if="selectedCategory === 'diagnostics'" :disabled="!isTauriApp">
             <legend class="sr-only">{{ t("诊断日志") }}</legend>
