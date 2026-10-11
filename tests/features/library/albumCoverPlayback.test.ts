@@ -253,31 +253,48 @@ describe("library album cover playback", () => {
     });
   }
 
-  it("accepts a double click just inside the 150ms window", async () => {
-    const browser = mountBrowser(true);
-    browser.dispatch("onClick", 1, 0);
-    browser.dispatch("onClick", 2, 149);
-    browser.dispatch("onDblclick", 2, 149);
-    await waitForSingleClick();
-    expect(browser.plays).toEqual([{ albumArtist: "Artist", album: "Album" }]);
-    expect(browser.selections).toEqual([]);
-    expect(browser.selectedAlbum.value?.album).toBe("Album");
-  });
+  for (const selected of [false, true]) {
+    const windowMs = selected ? 150 : 300;
+    for (const interval of [windowMs - 50, windowMs]) {
+      it(`accepts a double click at ${interval}ms when selected=${selected}`, async () => {
+        const browser = mountBrowser(selected);
+        browser.dispatch("onClick", 1, 0);
+        await Vue.nextTick();
+        browser.dispatch("onClick", 2, interval);
+        browser.dispatch("onDblclick", 2, interval);
+        await waitForSingleClick();
+        expect(browser.plays).toEqual([{ albumArtist: "Artist", album: "Album" }]);
+        expect(browser.selections).toEqual(selected ? [] : [{ album: "Album", year: 2024 }]);
+        expect(browser.selectedAlbum.value?.album).toBe("Album");
+      });
+    }
+  }
 
   for (const selected of [false, true]) {
-    it(`treats a native double click outside 150ms as single clicks when selected=${selected}`, async () => {
+    const windowMs = selected ? 150 : 300;
+    it(`treats a native double click outside ${windowMs}ms as single clicks when selected=${selected}`, async () => {
       const browser = mountBrowser(selected);
       browser.dispatch("onClick", 1, 0);
-      await new Promise((resolve) => setTimeout(resolve, 175));
+      await new Promise((resolve) => setTimeout(resolve, windowMs + 25));
       expect(browser.selectedAlbum.value !== null).toBe(!selected);
-      browser.dispatch("onClick", 2, 151);
-      browser.dispatch("onDblclick", 2, 151);
+      browser.dispatch("onClick", 2, windowMs + 1);
+      browser.dispatch("onDblclick", 2, windowMs + 1);
       await waitForSingleClick();
       expect(browser.selectedAlbum.value !== null).toBe(selected);
       expect(browser.selections).toHaveLength(2);
       expect(browser.plays).toEqual([]);
     });
   }
+
+  it("closes expanded detail after 150ms on a single click", async () => {
+    const browser = mountBrowser(true);
+    browser.dispatch("onClick", 1);
+    expect(browser.selectedAlbum.value?.album).toBe("Album");
+    await new Promise((resolve) => setTimeout(resolve, 175));
+    expect(browser.selectedAlbum.value).toBeNull();
+    expect(browser.selections).toEqual([null]);
+    expect(browser.plays).toEqual([]);
+  });
 
   it("toggles detail on two spaced single clicks without playing", async () => {
     const browser = mountBrowser();
