@@ -1,12 +1,12 @@
+pub(crate) mod cache;
 mod clipboard;
+pub(crate) mod encoding;
 pub(crate) mod transfer;
 
 use crate::database::{Database, TrackArtwork};
-use std::io::Cursor;
 use tauri::{ipc::Response, Manager};
 
-// Shared with frontend artwork requests and the SQL thumbnail constraint.
-pub(crate) const MAX_ARTWORK_SIZE: u32 = 4096;
+use cache::validate_size;
 
 #[tauri::command]
 pub(crate) async fn get_track_artwork<R: tauri::Runtime>(
@@ -54,29 +54,12 @@ pub(crate) async fn get_album_artwork<R: tauri::Runtime>(
     .map_err(|error| format!("读取专辑封面失败：{error}"))?
 }
 
-fn validate_size(size: Option<u32>) -> Result<(), String> {
-    if size.is_some_and(|size| size == 0 || size > MAX_ARTWORK_SIZE) {
-        return Err(format!("封面尺寸必须在 1 到 {MAX_ARTWORK_SIZE} 之间"));
-    }
-    Ok(())
-}
-
 fn thumbnail(database: &Database, data: Vec<u8>, size: u32) -> Result<Vec<u8>, String> {
     #[cfg(test)]
     database.observe_artwork_decode();
     #[cfg(not(test))]
     let _ = database;
-    let image = image::ImageReader::new(Cursor::new(data))
-        .with_guessed_format()
-        .map_err(|error| format!("识别封面格式失败：{error}"))?
-        .decode()
-        .map_err(|error| format!("解码封面失败：{error}"))?;
-    let mut output = Cursor::new(Vec::new());
-    image
-        .thumbnail(size, size)
-        .write_to(&mut output, image::ImageFormat::Png)
-        .map_err(|error| format!("生成封面缩略图失败：{error}"))?;
-    Ok(output.into_inner())
+    encoding::thumbnail(&data, size)
 }
 
 #[cfg(test)]

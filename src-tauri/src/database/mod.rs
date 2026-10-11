@@ -23,17 +23,19 @@ pub(crate) mod write;
 pub use playlist::PlaylistReorderError;
 
 fn schema_sql() -> String {
-    let mut sql = include_str!("schema.sql").replace(
-        "__MAX_ARTWORK_SIZE__",
-        &crate::artwork::MAX_ARTWORK_SIZE.to_string(),
-    );
+    let mut sql = include_str!("schema.sql").to_owned();
     sql.push_str(include_str!("statistics.sql"));
     sql
+}
+
+fn cache_error(error: std::io::Error) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(Box::new(error))
 }
 
 pub struct Database {
     connection: Mutex<Connection>,
     artwork_derivation: Mutex<()>,
+    artwork_cache: crate::artwork::cache::Cache,
     #[cfg(test)]
     artwork_decodes: std::sync::atomic::AtomicUsize,
     skipped_tracks: Arc<RwLock<HashSet<i64>>>,
@@ -183,6 +185,22 @@ pub enum TrackArtwork {
 
 impl Database {
     pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Self> {
+        let cache = crate::artwork::cache::Cache::temporary().map_err(cache_error)?;
+        Self::open_cached(path, cache)
+    }
+
+    pub(crate) fn open_with_cache(
+        path: impl AsRef<Path>,
+        cache_directory: &Path,
+    ) -> rusqlite::Result<Self> {
+        let cache = crate::artwork::cache::Cache::open(cache_directory).map_err(cache_error)?;
+        Self::open_cached(path, cache)
+    }
+
+    fn open_cached(
+        path: impl AsRef<Path>,
+        artwork_cache: crate::artwork::cache::Cache,
+    ) -> rusqlite::Result<Self> {
         let mut connection = Connection::open(path)?;
         connection.execute_batch("PRAGMA foreign_keys = ON;")?;
         schema::initialize_schema(&mut connection)?;
@@ -192,13 +210,18 @@ impl Database {
             let rows = statement.query_map([], |row| row.get::<_, i64>(0))?;
             rows.collect::<rusqlite::Result<HashSet<_>>>()?
         };
-        Ok(Self {
+        let database = Self {
             connection: Mutex::new(connection),
             artwork_derivation: Mutex::new(()),
+            artwork_cache,
             #[cfg(test)]
             artwork_decodes: std::sync::atomic::AtomicUsize::new(0),
             skipped_tracks: Arc::new(RwLock::new(skipped_tracks)),
-        })
+        };
+        database
+            .clean_artwork_cache()
+            .map_err(|error| cache_error(std::io::Error::other(error)))?;
+        Ok(database)
     }
 
     // Tauri's mock runtime retains managed state after its window/app is dropped.

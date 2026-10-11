@@ -1,4 +1,5 @@
 import { t } from "@/shared/i18n/locale";
+import { selectArtworkSize } from "@/features/artwork/size";
 import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
@@ -43,7 +44,7 @@ export function useTrackArtwork(
   let image: DecodedArtwork | null = null;
   let unsubscribe: (() => void) | null = null;
   const stop = watch(
-    [() => toValue(trackId), () => toValue(size)],
+    [() => toValue(trackId), () => selectArtworkSize(toValue(size))],
     ([nextTrackId, nextSize]) => {
       unsubscribe?.();
       unsubscribe = null;

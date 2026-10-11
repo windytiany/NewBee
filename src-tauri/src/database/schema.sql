@@ -31,15 +31,12 @@ CREATE TABLE IF NOT EXISTS skipped_tracks (
 CREATE TABLE IF NOT EXISTS artwork_images (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     mime_type TEXT NOT NULL,
-    image BLOB NOT NULL UNIQUE
+    digest BLOB NOT NULL CHECK (length(digest) = 32),
+    content_id TEXT NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
+    image BLOB NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS artwork_thumbnails (
-    image_id INTEGER NOT NULL REFERENCES artwork_images(id) ON DELETE CASCADE,
-    size INTEGER NOT NULL CHECK (size BETWEEN 1 AND __MAX_ARTWORK_SIZE__),
-    image BLOB NOT NULL,
-    PRIMARY KEY (image_id, size)
-);
+CREATE INDEX IF NOT EXISTS idx_artwork_images_digest ON artwork_images(digest);
 
 CREATE TABLE IF NOT EXISTS track_artwork (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,

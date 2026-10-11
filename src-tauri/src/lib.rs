@@ -39,7 +39,11 @@ pub fn run() {
                 };
                 stage = "database";
                 let database_path = app_data_dir.join("music-library.sqlite3");
-                app.manage(database::Database::open(database_path)?);
+                let cache_directory = app.path().app_cache_dir()?.join("artwork");
+                app.manage(database::Database::open_with_cache(
+                    database_path,
+                    &cache_directory,
+                )?);
                 stage = "settings";
                 app.manage(settings::SettingsState::load(
                     app_data_dir.join("settings.json"),

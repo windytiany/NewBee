@@ -116,7 +116,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
     assert_eq!(online[3]["title"], "Song");
     assert_eq!(online[3]["codec"], "FLAC");
     assert_eq!(online[4], json!({"kind":"plain", "text":"embedded lyrics"}));
-    let cover_args = json!({"trackId":1,"size":80});
+    let cover_args = json!({"trackId":1,"size":128});
     let cover = invoke(&window, "get_track_artwork", cover_args.clone());
     let tauri::ipc::InvokeResponseBody::Raw(cover) = cover else {
         panic!("Expected binary cover")
@@ -131,7 +131,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         ("get_track_artwork", cover_args),
         (
             "get_album_artwork",
-            json!({"albumArtist":"Artist","album":"Album","size":80}),
+            json!({"albumArtist":"Artist","album":"Album","size":128}),
         ),
     ] {
         let tauri::ipc::InvokeResponseBody::Raw(bytes) = invoke(&window, command, args) else {
@@ -368,7 +368,8 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     let directory_cover = fixture.0.join("cover.png");
     std::fs::write(&directory_cover, &red).unwrap();
     let database_path = fixture.0.join("library.sqlite3");
-    let database = Database::open(&database_path).unwrap();
+    let cache_path = fixture.0.join("cache");
+    let database = Database::open_with_cache(&database_path, &cache_path).unwrap();
     database
         .add_music_library_directory(&std::fs::canonicalize(&fixture.0).unwrap().to_string_lossy())
         .unwrap();
@@ -394,7 +395,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
         let tauri::ipc::InvokeResponseBody::Raw(bytes) = invoke(
             &window,
             "get_track_artwork",
-            json!({"trackId":id,"size":40}),
+            json!({"trackId":id,"size":128}),
         ) else {
             panic!("Expected binary thumbnail")
         };
@@ -432,14 +433,13 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
         .all(|tag| tag.pictures().is_empty()));
     assert_eq!(std::fs::read(&directory_cover).unwrap(), red);
     let updated = thumbnail(1);
-    assert_eq!(
-        image::load_from_memory(&updated)
-            .unwrap()
-            .to_rgb8()
-            .get_pixel(0, 0)
-            .0,
-        [0, 0, 255]
-    );
+    let pixel = image::load_from_memory(&updated)
+        .unwrap()
+        .to_rgba8()
+        .get_pixel(0, 0)
+        .0;
+    assert!(pixel[0] <= 3 && pixel[1] <= 3 && pixel[2] >= 252);
+    assert_eq!(pixel[3], 255);
     assert_eq!(thumbnail(2), shared);
     assert_eq!(serde_json::to_value(scan()).unwrap()["updated"], 2);
     assert_eq!(thumbnail(1), updated);
@@ -453,7 +453,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     std::fs::remove_file(&directory_cover).unwrap();
     files::access::take(&fixture.0);
     let app = tauri::test::mock_builder()
-        .manage(Database::open(&database_path).unwrap())
+        .manage(Database::open_with_cache(&database_path, &cache_path).unwrap())
         .invoke_handler(tauri::generate_handler![crate::artwork::get_track_artwork])
         .build(tauri::generate_context!())
         .unwrap();
@@ -465,7 +465,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
         let tauri::ipc::InvokeResponseBody::Raw(bytes) = invoke(
             &window,
             "get_track_artwork",
-            json!({"trackId":id,"size":40}),
+            json!({"trackId":id,"size":128}),
         ) else {
             panic!("Expected binary thumbnail")
         };

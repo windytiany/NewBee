@@ -5,6 +5,16 @@ use std::io::Cursor;
 use tauri::ipc::{InvokeBody, InvokeResponseBody};
 use tauri::Manager;
 
+pub(super) fn assert_color(actual: [u8; 4], expected: [u8; 4]) {
+    for channel in 0..3 {
+        assert!(
+            actual[channel].abs_diff(expected[channel]) <= 3,
+            "actual={actual:?} expected={expected:?}"
+        );
+    }
+    assert_eq!(actual[3], expected[3]);
+}
+
 fn track(path: &str, image: Vec<u8>) -> TrackWriteInput {
     TrackWriteInput {
         path: path.into(),
@@ -62,6 +72,20 @@ pub(super) fn invoke(
     })
 }
 
+fn webview(database: Database) -> tauri::WebviewWindow<tauri::test::MockRuntime> {
+    let app = tauri::test::mock_builder()
+        .manage(database)
+        .invoke_handler(tauri::generate_handler![
+            get_track_artwork,
+            get_album_artwork
+        ])
+        .build(tauri::generate_context!())
+        .unwrap();
+    tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap()
+}
+
 #[test]
 fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() {
     let database = Database::open(":memory:").unwrap();
@@ -90,48 +114,44 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
             crate::database::ArtworkUpdate::Embedded,
         )
         .unwrap();
-    let app = tauri::test::mock_builder()
-        .manage(database)
-        .invoke_handler(tauri::generate_handler![
-            get_track_artwork,
-            get_album_artwork
-        ])
-        .build(tauri::generate_context!())
-        .unwrap();
-    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-        .build()
-        .unwrap();
-    let original = invoke(
-        &webview,
-        "get_track_artwork",
-        serde_json::json!({"trackId": 1, "size": null}),
-    )
-    .unwrap();
-    assert_eq!(original, red);
+    let webview = webview(database);
+    assert_eq!(
+        invoke(
+            &webview,
+            "get_track_artwork",
+            serde_json::json!({"trackId":1,"size":null})
+        )
+        .unwrap(),
+        red
+    );
     for (id, expected) in [(1, [255, 0, 0, 255]), (2, [0, 0, 255, 255])] {
         let bytes = invoke(
             &webview,
             "get_track_artwork",
-            serde_json::json!({"trackId": id, "size": 80}),
+            serde_json::json!({"trackId":id,"size":128}),
         )
         .unwrap();
+        assert_eq!(&bytes[8..12], b"WEBP");
+        assert!(bytes.windows(4).any(|bytes| bytes == b"VP8 "));
         let image = image::load_from_memory(&bytes).unwrap().to_rgba8();
-        assert_eq!(image.dimensions(), (80, 40));
-        assert_eq!(image.get_pixel(40, 20).0, expected);
+        assert_eq!(image.dimensions(), (128, 64));
+        assert_color(image.get_pixel(64, 32).0, expected);
         assert!(bytes.len() < 10_000);
     }
-    let album = invoke(
-        &webview,
-        "get_album_artwork",
-        serde_json::json!({"albumArtist": "Artist", "album": "Album"}),
-    )
-    .unwrap();
-    assert_eq!(album, red);
-    for size in [None, Some(80)] {
+    assert_eq!(
+        invoke(
+            &webview,
+            "get_album_artwork",
+            serde_json::json!({"albumArtist":"Artist","album":"Album"})
+        )
+        .unwrap(),
+        red
+    );
+    for size in [None, Some(128)] {
         assert!(invoke(
             &webview,
             "get_track_artwork",
-            serde_json::json!({"trackId": 3, "size": size})
+            serde_json::json!({"trackId":3,"size":size})
         )
         .unwrap()
         .is_empty());
@@ -139,10 +159,11 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     assert!(invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 4, "size": 80})
+        serde_json::json!({"trackId":4,"size":128})
     )
     .is_err());
-    app.state::<Database>()
+    webview
+        .state::<Database>()
         .upsert_track(
             &track("/fixture/one.mp3", fixture(Rgba([0, 255, 0, 255]))),
             crate::database::ArtworkUpdate::Embedded,
@@ -151,21 +172,21 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     let updated = invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 1, "size": 80}),
+        serde_json::json!({"trackId":1,"size":128}),
     )
     .unwrap();
-    assert_eq!(
+    assert_color(
         image::load_from_memory(&updated)
             .unwrap()
             .to_rgba8()
-            .get_pixel(40, 20)
+            .get_pixel(64, 32)
             .0,
-        [0, 255, 0, 255]
+        [0, 255, 0, 255],
     );
     assert!(invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 999, "size": null})
+        serde_json::json!({"trackId":999,"size":null})
     )
     .unwrap()
     .is_empty());
@@ -203,20 +224,13 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
         .unwrap()
         .len()
         * 40;
-    let app = tauri::test::mock_builder()
-        .manage(database)
-        .invoke_handler(tauri::generate_handler![get_track_artwork])
-        .build(tauri::generate_context!())
-        .unwrap();
-    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-        .build()
-        .unwrap();
+    let webview = webview(database);
     let mut thumbnail_bytes = 0;
     for id in 1..=40 {
         let bytes = invoke(
             &webview,
             "get_track_artwork",
-            serde_json::json!({"trackId": id, "size": 80}),
+            serde_json::json!({"trackId":id,"size":128}),
         )
         .unwrap();
         assert_eq!(
@@ -224,20 +238,21 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
                 .unwrap()
                 .to_rgba8()
                 .dimensions(),
-            (80, 80)
+            (128, 128)
         );
         thumbnail_bytes += bytes.len();
     }
-    assert_eq!(app.state::<Database>().artwork_decode_count(), 1);
+    assert_eq!(webview.state::<Database>().artwork_decode_count(), 1);
     assert!(thumbnail_bytes < 1_000_000);
     assert!(thumbnail_bytes < previous_json_bytes);
 }
 
 #[test]
 fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding() {
-    let path = std::env::temp_dir().join(format!("newbee-thumbnail-{}.sqlite", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    let database = Database::open(&path).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("library.sqlite3");
+    let cache = directory.path().join("cache");
+    let database = Database::open_with_cache(&path, &cache).unwrap();
     let red = fixture(Rgba([255, 0, 0, 255]));
     for (name, update) in [
         ("one", crate::database::ArtworkUpdate::Embedded),
@@ -250,22 +265,12 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
             .upsert_track(&track(&format!("/offline/{name}.mp3"), red.clone()), update)
             .unwrap();
     }
-    let app = tauri::test::mock_builder()
-        .manage(database)
-        .invoke_handler(tauri::generate_handler![
-            get_track_artwork,
-            get_album_artwork
-        ])
-        .build(tauri::generate_context!())
-        .unwrap();
-    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-        .build()
-        .unwrap();
-    assert_eq!(app.state::<Database>().artwork_decode_count(), 0);
+    let view = webview(database);
+    assert_eq!(view.state::<Database>().artwork_decode_count(), 0);
     let first = invoke(
-        &webview,
+        &view,
         "get_track_artwork",
-        serde_json::json!({"trackId":1,"size":40}),
+        serde_json::json!({"trackId":1,"size":128}),
     )
     .unwrap();
     assert_eq!(
@@ -273,28 +278,32 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
             .unwrap()
             .to_rgba8()
             .dimensions(),
-        (40, 20)
+        (128, 64)
     );
-    assert_eq!(app.state::<Database>().artwork_decode_count(), 1);
-    let shared = invoke(
-        &webview,
-        "get_track_artwork",
-        serde_json::json!({"trackId":2,"size":40}),
-    )
-    .unwrap();
-    assert_eq!(first, shared);
-    let album = invoke(
-        &webview,
-        "get_album_artwork",
-        serde_json::json!({"albumArtist":"Artist","album":"Album","size":40}),
-    )
-    .unwrap();
-    assert_eq!(first, album);
-    assert_eq!(app.state::<Database>().artwork_decode_count(), 1);
+    assert_eq!(view.state::<Database>().artwork_decode_count(), 1);
+    assert_eq!(
+        invoke(
+            &view,
+            "get_track_artwork",
+            serde_json::json!({"trackId":2,"size":128})
+        )
+        .unwrap(),
+        first
+    );
+    assert_eq!(
+        invoke(
+            &view,
+            "get_album_artwork",
+            serde_json::json!({"albumArtist":"Artist","album":"Album","size":128})
+        )
+        .unwrap(),
+        first
+    );
+    assert_eq!(view.state::<Database>().artwork_decode_count(), 1);
     let large = invoke(
-        &webview,
+        &view,
         "get_track_artwork",
-        serde_json::json!({"trackId":1,"size":160}),
+        serde_json::json!({"trackId":1,"size":512}),
     )
     .unwrap();
     assert_eq!(
@@ -302,30 +311,18 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
             .unwrap()
             .to_rgba8()
             .dimensions(),
-        (160, 80)
+        (512, 256)
     );
-    assert_eq!(app.state::<Database>().artwork_decode_count(), 2);
-    drop(webview);
-    app.state::<Database>().close_test_connection();
-    drop(app);
-    let database = Database::open(&path).unwrap();
-    let app = tauri::test::mock_builder()
-        .manage(database)
-        .invoke_handler(tauri::generate_handler![
-            get_track_artwork,
-            get_album_artwork
-        ])
-        .build(tauri::generate_context!())
-        .unwrap();
-    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-        .build()
-        .unwrap();
+    assert_eq!(view.state::<Database>().artwork_decode_count(), 2);
+    view.state::<Database>().close_test_connection();
+    drop(view);
+    let view = webview(Database::open_with_cache(&path, &cache).unwrap());
     for id in [1, 2] {
         assert_eq!(
             invoke(
-                &webview,
+                &view,
                 "get_track_artwork",
-                serde_json::json!({"trackId":id,"size":40})
+                serde_json::json!({"trackId":id,"size":128})
             )
             .unwrap(),
             first
@@ -333,51 +330,104 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
     }
     assert_eq!(
         invoke(
-            &webview,
+            &view,
             "get_track_artwork",
-            serde_json::json!({"trackId":1,"size":160})
+            serde_json::json!({"trackId":1,"size":512})
         )
         .unwrap(),
         large
     );
-    assert_eq!(app.state::<Database>().artwork_decode_count(), 0);
-    drop(webview);
-    app.state::<Database>().close_test_connection();
-    drop(app);
-    std::fs::remove_file(path).unwrap();
+    assert_eq!(view.state::<Database>().artwork_decode_count(), 0);
+    view.state::<Database>().close_test_connection();
+    drop(view);
+    // Evict the entire cache while keeping the offline library snapshot.
+    std::fs::remove_dir_all(&cache).unwrap();
+    let view = webview(Database::open_with_cache(&path, &cache).unwrap());
+    assert_eq!(
+        invoke(
+            &view,
+            "get_track_artwork",
+            serde_json::json!({"trackId":1,"size":128})
+        )
+        .unwrap(),
+        first
+    );
+    assert_eq!(view.state::<Database>().artwork_decode_count(), 1);
+    view.state::<Database>().close_test_connection();
 }
 
 #[test]
-fn artwork_commands_accept_only_sizes_in_the_shared_range() {
-    let app = tauri::test::mock_builder()
-        .manage(Database::open(":memory:").unwrap())
-        .invoke_handler(tauri::generate_handler![
-            get_track_artwork,
-            get_album_artwork
-        ])
-        .build(tauri::generate_context!())
-        .unwrap();
-    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-        .build()
-        .unwrap();
+fn artwork_commands_accept_only_the_three_shared_sizes() {
+    let webview = webview(Database::open(":memory:").unwrap());
     for command in ["get_track_artwork", "get_album_artwork"] {
-        for size in [1, super::super::MAX_ARTWORK_SIZE] {
+        for size in super::super::cache::SIZES {
             assert!(invoke(
                 &webview,
                 command,
-                serde_json::json!({"trackId": 999, "size": size})
+                serde_json::json!({"trackId":999,"size":size})
             )
             .unwrap()
             .is_empty());
         }
-        for size in [0, super::super::MAX_ARTWORK_SIZE + 1] {
-            let error = invoke(
-                &webview,
-                command,
-                serde_json::json!({"trackId": 999, "size": size}),
-            )
-            .unwrap_err();
-            assert_eq!(error, "封面尺寸必须在 1 到 4096 之间");
+        for size in [0, 1, 80, 129, 513, 2049, 4096] {
+            assert_eq!(
+                invoke(
+                    &webview,
+                    command,
+                    serde_json::json!({"trackId":999,"size":size})
+                )
+                .unwrap_err(),
+                "封面尺寸必须为 128、512 或 2048"
+            );
+        }
+    }
+}
+
+#[test]
+fn transparent_background_colour_does_not_bleed_into_downscaled_edges() {
+    let image = RgbaImage::from_fn(384, 384, |x, _| {
+        if x % 3 == 0 {
+            Rgba([255, 255, 255, 255])
+        } else {
+            Rgba([0, 0, 0, 0])
+        }
+    });
+    let mut original = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(image)
+        .write_to(&mut original, ImageFormat::Png)
+        .unwrap();
+    let bytes = super::super::encoding::thumbnail(original.get_ref(), 128).unwrap();
+    let decoded = image::load_from_memory(&bytes).unwrap().to_rgba8();
+    assert_eq!(decoded.dimensions(), (128, 128));
+    let mut translucent = 0;
+    for pixel in decoded.pixels() {
+        if pixel[3] > 0 && pixel[3] < 255 {
+            translucent += 1;
+            assert!(
+                pixel.0[..3].iter().all(|channel| *channel >= 252),
+                "dark alpha fringe: {pixel:?}"
+            );
+        }
+    }
+    assert!(translucent > 0);
+}
+
+#[test]
+fn alpha_edges_survive_lossy_encoding_without_upscaling_small_originals() {
+    let database = Database::open(":memory:").unwrap();
+    let image = RgbaImage::from_fn(32, 32, |x, _| Rgba([255, 255, 255, (x * 8).min(255) as u8]));
+    let mut original = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(image.clone())
+        .write_to(&mut original, ImageFormat::Png)
+        .unwrap();
+    let bytes = super::super::thumbnail(&database, original.into_inner(), 512).unwrap();
+    assert!(bytes.windows(4).any(|bytes| bytes == b"VP8 "));
+    let decoded = image::load_from_memory(&bytes).unwrap().to_rgba8();
+    assert_eq!(decoded.dimensions(), image.dimensions());
+    for (expected, actual) in image.pixels().zip(decoded.pixels()) {
+        assert_eq!(actual[3], expected[3]);
+        if actual[3] > 0 {
+            assert_color(actual.0, expected.0);
         }
     }
 }

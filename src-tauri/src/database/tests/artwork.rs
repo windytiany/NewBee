@@ -82,14 +82,14 @@ fn scanned_directory_cover_is_available_for_tracks_albums_and_playlists_offline(
     let thumbnail = invoke(
         &webview,
         "get_track_artwork",
-        serde_json::json!({"trackId": 1, "size": 80}),
+        serde_json::json!({"trackId": 1, "size": 128}),
     );
     let tauri::ipc::InvokeResponseBody::Raw(thumbnail) = thumbnail else {
         panic!("Expected binary thumbnail");
     };
     let thumbnail = image::load_from_memory(&thumbnail).unwrap().to_rgb8();
-    assert_eq!(thumbnail.dimensions(), (80, 80));
-    assert_eq!(thumbnail.get_pixel(40, 40).0, [0, 0, 0]);
+    assert_eq!(thumbnail.dimensions(), (2, 2));
+    assert_eq!(thumbnail.get_pixel(1, 1).0, [0, 0, 0]);
     let album = invoke(
         &webview,
         "get_album_artwork",
@@ -636,9 +636,9 @@ fn thumbnail_derivation_does_not_block_metadata_reads() {
         let (release_tx, release_rx) = mpsc::channel();
         let database = &database;
         let derivation = scope.spawn(move || {
-            database.track_artwork_bytes(1, Some(600), |original, size| {
+            database.track_artwork_bytes(1, Some(512), |original, size| {
                 assert_eq!(original, b"original");
-                assert_eq!(size, 600);
+                assert_eq!(size, 512);
                 started_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
                 Ok(b"thumbnail".to_vec())
@@ -681,7 +681,7 @@ fn concurrent_track_and_album_requests_share_one_thumbnail() {
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
         let first = scope.spawn(move || {
-            database.track_artwork_bytes(1, Some(600), |_, _| {
+            database.track_artwork_bytes(1, Some(512), |_, _| {
                 started_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
                 Ok(b"shared thumbnail".to_vec())
@@ -692,14 +692,14 @@ fn concurrent_track_and_album_requests_share_one_thumbnail() {
         let track_tx = requested_tx.clone();
         let track = scope.spawn(move || {
             track_tx.send(()).unwrap();
-            database.track_artwork_bytes(2, Some(600), |_, _| panic!("shared image derived twice"))
+            database.track_artwork_bytes(2, Some(512), |_, _| panic!("shared image derived twice"))
         });
         let album = scope.spawn(move || {
             requested_tx.send(()).unwrap();
             database.album_artwork_bytes(
                 Some("Artist".into()),
                 Some("Album".into()),
-                Some(600),
+                Some(512),
                 |_, _| panic!("album derived shared image again"),
             )
         });
@@ -733,11 +733,11 @@ fn artwork_during_update(
                 database.album_artwork_bytes(
                     Some("Artist".into()),
                     Some("Album".into()),
-                    Some(600),
+                    Some(512),
                     derive,
                 )
             } else {
-                database.track_artwork_bytes(1, Some(600), derive)
+                database.track_artwork_bytes(1, Some(512), derive)
             }
         });
         started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -777,7 +777,7 @@ fn association_replacement_during_derivation_does_not_publish_old_thumbnail() {
     assert!(result.unwrap_err().contains("Artwork changed"));
     assert_eq!(
         database
-            .track_artwork_bytes(1, Some(600), |original, _| {
+            .track_artwork_bytes(1, Some(512), |original, _| {
                 assert_eq!(original, b"replacement");
                 Ok(b"new thumbnail".to_vec())
             })
@@ -788,7 +788,7 @@ fn association_replacement_during_derivation_does_not_publish_old_thumbnail() {
     // must not have published its derived bytes even there.
     assert_eq!(
         database
-            .track_artwork_bytes(2, Some(600), |original, _| {
+            .track_artwork_bytes(2, Some(512), |original, _| {
                 assert_eq!(original, b"original");
                 Ok(b"other thumbnail".to_vec())
             })
@@ -806,7 +806,7 @@ fn association_removal_during_derivation_returns_no_artwork() {
     });
     assert!(result.unwrap().is_empty());
     assert!(database
-        .track_artwork_bytes(1, Some(600), |_, _| panic!("removed artwork derived"))
+        .track_artwork_bytes(1, Some(512), |_, _| panic!("removed artwork derived"))
         .unwrap()
         .is_empty());
 }
@@ -851,7 +851,7 @@ fn album_selection_change_during_derivation_does_not_return_old_thumbnail() {
             .album_artwork_bytes(
                 Some("Artist".into()),
                 Some("Album".into()),
-                Some(600),
+                Some(512),
                 |original, _| {
                     assert_eq!(original, b"second");
                     Ok(b"current album thumbnail".to_vec())
@@ -870,14 +870,14 @@ fn cold_thumbnail_derivation_does_not_block_cached_thumbnails_or_originals() {
     let database = Database::open(":memory:").unwrap();
     super::support::insert_track(&database, 1, None, None, 1, Some(b"original"));
     database
-        .track_artwork_bytes(1, Some(80), |_, _| Ok(b"cached thumbnail".to_vec()))
+        .track_artwork_bytes(1, Some(128), |_, _| Ok(b"cached thumbnail".to_vec()))
         .unwrap();
     std::thread::scope(|scope| {
         let database = &database;
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
         let cold = scope.spawn(move || {
-            database.track_artwork_bytes(1, Some(600), |_, _| {
+            database.track_artwork_bytes(1, Some(512), |_, _| {
                 started_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
                 Ok(b"cold thumbnail".to_vec())
@@ -888,7 +888,7 @@ fn cold_thumbnail_derivation_does_not_block_cached_thumbnails_or_originals() {
         scope.spawn(move || {
             let original = database.track_artwork_bytes(1, None, |_, _| panic!("original derived"));
             let cached = database
-                .track_artwork_bytes(1, Some(80), |_, _| panic!("cached thumbnail derived"));
+                .track_artwork_bytes(1, Some(128), |_, _| panic!("cached thumbnail derived"));
             warm_tx.send((original, cached)).unwrap();
         });
         let warm = warm_rx.recv_timeout(Duration::from_secs(5));

@@ -769,8 +769,8 @@ describe("大队列封面调度", () => {
     const current = mountArtwork(900);
     expect(invokedTrackIds).toEqual([800, 801, 900]);
     expect(invokedArtworkRequests).toEqual([
-      { trackId: 800, size: 80 },
-      { trackId: 801, size: 80 },
+      { trackId: 800, size: 128 },
+      { trackId: 801, size: 128 },
       { trackId: 900, size: null },
     ]);
     await settleArtwork();
@@ -795,7 +795,7 @@ it("同曲目缩略图与原图分别共享，失效时两种用途都刷新并�
   await settleArtwork();
   expect(invokedArtworkRequests).toEqual([
     { trackId: 950, size: null },
-    { trackId: 950, size: 80 },
+    { trackId: 950, size: 128 },
   ]);
   expect(new Uint8Array(await imageBlobs[0]!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
   invalidateTrackArtworkCache([950]);
@@ -813,18 +813,22 @@ it("实际尺寸就绪后才请求，尺寸变化不复用旧 URL，更新只刷
   expect(artwork?.status.value).toBe("loading");
   size.value = 40;
   await settleArtwork();
-  expect(invokedArtworkRequests).toEqual([{ trackId: 701, size: 40 }]);
+  expect(invokedArtworkRequests).toEqual([{ trackId: 701, size: 128 }]);
   const oldUrl = artwork?.url.value;
   size.value = 120;
   await settleArtwork();
+  expect(invokedArtworkRequests).toEqual([{ trackId: 701, size: 128 }]);
+  expect(artwork?.url.value).toBe(oldUrl);
+  size.value = 129;
+  await settleArtwork();
   expect(invokedArtworkRequests[invokedArtworkRequests.length - 1]).toEqual({
     trackId: 701,
-    size: 120,
+    size: 512,
   });
   expect(artwork?.url.value).not.toBe(oldUrl);
   invalidateTrackArtworkCache([701]);
   await settleArtwork();
-  expect(invokedArtworkRequests.map((request) => request.size)).toEqual([40, 120, 120]);
+  expect(invokedArtworkRequests.map((request) => request.size)).toEqual([128, 512, 512]);
 });
 
 it("保留当前尺寸封面不新增加载订阅或额外请求原图", async () => {
@@ -851,5 +855,5 @@ it("同曲目和尺寸的元数据对象更新不重读封面", async () => {
   await settleArtwork();
   track.value = { id: 703, title: "new" };
   await settleArtwork();
-  expect(invokedArtworkRequests).toEqual([{ trackId: 703, size: 96 }]);
+  expect(invokedArtworkRequests).toEqual([{ trackId: 703, size: 128 }]);
 });

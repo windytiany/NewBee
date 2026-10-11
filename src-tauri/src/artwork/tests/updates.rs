@@ -1,4 +1,4 @@
-use super::ipc::{fixture, invoke};
+use super::ipc::{assert_color, fixture, invoke};
 use crate::{
     artwork::{get_album_artwork, get_track_artwork},
     database::{write::WriteState, Database},
@@ -50,7 +50,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
         let bytes = invoke(
             &webview,
             "get_track_artwork",
-            serde_json::json!({"trackId":id,"size":64}),
+            serde_json::json!({"trackId":id,"size":128}),
         )
         .unwrap();
         assert!(
@@ -76,7 +76,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
         assert_eq!(serde_json::to_value(result).unwrap()["updated"], 2);
     };
     let shared_red = read(1);
-    assert_eq!(color(&shared_red), [255, 0, 0, 255]);
+    assert_color(color(&shared_red), [255, 0, 0, 255]);
     assert_eq!(read(2), shared_red);
     assert_eq!(app.state::<Database>().artwork_decode_count(), 1);
 
@@ -100,11 +100,11 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     assert!(saved[0].file_written && saved[0].database_updated);
     let mut tagged = lofty::read_from_path(&one).unwrap();
     assert_eq!(tagged.primary_tag().unwrap().pictures()[0].data(), blue);
-    assert_eq!(color(&read(1)), [0, 0, 255, 255]);
+    assert_color(color(&read(1)), [0, 0, 255, 255]);
     assert_eq!(read(2), shared_red);
     assert_eq!(app.state::<Database>().artwork_decode_count(), 2);
     scan();
-    assert_eq!(color(&read(1)), [0, 0, 255, 255]);
+    assert_color(color(&read(1)), [0, 0, 255, 255]);
     assert_eq!(app.state::<Database>().artwork_decode_count(), 2);
 
     // Confirmed embedded removal switches back to the still-shared directory image.
@@ -119,14 +119,14 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     std::fs::write(&cover, &green).unwrap();
     scan();
     let shared_green = read(1);
-    assert_eq!(color(&shared_green), [0, 255, 0, 255]);
+    assert_color(color(&shared_green), [0, 255, 0, 255]);
     assert_eq!(read(2), shared_green);
     assert_eq!(app.state::<Database>().artwork_decode_count(), 3);
     assert_eq!(
         invoke(
             &webview,
             "get_album_artwork",
-            serde_json::json!({"albumArtist":null,"album":null,"size":64})
+            serde_json::json!({"albumArtist":null,"album":null,"size":128})
         )
         .unwrap(),
         shared_green
@@ -145,7 +145,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     assert!(invoke(
         &webview,
         "get_album_artwork",
-        serde_json::json!({"albumArtist":null,"album":null,"size":64})
+        serde_json::json!({"albumArtist":null,"album":null,"size":128})
     )
     .unwrap()
     .is_empty());

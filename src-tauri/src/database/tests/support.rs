@@ -25,7 +25,14 @@ pub(super) fn insert_track(
         .unwrap();
 
     if let Some(image) = artwork {
-        connection.execute("INSERT INTO artwork_images (mime_type, image) VALUES ('image/png', ?1) ON CONFLICT(image) DO NOTHING", [image]).unwrap();
-        connection.execute("INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) SELECT ?1, id, 'embedded', ?2 FROM artwork_images WHERE image = ?3", params![id, format!("track-{id}.mp3"), image]).unwrap();
+        let image_id = super::super::artwork::persist_image(
+            &connection,
+            &super::super::ArtworkContent {
+                mime_type: "image/png".into(),
+                image: image.to_vec(),
+            },
+        )
+        .unwrap();
+        connection.execute("INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) VALUES (?1, ?2, 'embedded', ?3)", params![id, image_id, format!("track-{id}.mp3")]).unwrap();
     }
 }

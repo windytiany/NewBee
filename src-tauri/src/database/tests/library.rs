@@ -252,7 +252,7 @@ fn removing_track_cascades_playlist_items_without_deleting_the_file() {
         .connection()
         .unwrap()
         .execute(
-            "INSERT INTO artwork_images (mime_type, image) VALUES ('image/png', X'0102')",
+            "INSERT INTO artwork_images (mime_type, digest, image) VALUES ('image/png', zeroblob(32), X'0102')",
             [],
         )
         .unwrap();

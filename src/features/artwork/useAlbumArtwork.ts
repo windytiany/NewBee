@@ -1,4 +1,5 @@
 import { t } from "@/shared/i18n/locale";
+import { selectArtworkSize } from "@/features/artwork/size";
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onScopeDispose, shallowRef, toValue, watch } from "vue";
 import type { MaybeRefOrGetter } from "vue";
@@ -53,9 +54,10 @@ export function useAlbumArtwork(
   const stop = watch(
     () => {
       const album = toValue(selection);
-      return album === null || toValue(size) === 0
+      const selectedSize = selectArtworkSize(toValue(size));
+      return album === null || selectedSize === 0
         ? null
-        : JSON.stringify([album.albumArtist, album.album, toValue(size)]);
+        : JSON.stringify([album.albumArtist, album.album, selectedSize]);
     },
     (key) => {
       unsubscribe?.();
@@ -67,7 +69,7 @@ export function useAlbumArtwork(
       const isNew = entry === undefined;
       if (!entry) {
         const selectedAlbum = { ...album };
-        const selectedSize = toValue(size);
+        const selectedSize = selectArtworkSize(toValue(size));
         entry = {
           resource: createArtworkResource(
             () =>

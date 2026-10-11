@@ -1,3 +1,5 @@
+mod artwork;
+
 use super::*;
 use crate::playback::session::SavedSession;
 use crate::settings::Settings;
@@ -121,7 +123,7 @@ fn fixture(root: &Path) -> Database {
          INSERT INTO playlists (id, name) VALUES (1, 'favorites');
          INSERT INTO playlist_items (playlist_id, track_id, position) VALUES (1, 1, 0);
          INSERT INTO track_lyrics (track_id, text) VALUES (1, 'lyrics');
-         INSERT INTO artwork_images (id, mime_type, image) VALUES (1, 'image/png', X'010203');
+         INSERT INTO artwork_images (id, mime_type, digest, image) VALUES (1, 'image/png', zeroblob(32), X'010203');
          INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) VALUES (1, 1, 'embedded', 'C:\\Music\\missing.flac');"
     ).unwrap();
     database
@@ -312,7 +314,9 @@ fn equivalent_schema_spelling_can_be_imported_and_restores_deleted_album() {
                     "tracks",
                     "track_lyrics",
                     "skipped_tracks",
-                    "artwork_thumbnails",
+                    "digest",
+                    "content_id",
+                    "idx_artwork_images_digest",
                     "music_library_directories",
                     "playlists",
                     "playlist_items",
@@ -477,8 +481,6 @@ fn inline_table_constraints_and_declaration_order_restore_the_same_structure() {
 
 #[test]
 fn incompatible_schema_is_rejected_before_staging_or_replacing_original_data() {
-    let max = crate::artwork::MAX_ARTWORK_SIZE.to_string();
-    let changed_max = (crate::artwork::MAX_ARTWORK_SIZE - 1).to_string();
     let changes = [
         ("column", "title TEXT", "title TEXT, unexpected TEXT"),
         ("type", "duration_ms INTEGER", "duration_ms TEXT"),
@@ -501,19 +503,19 @@ fn incompatible_schema_is_rejected_before_staging_or_replacing_original_data() {
         ),
         ("default", "DEFAULT 0", "DEFAULT 1"),
         (
-            "primary key order",
-            "PRIMARY KEY (image_id, size)",
-            "PRIMARY KEY (size, image_id)",
+            "digest index column",
+            "ON artwork_images(digest)",
+            "ON artwork_images(content_id)",
         ),
         (
             "primary key conflict",
-            "PRIMARY KEY (image_id, size)",
-            "PRIMARY KEY (image_id, size) ON CONFLICT REPLACE",
+            "track_id INTEGER PRIMARY KEY REFERENCES",
+            "track_id INTEGER PRIMARY KEY ON CONFLICT REPLACE REFERENCES",
         ),
         (
             "primary key removed",
-            ",\n    PRIMARY KEY (image_id, size)",
-            "",
+            "track_id INTEGER PRIMARY KEY REFERENCES",
+            "track_id INTEGER UNIQUE REFERENCES",
         ),
         (
             "foreign key target",
@@ -528,8 +530,8 @@ fn incompatible_schema_is_rejected_before_staging_or_replacing_original_data() {
         ),
         (
             "deferred foreign key",
-            "REFERENCES artwork_images(id) ON DELETE CASCADE",
-            "REFERENCES artwork_images(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED",
+            "REFERENCES tracks(id) ON DELETE CASCADE",
+            "REFERENCES tracks(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED",
         ),
         ("unique", "path TEXT NOT NULL UNIQUE", "path TEXT NOT NULL"),
         (
@@ -590,7 +592,7 @@ fn incompatible_schema_is_rejected_before_staging_or_replacing_original_data() {
         ),
         ("check literal escaping", "'embedded'", "'em''bedded'"),
         ("check literal whitespace", "'embedded'", "'embedded '"),
-        ("check bound", max.as_str(), changed_max.as_str()),
+        ("check bound", "length(digest) = 32", "length(digest) = 31"),
         (
             "trigger timing",
             "AFTER DELETE ON track_artwork",
