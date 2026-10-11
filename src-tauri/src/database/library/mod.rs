@@ -6,8 +6,8 @@ use super::{
 };
 use crate::artwork::model::TrackArtwork;
 use crate::library::model::{
-    AlbumArtistSummary, AlbumSummary, MusicLibraryDirectory, TrackDetails, TrackPlaybackInfo,
-    TrackSummary,
+    AlbumSummary, ArtistSummary, LibraryGroup, LibraryGrouping, MusicLibraryDirectory,
+    TrackDetails, TrackPlaybackInfo, TrackSummary,
 };
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use rusqlite::{params, OptionalExtension};
@@ -81,38 +81,40 @@ impl Database {
         Ok(outcome)
     }
 
-    pub fn list_album_artists(&self) -> Result<Vec<AlbumArtistSummary>, String> {
+    pub fn list_artists(&self, grouping: LibraryGrouping) -> Result<Vec<ArtistSummary>, String> {
+        let column = grouping.column();
         let connection = self.connection()?;
         let mut statement = connection
-            .prepare(
-                "SELECT album_artist, COUNT(*)
+            .prepare(&format!(
+                "SELECT group_artist, COUNT(*)
                  FROM (
-                     SELECT album_artist, album
+                     SELECT {column} AS group_artist, album_artist, album
                      FROM tracks
-                     GROUP BY album_artist, album
+                     GROUP BY {column}, album_artist, album
                  )
-                 GROUP BY album_artist
-                 ORDER BY album_artist IS NOT NULL, album_artist COLLATE NOCASE, album_artist",
-            )
-            .map_err(|error| format!("Failed to prepare album artist query: {error}"))?;
+                 GROUP BY group_artist
+                 ORDER BY group_artist IS NOT NULL, group_artist COLLATE NOCASE, group_artist",
+            ))
+            .map_err(|error| format!("Failed to prepare artist query: {error}"))?;
         let rows = statement
             .query_map([], |row| {
-                Ok(AlbumArtistSummary {
-                    album_artist: row.get(0)?,
+                Ok(ArtistSummary {
+                    artist: row.get(0)?,
                     album_count: row.get(1)?,
                 })
             })
-            .map_err(|error| format!("Failed to list album artists: {error}"))?;
+            .map_err(|error| format!("Failed to list artists: {error}"))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|error| format!("Failed to read album artists: {error}"))
+            .map_err(|error| format!("Failed to read artists: {error}"))
     }
 
     pub fn list_albums(
         &self,
-        album_artist: Option<String>,
+        group: LibraryGroup,
         sort_by: AlbumSortBy,
         sort_order: AlbumSortOrder,
     ) -> Result<Vec<AlbumSummary>, String> {
+        let column = group.grouping.column();
         let direction = match sort_order {
             AlbumSortOrder::Ascending => "ASC",
             AlbumSortOrder::Descending => "DESC",
@@ -130,7 +132,12 @@ impl Database {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(&format!(
-                "SELECT album,
+                "WITH grouped_albums AS (
+                     SELECT DISTINCT album_artist AS group_album_artist, album AS group_album
+                     FROM tracks
+                     WHERE {column} IS ?1
+                 )
+                 SELECT album, album_artist,
                         MIN(
                             CASE
                                 WHEN substr(release_date, 1, 4) GLOB '[0-9][0-9][0-9][0-9]'
@@ -144,16 +151,17 @@ impl Database {
                             END
                         ) AS sort_release_date
                  FROM tracks
-                 WHERE album_artist IS ?1
-                 GROUP BY album
-                 ORDER BY {order_by}",
+                 JOIN grouped_albums ON album_artist IS group_album_artist AND album IS group_album
+                 GROUP BY album_artist, album
+                 ORDER BY {order_by}, album_artist IS NOT NULL, album_artist COLLATE NOCASE, album_artist",
             ))
             .map_err(|error| format!("Failed to prepare album query: {error}"))?;
         let rows = statement
-            .query_map(params![album_artist], |row| {
+            .query_map(params![group.artist], |row| {
                 Ok(AlbumSummary {
                     album: row.get(0)?,
-                    year: row.get(1)?,
+                    album_artist: row.get(1)?,
+                    year: row.get(2)?,
                 })
             })
             .map_err(|error| format!("Failed to list albums: {error}"))?;
@@ -195,19 +203,27 @@ impl Database {
         &self,
         album_artist: Option<String>,
         album: Option<String>,
+        group: Option<LibraryGroup>,
     ) -> Result<Vec<TrackSummary>, String> {
+        let filter = group.as_ref().map_or_else(String::new, |group| {
+            format!(" AND {} IS ?3", group.grouping.column())
+        });
         let connection = self.connection()?;
         let mut statement = connection
-            .prepare(
+            .prepare(&format!(
                 "SELECT id, title, artist, album, duration_ms, disc_number, track_number
                  FROM tracks
-                 WHERE album_artist IS ?1 AND album IS ?2
+                 WHERE album_artist IS ?1 AND album IS ?2{filter}
                  ORDER BY disc_number IS NULL, disc_number,
                           track_number IS NULL, track_number, id",
-            )
+            ))
             .map_err(|error| format!("Failed to prepare album track query: {error}"))?;
+        let mut parameters = vec![album_artist, album];
+        if let Some(group) = group {
+            parameters.push(group.artist);
+        }
         let rows = statement
-            .query_map(params![album_artist, album], |row| {
+            .query_map(rusqlite::params_from_iter(parameters), |row| {
                 Ok(TrackSummary {
                     disc_number: row.get(5)?,
                     track_number: row.get(6)?,

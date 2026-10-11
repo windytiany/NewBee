@@ -1,8 +1,170 @@
 use super::super::Database;
 use super::support::insert_track;
 use crate::artwork::model::TrackArtwork;
+use crate::library::model::{LibraryGroup, LibraryGrouping};
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use rusqlite::params;
+
+#[test]
+fn artist_grouping_preserves_album_identity_and_filters_compilation_tracks() {
+    let database = Database::open(":memory:").unwrap();
+    for (id, album_artist, artist) in [
+        (1, Some("Various Artists"), Some("A")),
+        (2, Some("Various Artists"), Some("B")),
+        (3, Some("Various Artists"), Some("A")),
+        (4, Some("Other"), Some("A")),
+        (5, Some("Various Artists"), None),
+        (6, None, Some("A / B")),
+        (7, None, None),
+    ] {
+        insert_track(&database, id, album_artist, Some("Compilation"), id, None);
+        database
+            .connection()
+            .unwrap()
+            .execute(
+                "UPDATE tracks SET artist = ?1, release_date = ?3 WHERE id = ?2",
+                params![artist, id, if id == 2 { "2020" } else { "2024" }],
+            )
+            .unwrap();
+    }
+    let artists = database.list_artists(LibraryGrouping::Artist).unwrap();
+    assert_eq!(
+        artists
+            .iter()
+            .map(|artist| (artist.artist.as_deref(), artist.album_count))
+            .collect::<Vec<_>>(),
+        vec![
+            (None, 2),
+            (Some("A"), 2),
+            (Some("A / B"), 1),
+            (Some("B"), 1)
+        ]
+    );
+    let album_artists = database.list_artists(LibraryGrouping::AlbumArtist).unwrap();
+    assert_eq!(
+        album_artists
+            .iter()
+            .map(|artist| (artist.artist.as_deref(), artist.album_count))
+            .collect::<Vec<_>>(),
+        vec![(None, 1), (Some("Other"), 1), (Some("Various Artists"), 1)]
+    );
+    let albums = database
+        .list_albums(
+            LibraryGroup {
+                grouping: LibraryGrouping::Artist,
+                artist: Some("A".into()),
+            },
+            AlbumSortBy::Name,
+            AlbumSortOrder::Ascending,
+        )
+        .unwrap();
+    assert_eq!(
+        albums
+            .iter()
+            .map(|album| (album.album_artist.as_deref(), album.album.as_deref()))
+            .collect::<Vec<_>>(),
+        vec![
+            (Some("Other"), Some("Compilation")),
+            (Some("Various Artists"), Some("Compilation"))
+        ]
+    );
+    assert_eq!(
+        albums.iter().map(|album| album.year).collect::<Vec<_>>(),
+        vec![Some(2024), Some(2020)]
+    );
+    let tracks = database
+        .list_album_tracks(
+            Some("Various Artists".into()),
+            Some("Compilation".into()),
+            Some(LibraryGroup {
+                grouping: LibraryGrouping::Artist,
+                artist: Some("A".into()),
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        tracks.iter().map(|track| track.id).collect::<Vec<_>>(),
+        vec![1, 3]
+    );
+    let all_tracks = database
+        .list_album_tracks(
+            Some("Various Artists".into()),
+            Some("Compilation".into()),
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        all_tracks.iter().map(|track| track.id).collect::<Vec<_>>(),
+        vec![1, 2, 3, 5]
+    );
+    let unknown = database
+        .list_album_tracks(
+            Some("Various Artists".into()),
+            Some("Compilation".into()),
+            Some(LibraryGroup {
+                grouping: LibraryGrouping::Artist,
+                artist: None,
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        unknown.iter().map(|track| track.id).collect::<Vec<_>>(),
+        vec![5]
+    );
+    let unknown_albums = database
+        .list_albums(
+            LibraryGroup {
+                grouping: LibraryGrouping::Artist,
+                artist: None,
+            },
+            AlbumSortBy::Name,
+            AlbumSortOrder::Ascending,
+        )
+        .unwrap();
+    assert_eq!(unknown_albums.len(), 2);
+}
+
+#[test]
+fn artist_grouping_counts_and_matches_albums_with_null_names() {
+    let database = Database::open(":memory:").unwrap();
+    for (id, album_artist) in [(1, None), (2, None), (3, Some("Other"))] {
+        insert_track(&database, id, album_artist, None, id, None);
+        database
+            .connection()
+            .unwrap()
+            .execute("UPDATE tracks SET artist = 'A' WHERE id = ?1", [id])
+            .unwrap();
+    }
+    let artists = database.list_artists(LibraryGrouping::Artist).unwrap();
+    assert_eq!(artists.len(), 1);
+    assert_eq!(artists[0].album_count, 2);
+    let albums = database
+        .list_albums(
+            LibraryGroup {
+                grouping: LibraryGrouping::Artist,
+                artist: Some("A".into()),
+            },
+            AlbumSortBy::Name,
+            AlbumSortOrder::Ascending,
+        )
+        .unwrap();
+    assert_eq!(albums.len(), 2);
+    assert!(albums.iter().all(|album| album.album.is_none()));
+    let tracks = database
+        .list_album_tracks(
+            None,
+            None,
+            Some(LibraryGroup {
+                grouping: LibraryGrouping::Artist,
+                artist: Some("A".into()),
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        tracks.iter().map(|track| track.id).collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+}
 
 #[test]
 fn album_tracks_expose_disc_and_track_numbers_in_disc_order() {
@@ -24,7 +186,7 @@ fn album_tracks_expose_disc_and_track_numbers_in_disc_order() {
             .unwrap();
     }
     let tracks = database
-        .list_album_tracks(Some("Artist".to_owned()), Some("Album".to_owned()))
+        .list_album_tracks(Some("Artist".to_owned()), Some("Album".to_owned()), None)
         .unwrap();
     assert_eq!(
         tracks
@@ -96,7 +258,14 @@ fn album_date_sorting_uses_full_dates_but_exposes_only_the_year() {
         ),
     ] {
         let albums = database
-            .list_albums(Some("Artist".to_owned()), AlbumSortBy::Year, sort_order)
+            .list_albums(
+                LibraryGroup {
+                    grouping: LibraryGrouping::AlbumArtist,
+                    artist: Some("Artist".to_owned()),
+                },
+                AlbumSortBy::Year,
+                sort_order,
+            )
             .unwrap();
         assert_eq!(
             albums
@@ -202,7 +371,14 @@ fn album_sorting_supports_names_years_and_both_directions() {
         ),
     ] {
         let albums = database
-            .list_albums(Some("Artist".to_owned()), sort_by, sort_order)
+            .list_albums(
+                LibraryGroup {
+                    grouping: LibraryGrouping::AlbumArtist,
+                    artist: Some("Artist".to_owned()),
+                },
+                sort_by,
+                sort_order,
+            )
             .unwrap();
         assert_eq!(
             albums
@@ -222,7 +398,14 @@ fn album_sorting_supports_names_years_and_both_directions() {
         );
     }
     let unknown_artist = database
-        .list_albums(None, AlbumSortBy::Year, AlbumSortOrder::Descending)
+        .list_albums(
+            LibraryGroup {
+                grouping: LibraryGrouping::AlbumArtist,
+                artist: None,
+            },
+            AlbumSortBy::Year,
+            AlbumSortOrder::Descending,
+        )
         .unwrap();
     assert!(unknown_artist.is_empty());
 }

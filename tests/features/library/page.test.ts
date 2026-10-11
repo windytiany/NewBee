@@ -6,8 +6,8 @@ import { transpileScript, evaluateSource } from "../../support/module/loader";
 import type { useLibraryBrowser } from "@/features/library/browser/useBrowser";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 
-const artist = { albumArtist: "Artist", albumCount: 1 };
-const album = { album: "Album", year: 2024 };
+const artist = { artist: "Artist", albumCount: 1 };
+const album = { albumArtist: "Artist", album: "Album", year: 2024 };
 const track = {
   discNumber: 1,
   trackNumber: 1,
@@ -80,7 +80,7 @@ dependencies["@tauri-apps/api/core"] = {
     if (command === "remove_track_from_library" && databaseDeleteError) {
       throw databaseDeleteError;
     }
-    if (command === "list_album_artists") return [artist];
+    if (command === "list_artists") return [artist];
     if (command === "list_albums") return availableAlbums;
     if (command === "list_album_tracks") {
       albumTrackRequests.push(args ?? {});
@@ -117,6 +117,8 @@ dependencies["@/features/library/events"] = {
 
 dependencies["@/features/library/browser/useSelection"] = {
   useLibrarySelection: () => ({
+    grouping: ref("albumArtist"),
+    setGrouping: () => {},
     selectedGroup,
     selectedAlbum,
     setAvailableGroups: () => {},
@@ -126,7 +128,7 @@ dependencies["@/features/library/browser/useSelection"] = {
     },
     selectAlbum: (selected: typeof album | null) => {
       selectedAlbum.value = selected
-        ? { albumArtist: selectedGroup.value?.albumArtist ?? null, album: selected.album }
+        ? { albumArtist: selected.albumArtist, album: selected.album }
         : null;
     },
   }),
@@ -349,11 +351,11 @@ describe("library page switching", () => {
     active.value = true;
     await settleRequests();
     expect(page.artists.value).toEqual([artist]);
-    expect(invokeCalls).toEqual(["list_album_artists"]);
+    expect(invokeCalls).toEqual(["list_artists"]);
     active.value = false;
     active.value = true;
     await settleRequests();
-    expect(invokeCalls).toEqual(["list_album_artists"]);
+    expect(invokeCalls).toEqual(["list_artists"]);
   });
 
   it("retries interrupted loading and ignores results from before deactivation", async () => {
@@ -415,7 +417,7 @@ describe("library page switching", () => {
     active.value = true;
     await settleRequests();
     expect(page.tracks.value).toEqual(availableTracks);
-    expect(invokeCalls).toEqual(["list_album_artists", "list_albums", "list_album_tracks"]);
+    expect(invokeCalls).toEqual(["list_artists", "list_albums", "list_album_tracks"]);
     invokeCalls = [];
     active.value = false;
     active.value = true;
@@ -430,7 +432,7 @@ describe("library album sorting updates", () => {
     await loadTrack(page);
     const selection = page.selectedAlbum.value;
     if (!selection) throw new Error("Album selection was not initialized.");
-    availableAlbums = [{ album: "New album", year: 2025 }, album];
+    availableAlbums = [{ albumArtist: "Artist", album: "New album", year: 2025 }, album];
     globalThis.window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
     await settleRequests();
     expect(page.albums.value).toEqual(availableAlbums);
@@ -444,7 +446,7 @@ describe("library album sorting updates", () => {
     const page = mountLibraryPage(active);
     await loadTrack(page);
     active.value = false;
-    availableAlbums = [{ album: "New album", year: 2025 }, album];
+    availableAlbums = [{ albumArtist: "Artist", album: "New album", year: 2025 }, album];
     const beforeUpdate = invokeCalls.length;
     globalThis.window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
     await settleRequests();
@@ -502,7 +504,7 @@ describe("library album actions", () => {
     expect(page.trackActionMessage.value).toBe("");
     expect(databaseDeleteCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
     expect(queueRemovalCalls).toEqual([track.id, secondTrack.id, thirdTrack.id]);
-    expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(2);
+    expect(invokeCalls.filter((command) => command === "list_artists")).toHaveLength(2);
   });
 
   it("clears playback and the entire queue when deleting the active track's album", async () => {
@@ -631,7 +633,7 @@ describe("library track actions", () => {
       1,
     );
     expect(page.trackActionError.value).toBe("从曲库移除失败，请重试或查看日志");
-    expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(1);
+    expect(invokeCalls.filter((command) => command === "list_artists")).toHaveLength(1);
   });
 
   it("treats a missing queue row as a complete deletion", async () => {
@@ -645,7 +647,7 @@ describe("library track actions", () => {
     expect(invokeCalls.filter((command) => command === "remove_track_from_library")).toHaveLength(
       1,
     );
-    expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(2);
+    expect(invokeCalls.filter((command) => command === "list_artists")).toHaveLength(2);
     expect(page.trackActionError.value).toBe("");
   });
 
@@ -666,7 +668,7 @@ describe("library track actions", () => {
     expect(invokeCalls.filter((command) => command === "remove_track_from_library")).toHaveLength(
       1,
     );
-    expect(invokeCalls.filter((command) => command === "list_album_artists")).toHaveLength(2);
+    expect(invokeCalls.filter((command) => command === "list_artists")).toHaveLength(2);
   });
 
   it("does not report queue exceptions as stop failures", async () => {

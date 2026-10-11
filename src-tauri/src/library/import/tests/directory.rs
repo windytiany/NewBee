@@ -25,7 +25,7 @@ fn scans_nested_and_overlapping_directories_once_in_either_order() {
             (result.added, result.updated, result.skipped, result.failed),
             (2, 0, 1, 0)
         );
-        let tracks = database.list_album_tracks(None, None).unwrap();
+        let tracks = database.list_album_tracks(None, None, None).unwrap();
         assert_eq!(tracks.len(), 2);
         assert!(database.get_track(3).unwrap().is_none());
     }

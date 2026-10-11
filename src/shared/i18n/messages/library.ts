@@ -8,6 +8,7 @@ export const libraryMessages: Record<string, string> = {
   专辑曲目操作: "Album track actions",
   专辑演出者: "Album artist",
   专辑演出者列表: "Album artists",
+  演出者列表: "Artists",
   从库中删除: "Remove from library",
   从当前歌单移除: "Remove from playlist",
   从曲库中删除专辑: "Remove album from library",
@@ -16,6 +17,8 @@ export const libraryMessages: Record<string, string> = {
   "创建歌单失败，请查看日志": "Could not create playlist. Check the logs.",
   删除歌单: "Delete playlist",
   "删除歌单失败，请查看日志": "Could not delete playlist. Check the logs.",
+  "删除此专辑中当前演出者的曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。":
+    "This artist's tracks in this album will be removed from the library, all playlists, and the current queue. Files will not be deleted. Scan again to reimport them.",
   "删除此专辑的全部曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。":
     "All tracks in this album will be removed from the library, all playlists, and the current queue. Files will not be deleted. Scan again to reimport them.",
   "删除此歌单无法撤销。不会删除曲库歌曲或磁盘文件，也不会改变当前播放队列。":

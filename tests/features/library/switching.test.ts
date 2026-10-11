@@ -33,9 +33,9 @@ function mountBrowser() {
     configurable: true,
     value: { getItem: () => null, setItem: () => {} },
   });
-  const artist = { albumArtist: "Artist", albumCount: 1 };
-  const album = { album: "Album", year: 2024 };
-  const replacement = { album: "New album", year: 2025 };
+  const artist = { artist: "Artist", albumCount: 1 };
+  const album = { albumArtist: "Artist", album: "Album", year: 2024 };
+  const replacement = { albumArtist: "Artist", album: "New album", year: 2025 };
   let availableAlbums: AlbumSummary[] = [album];
   const requests: string[] = [];
   const lifecycle = { browserMounts: 0, browserUnmounts: 0, cardMounts: 0, cardUnmounts: 0 };
@@ -48,7 +48,7 @@ function mountBrowser() {
       invoke: async (command: string) => {
         requests.push(command);
         switch (command) {
-          case "list_album_artists":
+          case "list_artists":
             return [artist];
           case "list_albums":
             return availableAlbums;
@@ -112,6 +112,7 @@ function mountBrowser() {
         Vue.h("div", { hidden: !active.value }, [
           Vue.h(AlbumBrowser, {
             artist: page.selectedGroup.value,
+            grouping: page.grouping.value,
             albums: page.albums.value,
             selectedAlbum: page.selectedAlbum.value,
             tracks: page.tracks.value,
@@ -185,7 +186,7 @@ it("keeps real album cards and cover subscriptions mounted across inactive/activ
   await settle();
   const card = findNode(fixture.root, (node) => node.type === "article");
   expect(card).not.toBeNull();
-  expect(fixture.requests).toEqual(["list_album_artists", "list_albums", "get_album_artwork"]);
+  expect(fixture.requests).toEqual(["list_artists", "list_albums", "get_album_artwork"]);
 
   for (let index = 0; index < 3; index += 1) {
     fixture.active.value = false;
@@ -203,7 +204,7 @@ it("keeps real album cards and cover subscriptions mounted across inactive/activ
       cardUnmounts: 0,
     });
     expect(fixture.covers).toEqual({ subscriptions: 1, unsubscriptions: 0 });
-    expect(fixture.requests).toEqual(["list_album_artists", "list_albums", "get_album_artwork"]);
+    expect(fixture.requests).toEqual(["list_artists", "list_albums", "get_album_artwork"]);
   }
 });
 
@@ -263,7 +264,7 @@ it("refreshes the mounted album browser on activation after a library change whi
   expect(
     findNode(fixture.root, (node) => node.props["aria-label"] === "查看专辑 Album"),
   ).toBeNull();
-  expect(fixture.requests).toEqual(["list_album_artists", "list_albums", "get_album_artwork"]);
+  expect(fixture.requests).toEqual(["list_artists", "list_albums", "get_album_artwork"]);
   expect(fixture.lifecycle.browserMounts).toBe(1);
   expect(fixture.lifecycle.browserUnmounts).toBe(0);
 });

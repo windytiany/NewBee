@@ -30,10 +30,12 @@ const library = useLibrary(toRef(props, "active"), {
     <SidePane side="left" class="col-start-1 row-start-1 max-md:hidden">
       <ArtistList
         :artists="library.page.artists"
+        :grouping="library.page.grouping"
         :selected-artist="library.page.selectedGroup"
         :is-loading="library.page.isLoadingArtists"
         :error="library.page.artistsError"
         @select="library.page.selectArtist"
+        @select-grouping="library.page.selectGrouping"
       />
     </SidePane>
     <section
@@ -41,6 +43,7 @@ const library = useLibrary(toRef(props, "active"), {
     >
       <AlbumBrowser
         :artist="library.page.selectedGroup"
+        :grouping="library.page.grouping"
         :albums="library.page.albums"
         :selected-album="library.page.selectedAlbum"
         :tracks="library.page.tracks"

@@ -1,7 +1,7 @@
 <template>
   <section
     ref="browserElement"
-    v-persistent-scroll="JSON.stringify(['library', artist?.albumArtist, selectedAlbum])"
+    v-persistent-scroll="JSON.stringify(['library', grouping, artist?.artist, selectedAlbum])"
     aria-labelledby="album-browser-heading"
     :aria-busy="props.trackActionPending || props.albumsLoading"
     class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 [scrollbar-gutter:stable] flex-col overflow-y-auto text-white"
@@ -11,7 +11,7 @@
     <template v-if="props.artist">
       <header class="shrink-0 px-5 py-6 sm:px-8 sm:py-8">
         <h1 id="album-browser-heading" class="text-3xl font-bold tracking-tight sm:text-4xl">
-          {{ props.artist.albumArtist ?? t("未知演出者") }}
+          {{ props.artist.artist ?? t("未知演出者") }}
         </h1>
       </header>
       <p
@@ -30,11 +30,14 @@
               v-for="(album, index) in row.albums"
               :key="getAlbumKey(album)"
               :album="album"
-              :album-artist="props.artist.albumArtist"
+              :album-artist="album.albumArtist"
               :cover-index="row.startIndex + index"
               :is-selected="isSelectedAlbum(album)"
               :is-focused="albumFocus.isFocused(getAlbumKey(album))"
-              :is-context-menu-open="albumMenu?.contextMenu?.payload.album === album.album"
+              :is-context-menu-open="
+                albumMenu?.contextMenu?.payload.album === album.album &&
+                albumMenu?.contextMenu?.payload.albumArtist === album.albumArtist
+              "
               @select="toggleAlbum(album)"
               @play="playAlbum(album)"
               @context-menu="openAlbumContextMenu(album, $event)"
@@ -60,7 +63,7 @@
             <AlbumDetail
               :album="row.selectedAlbum"
               :background="selectedArtwork.background.value"
-              :album-artist="props.artist.albumArtist"
+              :album-artist="row.selectedAlbum.albumArtist"
               :tracks="props.tracks"
               :current-track-id="props.currentTrackId"
               :is-playing="props.isPlaying"
@@ -117,7 +120,8 @@ import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import type {
   LibraryAlbumSelection,
-  AlbumArtistSummary,
+  ArtistSummary,
+  LibraryGrouping,
   AlbumSummary,
   TrackSummary,
 } from "@/features/library/types";
@@ -140,7 +144,8 @@ const SMALL_SCREEN_BREAKPOINT = 640;
 const WIDE_SCREEN_BREAKPOINT = 1280;
 
 const props = defineProps<{
-  artist: AlbumArtistSummary | null;
+  artist: ArtistSummary | null;
+  grouping: LibraryGrouping;
   albums: AlbumSummary[];
   selectedAlbum: LibraryAlbumSelection | null;
   tracks: TrackSummary[];
@@ -189,13 +194,13 @@ function openAlbumContextMenu(
   albumFocus.focusItem(getAlbumKey(album));
   albumMenu.value?.open({
     ...request,
-    album: { albumArtist: props.artist.albumArtist, album: album.album },
+    album: albumSelection(album),
   });
 }
 
 const columnCount = ref(2);
 const albumListScope = computed(() =>
-  JSON.stringify(["library", "albums", props.artist?.albumArtist ?? null]),
+  JSON.stringify(["library", "albums", props.grouping, props.artist?.artist ?? null]),
 );
 const albumFocus = useItemSelection(albumListScope);
 
@@ -279,14 +284,14 @@ onUnmounted(() => {
 });
 
 function getAlbumKey(album: AlbumSummary) {
-  return JSON.stringify([props.artist?.albumArtist ?? null, album.album]);
+  return JSON.stringify([album.albumArtist, album.album]);
 }
 
 function isSelectedAlbum(album: AlbumSummary) {
   return (
     props.artist !== null &&
     props.selectedAlbum !== null &&
-    props.selectedAlbum.albumArtist === props.artist.albumArtist &&
+    props.selectedAlbum.albumArtist === album.albumArtist &&
     props.selectedAlbum.album === album.album
   );
 }
@@ -296,10 +301,20 @@ function toggleAlbum(album: AlbumSummary) {
   emit("selectAlbum", isSelectedAlbum(album) ? null : album);
 }
 
+function albumSelection(album: AlbumSummary): LibraryAlbumSelection {
+  return {
+    albumArtist: album.albumArtist,
+    album: album.album,
+    ...(props.grouping === "artist"
+      ? { group: { grouping: props.grouping, artist: props.artist?.artist ?? null } }
+      : {}),
+  };
+}
+
 function playAlbum(album: AlbumSummary) {
   if (!props.artist || props.trackActionPending) return;
   albumFocus.focusItem(getAlbumKey(album));
-  emit("playAlbum", { albumArtist: props.artist.albumArtist, album: album.album });
+  emit("playAlbum", albumSelection(album));
 }
 
 function closeAlbum(album: AlbumSummary) {

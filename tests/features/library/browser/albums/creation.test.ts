@@ -79,8 +79,9 @@ function mountBrowser() {
   );
   const root = createHostNode("root");
   const app = createHostRenderer(createHostNode).createApp(AlbumBrowser, {
-    artist: { albumArtist: "Expanded artist", albumCount: 1 },
-    albums: [{ album: "Expanded album", year: null }],
+    artist: { artist: "Expanded artist", albumCount: 1 },
+    grouping: "albumArtist",
+    albums: [{ albumArtist: "Expanded artist", album: "Expanded album", year: null }],
     selectedAlbum: { albumArtist: "Expanded artist", album: "Expanded album" },
     tracks: [],
     currentTrackId: null,

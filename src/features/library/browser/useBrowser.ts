@@ -6,10 +6,16 @@ import { useLibraryActions } from "@/features/library/composables/useActions";
 import { createLibraryApi } from "@/features/library/api";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
-import type { AlbumArtistSummary, AlbumSummary, TrackSummary } from "@/features/library/types";
+import type {
+  ArtistSummary,
+  AlbumSummary,
+  LibraryAlbumSelection,
+  LibraryGrouping,
+  TrackSummary,
+} from "@/features/library/types";
 
 export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
-  const artists = ref<AlbumArtistSummary[]>([]);
+  const artists = ref<ArtistSummary[]>([]);
   const albums = ref<AlbumSummary[]>([]);
   const tracks = ref<TrackSummary[]>([]);
   const isLoadingArtists = ref(false);
@@ -21,6 +27,8 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   const actions = useLibraryActions(tracks, isLoadingTracks, invoke);
   const api = createLibraryApi(invoke);
   const {
+    grouping,
+    setGrouping,
     selectedGroup,
     selectedAlbum,
     setAvailableGroups,
@@ -35,15 +43,20 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   let albumsRequestGeneration = 0;
   let tracksRequestGeneration = 0;
 
-  function sameGroup(left: AlbumArtistSummary | null, right: AlbumArtistSummary | null) {
-    return left?.albumArtist === right?.albumArtist;
+  function sameGroup(left: ArtistSummary | null, right: ArtistSummary | null) {
+    return left !== null && right !== null && left.artist === right.artist;
   }
 
   function sameAlbumSelection(
-    left: { albumArtist: string | null; album: string | null } | null,
-    right: { albumArtist: string | null; album: string | null } | null,
+    left: LibraryAlbumSelection | null,
+    right: LibraryAlbumSelection | null,
   ) {
-    return left?.albumArtist === right?.albumArtist && left?.album === right?.album;
+    return (
+      left?.albumArtist === right?.albumArtist &&
+      left?.album === right?.album &&
+      left?.group?.grouping === right?.group?.grouping &&
+      left?.group?.artist === right?.group?.artist
+    );
   }
 
   function errorMessage(error: unknown) {
@@ -66,7 +79,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
     artistsError.value = "";
 
     try {
-      const result = await api.listArtists();
+      const result = await api.listArtists(grouping.value);
       if (!isMounted || !active.value || generation !== artistsRequestGeneration) return;
 
       artists.value = result;
@@ -77,11 +90,12 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
       } else {
         albums.value = [];
         tracks.value = [];
+        isLoadingTracks.value = false;
       }
     } catch (error) {
       if (!isMounted || !active.value || generation !== artistsRequestGeneration) return;
       libraryNeedsRefresh = true;
-      artistsError.value = `读取专辑演出者失败：${errorMessage(error)}`;
+      artistsError.value = `读取演出者失败：${errorMessage(error)}`;
       isLoadingTracks.value = false;
     } finally {
       if (isMounted && active.value && generation === artistsRequestGeneration) {
@@ -90,7 +104,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
     }
   }
 
-  async function loadAlbums(group: AlbumArtistSummary) {
+  async function loadAlbums(group: ArtistSummary) {
     if (!isMounted || !active.value || !sameGroup(selectedGroup.value, group)) return;
 
     const generation = ++albumsRequestGeneration;
@@ -103,7 +117,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
     isLoadingAlbums.value = true;
 
     try {
-      const result = await api.listAlbums(group.albumArtist);
+      const result = await api.listAlbums({ grouping: grouping.value, artist: group.artist });
       if (
         !isMounted ||
         !active.value ||
@@ -114,9 +128,9 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
       }
 
       albums.value = result;
-      setAvailableAlbums(group.albumArtist, result);
+      setAvailableAlbums(group.artist, result);
       const selection = selectedAlbum.value;
-      if (selection && selection.albumArtist === group.albumArtist) {
+      if (selection) {
         void loadTracks(selection);
       } else {
         isLoadingTracks.value = false;
@@ -133,7 +147,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
     }
   }
 
-  async function loadTracks(selection: { albumArtist: string | null; album: string | null }) {
+  async function loadTracks(selection: LibraryAlbumSelection) {
     if (!isMounted || !active.value || !sameAlbumSelection(selectedAlbum.value, selection)) return;
 
     const generation = ++tracksRequestGeneration;
@@ -171,7 +185,21 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
     }
   }
 
-  function selectArtist(artist: AlbumArtistSummary) {
+  function selectGrouping(next: LibraryGrouping) {
+    if (next === grouping.value) return;
+    deactivate();
+    setGrouping(next);
+    artists.value = [];
+    albums.value = [];
+    tracks.value = [];
+    artistsError.value = "";
+    albumsError.value = "";
+    tracksError.value = "";
+    libraryNeedsRefresh = true;
+    void refreshLibrary();
+  }
+
+  function selectArtist(artist: ArtistSummary) {
     selectGroup(artist);
     void loadAlbums(artist);
   }
@@ -253,6 +281,8 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
     artistsError,
     albumsError,
     tracksError,
+    grouping,
+    selectGrouping,
     selectedGroup,
     selectedAlbum,
     refreshLibrary,

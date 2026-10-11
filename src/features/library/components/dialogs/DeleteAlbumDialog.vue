@@ -20,7 +20,9 @@
         <p id="delete-album-dialog-description" class="text-app-muted mt-3 text-sm leading-6">
           {{
             t(
-              "删除此专辑的全部曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。",
+              album.group?.grouping === "artist"
+                ? "删除此专辑中当前演出者的曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。"
+                : "删除此专辑的全部曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。",
             )
           }}
         </p>

@@ -120,7 +120,7 @@ pub fn run() {
             lyrics::batch::commit_lyrics_download_step,
             lyrics::batch::complete_lyrics_download_step,
             lyrics::batch::cancel_lyrics_download,
-            library::commands::list_album_artists,
+            library::commands::list_artists,
             library::commands::list_albums,
             artwork::get_album_artwork,
             library::commands::list_album_tracks,

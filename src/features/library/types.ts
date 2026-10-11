@@ -1,9 +1,17 @@
-export type AlbumArtistSummary = {
-  albumArtist: string | null;
+export type LibraryGrouping = "albumArtist" | "artist";
+
+export type LibraryGroup = {
+  grouping: LibraryGrouping;
+  artist: string | null;
+};
+
+export type ArtistSummary = {
+  artist: string | null;
   albumCount: number;
 };
 
 export type AlbumSummary = {
+  albumArtist: string | null;
   album: string | null;
   year: number | null;
 };
@@ -47,4 +55,5 @@ export type IngestResult = {
 export type LibraryAlbumSelection = {
   albumArtist: string | null;
   album: string | null;
+  group?: LibraryGroup;
 };

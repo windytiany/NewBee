@@ -1,5 +1,6 @@
 use super::model::{
-    AlbumArtistSummary, AlbumSummary, MusicLibraryDirectory, TrackDetails, TrackSummary,
+    AlbumSummary, ArtistSummary, LibraryGroup, LibraryGrouping, MusicLibraryDirectory,
+    TrackDetails, TrackSummary,
 };
 use crate::database::blocking;
 use crate::playback::session::{synchronize_removal, RemovalResult, SessionCommand};
@@ -57,24 +58,21 @@ pub async fn migrate_library_paths<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub async fn list_album_artists<R: tauri::Runtime>(
+pub async fn list_artists<R: tauri::Runtime>(
+    grouping: LibraryGrouping,
     app: tauri::AppHandle<R>,
-) -> Result<Vec<AlbumArtistSummary>, String> {
-    blocking(app, |database| database.list_album_artists()).await
+) -> Result<Vec<ArtistSummary>, String> {
+    blocking(app, move |database| database.list_artists(grouping)).await
 }
 
 #[tauri::command]
 pub async fn list_albums<R: tauri::Runtime>(
-    album_artist: Option<String>,
+    group: LibraryGroup,
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<AlbumSummary>, String> {
     let settings = app.state::<crate::settings::SettingsState>().get()?;
     blocking(app, move |database| {
-        database.list_albums(
-            album_artist,
-            settings.album_sort_by,
-            settings.album_sort_order,
-        )
+        database.list_albums(group, settings.album_sort_by, settings.album_sort_order)
     })
     .await
 }
@@ -83,10 +81,11 @@ pub async fn list_albums<R: tauri::Runtime>(
 pub async fn list_album_tracks<R: tauri::Runtime>(
     album_artist: Option<String>,
     album: Option<String>,
+    group: Option<LibraryGroup>,
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<TrackSummary>, String> {
     blocking(app, move |database| {
-        database.list_album_tracks(album_artist, album)
+        database.list_album_tracks(album_artist, album, group)
     })
     .await
 }

@@ -32,8 +32,8 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   const calls: string[] = [];
   const effects: Array<readonly number[] | "all" | "albums" | "refresh"> = [];
   const notices: NotificationInput[] = [];
-  const artist = { albumArtist: "Artist", albumCount: 1 };
-  const album = { album: "Album", year: 2024 };
+  const artist = { artist: "Artist", albumCount: 1 };
+  const album = { albumArtist: "Artist", album: "Album", year: 2024 };
   const track = { id: 41, title: "Song", artist: "Artist", album: "Album", durationMs: 100 };
   let tracks = [track, { ...track, id: 42 }];
   const playlists = Vue.ref([{ id: 7, name: "List", trackCount: 2, coverTrackId: 41 }]);
@@ -53,7 +53,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
           if (scanError) throw scanError;
           return scanResult;
         }
-        if (command === "list_album_artists") return [artist];
+        if (command === "list_artists") return [artist];
         if (command === "list_albums") return [album];
         if (command === "list_album_tracks") return tracks;
         if (command === "remove_track_from_library") {
@@ -90,6 +90,8 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT: "settings-changed" },
     "@/features/library/browser/useSelection": {
       useLibrarySelection: () => ({
+        grouping: Vue.ref("albumArtist"),
+        setGrouping: () => {},
         selectedGroup,
         selectedAlbum,
         setAvailableGroups: () => {},
@@ -189,7 +191,7 @@ describe("媒体库变更", () => {
       expect(harness.effects).toEqual(["all", "albums", "refresh"]);
       expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(1);
       expect(harness.calls.filter((command) => command === "list_playlist_tracks")).toHaveLength(1);
-      expect(harness.calls.includes("list_album_artists")).toBe(mode === "Library");
+      expect(harness.calls.includes("list_artists")).toBe(mode === "Library");
       expect(harness.notices[0]?.type).toBe("warning");
     });
   }
@@ -221,7 +223,7 @@ describe("媒体库变更", () => {
     expect(result.deletedCount).toBe(1);
     expect(result.completed).toBe(false);
     expect(harness.effects).toEqual([[41], "albums", "refresh"]);
-    expect(harness.calls.filter((command) => command === "list_album_artists")).toHaveLength(1);
+    expect(harness.calls.filter((command) => command === "list_artists")).toHaveLength(1);
     expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(1);
     expect(harness.playlist.playlists.value[0]?.trackCount).toBe(1);
     expect(harness.playlist.playlistTracks.value.map(({ trackId }) => trackId)).toEqual([42]);

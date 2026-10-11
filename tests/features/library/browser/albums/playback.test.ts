@@ -129,8 +129,9 @@ function mountBrowser(selected = false, initialState: Partial<PlaybackState> = {
   const app = createHostRenderer(createHostNode).createApp({
     setup: () => () =>
       Vue.h(AlbumBrowser, {
-        artist: { albumArtist: "Artist", albumCount: 1 },
-        albums: [{ album: "Album", year: 2024 }],
+        artist: { artist: "Artist", albumCount: 1 },
+        grouping: "albumArtist",
+        albums: [{ albumArtist: "Artist", album: "Album", year: 2024 }],
         selectedAlbum: selectedAlbum.value,
         ...state,
         albumsLoading: false,
@@ -248,7 +249,9 @@ describe("library album cover playback", () => {
       await waitForSingleClick();
       expect(browser.plays).toEqual([{ albumArtist: "Artist", album: "Album" }]);
       expect(browser.toggles).toEqual([]);
-      expect(browser.selections).toEqual(selected ? [] : [{ album: "Album", year: 2024 }]);
+      expect(browser.selections).toEqual(
+        selected ? [] : [{ albumArtist: "Artist", album: "Album", year: 2024 }],
+      );
       expect(browser.selectedAlbum.value?.album).toBe("Album");
     });
   }
@@ -264,7 +267,9 @@ describe("library album cover playback", () => {
         browser.dispatch("onDblclick", 2, interval);
         await waitForSingleClick();
         expect(browser.plays).toEqual([{ albumArtist: "Artist", album: "Album" }]);
-        expect(browser.selections).toEqual(selected ? [] : [{ album: "Album", year: 2024 }]);
+        expect(browser.selections).toEqual(
+          selected ? [] : [{ albumArtist: "Artist", album: "Album", year: 2024 }],
+        );
         expect(browser.selectedAlbum.value?.album).toBe("Album");
       });
     }

@@ -64,7 +64,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         .invoke_handler(tauri::generate_handler![
             crate::playback::session::runtime::playback_session_command,
             crate::playback::session::runtime::playback_session_progress,
-            commands::list_album_artists,
+            commands::list_artists,
             commands::list_albums,
             commands::list_album_tracks,
             commands::get_track,
@@ -103,8 +103,11 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         .unwrap();
     let call = |command: &str, args: Value| json_command(&window, command, args);
     let queries = [
-        ("list_album_artists", json!({})),
-        ("list_albums", json!({"albumArtist":"Artist"})),
+        ("list_artists", json!({"grouping":"albumArtist"})),
+        (
+            "list_albums",
+            json!({"group":{"grouping":"albumArtist","artist":"Artist"}}),
+        ),
         (
             "list_album_tracks",
             json!({"albumArtist":"Artist", "album":"Album"}),
@@ -112,11 +115,23 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         ("get_track", json!({"trackId":1})),
         ("get_track_lyrics", json!({"trackId":1})),
         ("get_editable_tracks", json!({"trackIds":[1]})),
+        ("list_artists", json!({"grouping":"artist"})),
+        (
+            "list_albums",
+            json!({"group":{"grouping":"artist","artist":null}}),
+        ),
+        (
+            "list_album_tracks",
+            json!({"albumArtist":"Artist","album":"Album","group":{"grouping":"artist","artist":null}}),
+        ),
     ];
     let online: Vec<_> = queries
         .iter()
         .map(|(command, args)| call(command, args.clone()))
         .collect();
+    assert_eq!(online[6], json!([{"artist":null,"albumCount":1}]));
+    assert_eq!(online[7][0]["albumArtist"], "Artist");
+    assert_eq!(online[8][0]["id"], 1);
     assert_eq!(online[3]["title"], "Song");
     assert_eq!(online[3]["codec"], "FLAC");
     assert_eq!(online[4], json!({"kind":"plain", "text":"embedded lyrics"}));

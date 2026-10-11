@@ -105,7 +105,7 @@ const AlbumBrowser = (
     default: Vue.Component;
   }
 ).default;
-const album = { album: "Album", year: 2024, trackCount: 1 };
+const album = { albumArtist: "Artist", album: "Album", year: 2024, trackCount: 1 };
 
 function mountBrowser() {
   const renderer = createHostRenderer(createHostNode);
@@ -117,7 +117,8 @@ function mountBrowser() {
   const app = renderer.createApp({
     setup: () => () =>
       Vue.h(AlbumBrowser, {
-        artist: { albumArtist: "Artist" },
+        artist: { artist: "Artist", albumCount: 1 },
+        grouping: "albumArtist",
         albums: [album],
         selectedAlbum: selectedAlbum.value,
         tracks: [{ id: 1, title: "Song" }],

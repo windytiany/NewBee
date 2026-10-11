@@ -1,6 +1,6 @@
 <template>
   <section
-    :aria-label="t('专辑演出者列表')"
+    :aria-label="t(props.grouping === 'artist' ? '演出者列表' : '专辑演出者列表')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
     <div ref="groupingControl" class="relative z-10 shrink-0 px-2 py-1">
@@ -13,7 +13,7 @@
         type="button"
         @click="isGroupingMenuOpen = !isGroupingMenuOpen"
       >
-        <span>{{ t("专辑演出者") }}</span>
+        <span>{{ t(props.grouping === "artist" ? "演出者" : "专辑演出者") }}</span>
         <ChevronDown
           aria-hidden="true"
           class="text-app-muted size-4 transition-transform"
@@ -29,19 +29,28 @@
         :aria-label="t('分组方式')"
       >
         <button
-          aria-checked="true"
+          v-for="option in groupingOptions"
+          :key="option.value"
+          :aria-checked="props.grouping === option.value"
           class="focus-visible:outline-app-accent flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
           role="menuitemradio"
           type="button"
-          @click="isGroupingMenuOpen = false"
+          @click="selectGrouping(option.value)"
         >
-          <Check aria-hidden="true" class="text-app-accent size-4" />
-          <span>{{ t("专辑演出者") }}</span>
+          <Check
+            aria-hidden="true"
+            class="text-app-accent size-4"
+            :class="{ invisible: props.grouping !== option.value }"
+          />
+          <span>{{ t(option.label) }}</span>
         </button>
       </div>
     </div>
 
-    <div v-persistent-scroll="'library:artists'" class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+    <div
+      v-persistent-scroll="`library:artists:${props.grouping}`"
+      class="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
+    >
       <p
         v-if="!props.isLoading && !props.error && props.artists.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
@@ -56,11 +65,11 @@
       >
         <ArtistRow
           v-for="artist in props.artists"
-          :key="getArtistKey(artist.albumArtist)"
-          :name="artist.albumArtist ?? t('未知演出者')"
+          :key="getArtistKey(artist.artist)"
+          :name="artist.artist ?? t('未知演出者')"
           :album-count="artist.albumCount"
           :is-selected="isSelectedArtist(artist)"
-          :is-focused="artistFocus.isFocused(getArtistKey(artist.albumArtist))"
+          :is-focused="artistFocus.isFocused(getArtistKey(artist.artist))"
           @select="selectArtist(artist)"
         />
       </ul>
@@ -75,25 +84,30 @@ import { Check, ChevronDown } from "@lucide/vue";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
-import type { AlbumArtistSummary } from "@/features/library/types";
+import type { ArtistSummary, LibraryGrouping } from "@/features/library/types";
 import ArtistRow from "@/features/library/browser/artists/ArtistRow.vue";
 
 const props = defineProps<{
-  artists: AlbumArtistSummary[];
-  selectedArtist: AlbumArtistSummary | null;
+  artists: ArtistSummary[];
+  selectedArtist: ArtistSummary | null;
+  grouping: LibraryGrouping;
   isLoading: boolean;
   error: string;
 }>();
 
 const emit = defineEmits<{
-  select: [artist: AlbumArtistSummary];
+  select: [artist: ArtistSummary];
+  selectGrouping: [grouping: LibraryGrouping];
 }>();
 
-const artistListScope = "library:artist-navigation";
+const groupingOptions = [
+  { value: "albumArtist", label: "专辑演出者" },
+  { value: "artist", label: "演出者" },
+] as const;
+
+const artistListScope = computed(() => `library:artist-navigation:${props.grouping}`);
 const artistFocus = useItemSelection(artistListScope);
-const artistItemKeys = computed(() =>
-  props.artists.map((artist) => getArtistKey(artist.albumArtist)),
-);
+const artistItemKeys = computed(() => props.artists.map((artist) => getArtistKey(artist.artist)));
 
 const artistKeyboard = createItemKeyboard({
   getItemKeys: () => artistItemKeys.value,
@@ -102,24 +116,30 @@ const artistKeyboard = createItemKeyboard({
     if (!artistFocus.isFocused(key)) artistFocus.focusItem(key);
   },
   onMove: (key) => {
-    const artist = props.artists.find((entry) => getArtistKey(entry.albumArtist) === key);
+    const artist = props.artists.find((entry) => getArtistKey(entry.artist) === key);
     if (artist) selectArtist(artist);
   },
 });
 
 watch(artistItemKeys, (itemKeys) => artistFocus.syncVisibleItems(itemKeys), { immediate: true });
 
-function getArtistKey(albumArtist: string | null) {
-  return JSON.stringify([albumArtist]);
+function getArtistKey(artist: string | null) {
+  return JSON.stringify([artist]);
 }
 
-function isSelectedArtist(artist: AlbumArtistSummary) {
-  return props.selectedArtist?.albumArtist === artist.albumArtist;
+function isSelectedArtist(artist: ArtistSummary) {
+  return props.selectedArtist !== null && props.selectedArtist.artist === artist.artist;
 }
 
-function selectArtist(artist: AlbumArtistSummary) {
-  artistFocus.focusItem(getArtistKey(artist.albumArtist));
+function selectArtist(artist: ArtistSummary) {
+  artistFocus.focusItem(getArtistKey(artist.artist));
   emit("select", artist);
+}
+
+function selectGrouping(grouping: LibraryGrouping) {
+  isGroupingMenuOpen.value = false;
+  emit("selectGrouping", grouping);
+  groupingButton.value?.focus();
 }
 
 const isGroupingMenuOpen = ref(false);
