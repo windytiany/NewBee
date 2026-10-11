@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../../support/module/loader";
 
 import { createLyricsSearch } from "@/features/lyrics/download/search";
 import { searchQuery } from "@/features/lyrics/download/query";

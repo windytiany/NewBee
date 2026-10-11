@@ -199,7 +199,7 @@ pub struct SessionReply {
     edit_token: Option<u64>,
 }
 
-#[path = "session_runtime.rs"]
+mod audio;
 pub(crate) mod runtime;
 pub(crate) use runtime::{initialize, synchronize_removal, system_command};
 #[cfg(test)]

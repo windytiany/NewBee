@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { compileSfc, evaluateSource } from "../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../support/module/loader";
 
-import { createHostNode, createHostRenderer } from "../support/hostRenderer";
-import type { HostNode } from "../support/hostRenderer";
+import { createHostNode, createHostRenderer } from "../support/host/renderer";
+import type { HostNode } from "../support/host/renderer";
 import type { PlaylistSummary } from "@/features/playlist/types";
 import { notifications, notify } from "@/shared/notifications/center";
 import { useNotification } from "@/shared/notifications/useNotification";
-import { loadLibraryModules } from "../features/library/pageModules";
-import { loadPlaylistModules } from "../features/playlist/pageModules";
+import { loadLibraryModules } from "../features/library/modules";
+import { loadPlaylistModules } from "../features/playlist/modules";
 
 const playlist: PlaylistSummary = {
   id: 7,
@@ -217,7 +217,7 @@ async function createComponent(source: string) {
     "@/app/shell/TitleBar.vue",
     "@/shared/components/SidePane.vue",
     "@/features/playback/queue/components/QueuePanel.vue",
-    "@/features/playback/components/current-track/TrackInfoPanel.vue",
+    "@/features/playback/components/current/TrackInfoPanel.vue",
   ]) {
     modules[name] = defaultModule(passiveComponent);
   }

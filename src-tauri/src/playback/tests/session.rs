@@ -199,11 +199,11 @@ fn boundary(session: &mut Session<FakeAudio>, key: &str) {
     session.audio.playing = true;
 }
 
-#[path = "session_lifecycle.rs"]
+#[path = "session/lifecycle.rs"]
 mod lifecycle;
-#[path = "session_persistence.rs"]
+#[path = "session/persistence.rs"]
 mod persistence;
-#[path = "session_queue.rs"]
+#[path = "session/queue.rs"]
 mod queue;
 
 impl SessionAudio for Arc<Mutex<FakeAudio>> {
@@ -262,7 +262,7 @@ pub(crate) fn initialize_test_session<R: tauri::Runtime>(app: &AppHandle<R>, pat
     });
 }
 
-#[path = "session_volume.rs"]
+#[path = "session/volume.rs"]
 mod volume;
-#[path = "session_worker.rs"]
+#[path = "session/worker.rs"]
 mod worker;

@@ -14,7 +14,6 @@ impl Database {
     }
 }
 
-#[path = "backup_schema.rs"]
 mod schema;
 
 pub(crate) fn validate_backup_database(path: &Path) -> Result<Connection, String> {

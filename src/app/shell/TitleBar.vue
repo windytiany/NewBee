@@ -36,7 +36,7 @@ import ScanDialog from "@/features/library/import/ScanDialog.vue";
 import PathMigrationDialog from "@/features/library/paths/PathMigrationDialog.vue";
 import { useLibraryFileImport } from "@/features/library/import/useFileImport";
 import SettingsDialog from "@/features/settings/components/SettingsDialog.vue";
-import PlaybackStatisticsDialog from "@/features/playback-statistics/PlaybackStatisticsDialog.vue";
+import PlaybackStatisticsDialog from "@/features/playback/statistics/PlaybackStatisticsDialog.vue";
 import type { PageName } from "@/app/pages";
 import type { AppMenuAction } from "@/app/shell/AppMenu.vue";
 

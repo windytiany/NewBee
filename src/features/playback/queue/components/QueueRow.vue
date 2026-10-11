@@ -58,7 +58,7 @@
 import { t } from "@/shared/i18n/locale";
 import { AudioLines, Disc3, SkipForward } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
+import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
 
 const props = withDefaults(

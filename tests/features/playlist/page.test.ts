@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { transpileScript, evaluateSource } from "../../support/moduleLoader";
+import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 import type { PlaylistAvailability } from "@/features/playlist/composables/useState";
 import type { usePlaylistPage } from "@/features/playlist/composables/usePage";

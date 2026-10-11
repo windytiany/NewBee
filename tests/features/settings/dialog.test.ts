@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { locale, setLocale } from "@/shared/i18n/locale";
-import { compileSfc, evaluateSource } from "../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../support/module/loader";
 
-import { HelpDialog } from "../../support/helpDialog";
+import { HelpDialog } from "../../support/help/dialog";
 import {
   createHostNode,
   createHostRenderer,
   findNode,
   getTextContent,
-} from "../../support/hostRenderer";
-import type { HostNode } from "../../support/hostRenderer";
+} from "../../support/host/renderer";
+import type { HostNode } from "../../support/host/renderer";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
 import {
@@ -19,7 +19,7 @@ import {
   SHORTCUT_ACTIONS,
   type ShortcutAction,
 } from "@/features/settings/shortcuts/bindings";
-import * as AccentColor from "@/features/settings/accentColor";
+import * as AccentColor from "@/features/settings/accent";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 type DialogBindings = {
@@ -108,7 +108,7 @@ function createDialog(
       isTauri: () => true,
     },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
-    "@/features/settings/accentColor": AccentColor,
+    "@/features/settings/accent": AccentColor,
     "@/features/settings/appearance": {
       applyAppearance: (settings: Settings) => {
         appliedColors.push(settings.accentColor);
@@ -329,7 +329,7 @@ describe("settings dialog", () => {
         isTauri: () => true,
       },
       "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
-      "@/features/settings/accentColor": AccentColor,
+      "@/features/settings/accent": AccentColor,
       "@/features/settings/appearance": { applyAppearance: () => {} },
     };
     const component = evaluateSource<{ default: Vue.Component }>(

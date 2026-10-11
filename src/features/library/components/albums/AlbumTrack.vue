@@ -49,7 +49,7 @@
 import { t } from "@/shared/i18n/locale";
 import { computed } from "vue";
 import { AudioLines } from "@lucide/vue";
-import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
+import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { TrackSummary } from "@/features/library/types";
 import { formatTrackDuration } from "@/features/library/format";
 

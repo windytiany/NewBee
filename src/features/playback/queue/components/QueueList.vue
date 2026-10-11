@@ -74,10 +74,10 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
-import { useItemSelection } from "@/shared/interaction/useItemSelection";
-import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
-import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
-import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
+import { useItemSelection } from "@/shared/interaction/item/useSelection";
+import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
+import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { formatTrackDuration } from "@/features/library/format";
 import QueueRow from "@/features/playback/queue/components/QueueRow.vue";

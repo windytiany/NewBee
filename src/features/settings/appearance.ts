@@ -1,4 +1,4 @@
-import { applyAccentColor } from "@/features/settings/accentColor";
+import { applyAccentColor } from "@/features/settings/accent";
 import { applyReducedMotion } from "@/features/settings/motion";
 import type { Settings } from "@/features/settings/types";
 

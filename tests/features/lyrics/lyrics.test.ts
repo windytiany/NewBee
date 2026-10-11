@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { notifications, notify } from "@/shared/notifications/center";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
-import { transpileScript, evaluateSource } from "../../support/moduleLoader";
+import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 import { effectScope, nextTick, ref } from "vue";
 import type { EffectScope, Ref } from "vue";

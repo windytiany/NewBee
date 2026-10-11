@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { evaluateSource, transpileScript } from "../../support/moduleLoader";
+import { evaluateSource, transpileScript } from "../../support/module/loader";
 import type { LibraryInvoker } from "@/features/library/api";
 import type { TrackMetadataUpdate } from "@/features/playback/types";
 

@@ -86,7 +86,7 @@ import type { AlbumBackground } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LyricsView from "@/features/lyrics/components/LyricsView.vue";
-import TrackPresentation from "@/features/playback/components/current-track/TrackPresentation.vue";
+import TrackPresentation from "@/features/playback/components/current/TrackPresentation.vue";
 import { canSeekLyrics, seekToLyric } from "@/features/lyrics/seek";
 import { useLyrics } from "@/features/lyrics/composables/useLyrics";
 import {

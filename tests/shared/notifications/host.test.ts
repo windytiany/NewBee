@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import * as Icons from "@lucide/vue";
-import { compileSfc, evaluateSource } from "../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../support/module/loader";
 
-import { createHostRenderer } from "../../support/hostRenderer";
+import { createHostRenderer } from "../../support/host/renderer";
 import { notifications } from "@/shared/notifications/center";
 
 class TestElement {

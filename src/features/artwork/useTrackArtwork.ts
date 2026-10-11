@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import type { TrackArtwork } from "@/features/artwork/types";
-import { createArtworkResource } from "@/features/artwork/artworkResources";
+import { createArtworkResource } from "@/features/artwork/resources";
 import type {
   ArtworkResource,
   ArtworkResourceSnapshot,
   DecodedArtwork,
-} from "@/features/artwork/artworkResources";
+} from "@/features/artwork/resources";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 

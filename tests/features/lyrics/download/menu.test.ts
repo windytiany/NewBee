@@ -1,13 +1,13 @@
 import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../../support/module/loader";
 
 import {
   createHostNode,
   createHostRenderer,
   findNode,
   getTextContent,
-} from "../../../support/hostRenderer";
+} from "../../../support/host/renderer";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 
 const source = await Bun.file("src/features/lyrics/components/DownloadMenuItem.vue").text();

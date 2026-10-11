@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createMetadataSave } from "@/features/tags/save";
-import { playbackFixture } from "../../support/playbackSession";
+import { playbackFixture } from "../../support/playback/session";
 import type { TagSaveResult } from "@/features/tags/types";
 
 function result(trackId: number, success = true): TagSaveResult {

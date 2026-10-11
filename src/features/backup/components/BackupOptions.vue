@@ -2,7 +2,7 @@
 import { onBeforeUnmount, ref } from "vue";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { captureInterfaceState } from "@/features/backup/interfaceState";
+import { captureInterfaceState } from "@/features/backup/interface";
 import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";

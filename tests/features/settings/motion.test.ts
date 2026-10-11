@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compile } from "tailwindcss";
-import { evaluateSource, transpileScript } from "../../support/moduleLoader";
+import { evaluateSource, transpileScript } from "../../support/module/loader";
 
 const output = transpileScript(
   await Bun.file(new URL("../../../src/features/settings/motion.ts", import.meta.url)).text(),

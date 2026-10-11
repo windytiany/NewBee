@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { locale, setLocale } from "@/shared/i18n/locale";
-import { evaluateSource, transpileScript } from "../../support/moduleLoader";
+import { evaluateSource, transpileScript } from "../../support/module/loader";
 import type { Settings } from "@/features/settings/types";
 
 const output = transpileScript(

@@ -1,7 +1,7 @@
 import { expect, it } from "bun:test";
 import * as Vue from "vue";
-import { evaluateModule, transpileScript } from "../../support/moduleLoader";
-import { playbackFixture, playbackReply, playbackSnapshot } from "../../support/playbackSession";
+import { evaluateModule, transpileScript } from "../../support/module/loader";
+import { playbackFixture, playbackReply, playbackSnapshot } from "../../support/playback/session";
 import type { PlaybackSessionReply } from "@/features/playback/session";
 
 const output = transpileScript(

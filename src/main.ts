@@ -2,7 +2,7 @@ import { createApp } from "vue";
 import "@/app/styles/main.css";
 import { showMainWindow } from "@/app/startup";
 import { installErrorLogging } from "@/app/logging";
-import { restoreInterfaceState } from "@/features/backup/interfaceState";
+import { restoreInterfaceState } from "@/features/backup/interface";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { t } from "@/shared/i18n/locale";

@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { setLocale } from "@/shared/i18n/locale";
-import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../../support/module/loader";
 
 import {
   createHostNode,
   createHostRenderer,
   findNode,
   getTextContent,
-} from "../../../support/hostRenderer";
-import type { HostNode } from "../../../support/hostRenderer";
+} from "../../../support/host/renderer";
+import type { HostNode } from "../../../support/host/renderer";
 import { createTagEditor } from "@/features/tags/manual/useEditor";
 import { TAG_FIELDS } from "@/features/tags/draft";
 import type { EditableTrack, TagChange } from "@/features/tags/types";

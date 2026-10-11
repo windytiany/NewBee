@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { compileSfc, evaluateSource } from "../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../support/module/loader";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 const source = await Bun.file(
@@ -43,7 +43,7 @@ function options({
     vue: { ...Vue, onBeforeUnmount: (callback: () => void) => (unmount = callback) },
     "@tauri-apps/api/core": { invoke, isTauri: () => desktop },
     "@tauri-apps/plugin-dialog": { save, open },
-    "@/features/backup/interfaceState": {
+    "@/features/backup/interface": {
       captureInterfaceState: () => ({ "newbee.active-page": "Library" }),
     },
     "@/shared/notifications/center": {

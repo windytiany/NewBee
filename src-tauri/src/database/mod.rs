@@ -12,10 +12,10 @@ mod library;
 pub(crate) mod lyrics;
 mod metadata;
 mod paths;
-mod playback_statistics;
 mod playlist;
 mod schema;
 mod skip;
+mod statistics;
 #[cfg(test)]
 mod tests;
 pub(crate) mod write;
@@ -27,7 +27,7 @@ fn schema_sql() -> String {
         "__MAX_ARTWORK_SIZE__",
         &crate::artwork::MAX_ARTWORK_SIZE.to_string(),
     );
-    sql.push_str(include_str!("playback_statistics.sql"));
+    sql.push_str(include_str!("statistics.sql"));
     sql
 }
 

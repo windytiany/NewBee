@@ -1,5 +1,5 @@
-mod aac_playability;
-mod flac_id3;
+mod aac;
+mod flac;
 mod snapshot;
 use super::model::{EditingSnapshot, MetadataChange, MetadataField};
 use lofty::config::{ParseOptions, WriteOptions};
@@ -307,7 +307,7 @@ fn write_tag(
     // generic Tag. No raw metadata block parsing or rewriting is needed.
     let options = ParseOptions::default();
     match (file_type, tag.tag_type()) {
-        (FileType::Flac, TagType::Id3v2) if edit_cover => flac_id3::write_tag(file, tag),
+        (FileType::Flac, TagType::Id3v2) if edit_cover => flac::write_tag(file, tag),
         (FileType::Flac, TagType::Id3v2) => {
             Err("FLAC 的只读前置 ID3 不能用于字段编辑，原文件未修改".to_owned())
         }
@@ -508,7 +508,7 @@ pub(crate) fn write_file_with_cover(
         }
     }
     if original.file_type() == FileType::Aac {
-        aac_playability::verify(&temporary.0, &mut destination)?;
+        aac::verify(&temporary.0, &mut destination)?;
     }
     destination.sync_all().map_err(|error| error.to_string())?;
     drop(destination);
@@ -586,7 +586,7 @@ impl Drop for TemporaryFile {
 }
 
 #[cfg(test)]
-#[path = "tests/aac_playability.rs"]
+#[path = "tests/aac.rs"]
 mod aac_tests;
 
 #[cfg(test)]

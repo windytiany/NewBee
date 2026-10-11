@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from "bun:test";
 import { createLogger } from "@/shared/logging/logger";
-import { evaluateSource, transpileScript } from "../support/moduleLoader";
+import { evaluateSource, transpileScript } from "../support/module/loader";
 
 const output = transpileScript(await Bun.file("src/app/logging.ts").text());
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");

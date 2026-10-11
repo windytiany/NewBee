@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { evaluateSource, transpileScript } from "../../../support/moduleLoader";
-import { createHostNode, createHostRenderer } from "../../../support/hostRenderer";
+import { evaluateSource, transpileScript } from "../../../support/module/loader";
+import { createHostNode, createHostRenderer } from "../../../support/host/renderer";
 import { DEFAULT_SHORTCUTS } from "@/features/settings/shortcuts/bindings";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 

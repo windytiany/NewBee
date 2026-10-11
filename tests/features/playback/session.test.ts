@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createPlaybackSession } from "@/features/playback/session";
 import type { PlaybackSessionReply, PlaybackSessionSnapshot } from "@/features/playback/session";
 import type { PlaybackCommandInvoker } from "@/features/playback/types";
-import { playbackFixture, playbackReply, playbackSnapshot } from "../../support/playbackSession";
+import { playbackFixture, playbackReply, playbackSnapshot } from "../../support/playback/session";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

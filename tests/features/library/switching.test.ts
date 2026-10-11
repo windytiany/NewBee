@@ -5,8 +5,8 @@ import type { useLibraryBrowser } from "@/features/library/composables/useBrowse
 import type { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import type { AlbumSummary } from "@/features/library/types";
-import { compileSfc, evaluateSource, transpileScript } from "../../support/moduleLoader";
-import { createHostNode, createHostRenderer, findNode } from "../../support/hostRenderer";
+import { compileSfc, evaluateSource, transpileScript } from "../../support/module/loader";
+import { createHostNode, createHostRenderer, findNode } from "../../support/host/renderer";
 
 const browserSource = await Bun.file(
   new URL("../../../src/features/library/composables/useBrowser.ts", import.meta.url),

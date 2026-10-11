@@ -4,7 +4,7 @@ import { setLocale } from "@/shared/i18n/locale";
 import type { LibraryState } from "@/features/library/composables/useLibrary";
 import { notifications, notify } from "@/shared/notifications/center";
 import { useNotification } from "@/shared/notifications/useNotification";
-import { loadLibraryModules } from "./pageModules";
+import { loadLibraryModules } from "./modules";
 
 type TrackRemovalResult = Awaited<ReturnType<LibraryState["page"]["removeTrackFromLibrary"]>>;
 const track = { id: 41, title: "Song", artist: "Artist", album: "Album", durationMs: 100 };

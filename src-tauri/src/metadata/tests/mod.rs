@@ -1,9 +1,9 @@
 mod cover;
 mod files;
-mod library_workflow;
+mod library;
 mod lyrics;
 mod model;
-mod release_fields;
+mod releases;
 mod save;
 mod snapshot;
 mod support;

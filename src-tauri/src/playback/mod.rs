@@ -4,8 +4,8 @@ pub(crate) mod media;
 mod persistence;
 mod queue;
 pub(crate) mod session;
-mod session_audio;
 mod spectrum;
+pub(crate) mod statistics;
 
 use crate::database::Database;
 use continuous::{ContinuousPlayback, ContinuousSource, PreparedTrack};
@@ -395,9 +395,7 @@ fn start_playback(
     let (source, continuous, transitions) = ContinuousSource::new(
         normalize_track(prepared, channels, sample_rate),
         app.state::<Database>().skipped_tracks(),
-        app.state::<crate::playback_statistics::StatisticsRecorder>()
-            .0
-            .clone(),
+        app.state::<statistics::StatisticsRecorder>().0.clone(),
     );
     let app = app.clone();
     std::thread::spawn(move || {

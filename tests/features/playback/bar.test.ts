@@ -2,12 +2,12 @@ import { setLocale, t } from "@/shared/i18n/locale";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import * as Icons from "@lucide/vue";
-import { compileSfc, evaluateSource } from "../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../support/module/loader";
 
-import { createHostNode, createHostRenderer } from "../../support/hostRenderer";
-import type { HostNode } from "../../support/hostRenderer";
+import { createHostNode, createHostRenderer } from "../../support/host/renderer";
+import type { HostNode } from "../../support/host/renderer";
 import { createPlaybackSession } from "@/features/playback/session";
-import { playbackFixture, playbackReply } from "../../support/playbackSession";
+import { playbackFixture, playbackReply } from "../../support/playback/session";
 import type { PlaybackStatus } from "@/features/playback/types";
 import { useNotification } from "@/shared/notifications/useNotification";
 import { notifications } from "@/shared/notifications/center";

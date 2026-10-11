@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { setLocale } from "@/shared/i18n/locale";
-import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../../support/module/loader";
 
 import {
   createHostNode,
   createHostRenderer,
   findNode,
   getTextContent,
-} from "../../../support/hostRenderer";
-import type { HostNode } from "../../../support/hostRenderer";
+} from "../../../support/host/renderer";
+import type { HostNode } from "../../../support/host/renderer";
 import { createReleaseEditor } from "@/features/tags/releases/useEditor";
-import type { MappingDragOptions } from "@/features/tags/releases/dragMapping";
+import type { MappingDragOptions } from "@/features/tags/releases/mapping/drag";
 import * as metadata from "@/features/tags/draft";
 import { album, local, release } from "./fixtures";
 const mappingSource = await Bun.file(
@@ -230,7 +230,7 @@ describe("album tag views", () => {
         vue: Vue,
         "@/features/tags/draft": metadata,
         "@/features/library/format": { formatTrackDuration: () => "3:00" },
-        "@/features/tags/releases/dragMapping": {
+        "@/features/tags/releases/mapping/drag": {
           createMappingDrag: (options: MappingDragOptions) => ({
             start: (id: number) => {
               if (options.canStart()) options.drop(id, 1);
@@ -442,7 +442,7 @@ describe("album tag views", () => {
         vue: Vue,
         "@/features/tags/draft": metadata,
         "@/features/library/format": { formatTrackDuration: () => "3:00" },
-        "@/features/tags/releases/dragMapping": {
+        "@/features/tags/releases/mapping/drag": {
           createMappingDrag: () => ({ start() {}, cancel() {}, suppressClick() {} }),
         },
       },

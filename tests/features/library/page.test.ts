@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { createRenderer, ref } from "vue";
-import { transpileScript, evaluateSource } from "../../support/moduleLoader";
+import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 import type { useLibraryBrowser } from "@/features/library/composables/useBrowser";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";

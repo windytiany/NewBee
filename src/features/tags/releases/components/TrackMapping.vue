@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { computed, onScopeDispose, ref, watch } from "vue";
-import { createMappingDrag } from "@/features/tags/releases/dragMapping";
-import type { MappingDragPreview } from "@/features/tags/releases/dragMapping";
+import { createMappingDrag } from "@/features/tags/releases/mapping/drag";
+import type { MappingDragPreview } from "@/features/tags/releases/mapping/drag";
 import type { createReleaseEditor } from "@/features/tags/releases/useEditor";
 import type { AlbumField } from "@/features/tags/releases/types";
 import { TAG_FIELDS } from "@/features/tags/draft";

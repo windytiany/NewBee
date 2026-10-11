@@ -19,7 +19,7 @@ import {
   ACCENT_COLORS,
   DEFAULT_ACCENT_COLOR,
   normalizeAccentColor,
-} from "@/features/settings/accentColor";
+} from "@/features/settings/accent";
 import { applyAppearance } from "@/features/settings/appearance";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
 import BackupOptions from "@/features/backup/components/BackupOptions.vue";

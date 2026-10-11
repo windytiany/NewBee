@@ -295,7 +295,7 @@ import { useTagEditor } from "@/features/tags/manual/useEditor";
 import type { DraftField, LyricsMarkAction, TagField } from "@/features/tags/types";
 import TagCoverEditor from "@/features/tags/manual/components/TagCoverEditor.vue";
 import { formatTrackDuration } from "@/features/library/format";
-import { formatPathForDisplay } from "@/shared/filesystem/pathPresentation";
+import { formatPathForDisplay } from "@/shared/filesystem/presentation";
 import LyricsEditor from "@/features/lyrics/components/LyricsEditor.vue";
 import { useLyricsBatch } from "@/features/lyrics/download/batch";
 

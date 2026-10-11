@@ -109,9 +109,9 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
-import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
-import { useItemSelection } from "@/shared/interaction/useItemSelection";
+import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
+import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";

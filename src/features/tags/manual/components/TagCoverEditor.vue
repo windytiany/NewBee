@@ -90,7 +90,7 @@ import {
   readClipboardCover,
   readOriginalCover,
   saveCover,
-} from "@/features/artwork/coverTransfer";
+} from "@/features/artwork/transfer";
 import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
 import type { CoverEdit } from "@/features/tags/types";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";

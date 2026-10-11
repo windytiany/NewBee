@@ -4,8 +4,8 @@ import {
   type createPlaybackSession,
   PLAYBACK_STATUS_POLL_INTERVAL_MS,
 } from "@/features/playback/session";
-import { playbackFixture } from "../../support/playbackSession";
-import { transpileScript, evaluateSource } from "../../support/moduleLoader";
+import { playbackFixture } from "../../support/playback/session";
+import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 let session: ReturnType<typeof createPlaybackSession>;
 const { usePlaybackControls } = evaluateSource<

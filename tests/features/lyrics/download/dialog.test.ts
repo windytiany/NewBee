@@ -2,14 +2,14 @@ import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { setLocale } from "@/shared/i18n/locale";
 import { createLyricsConfirmation } from "@/features/lyrics/download/confirmation";
-import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../../support/module/loader";
 import {
   createHostNode,
   createHostRenderer,
   findNode,
   getTextContent,
-} from "../../../support/hostRenderer";
-import type { HostNode } from "../../../support/hostRenderer";
+} from "../../../support/host/renderer";
+import type { HostNode } from "../../../support/host/renderer";
 
 const source = await Bun.file("src/features/lyrics/components/LyricsDownloadDialog.vue").text();
 const apps: Array<{ unmount: () => void }> = [];

@@ -4,16 +4,16 @@ import { join } from "node:path";
 import * as Vue from "vue";
 import * as ts from "typescript";
 import { compileScript, parse } from "@vue/compiler-sfc";
-import { libraryMessages } from "@/shared/i18n/libraryMessages";
+import { libraryMessages } from "@/shared/i18n/messages/library";
 import { setLocale, t } from "@/shared/i18n/locale";
 import { formatAudioSummary, formatTrackDuration } from "@/features/library/format";
-import { compileSfc, evaluateSource } from "../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../support/module/loader";
 import {
   createHostNode,
   createHostRenderer,
   findNode,
   getTextContent,
-} from "../../support/hostRenderer";
+} from "../../support/host/renderer";
 
 const components = new Map<string, Vue.Component>();
 for (const path of [

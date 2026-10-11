@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { evaluateModule, transpileScript } from "../../support/moduleLoader";
+import { evaluateModule, transpileScript } from "../../support/module/loader";
 import { createLogger, describeError, operationId } from "@/shared/logging/logger";
 import type { LogLevel } from "@/shared/logging/logger";
 

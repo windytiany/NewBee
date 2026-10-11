@@ -13,7 +13,7 @@ import TagEditorDialog from "@/features/tags/manual/components/TagEditorDialog.v
 import ReleaseTagDialog from "@/features/tags/releases/components/ReleaseTagDialog.vue";
 import AppShell from "@/app/shell/AppShell.vue";
 import QueuePanel from "@/features/playback/queue/components/QueuePanel.vue";
-import TrackInfoPanel from "@/features/playback/components/current-track/TrackInfoPanel.vue";
+import TrackInfoPanel from "@/features/playback/components/current/TrackInfoPanel.vue";
 import TitleBar from "@/app/shell/TitleBar.vue";
 
 useShortcuts();

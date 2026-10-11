@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { compileSfc, loadSourceModules, evaluateSource } from "../../support/moduleLoader";
+import { compileSfc, loadSourceModules, evaluateSource } from "../../support/module/loader";
 
-import { createHostNode, createHostRenderer } from "../../support/hostRenderer";
+import { createHostNode, createHostRenderer } from "../../support/host/renderer";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 function deferred<Value>() {

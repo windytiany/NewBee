@@ -3,8 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { computed, onScopeDispose, shallowRef, toValue, watch } from "vue";
 import type { MaybeRefOrGetter } from "vue";
 import type { TrackArtwork } from "@/features/artwork/types";
-import { createArtworkResource } from "@/features/artwork/artworkResources";
-import type { ArtworkResource, ArtworkResourceSnapshot } from "@/features/artwork/artworkResources";
+import { createArtworkResource } from "@/features/artwork/resources";
+import type { ArtworkResource, ArtworkResourceSnapshot } from "@/features/artwork/resources";
 import {
   ALBUM_BACKGROUND_SAMPLE_SIZE,
   createAlbumBackgroundPixels,

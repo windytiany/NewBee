@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import * as Vue from "vue";
 import type { CoverEdit } from "@/features/tags/types";
-import { compileSfc, evaluateSource } from "../../../support/moduleLoader";
+import { compileSfc, evaluateSource } from "../../../support/module/loader";
 import {
   createHostNode,
   createHostRenderer,
   findNode,
   getTextContent,
-} from "../../../support/hostRenderer";
-import type { HostNode } from "../../../support/hostRenderer";
+} from "../../../support/host/renderer";
+import type { HostNode } from "../../../support/host/renderer";
 
 const source = await Bun.file("src/features/tags/manual/components/TagCoverEditor.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
@@ -60,7 +60,7 @@ function mountEditor(
     compileSfc(source, "TagCoverEditor.vue"),
     {
       vue: Vue,
-      "@/features/artwork/coverTransfer": {
+      "@/features/artwork/transfer": {
         hasClipboardCover: async () => false,
         readClipboardCover: async () => [],
         readOriginalCover: async () => [],

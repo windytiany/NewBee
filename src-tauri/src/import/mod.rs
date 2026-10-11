@@ -3,7 +3,6 @@ use serde::Serialize;
 use std::path::Path;
 
 pub(crate) mod directory;
-mod directory_artwork;
 pub(crate) mod files;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -38,7 +37,7 @@ fn import_track(database: &Database, path: &Path, result: &mut ImportResult) {
     match crate::metadata::files::read_track(path) {
         Ok(Some(mut track)) => {
             let fallback = if track.artwork.is_none() {
-                directory_artwork::read_directory_cover(path)
+                directory::artwork::read_directory_cover(path)
             } else {
                 Ok(None)
             };

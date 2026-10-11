@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { ref } from "vue";
-import { evaluateSource, transpileScript } from "../../support/moduleLoader";
+import { evaluateSource, transpileScript } from "../../support/module/loader";
 
 const output = transpileScript(
   await Bun.file(new URL("../../../src/app/shell/useWindow.ts", import.meta.url)).text(),

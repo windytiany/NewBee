@@ -1,0 +1,68 @@
+use super::SessionAudio;
+use crate::database::Database;
+use crate::playback::{self, NowPlayingTrack, PlaybackState, PlaybackStatus};
+use std::collections::HashSet;
+use tauri::{AppHandle, Manager};
+
+pub struct DesktopAudio(pub AppHandle);
+
+impl SessionAudio for DesktopAudio {
+    fn start(&mut self, track_id: i64, row_key: &str) -> Result<NowPlayingTrack, String> {
+        playback::play_track(
+            &self.0,
+            track_id,
+            Some(row_key.into()),
+            &self.0.state::<Database>(),
+            &self.0.state::<PlaybackState>(),
+        )
+    }
+
+    fn status(&self) -> Result<PlaybackStatus, String> {
+        playback::playback_status(&self.0.state::<PlaybackState>())
+    }
+
+    fn prepare(
+        &mut self,
+        playback_id: u64,
+        revision: u64,
+        track: Option<&playback::queue::QueueTrack>,
+    ) -> Result<bool, String> {
+        playback::prepare_next_track(
+            playback_id,
+            revision,
+            track.map(|track| track.track_id),
+            track.map(|track| track.row_key.clone()),
+            &self.0.state::<Database>(),
+            &self.0.state::<PlaybackState>(),
+        )
+    }
+
+    fn stop(&mut self, playback_id: u64) -> Result<bool, String> {
+        playback::stop_playback(&self.0, playback_id, &self.0.state::<PlaybackState>())
+    }
+
+    fn pause(&mut self) -> Result<(), String> {
+        playback::pause(&self.0, &self.0.state::<PlaybackState>())
+    }
+
+    fn resume(&mut self) -> Result<(), String> {
+        playback::resume(&self.0, &self.0.state::<PlaybackState>())
+    }
+
+    fn seek(&mut self, position_ms: u64) -> Result<(), String> {
+        playback::seek_to(position_ms, &self.0.state::<PlaybackState>())
+    }
+
+    fn set_volume(&mut self, volume: u8) -> Result<(), String> {
+        playback::set_volume(volume, &self.0.state::<PlaybackState>())
+    }
+
+    fn skipped(&self) -> HashSet<i64> {
+        self.0
+            .state::<Database>()
+            .skipped_tracks()
+            .read()
+            .unwrap()
+            .clone()
+    }
+}

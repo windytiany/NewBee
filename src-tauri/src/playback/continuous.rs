@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::time::Duration;
 
+use super::statistics::qualification::Playthrough;
 use super::NowPlayingTrack;
-use crate::playback_statistics::qualification::Playthrough;
 
 pub struct PreparedTrack {
     pub track: NowPlayingTrack,
@@ -236,7 +236,7 @@ impl Source for ContinuousSource {
 }
 
 #[cfg(test)]
-#[path = "tests/continuous_statistics.rs"]
+#[path = "tests/continuous/statistics.rs"]
 mod statistics_tests;
 #[cfg(test)]
 #[path = "tests/continuous.rs"]

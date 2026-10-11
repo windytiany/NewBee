@@ -83,9 +83,9 @@
 import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
-import { useItemSelection } from "@/shared/interaction/useItemSelection";
-import { vPersistentScroll } from "@/shared/interaction/persistentScroll";
-import { createItemKeyboard } from "@/shared/interaction/itemKeyboard";
+import { useItemSelection } from "@/shared/interaction/item/useSelection";
+import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
+import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import type { PlaylistSummary } from "@/features/playlist/types";
 import PlaylistRow from "@/features/playlist/components/list/PlaylistRow.vue";
 

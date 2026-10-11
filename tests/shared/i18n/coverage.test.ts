@@ -8,12 +8,12 @@ import {
   ScriptTarget,
   type Node,
 } from "typescript";
-import { compileSfc } from "../../support/moduleLoader";
-import { libraryMessages } from "@/shared/i18n/libraryMessages";
-import { metadataMessages } from "@/shared/i18n/metadataMessages";
-import { playbackMessages } from "@/shared/i18n/playbackMessages";
-import { settingsMessages } from "@/shared/i18n/settingsMessages";
-import { interfaceMessages } from "@/shared/i18n/interfaceMessages";
+import { compileSfc } from "../../support/module/loader";
+import { libraryMessages } from "@/shared/i18n/messages/library";
+import { metadataMessages } from "@/shared/i18n/messages/metadata";
+import { playbackMessages } from "@/shared/i18n/messages/playback";
+import { settingsMessages } from "@/shared/i18n/messages/settings";
+import { interfaceMessages } from "@/shared/i18n/messages/interface";
 
 const messages = {
   ...libraryMessages,

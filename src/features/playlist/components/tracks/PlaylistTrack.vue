@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { computed } from "vue";
-import type { ItemSelectionModifiers } from "@/shared/interaction/useItemSelection";
+import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import { formatTrackDuration } from "@/features/library/format";
 import type { PlaylistTrackSummary } from "@/features/playlist/types";
 
