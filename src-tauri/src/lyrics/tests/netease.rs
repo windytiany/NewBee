@@ -176,22 +176,3 @@ fn rejects_invalid_characters_in_selected_lyrics() {
         assert!(decode_lyrics(response, mode).is_err());
     }
 }
-#[test]
-#[ignore = "requires live access to NetEase"]
-fn live_search_and_lyrics() {
-    let result = search("陈奕迅 十年", 0).unwrap();
-    assert!(result
-        .candidates
-        .iter()
-        .any(|candidate| candidate.id == 66842));
-    assert!(matches!(
-        lyrics(66842, NeteaseLyricsMode::Original).unwrap(),
-        LyricsContent::Available { .. }
-    ));
-    let LyricsContent::Available { text } = lyrics(35847388, NeteaseLyricsMode::Bilingual).unwrap()
-    else {
-        panic!("expected bilingual lyrics for Adele - Hello");
-    };
-    assert!(text.contains("[00:06.220]Hello, it's me / 你好 是我"));
-    assert!(!text.contains("作曲 : Adele Adkins/Greg Kurstin / 你好 是我"));
-}

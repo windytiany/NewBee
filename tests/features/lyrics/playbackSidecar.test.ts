@@ -1,7 +1,4 @@
 import { expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { effectScope } from "vue";
 import { playbackFixture } from "../../support/playbackSession";
 import { useLyrics } from "@/features/lyrics/composables/useLyrics";
@@ -27,12 +24,11 @@ const changed: TrackLyrics = {
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 for (const validSidecar of [true, false]) {
-  it(`session controls and embedded saving preserve ${validSidecar ? "sidecar" : "fallback"} display without rereading files`, async () => {
-    const directory = mkdtempSync(join(tmpdir(), "newbee-session-lrc-"));
-    const path = join(directory, "1.lrc");
-    const initialText = validSidecar ? "[00:01]sidecar original" : "";
-    writeFileSync(path, initialText);
-    writeFileSync(join(directory, "2.lrc"), "[00:02]sidecar changed");
+  it(`session controls and embedded saving preserve ${validSidecar ? "sidecar" : "fallback"} display until a new playback snapshot`, async () => {
+    const sidecars = new Map<number, TrackLyrics | null>([
+      [1, validSidecar ? original : null],
+      [2, changed],
+    ]);
     const reads: number[] = [];
     let embedded: TrackLyrics = { kind: "instrumental" };
     const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
@@ -51,13 +47,7 @@ for (const validSidecar of [true, false]) {
           const id = args?.trackId;
           if (typeof id !== "number") throw new Error("Missing trackId");
           reads.push(id);
-          const text = readFileSync(join(directory, `${id}.lrc`), "utf8");
-          // Command boundary adapter for the real fixture. Rust IPC tests verify parsing.
-          return text === "[00:01]sidecar original"
-            ? original
-            : text === "[00:02]sidecar changed"
-              ? changed
-              : null;
+          return sidecars.get(id) ?? null;
         }
         throw new Error(`Unexpected command ${command}`);
       },
@@ -81,7 +71,7 @@ for (const validSidecar of [true, false]) {
         status: "ready",
         lyrics: validSidecar ? original : { kind: "instrumental" },
       });
-      writeFileSync(path, "[00:02]sidecar changed");
+      sidecars.set(1, changed);
       await session.togglePlayback();
       await session.togglePlayback();
       session.beginSeeking();
@@ -106,7 +96,6 @@ for (const validSidecar of [true, false]) {
         lyrics: validSidecar ? original : embedded,
       });
       expect(reads).toEqual([1]);
-      expect(readFileSync(path, "utf8")).toBe("[00:02]sidecar changed");
       await session.playQueueItem("1");
       await settle();
       expect(reads).toEqual([1, 1]);
@@ -121,7 +110,6 @@ for (const validSidecar of [true, false]) {
       expect(lyrics.state.value).toEqual({ status: "ready", lyrics: changed });
     } finally {
       scope.stop();
-      rmSync(directory, { recursive: true });
       if (previousStorage) Object.defineProperty(globalThis, "localStorage", previousStorage);
       else Reflect.deleteProperty(globalThis, "localStorage");
       if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);

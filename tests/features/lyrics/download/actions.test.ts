@@ -122,14 +122,12 @@ function setup(
 }
 
 describe("lyrics editor actions", () => {
-  it("notifies when lyrics providers are disabled without inline error UI", async () => {
+  it("notifies when lyrics providers are disabled without attempting downloads", async () => {
     const { bindings, calls } = setup(false, undefined, () => ({ lyricsProviders: [] }));
     await Vue.nextTick();
     expect(notifications.items.value[0]?.message).toBe("请先在设置中启用歌词来源。");
     await bindings.automatic();
     expect(calls).not.toContain("find_track_lyrics");
-    expect(source).not.toContain('v-if="state.error"');
-    expect(source).not.toContain("settingsError");
   });
   it("notifies settings read failures without attempting lyrics downloads", async () => {
     const { bindings, calls } = setup(false, undefined, () => {

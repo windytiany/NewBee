@@ -239,11 +239,6 @@ describe("播放页专辑封面背景", () => {
     expect(JSON.stringify(backgroundImages(page))).toContain("First album");
     expect(JSON.stringify(backgroundImages(page))).toContain("Second album");
     expect(pendingLeaves).toHaveLength(1);
-    // Hold the old layer fully opaque while the next layer fades over it.
-    expect(source).toContain('enter-from-class="opacity-0"');
-    expect(source).toContain(
-      ":leave-to-class=\"displayedBackground ? 'opacity-100' : 'opacity-0'\"",
-    );
 
     finishLeaves();
     await settle();

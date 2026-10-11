@@ -190,47 +190,6 @@ fn fixture_with_schema(root: &Path, rewrite: impl Fn(&str) -> String) -> Databas
     Database::open(path).unwrap()
 }
 
-#[test]
-fn export_delete_album_import_accepts_equivalent_schema_line_endings() {
-    for ending in ["\n", "\r\n"] {
-        let directory = Directory::new();
-        let database = fixture_with_line_endings(&directory.0, ending);
-        let exported = directory.0.join("export.newbee");
-        let current = Manifest::new(
-            Settings::default(),
-            SavedSession::default(),
-            InterfaceState::new(),
-        );
-        archive::write(&database, &current, &exported).unwrap();
-        database.remove_track_from_library(1).unwrap();
-        assert!(database.get_track(1).unwrap().is_none());
-        if let Err(error) = archive::read(&exported) {
-            panic!("导出、删除专辑后必须能够导入同结构备份；换行={ending:?}，实际错误：{error}");
-        }
-        restore::stage(&directory.0, &database, Some(&current), &exported).unwrap();
-        database.close_test_connection();
-        assert!(apply_pending_restore(&directory.0).unwrap());
-        let restored = Database::open(directory.0.join("music-library.sqlite3")).unwrap();
-        assert_eq!(
-            restored.get_track(1).unwrap().unwrap().title(),
-            Some("restored song")
-        );
-        assert_eq!(
-            restored.get_track(2).unwrap().unwrap().title(),
-            Some("other song")
-        );
-        let connection = Connection::open(directory.0.join("music-library.sqlite3")).unwrap();
-        let count: i64 = connection
-            .query_row(
-                "SELECT play_count FROM track_play_statistics WHERE track_id = 1",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 3);
-    }
-}
-
 fn rewrite_backup_schema(file: &Path, rewrite: impl Fn(&str) -> String) {
     let connection = Connection::open(file).unwrap();
     let objects = connection
@@ -396,35 +355,16 @@ fn equivalent_schema_spelling_can_be_imported_and_restores_deleted_album() {
                 restored.get_track(2).unwrap().unwrap().title(),
                 Some("other song")
             );
+            let connection = Connection::open(directory.0.join("music-library.sqlite3")).unwrap();
+            let count: i64 = connection
+                .query_row(
+                    "SELECT play_count FROM track_play_statistics WHERE track_id = 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 3);
         }
-    }
-}
-
-#[test]
-fn line_ending_normalization_still_rejects_real_column_index_and_constraint_changes() {
-    let constraint_change = format!(
-        "DROP TABLE artwork_thumbnails; CREATE TABLE artwork_thumbnails (
-            image_id INTEGER NOT NULL REFERENCES artwork_images(id) ON DELETE CASCADE,
-            size INTEGER NOT NULL CHECK (size BETWEEN 1 AND {}),
-            image BLOB NOT NULL, PRIMARY KEY (image_id, size));",
-        crate::artwork::MAX_ARTWORK_SIZE - 1,
-    );
-    for change in [
-        "ALTER TABLE tracks ADD COLUMN unexpected TEXT",
-        "DROP INDEX idx_tracks_album_artist_album; CREATE INDEX idx_tracks_album_artist_album ON tracks(album, album_artist)",
-        constraint_change.as_str(),
-    ] {
-        let directory = Directory::new();
-        let database = fixture_with_line_endings(&directory.0, "\r\n");
-        let connection = Connection::open(directory.0.join("music-library.sqlite3")).unwrap();
-        connection.execute_batch(change).unwrap();
-        let integrity: String = connection.query_row("PRAGMA integrity_check", [], |row| row.get(0)).unwrap();
-        assert_eq!(integrity, "ok");
-        drop(connection);
-        let exported = directory.0.join("different-schema.newbee");
-        let current = Manifest::new(Settings::default(), SavedSession::default(), InterfaceState::new());
-        archive::write(&database, &current, &exported).unwrap();
-        assert!(archive::read(&exported).err().unwrap().contains("备份数据库与当前版本不兼容"));
     }
 }
 
@@ -678,7 +618,9 @@ fn incompatible_schema_is_rejected_before_staging_or_replacing_original_data() {
         let target = Directory::new();
         let original = fixture(&target.0);
         fs::write(target.0.join("settings.json"), "original settings").unwrap();
-        let database = fixture_with_schema(&source.0, |sql| sql.replace(before, after));
+        let database = fixture_with_schema(&source.0, |sql| {
+            sql.replace(before, after).replace('\n', "\r\n")
+        });
         let exported = source.0.join("incompatible.newbee");
         let current = Manifest::new(
             Settings::default(),

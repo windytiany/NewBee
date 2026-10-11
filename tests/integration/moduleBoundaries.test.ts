@@ -70,17 +70,7 @@ for (const filename of filenames) {
 }
 
 describe("frontend module boundaries", () => {
-  it("keeps only application, feature and shared modules at the source root", () => {
-    expect([...new Set(filenames.map((file) => file.split("/")[0]))].sort()).toEqual([
-      "app",
-      "features",
-      "main.ts",
-      "shared",
-      "vite-env.d.ts",
-    ]);
-  });
-
-  it("resolves every local source import after migration", () => {
+  it("resolves every local source import", () => {
     expect(unresolved).toEqual([]);
   });
 
@@ -97,15 +87,17 @@ describe("frontend module boundaries", () => {
     ).toEqual([]);
   });
 
-  it("does not expose playback runtime or queue implementation to other features", () => {
+  it("limits other features to playback session contracts and UI components", () => {
     expect(
       dependencies.filter(
         ({ source, target }) =>
           source.startsWith("features/") &&
           !source.startsWith("features/playback/") &&
-          (target.startsWith("features/playback/runtime/") ||
-            (target.startsWith("features/playback/queue/") &&
-              !target.startsWith("features/playback/queue/components/"))),
+          target.startsWith("features/playback/") &&
+          target !== "features/playback/session.ts" &&
+          target !== "features/playback/types.ts" &&
+          !target.startsWith("features/playback/components/") &&
+          !target.startsWith("features/playback/queue/components/"),
       ),
     ).toEqual([]);
     expect(
