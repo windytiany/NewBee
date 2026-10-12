@@ -79,6 +79,33 @@ function expectBackgroundOnly(file: SfcFile, hasMultiSelectBackground: boolean) 
 }
 
 describe("列表条目状态样式", () => {
+  it("播放列表和 Inbox 的表头与曲目行保持一致的左右内边距", async () => {
+    const rowClasses = ["PlaylistTrack.vue", "TrackRow.vue"].map((suffix) => {
+      const row = elements(findFile(suffix).template).find((node) =>
+        staticClass(node).includes("grid-cols-[1.5rem_minmax(0,1fr)_3rem]"),
+      );
+      if (!row) throw new Error(`Missing track row: ${suffix}`);
+      return staticClass(row).split(/\s+/);
+    });
+    for (const classes of rowClasses) {
+      expect(classes).toContain("px-4");
+      expect(classes).not.toContain("px-1");
+    }
+    for (const path of [
+      "../../../src/features/playlist/tracks/PlaylistBrowser.vue",
+      "../../../src/features/inbox/pages/InboxPage.vue",
+    ]) {
+      const source = await Bun.file(new URL(path, import.meta.url)).text();
+      const { descriptor } = parse(source, { filename: path });
+      if (!descriptor.template) throw new Error(`Missing template: ${path}`);
+      const header = elements(descriptor.template.ast as unknown as TemplateNode).find((node) =>
+        staticClass(node).includes("sticky top-0"),
+      );
+      if (!header) throw new Error(`Missing table header: ${path}`);
+      expect(staticClass(header).split(/\s+/)).toContain("px-4");
+    }
+  });
+
   it("除专辑卡片外，焦点和多选只使用背景，不显示状态 ring 或焦点 outline", () => {
     const withoutMultiSelectBackground = new Set(["PlaylistRow.vue", "ArtistRow.vue"]);
     for (const file of componentFiles) {

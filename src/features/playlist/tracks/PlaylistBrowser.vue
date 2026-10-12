@@ -58,7 +58,7 @@
         class="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8"
       >
         <div
-          class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
+          class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 px-4 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
         >
           <span class="text-right">#</span>
           <span>{{ t("歌曲") }}</span>

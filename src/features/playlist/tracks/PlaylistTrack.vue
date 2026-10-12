@@ -7,7 +7,7 @@
       :class="dropPosition === 'before' ? 'top-0' : 'bottom-0'"
     ></span>
     <div
-      class="grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-1 transition-colors sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
+      class="grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-4 transition-colors sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
       :class="isFocused ? 'bg-app-track' : isSelected ? 'bg-white/10' : 'hover:bg-white/5'"
     >
       <button

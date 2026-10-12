@@ -57,7 +57,7 @@ function keydown(event: globalThis.KeyboardEvent) {
       data-item-interaction
       data-track-select
       type="button"
-      class="focus-visible:bg-app-track grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-1 py-2.5 text-left text-sm transition-colors outline-none sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
+      class="focus-visible:bg-app-track grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm transition-colors outline-none sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
       :class="focused ? 'bg-app-track' : selected ? 'bg-white/10' : 'hover:bg-white/5'"
       :aria-pressed="selected ? true : undefined"
       aria-haspopup="menu"
