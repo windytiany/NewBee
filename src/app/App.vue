@@ -5,6 +5,7 @@ import { useShortcuts } from "@/features/settings/shortcuts/useShortcuts";
 import type { PlaylistCatalog } from "@/features/playlist/types";
 import LibraryPage from "@/features/library/pages/LibraryPage.vue";
 import PlaylistPage from "@/features/playlist/pages/PlaylistPage.vue";
+import InboxPage from "@/features/inbox/pages/InboxPage.vue";
 import NowPlayingPage from "@/features/playback/pages/NowPlayingPage.vue";
 import PlaybackBar from "@/features/playback/controls/PlaybackBar.vue";
 import NotificationHost from "@/shared/notifications/NotificationHost.vue";
@@ -32,6 +33,7 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
             @catalog-ready="playlistCatalog = $event"
           />
           <LibraryPage :active="activePage === 'Library'" :catalog="playlistCatalog" />
+          <InboxPage :active="activePage === 'Inbox'" />
         </template>
         <template #playing>
           <NowPlayingPage v-if="activePage === 'Playing'" />

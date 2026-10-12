@@ -1,3 +1,4 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import type { TAG_FIELDS } from "@/features/metadata/draft";
 import type { TagChange, IdentifierField } from "@/features/metadata/types";
 
@@ -35,8 +36,8 @@ export type CoverData = { mimeType: string; data: number[] };
 export type AlbumField = (typeof TAG_FIELDS)[number]["key"];
 export type MatchRow = {
   source: ReleaseTrack | null;
-  trackId: number | null;
+  trackId: MetadataTarget | null;
   values: Partial<Record<AlbumField, string>>;
   identifiers?: Partial<Record<IdentifierField, string[]>>;
 };
-export type TrackPatch = { trackId: number; changes: TagChange[]; writeCover: boolean };
+export type TrackPatch = { trackId: MetadataTarget; changes: TagChange[]; writeCover: boolean };

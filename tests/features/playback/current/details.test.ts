@@ -45,7 +45,11 @@ function createInvoker(
   handler: (trackId: number) => unknown | Promise<unknown>,
   calls: number[] = [],
 ): TrackDetailsInvoker {
-  return async <Result>(_command: "get_track", args: { trackId: number }) => {
+  return async <Result>(
+    _command: "get_track" | "read_audio_file",
+    args: { trackId: number } | { path: string },
+  ) => {
+    if (!("trackId" in args)) throw new Error("Expected library details target");
     calls.push(args.trackId);
     return (await handler(args.trackId)) as Result;
   };

@@ -690,7 +690,7 @@ fn snapshot_round_trip_includes_database_settings_session_and_interface_without_
     let saved = archive::read(&file).unwrap();
     assert_eq!(saved.settings, Settings::default());
     assert_eq!(saved.interface, manifest().interface);
-    assert_eq!(saved.session.current_track.unwrap().track_id, 1);
+    assert_eq!(saved.session.current_track.unwrap().track_id, Some(1));
     let queue = serde_json::to_value(saved.session.queue).unwrap();
     assert_eq!(queue["currentRowKey"], "row:1");
     assert_eq!(queue["shuffleEnabled"], true);

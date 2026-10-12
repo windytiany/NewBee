@@ -1,5 +1,6 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { t } from "@/shared/i18n/locale";
-import type { TrackDetails } from "@/features/library/types";
+import type { EditorTrack } from "@/features/metadata/types";
 import { buildTagChanges, TAG_FIELDS } from "@/features/metadata/draft";
 import type { EditableTrack, IdentifierField, TagChange } from "@/features/metadata/types";
 
@@ -30,7 +31,7 @@ const normalize = (value: string | null) =>
     .normalize("NFKC")
     .toLocaleLowerCase()
     .replace(/[\p{P}\p{Z}\s]/gu, "");
-function similarity(source: ReleaseTrack, local: TrackDetails) {
+function similarity(source: ReleaseTrack, local: EditorTrack) {
   let score = 0;
   const title = normalize(source.title);
   const localTitle = normalize(local.title);
@@ -79,7 +80,7 @@ export function createMatchRows(
       })),
     )
     .sort((a, b) => b.score - a.score || a.row - b.row || a.index - b.index);
-  const assigned = new Set<number>();
+  const assigned = new Set<MetadataTarget>();
   for (const pair of pairs) {
     const row = rows[pair.row];
     const local = locals[pair.index];
@@ -94,7 +95,7 @@ export function createMatchRows(
 }
 
 /** Move a local file between rows; a null target leaves its source side blank. */
-export function assignTrack(rows: MatchRow[], trackId: number, target: number | null) {
+export function assignTrack(rows: MatchRow[], trackId: MetadataTarget, target: number | null) {
   const previous = rows.find((row) => row.trackId === trackId);
   if (!previous) return;
   if (target === null) {
@@ -116,11 +117,11 @@ export function buildAlbumPatches(
   rows: readonly MatchRow[],
   tracks: readonly EditableTrack[],
   fields: readonly AlbumField[],
-  included: readonly number[],
+  included: readonly MetadataTarget[],
   writeCover: boolean,
 ): TrackPatch[] {
   const patches: TrackPatch[] = [];
-  const seen = new Set<number>();
+  const seen = new Set<MetadataTarget>();
   for (const row of rows) {
     if (row.source === null || row.trackId === null || !included.includes(row.trackId)) continue;
     if (seen.has(row.trackId)) throw new Error(t("同一本地曲目不能重复对应。"));

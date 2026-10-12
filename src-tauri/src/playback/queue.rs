@@ -8,11 +8,23 @@ pub(super) const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueueTrack {
-    pub track_id: i64,
+    pub track_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     pub row_key: String,
     pub title: Option<String>,
     pub album: Option<String>,
     pub duration_ms: Option<u64>,
+}
+
+impl QueueTrack {
+    pub(crate) fn valid_target(&self) -> bool {
+        match (&self.track_id, &self.path) {
+            (Some(id), None) => *id > 0 && *id <= MAX_SAFE_INTEGER,
+            (None, Some(path)) => std::path::Path::new(path).is_absolute(),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -46,8 +58,7 @@ impl Queue {
     pub fn validate(&self) -> Result<(), String> {
         let mut keys = HashSet::new();
         for track in &self.displayed_tracks {
-            if track.track_id <= 0
-                || track.track_id > MAX_SAFE_INTEGER
+            if !track.valid_target()
                 || track
                     .duration_ms
                     .is_some_and(|duration| duration > MAX_SAFE_INTEGER as u64)
@@ -142,7 +153,7 @@ impl Queue {
         }
         keys.iter()
             .filter_map(|key| self.find(key))
-            .filter(|track| !skipped.contains(&track.track_id))
+            .filter(|track| !track.track_id.is_some_and(|id| skipped.contains(&id)))
             .cloned()
             .collect()
     }

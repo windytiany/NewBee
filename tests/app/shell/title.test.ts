@@ -8,6 +8,7 @@ import type { AppMenuAction } from "@/app/shell/AppMenu.vue";
 type Dialog = { show: () => void };
 type Bindings = {
   libraryScanDialog: Vue.Ref<Dialog | null>;
+  importDialog: Vue.Ref<{ show: (inbox: boolean) => void } | null>;
   pathMigrationDialog: Vue.Ref<Dialog | null>;
   settingsDialog: Vue.Ref<Dialog | null>;
   playbackStatisticsDialog: Vue.Ref<Dialog | null>;
@@ -30,6 +31,8 @@ it("routes brand menu selections to existing import and dialog actions", async (
     "@/app/shell/AppMenu.vue": { default: {} },
     "@/app/pages": { pageNames, pageLabel },
     "@/features/library/import/ScanDialog.vue": { default: {} },
+    "@/features/import/ImportDialog.vue": { default: {} },
+    "@/features/inbox/import": { useInboxImport: () => ({ pending: Vue.ref(false) }) },
     "@/features/library/paths/PathMigrationDialog.vue": { default: {} },
     "@/features/settings/components/SettingsDialog.vue": { default: {} },
     "@/features/playback/statistics/PlaybackStatisticsDialog.vue": { default: {} },
@@ -46,6 +49,12 @@ it("routes brand menu selections to existing import and dialog actions", async (
     default: { setup: (props: object, context: object) => Bindings };
   }>(output, modules).default;
   const bindings = component.setup({ activePage: "Library" }, { expose: () => {}, emit: () => {} });
+  bindings.importDialog.value = {
+    show: (inbox) => {
+      expect(inbox).toBe(false);
+      actions.push("import");
+    },
+  };
   bindings.libraryScanDialog.value = {
     show: () => {
       actions.push("scan");

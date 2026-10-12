@@ -14,6 +14,7 @@ import { metadataMessages } from "@/shared/i18n/messages/metadata";
 import { playbackMessages } from "@/shared/i18n/messages/playback";
 import { settingsMessages } from "@/shared/i18n/messages/settings";
 import { interfaceMessages } from "@/shared/i18n/messages/interface";
+import { inboxMessages } from "@/shared/i18n/messages/inbox";
 
 const messages = {
   ...libraryMessages,
@@ -21,6 +22,7 @@ const messages = {
   ...playbackMessages,
   ...settingsMessages,
   ...interfaceMessages,
+  ...inboxMessages,
 };
 const sourceRoot = new URL("../../../src/", import.meta.url);
 

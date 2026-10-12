@@ -281,7 +281,7 @@ const appModules: Record<string, unknown> = {
     __esModule: true,
     default: passiveComponent,
   },
-  "@/features/library/browser/artists/ArtistList.vue": {
+  "@/features/artists/navigation/ArtistList.vue": {
     __esModule: true,
     default: passiveComponent,
   },
@@ -307,6 +307,7 @@ const appModules: Record<string, unknown> = {
   },
   "@/app/shell/AppShell.vue": { __esModule: true, default: AppShell },
   "@/app/shell/TitleBar.vue": { __esModule: true, default: passiveComponent },
+  "@/features/inbox/pages/InboxPage.vue": { __esModule: true, default: passiveComponent },
   "@/shared/components/SidePane.vue": {
     __esModule: true,
     default: Vue.defineComponent({

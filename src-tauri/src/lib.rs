@@ -1,6 +1,7 @@
 mod artwork;
 mod backup;
 mod database;
+mod inbox;
 mod library;
 mod locking;
 mod logging;
@@ -112,6 +113,9 @@ pub fn run() {
             library::import::supported_audio_extensions,
             library::import::files::import_music_files,
             lyrics::embedded::get_track_lyrics,
+            lyrics::embedded::get_file_lyrics,
+            lyrics::sidecar::get_file_sidecar_lyrics,
+            lyrics::download::find_file_lyrics,
             lyrics::sidecar::get_playback_sidecar_lyrics,
             lyrics::download::get_lyrics_download_targets,
             lyrics::download::search_lyrics_candidates,
@@ -138,6 +142,7 @@ pub fn run() {
             playback::queue::commands::set_tracks_skipped,
             library::commands::get_track,
             artwork::get_track_artwork,
+            artwork::files::get_file_artwork,
             artwork::artist::get_artist_photo,
             artwork::artist::find_artist_photo,
             artwork::artist::save_artist_photo,
@@ -145,6 +150,13 @@ pub fn run() {
             artwork::transfer::read_clipboard_artwork,
             artwork::transfer::artwork_extensions,
             artwork::transfer::save_artwork,
+            inbox::read_inbox,
+            inbox::register_inbox,
+            inbox::remove_inbox,
+            inbox::ingest_inbox,
+            metadata::files::commands::read_audio_file,
+            metadata::files::commands::get_editable_files,
+            metadata::files::commands::save_file_metadata,
             metadata::get_editable_tracks,
             metadata::save_track_metadata,
             metadata::releases::search_album_releases,

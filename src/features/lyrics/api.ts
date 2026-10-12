@@ -16,7 +16,10 @@ type LyricsInvoker = <Result>(command: string, args?: Record<string, unknown>) =
 
 export function createLyricsApi(invokeCommand: LyricsInvoker = invoke) {
   return {
-    read: (trackId: number) => invokeCommand<TrackLyrics>("get_track_lyrics", { trackId }),
+    read: (trackId: number | string) =>
+      typeof trackId === "string"
+        ? invokeCommand<TrackLyrics>("get_file_lyrics", { path: trackId })
+        : invokeCommand<TrackLyrics>("get_track_lyrics", { trackId }),
     search: (query: string, provider: LyricsProvider | null, offset: number) =>
       invokeCommand<LyricsSearchResults>("search_lyrics_candidates", { query, provider, offset }),
     preview: (candidate: LyricsCandidate) =>
@@ -24,7 +27,10 @@ export function createLyricsApi(invokeCommand: LyricsInvoker = invoke) {
         provider: candidate.provider,
         candidateId: candidate.id,
       }),
-    automatic: (trackId: number) => invokeCommand<LyricsContent>("find_track_lyrics", { trackId }),
+    automatic: (trackId: number | string) =>
+      typeof trackId === "string"
+        ? invokeCommand<LyricsContent>("find_file_lyrics", { path: trackId })
+        : invokeCommand<LyricsContent>("find_track_lyrics", { trackId }),
     targets: (trackIds: number[]) =>
       invokeCommand<LyricsDownloadTarget[]>("get_lyrics_download_targets", { trackIds }),
     run: (trackIds: number[], onProgress: Channel<LyricsBatchEvent>, operationId: string) =>

@@ -64,7 +64,8 @@ pub struct PlaybackStatus {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NowPlayingTrack {
-    track_id: i64,
+    track_id: Option<i64>,
+    path: Option<String>,
     playback_id: u64,
     title: Option<String>,
     artist: Option<String>,
@@ -96,59 +97,61 @@ impl PlaybackError {
     }
 }
 
-pub(crate) fn play_track(
-    _app: &tauri::AppHandle,
-    track_id: i64,
-    row_key: Option<String>,
+fn target_info(
+    track: &queue::QueueTrack,
+    database: &Database,
+) -> Result<crate::library::model::TrackPlaybackInfo, String> {
+    match (track.track_id, &track.path) {
+        (Some(id), None) => database
+            .get_track_for_playback(id)?
+            .ok_or_else(|| format!("Track {id} was not found")),
+        (None, Some(path)) => {
+            let file = crate::metadata::files::read_track(Path::new(path))?
+                .ok_or_else(|| "Unsupported audio file".to_owned())?;
+            Ok(crate::library::model::TrackPlaybackInfo {
+                path: file.path,
+                title: file.title,
+                artist: file.artist,
+            })
+        }
+        _ => Err("Invalid playback target".into()),
+    }
+}
+
+pub(crate) fn play_target(
+    app: &tauri::AppHandle,
+    target: &queue::QueueTrack,
     database: &Database,
     state: &PlaybackState,
 ) -> Result<NowPlayingTrack, String> {
-    let track = database
-        .get_track_for_playback(track_id)?
-        .ok_or_else(|| format!("Track {track_id} was not found"))?;
+    let track = target_info(target, database)?;
     let now_playing = NowPlayingTrack {
-        track_id,
+        track_id: target.track_id,
+        path: Some(track.path.clone()),
         playback_id: state.next_playback_id.fetch_add(1, Ordering::Relaxed) + 1,
         title: track.title.clone(),
         artist: track.artist.clone(),
-        row_key,
+        row_key: Some(target.row_key.clone()),
         previous_playback_id: None,
     };
     let prepared = prepare_track(Path::new(&track.path), now_playing.clone())
         .map_err(PlaybackError::into_play_command_message)?;
-    start_playback(prepared, state, _app).map_err(PlaybackError::into_message)?;
-
+    start_playback(prepared, state, app).map_err(PlaybackError::into_message)?;
     #[cfg(windows)]
-    {
-        let active = state
-            .active
-            .lock()
-            .map_err(|_| "Playback state is unavailable".to_owned())?;
-        if active.as_ref().is_some_and(|playback| {
-            playback.continuous.snapshot().track.playback_id == now_playing.playback_id
-        }) {
-            let fallback_title = Path::new(&track.path)
-                .file_stem()
-                .and_then(|name| name.to_str())
-                .unwrap_or("");
-            media::set_track(
-                _app,
-                database,
-                track_id,
-                track.title.as_deref().unwrap_or(fallback_title),
-                track.artist.as_deref().unwrap_or(""),
-            );
-        }
-    }
-
+    media::set_track(
+        app,
+        database,
+        target.track_id,
+        track.title.as_deref().unwrap_or(""),
+        track.artist.as_deref().unwrap_or(""),
+    );
     Ok(now_playing)
 }
 
 pub(crate) fn prepare_next_track(
     playback_id: u64,
     revision: u64,
-    track_id: Option<i64>,
-    row_key: Option<String>,
+    target: Option<&queue::QueueTrack>,
     database: &Database,
     state: &PlaybackState,
 ) -> Result<bool, String> {
@@ -169,18 +172,17 @@ pub(crate) fn prepare_next_track(
             active.sample_rate,
         )
     };
-    let Some(track_id) = track_id else {
+    let Some(target) = target else {
         return Ok(true);
     };
-    let track = database
-        .get_track_for_playback(track_id)?
-        .ok_or_else(|| format!("Track {track_id} was not found"))?;
+    let track = target_info(target, database)?;
     let now_playing = NowPlayingTrack {
-        track_id,
+        track_id: target.track_id,
+        path: Some(track.path.clone()),
         playback_id: state.next_playback_id.fetch_add(1, Ordering::Relaxed) + 1,
         title: track.title,
         artist: track.artist,
-        row_key,
+        row_key: Some(target.row_key.clone()),
         previous_playback_id: Some(playback_id),
     };
     let next = prepare_track(Path::new(&track.path), now_playing)
@@ -188,7 +190,6 @@ pub(crate) fn prepare_next_track(
         .map_err(PlaybackError::into_play_command_message)?;
     Ok(continuous.prepare(playback_id, revision, next))
 }
-
 pub(crate) fn set_volume(volume: u8, state: &PlaybackState) -> Result<(), String> {
     if volume > 100 {
         return Err("Volume must be between 0 and 100".to_owned());

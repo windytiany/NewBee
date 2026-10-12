@@ -9,7 +9,7 @@ use lofty::picture::Picture;
 use std::path::Path;
 
 pub(crate) struct CoverUpdate {
-    picture: Option<Picture>,
+    pub(crate) picture: Option<Picture>,
     artwork: Option<ArtworkContent>,
 }
 

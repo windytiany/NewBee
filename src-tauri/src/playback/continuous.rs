@@ -137,8 +137,10 @@ impl Iterator for ContinuousSource {
                 if let Some(sample) = self.current.source.next() {
                     self.position_samples += 1;
                     if self.playthrough.observe(self.position_samples, false) {
-                        if let Err(error) = self.statistics.send(self.current.track.track_id) {
-                            log::error!("Playback statistics recorder is unavailable: {error}");
+                        if let Some(id) = self.current.track.track_id {
+                            if let Err(error) = self.statistics.send(id) {
+                                log::error!("Playback statistics recorder is unavailable: {error}");
+                            }
                         }
                     }
                     self.playback
@@ -148,8 +150,10 @@ impl Iterator for ContinuousSource {
                 }
                 self.exhausted = true;
                 if self.playthrough.observe(self.position_samples, true) {
-                    if let Err(error) = self.statistics.send(self.current.track.track_id) {
-                        log::error!("Playback statistics recorder is unavailable: {error}");
+                    if let Some(id) = self.current.track.track_id {
+                        if let Err(error) = self.statistics.send(id) {
+                            log::error!("Playback statistics recorder is unavailable: {error}");
+                        }
                     }
                 }
             }
@@ -159,10 +163,12 @@ impl Iterator for ContinuousSource {
             // may have been explicitly requested. Hold through the transition
             // so preference changes and audio boundaries have a defined order.
             let skipped_tracks = self.skipped_tracks.read().unwrap();
-            let next = control
-                .next
-                .take()
-                .filter(|next| !skipped_tracks.contains(&next.track.track_id));
+            let next = control.next.take().filter(|next| {
+                !next
+                    .track
+                    .track_id
+                    .is_some_and(|id| skipped_tracks.contains(&id))
+            });
             let Some(mut next) = next else {
                 control.snapshot.ended = true;
                 control.snapshot.position = control.snapshot.duration;

@@ -1,9 +1,10 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { describe, expect, it } from "bun:test";
 import { createMetadataSave } from "@/features/metadata/save";
 import { playbackFixture } from "../../support/playback/session";
 import type { MetadataSaveResult } from "@/features/metadata/types";
 
-function result(trackId: number, success = true): MetadataSaveResult {
+function result(trackId: MetadataTarget, success = true): MetadataSaveResult {
   return {
     trackId,
     path: `/music/${trackId}.mp3`,
@@ -12,11 +13,11 @@ function result(trackId: number, success = true): MetadataSaveResult {
     error: success ? null : "文件只读",
   };
 }
-function targets(...ids: number[]) {
+function targets(...ids: MetadataTarget[]) {
   return ids.map((trackId) => ({ trackId, path: `/music/${trackId}.mp3` }));
 }
 function fixture(paused = false, canStop = true) {
-  const synchronized: number[][] = [];
+  const synchronized: MetadataTarget[][] = [];
   const { session, calls } = playbackFixture({ paused, canStop });
   const save = createMetadataSave({
     editFiles: session.withMetadataEditing,
@@ -135,7 +136,7 @@ describe("track metadata save", () => {
   });
 
   it("keeps final save results even if playback cleanup rejects afterwards", async () => {
-    const refreshed: number[][] = [];
+    const refreshed: MetadataTarget[][] = [];
     const save = createMetadataSave({
       editFiles: async (_ids, execute) => {
         await execute();
@@ -220,7 +221,7 @@ describe("track metadata save", () => {
 
   it("defers batch refresh until requested, including file-only partial successes", async () => {
     const { session } = fixture();
-    const refreshed: number[][] = [];
+    const refreshed: MetadataTarget[][] = [];
     const save = createMetadataSave({
       editFiles: session.withMetadataEditing,
       synchronize: (ids) => {
@@ -326,7 +327,7 @@ it("preserves actual save outcomes and original request failure if backend endEd
   }));
   await fixture.session.playTracks(queue, "row:1");
   fixture.fail("endEditing", new Error("cleanup unavailable"));
-  const synchronized: number[][] = [];
+  const synchronized: MetadataTarget[][] = [];
   const save = createMetadataSave({
     editFiles: fixture.session.withMetadataEditing,
     synchronize: (ids) => {

@@ -6,6 +6,7 @@
     <div class="justify-self-start">
       <AppMenu :can-import="isTauriApp" :is-importing="isImporting" @select="onMenuSelect" />
       <ScanDialog ref="libraryScanDialog" />
+      <ImportDialog ref="importDialog" />
       <PathMigrationDialog ref="pathMigrationDialog" />
       <SettingsDialog ref="settingsDialog" />
       <PlaybackStatisticsDialog ref="playbackStatisticsDialog" />
@@ -33,6 +34,9 @@ import PageTabs from "@/app/shell/PageTabs.vue";
 import WindowControls from "@/app/shell/WindowControls.vue";
 import AppMenu from "@/app/shell/AppMenu.vue";
 import ScanDialog from "@/features/library/import/ScanDialog.vue";
+import ImportDialog from "@/features/import/ImportDialog.vue";
+import { useInboxImport } from "@/features/inbox/import";
+import { computed } from "vue";
 import PathMigrationDialog from "@/features/library/paths/PathMigrationDialog.vue";
 import { useLibraryFileImport } from "@/features/library/import/useFileImport";
 import SettingsDialog from "@/features/settings/components/SettingsDialog.vue";
@@ -52,7 +56,10 @@ const {
   toggleMaximizeWindow,
   closeWindow,
 } = useWindow();
-const { isImporting, importMusicFiles } = useLibraryFileImport();
+const libraryImport = useLibraryFileImport();
+const inboxImport = useInboxImport();
+const isImporting = computed(() => libraryImport.isImporting.value || inboxImport.pending.value);
+const importDialog = ref<InstanceType<typeof ImportDialog> | null>(null);
 const libraryScanDialog = ref<InstanceType<typeof ScanDialog> | null>(null);
 const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
 const pathMigrationDialog = ref<InstanceType<typeof PathMigrationDialog> | null>(null);
@@ -61,7 +68,7 @@ const playbackStatisticsDialog = ref<InstanceType<typeof PlaybackStatisticsDialo
 async function onMenuSelect(action: AppMenuAction) {
   switch (action) {
     case "import":
-      await importMusicFiles();
+      importDialog.value?.show(props.activePage === "Inbox");
       break;
     case "scan":
       libraryScanDialog.value?.show();

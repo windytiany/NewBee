@@ -48,7 +48,7 @@
     </div>
 
     <div
-      v-persistent-scroll="`library:artists:${props.grouping}`"
+      v-persistent-scroll="`${props.scope}:artists:${props.grouping}`"
       class="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
     >
       <p
@@ -58,15 +58,28 @@
         {{ t("无演出者") }}
       </p>
       <ul
-        v-if="props.artists.length > 0"
+        v-if="props.allArtists || props.artists.length > 0"
         class="space-y-0.5"
         @keydown="artistKeyboard.onKeydown"
         @focusin="artistKeyboard.onFocusin"
       >
+        <li v-if="props.allArtists">
+          <button
+            data-item-interaction
+            type="button"
+            class="focus-visible:bg-app-track w-full rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-white/5"
+            :class="{ 'bg-app-track': artistFocus.isFocused('all') }"
+            :aria-current="props.selectedArtist === null ? 'true' : undefined"
+            @click="selectAll"
+          >
+            {{ t("所有艺术家") }}
+          </button>
+        </li>
         <ArtistRow
           v-for="artist in props.artists"
           :key="getArtistKey(artist.artist)"
           :artist="artist.artist"
+          :show-photo="props.showPhotos"
           :name="artist.artist ?? t('未知演出者')"
           :album-count="artist.albumCount"
           :is-selected="isSelectedArtist(artist)"
@@ -86,19 +99,26 @@ import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import type { ArtistSummary, LibraryGrouping } from "@/features/library/types";
-import ArtistRow from "@/features/library/browser/artists/ArtistRow.vue";
+import ArtistRow from "@/features/artists/navigation/ArtistRow.vue";
 
-const props = defineProps<{
-  artists: ArtistSummary[];
-  selectedArtist: ArtistSummary | null;
-  grouping: LibraryGrouping;
-  isLoading: boolean;
-  error: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    artists: ArtistSummary[];
+    selectedArtist: ArtistSummary | null;
+    grouping: LibraryGrouping;
+    isLoading: boolean;
+    error: string;
+    scope?: string;
+    showPhotos?: boolean;
+    allArtists?: boolean;
+  }>(),
+  { scope: "artists", showPhotos: true, allArtists: false },
+);
 
 const emit = defineEmits<{
   select: [artist: ArtistSummary];
   selectGrouping: [grouping: LibraryGrouping];
+  selectAll: [];
 }>();
 
 const groupingOptions = [
@@ -106,9 +126,12 @@ const groupingOptions = [
   { value: "artist", label: "演出者" },
 ] as const;
 
-const artistListScope = computed(() => `library:artist-navigation:${props.grouping}`);
+const artistListScope = computed(() => `${props.scope}:artist-navigation:${props.grouping}`);
 const artistFocus = useItemSelection(artistListScope);
-const artistItemKeys = computed(() => props.artists.map((artist) => getArtistKey(artist.artist)));
+const artistItemKeys = computed(() => [
+  ...(props.allArtists ? ["all"] : []),
+  ...props.artists.map((artist) => getArtistKey(artist.artist)),
+]);
 
 const artistKeyboard = createItemKeyboard({
   getItemKeys: () => artistItemKeys.value,
@@ -117,6 +140,10 @@ const artistKeyboard = createItemKeyboard({
     if (!artistFocus.isFocused(key)) artistFocus.focusItem(key);
   },
   onMove: (key) => {
+    if (key === "all") {
+      selectAll();
+      return;
+    }
     const artist = props.artists.find((entry) => getArtistKey(entry.artist) === key);
     if (artist) selectArtist(artist);
   },
@@ -135,6 +162,11 @@ function isSelectedArtist(artist: ArtistSummary) {
 function selectArtist(artist: ArtistSummary) {
   artistFocus.focusItem(getArtistKey(artist.artist));
   emit("select", artist);
+}
+
+function selectAll() {
+  artistFocus.focusItem("all");
+  emit("selectAll");
 }
 
 function selectGrouping(grouping: LibraryGrouping) {

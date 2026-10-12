@@ -208,8 +208,9 @@ async function createComponent(source: string) {
   };
   for (const name of [
     "@/features/playback/pages/NowPlayingPage.vue",
+    "@/features/inbox/pages/InboxPage.vue",
     "@/features/playback/controls/PlaybackBar.vue",
-    "@/features/library/browser/artists/ArtistList.vue",
+    "@/features/artists/navigation/ArtistList.vue",
     "@/features/library/components/dialogs/DeleteAlbumDialog.vue",
     "@/features/playlist/creation/CreatePlaylistDialog.vue",
     "@/features/playlist/tracks/PlaylistBrowser.vue",

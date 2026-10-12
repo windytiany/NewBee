@@ -1,3 +1,4 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { notifications } from "@/shared/notifications/center";
 import { setLocale } from "@/shared/i18n/locale";
@@ -17,7 +18,7 @@ afterEach(() => {
   notifications.clear();
 });
 
-function result(trackId: number, databaseUpdated = true): MetadataSaveResult {
+function result(trackId: MetadataTarget, databaseUpdated = true): MetadataSaveResult {
   return {
     trackId,
     path: `/music/${trackId}.flac`,

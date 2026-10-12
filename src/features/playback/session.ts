@@ -53,7 +53,7 @@ type SessionCommand =
   | { action: "remove"; rowKeys: readonly string[] }
   | { action: "removeTrack"; trackId: number }
   | { action: "repeat" | "shuffle"; enabled: boolean }
-  | { action: "beginEditing"; trackIds: readonly number[] }
+  | { action: "beginEditing"; trackIds: readonly number[]; paths?: readonly string[] }
   | { action: "endEditing"; token: number }
   | { action: "updateMetadata"; tracks: readonly TrackMetadataUpdate[] };
 
@@ -196,7 +196,11 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
 
   const currentTrack = computed(() => snapshot.value.currentTrack);
   watch(
-    () => [currentTrack.value?.trackId ?? null, snapshot.value.currentPlaybackId] as const,
+    () =>
+      [
+        currentTrack.value?.trackId ?? currentTrack.value?.path ?? null,
+        snapshot.value.currentPlaybackId,
+      ] as const,
     ([trackId, playbackId], previous) => {
       if (trackId === previous?.[0] && playbackId === previous?.[1]) return;
       // Editing detaches the audio instance, but retains the listening lyrics.
@@ -204,7 +208,11 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       const generation = ++sidecarRequest;
       sidecarLyrics.value = null;
       if (trackId === null || playbackId === null) return;
-      void invokeCommand<TrackLyrics | null>("get_playback_sidecar_lyrics", { trackId })
+      const request =
+        typeof trackId === "string"
+          ? invokeCommand<TrackLyrics | null>("get_file_sidecar_lyrics", { path: trackId })
+          : invokeCommand<TrackLyrics | null>("get_playback_sidecar_lyrics", { trackId });
+      void request
         .then((lyrics) => {
           if (!disposed && generation === sidecarRequest) sidecarLyrics.value = lyrics;
         })
@@ -275,13 +283,18 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   }
 
   async function withMetadataEditing<T>(
-    trackIds: readonly number[],
+    targets: readonly (number | string)[],
     save: () => Promise<T>,
   ): Promise<T> {
     requestsPending.value += 1;
     let token: number | null = null;
     try {
-      const reply = await request({ action: "beginEditing", trackIds }, false);
+      const trackIds = targets.filter((target): target is number => typeof target === "number");
+      const paths = targets.filter((target): target is string => typeof target === "string");
+      const reply = await request(
+        { action: "beginEditing", trackIds, ...(paths.length ? { paths } : {}) },
+        false,
+      );
       token = reply.editToken;
       if (token === null) throw new Error(t("未能确认播放文件已释放，请重试。"));
       return await save();

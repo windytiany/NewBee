@@ -222,7 +222,7 @@ describe("lyrics batch", () => {
 
   it("keeps downloads outside playback editing and edits all instrumental marks without snapshot reads", async () => {
     let editing = false;
-    const edits: number[][] = [];
+    const edits: Array<Array<number | string>> = [];
     const result = setup(
       {
         editFiles: async (ids, save) => {

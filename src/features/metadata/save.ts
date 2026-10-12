@@ -1,19 +1,26 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { t } from "@/shared/i18n/locale";
 import { reactive } from "vue";
 import { notify } from "@/shared/notifications/center";
 import { logger, operationId } from "@/shared/logging/logger";
 import type { MetadataSaveResult } from "@/features/metadata/types";
 
+export function metadataSaved(result: MetadataSaveResult): boolean {
+  return typeof result.trackId === "string"
+    ? result.fileWritten && !result.error
+    : result.databaseUpdated;
+}
+
 export type MetadataFileEditor = <Result>(
-  trackIds: readonly number[],
+  trackIds: readonly MetadataTarget[],
   save: () => Promise<Result>,
 ) => Promise<Result>;
 
-type SaveTarget = { trackId: number; path: string };
+type SaveTarget = { trackId: MetadataTarget; path: string };
 type SaveRequest = {
   operationId?: string;
   targets: readonly SaveTarget[];
-  writeTrackIds: readonly number[];
+  writeTrackIds: readonly MetadataTarget[];
   execute: (
     progress: (result: MetadataSaveResult) => void,
     operationId: string,
@@ -22,7 +29,7 @@ type SaveRequest = {
 };
 type MetadataSaveOptions = {
   editFiles: MetadataFileEditor;
-  synchronize: (trackIds: number[]) => void | Promise<void>;
+  synchronize: (trackIds: MetadataTarget[]) => void | Promise<void>;
   refreshWrittenFiles?: boolean;
   notifyResult?: boolean;
 };
@@ -36,7 +43,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     error: "",
     synchronizationError: "",
   });
-  const pendingSynchronization = new Set<number>();
+  const pendingSynchronization = new Set<MetadataTarget>();
 
   function reset() {
     if (state.saving) return;
@@ -73,7 +80,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     logger.info("metadata", "save_started", { operationId: id, count: request.targets.length });
     const targets = new Map(request.targets.map((target) => [target.trackId, target]));
     const results = new Map(state.results.map((result) => [result.trackId, result]));
-    const reported = new Map<number, MetadataSaveResult>();
+    const reported = new Map<MetadataTarget, MetadataSaveResult>();
     const writeIds = [...new Set(request.writeTrackIds)].filter((id) => targets.has(id));
     state.saving = true;
     state.error = "";
@@ -104,7 +111,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
           databaseUpdated: false,
           error: state.error || t("保存未返回结果，请重试或重新扫描。"),
         };
-        logger.write(result.databaseUpdated ? "info" : "warn", "metadata", "save_result", {
+        logger.write(metadataSaved(result) ? "info" : "warn", "metadata", "save_result", {
           operationId: id,
           trackId: result.trackId,
           path: result.path,
@@ -114,7 +121,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
         });
         results.set(target.trackId, result);
         reported.set(target.trackId, result);
-        if (result.databaseUpdated || (options.refreshWrittenFiles && result.fileWritten)) {
+        if (metadataSaved(result) || (options.refreshWrittenFiles && result.fileWritten)) {
           pendingSynchronization.add(target.trackId);
         }
       }
@@ -126,7 +133,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
         count: reported.size,
         refreshFailed: Boolean(state.synchronizationError),
       });
-      const succeeded = [...reported.values()].filter((result) => result.databaseUpdated).length;
+      const succeeded = [...reported.values()].filter((result) => metadataSaved(result)).length;
       const failed = reported.size - succeeded;
       if (options.notifyResult)
         notify({

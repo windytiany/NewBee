@@ -96,7 +96,7 @@ import type { CoverEdit } from "@/features/metadata/types";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 
 const props = defineProps<{
-  trackId: number | null;
+  trackId: number | string | null;
   cover: CoverEdit | null;
   disabled: boolean;
 }>();

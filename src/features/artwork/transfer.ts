@@ -11,8 +11,11 @@ export async function readClipboardCover(): Promise<number[]> {
   return Array.from(new Uint8Array(data));
 }
 
-export async function readOriginalCover(trackId: number): Promise<number[]> {
-  const data = await invoke<ArrayBuffer>("get_track_artwork", { trackId, size: null });
+export async function readOriginalCover(trackId: number | string): Promise<number[]> {
+  const data =
+    typeof trackId === "string"
+      ? await invoke<ArrayBuffer>("get_file_artwork", { path: trackId, size: null })
+      : await invoke<ArrayBuffer>("get_track_artwork", { trackId, size: null });
   return Array.from(new Uint8Array(data));
 }
 

@@ -1,4 +1,5 @@
 export const metadataMessages: Record<string, string> = {
+  无效的文件操作: "Invalid file operation",
   "MusicBrainz 发行版本链接或 ID": "MusicBrainz release link or ID",
   "{count} 首 · {fields}": "{count} tracks · {fields}",
   "{count} 首曲目": "{count} tracks",

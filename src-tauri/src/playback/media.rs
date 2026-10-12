@@ -80,7 +80,13 @@ fn update(
     };
 }
 
-pub fn set_track(app: &AppHandle, database: &Database, track_id: i64, title: &str, artist: &str) {
+pub fn set_track(
+    app: &AppHandle,
+    database: &Database,
+    track_id: Option<i64>,
+    title: &str,
+    artist: &str,
+) {
     update(app, |controls| {
         let updater = controls
             .DisplayUpdater()
@@ -100,8 +106,10 @@ pub fn set_track(app: &AppHandle, database: &Database, track_id: i64, title: &st
             .map_err(|error| error.to_string())?;
         // ClearAll also clears the previous thumbnail when this track has no artwork.
         // Artwork failure should not prevent the title/artist from being published.
-        if let Err(error) = set_artwork(database, track_id, &updater) {
-            log::warn!("Could not update Windows media artwork: {error}");
+        if let Some(track_id) = track_id {
+            if let Err(error) = set_artwork(database, track_id, &updater) {
+                log::warn!("Could not update Windows media artwork: {error}");
+            }
         }
         updater.Update().map_err(|error| error.to_string())?;
         controls

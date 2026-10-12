@@ -17,7 +17,7 @@ export type LyricsSearchOptions = {
     offset: number,
   ) => Promise<LyricsSearchResults>;
   preview: (candidate: LyricsCandidate) => Promise<LyricsContent>;
-  automatic: (trackId: number) => Promise<LyricsContent>;
+  automatic: (trackId: number | string) => Promise<LyricsContent>;
   apply: (text: string) => void;
   mark: () => void;
 };
@@ -140,7 +140,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       if (generation === previewGeneration) state.previewing = false;
     }
   }
-  async function automatic(trackId: number) {
+  async function automatic(trackId: number | string) {
     const generation = ++automaticGeneration;
     state.automatic = true;
     state.error = "";

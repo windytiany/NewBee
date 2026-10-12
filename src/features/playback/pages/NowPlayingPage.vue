@@ -166,7 +166,7 @@ function cyclePresentation() {
 }
 
 async function handleLyricsSeek(startMs: number) {
-  const sourceTrackId = currentTrack.value?.trackId ?? null;
+  const sourceTrackId = currentTrack.value?.trackId ?? currentTrack.value?.path ?? null;
   await seekToLyric(session, lyricsState.value, sourceTrackId, startMs);
 }
 </script>

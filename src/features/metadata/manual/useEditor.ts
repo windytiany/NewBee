@@ -1,3 +1,4 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { t } from "@/shared/i18n/locale";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { reactive, toRefs } from "vue";
@@ -7,7 +8,7 @@ import type { LibraryAlbumSelection } from "@/features/library/types";
 import { createLibraryApi } from "@/features/library/api";
 import { createMetadataApi } from "@/features/metadata/api";
 import { createTagSynchronization } from "@/features/metadata/synchronize";
-import { createMetadataSave } from "@/features/metadata/save";
+import { createMetadataSave, metadataSaved } from "@/features/metadata/save";
 import type { MetadataFileEditor } from "@/features/metadata/save";
 import { usePlaybackSession } from "@/features/playback/session";
 import { buildTagChanges, createTagDraft } from "@/features/metadata/draft";
@@ -22,10 +23,10 @@ import type {
 } from "@/features/metadata/types";
 
 export type TagEditorOptions = {
-  loadTracks: (trackIds: number[]) => Promise<EditableTrack[]>;
-  loadAlbum: (album: LibraryAlbumSelection) => Promise<number[]>;
+  loadTracks: (trackIds: MetadataTarget[]) => Promise<EditableTrack[]>;
+  loadAlbum: (album: LibraryAlbumSelection) => Promise<MetadataTarget[]>;
   save: (
-    trackIds: number[],
+    trackIds: MetadataTarget[],
     changes: TagChange[],
     progress: (result: MetadataSaveResult) => void,
     lyricsAction: LyricsMarkAction,
@@ -33,7 +34,7 @@ export type TagEditorOptions = {
     cover?: CoverEdit | null,
   ) => Promise<MetadataSaveResult[]>;
   editFiles: MetadataFileEditor;
-  synchronize: (trackIds: number[]) => Promise<void>;
+  synchronize: (trackIds: MetadataTarget[]) => Promise<void>;
 };
 
 function errorMessage(error: unknown) {
@@ -65,10 +66,10 @@ export function createTagEditor(options: TagEditorOptions) {
   }
   let loadGeneration = 0;
   let pendingChanges: TagChange[] = [];
-  let pendingTrackIds: number[] = [];
+  let pendingTrackIds: MetadataTarget[] = [];
   let pendingLyricsAction: LyricsMarkAction = "keep";
 
-  async function open(loadIds: () => Promise<number[]>, mode: EditMode) {
+  async function open(loadIds: () => Promise<MetadataTarget[]>, mode: EditMode) {
     if (state.open) return;
     const generation = ++loadGeneration;
     saving.reset();
@@ -162,7 +163,7 @@ export function createTagEditor(options: TagEditorOptions) {
     state.results = [];
   }
 
-  function prepareTargetSave(trackIds: number[]) {
+  function prepareTargetSave(trackIds: MetadataTarget[]) {
     if (state.loading || state.saving) return;
     state.error = "";
     try {
@@ -200,7 +201,7 @@ export function createTagEditor(options: TagEditorOptions) {
       execute: (progress, operationId) =>
         options.save(ids, changes, progress, action, operationId, state.cover),
     });
-    const failed = state.results.filter((result) => !result.databaseUpdated).length;
+    const failed = state.results.filter((result) => !metadataSaved(result)).length;
     const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
     state.dirty = failed > 0;
     if (!state.dirty && !error) state.open = false;
@@ -208,7 +209,7 @@ export function createTagEditor(options: TagEditorOptions) {
 
   return {
     state,
-    openTracks: (ids: readonly number[]) => open(() => Promise.resolve([...ids]), "tracks"),
+    openTracks: (ids: readonly MetadataTarget[]) => open(() => Promise.resolve([...ids]), "tracks"),
     openAlbum: (album: LibraryAlbumSelection) => open(() => options.loadAlbum(album), "album"),
     requestClose,
     close,

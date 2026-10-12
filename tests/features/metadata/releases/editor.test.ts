@@ -1,3 +1,4 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { describe, expect, it } from "bun:test";
 import { createReleaseEditor } from "@/features/metadata/releases/useEditor";
 import type { ReleaseEditorOptions } from "@/features/metadata/releases/useEditor";
@@ -14,7 +15,7 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-const result = (trackId: number, success = true): MetadataSaveResult => ({
+const result = (trackId: MetadataTarget, success = true): MetadataSaveResult => ({
   trackId,
   path: `/music/${trackId}.flac`,
   fileWritten: success,
@@ -24,7 +25,7 @@ const result = (trackId: number, success = true): MetadataSaveResult => ({
 function fixture(overrides: Partial<ReleaseEditorOptions> = {}) {
   const saves: TrackPatch[][] = [];
   const searches: Array<{ artist: string; album: string; offset: number }> = [];
-  const synchronized: number[][] = [];
+  const synchronized: MetadataTarget[][] = [];
   const editor = createReleaseEditor({
     loadAlbum: async () => [local(1), local(2)],
     search: async (artist, album, offset) => {

@@ -23,7 +23,8 @@ fn spectrum_uses_player_output_and_rejects_inactive_playback_instances() {
         .collect::<Vec<_>>();
     let prepared = PreparedTrack {
         track: NowPlayingTrack {
-            track_id: 1,
+            track_id: Some(1),
+            path: None,
             playback_id: 1,
             title: None,
             artist: None,

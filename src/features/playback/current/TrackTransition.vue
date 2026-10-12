@@ -36,13 +36,13 @@ import { useTrackArtworkPresentation } from "@/features/artwork/useTrackArtworkP
 import type { TrackArtworkStatus } from "@/features/artwork/useTrackArtwork";
 import { useTrackDetails } from "@/features/playback/current/useTrackDetails";
 import type { PlaybackTrack } from "@/features/playback/types";
-import type { TrackDetails } from "@/features/library/types";
+import type { EditorTrack } from "@/features/metadata/types";
 
-type PresentationTrack = Pick<PlaybackTrack, "trackId" | "title" | "artist">;
+type PresentationTrack = Pick<PlaybackTrack, "trackId" | "path" | "title" | "artist">;
 type DisplayedTrack = {
   key: number;
   track: PresentationTrack | null;
-  details: TrackDetails | null;
+  details: EditorTrack | null;
   artworkUrl: string | null;
   artworkStatus: TrackArtworkStatus;
   detailsError: string;
@@ -55,10 +55,10 @@ const props = defineProps<{
   artworkSize?: number | null;
 }>();
 const { currentTrackDetails, isLoading, currentTrackDetailsError } = useTrackDetails(
-  () => props.track?.trackId ?? null,
+  () => props.track?.trackId ?? props.track?.path ?? null,
 );
 const { status, url, error, present, release } = useTrackArtworkPresentation(
-  () => props.track?.trackId ?? null,
+  () => props.track?.trackId ?? props.track?.path ?? null,
   () => props.artworkSize ?? null,
 );
 const displayed = shallowRef<DisplayedTrack | null>(null);
@@ -76,7 +76,9 @@ watch(
     const artwork = present(loading);
     displayed.value = {
       key: artwork.key,
-      track: track ? { trackId: track.trackId, title: track.title, artist: track.artist } : null,
+      track: track
+        ? { trackId: track.trackId, path: track.path, title: track.title, artist: track.artist }
+        : null,
       details,
       artworkUrl: artwork.url,
       artworkStatus: artwork.status,

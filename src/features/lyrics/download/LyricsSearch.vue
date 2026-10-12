@@ -4,7 +4,7 @@ import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onScopeDispose, ref, watch } from "vue";
-import type { TrackDetails } from "@/features/library/types";
+import type { EditorTrack } from "@/features/metadata/types";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import { formatTrackDuration } from "@/features/library/format";
 import { createLyricsSearch } from "@/features/lyrics/download/search";
@@ -15,7 +15,7 @@ import { createSettingsApi } from "@/features/settings/api";
 const api = createLyricsApi(invoke);
 const settingsApi = createSettingsApi(invoke);
 
-const props = defineProps<{ track: TrackDetails; modified: boolean; disabled: boolean }>();
+const props = defineProps<{ track: EditorTrack; modified: boolean; disabled: boolean }>();
 const emit = defineEmits<{ apply: [text: string]; mark: [] }>();
 const searchDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const replaceDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
@@ -81,6 +81,12 @@ function apply(text: string) {
   emit("apply", text);
 }
 function mark() {
+  if (typeof props.track.id === "string") {
+    pendingText.value = null;
+    closeSearch();
+    notify({ type: "info", message: t("此曲目为纯音乐。"), key: "lyrics-instrumental" });
+    return;
+  }
   pendingText.value = null;
   pendingMark.value = false;
   replaceDialog.value?.close();

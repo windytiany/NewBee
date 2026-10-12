@@ -47,7 +47,11 @@ impl SavedSession {
         if self
             .current_track
             .as_ref()
-            .is_some_and(|track| track.track_id <= 0)
+            .is_some_and(|track| match (track.track_id, &track.path) {
+                (Some(id), _) => id <= 0,
+                (None, Some(path)) => !Path::new(path).is_absolute(),
+                _ => true,
+            })
         {
             return Err("Invalid saved current track".into());
         }

@@ -109,7 +109,48 @@ pub(crate) async fn get_candidate_lyrics(
         .map_err(|error| format!("歌词预览任务失败：{error}"))?
 }
 
-fn track_query(track: &TrackDetails) -> (String, String) {
+trait LyricsTrack {
+    fn path(&self) -> &str;
+    fn title(&self) -> Option<&str>;
+    fn artist(&self) -> Option<&str>;
+    fn album(&self) -> Option<&str>;
+    fn duration_ms(&self) -> Option<i64>;
+}
+impl LyricsTrack for TrackDetails {
+    fn path(&self) -> &str {
+        self.path()
+    }
+    fn title(&self) -> Option<&str> {
+        self.title()
+    }
+    fn artist(&self) -> Option<&str> {
+        self.artist()
+    }
+    fn album(&self) -> Option<&str> {
+        self.album()
+    }
+    fn duration_ms(&self) -> Option<i64> {
+        self.duration_ms()
+    }
+}
+impl LyricsTrack for crate::database::model::TrackWriteInput {
+    fn path(&self) -> &str {
+        &self.path
+    }
+    fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+    fn artist(&self) -> Option<&str> {
+        self.artist.as_deref()
+    }
+    fn album(&self) -> Option<&str> {
+        self.album.as_deref()
+    }
+    fn duration_ms(&self) -> Option<i64> {
+        self.duration_ms
+    }
+}
+fn track_query(track: &impl LyricsTrack) -> (String, String) {
     let title = track
         .title()
         .filter(|title| !title.trim().is_empty())
@@ -187,7 +228,7 @@ pub(super) fn automatic(
 }
 
 fn lookup(
-    track: &TrackDetails,
+    track: &impl LyricsTrack,
     enabled: &[LyricsProvider],
     cancelled: &AtomicBool,
     search: impl Fn(LyricsProvider, &str, u32) -> Result<LyricsSearchResults, String>,
@@ -263,3 +304,24 @@ pub(crate) async fn find_track_lyrics(
 #[cfg(test)]
 #[path = "tests/download.rs"]
 mod tests;
+
+#[tauri::command]
+pub(crate) async fn find_file_lyrics(
+    path: String,
+    app: tauri::AppHandle,
+) -> Result<LyricsContent, String> {
+    let provider_set = provider_set(&app.state::<SettingsState>())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let track = crate::metadata::files::read_track(Path::new(&path))?
+            .ok_or_else(|| "不支持的音频文件".to_owned())?;
+        lookup(
+            &track,
+            provider_set.enabled(),
+            &AtomicBool::new(false),
+            search,
+            |provider, id| lyrics(&provider_set, provider, id),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}

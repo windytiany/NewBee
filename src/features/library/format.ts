@@ -37,7 +37,9 @@ function formatChannels(channels: number | null) {
   return t("{count} 声道", { count: channels });
 }
 
-export function formatAudioSummary(details: TrackDetails) {
+export function formatAudioSummary(
+  details: Pick<TrackDetails, "codec" | "sampleRateHz" | "bitrateKbps" | "channels" | "durationMs">,
+) {
   const codecAndSampleRate = [details.codec, formatSampleRate(details.sampleRateHz)]
     .filter((value): value is string => value !== null && value !== "")
     .join(" ");

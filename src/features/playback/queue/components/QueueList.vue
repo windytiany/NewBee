@@ -28,8 +28,8 @@
         <QueueRow
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
-          :track-id="track.trackId"
-          :is-skipped="props.skippedTrackIds.includes(track.trackId)"
+          :track-id="track.trackId ?? track.path ?? null"
+          :is-skipped="track.trackId !== null && props.skippedTrackIds.includes(track.trackId)"
           :row-key="getTrackRowKey(track)"
           :can-remove-from-queue="props.canRemoveFromQueue"
           :is-context-menu-open="contextMenu?.rowKey === getTrackRowKey(track)"
@@ -66,7 +66,11 @@
         {{ t("从播放队列移除") }}
       </button>
       <EditMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
-      <SkipMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
+      <SkipMenuItem
+        v-if="contextLibraryTrackIds.length === contextTargetTrackIds.length"
+        :track-ids="contextLibraryTrackIds"
+        @close="closeQueueContextMenu(true)"
+      />
     </div>
   </section>
 </template>
@@ -133,8 +137,15 @@ const displayEmptyMessage = computed(() => props.emptyMessage ?? t("暂无曲目
 const visibleRowKeys = computed(() => props.tracks.map(getTrackRowKey));
 const contextTargetTrackIds = computed(() => {
   const rowKeys = new Set(contextMenu.value?.targetRowKeys ?? []);
-  return props.tracks.filter((track) => rowKeys.has(track.rowKey)).map((track) => track.trackId);
+  return props.tracks
+    .filter((track) => rowKeys.has(track.rowKey))
+    .flatMap<number | string>((track) =>
+      track.trackId !== null ? [track.trackId] : track.path ? [track.path] : [],
+    );
 });
+const contextLibraryTrackIds = computed(() =>
+  contextTargetTrackIds.value.filter((target): target is number => typeof target === "number"),
+);
 
 watch(visibleRowKeys, (rowKeys) => queueFocus.syncVisibleItems(rowKeys), { immediate: true });
 

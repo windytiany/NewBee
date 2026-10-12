@@ -8,7 +8,7 @@
       type="button"
       @click="emit('select')"
     >
-      <ArtistPhoto :artist="artist" class="size-10" />
+      <ArtistPhoto v-if="showPhoto" :artist="artist" class="size-10" />
       <span class="flex min-w-0 flex-col">
         <span class="truncate text-sm font-medium text-white">
           {{ name }}
@@ -22,13 +22,17 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import ArtistPhoto from "@/features/artwork/artist/ArtistPhoto.vue";
-defineProps<{
-  artist: string | null;
-  name: string;
-  albumCount: number;
-  isSelected: boolean;
-  isFocused: boolean;
-}>();
+withDefaults(
+  defineProps<{
+    artist: string | null;
+    name: string;
+    albumCount: number;
+    isSelected: boolean;
+    isFocused: boolean;
+    showPhoto?: boolean;
+  }>(),
+  { showPhoto: true },
+);
 
 const emit = defineEmits<{
   select: [];

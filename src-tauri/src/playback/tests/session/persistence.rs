@@ -37,7 +37,7 @@ fn persistence_round_trips_duplicates_modes_selection_and_explicit_next_priority
             .queue
             .candidates(false, false, &HashSet::new())
             .iter()
-            .map(|track| track.track_id)
+            .filter_map(|track| track.track_id)
             .collect::<Vec<_>>(),
         [9, 9, 8]
     );
@@ -81,12 +81,12 @@ fn persists_natural_transitions_and_removal_and_excludes_runtime_fields() {
             .queue
             .displayed_tracks
             .iter()
-            .map(|track| track.track_id)
+            .filter_map(|track| track.track_id)
             .collect::<Vec<_>>(),
         [2, 3]
     );
     assert_eq!(saved.queue.current_row_key.as_deref(), Some("row:1"));
-    assert_eq!(saved.current_track.unwrap().track_id, 2);
+    assert_eq!(saved.current_track.unwrap().track_id, Some(2));
     std::fs::remove_file(path).unwrap();
 }
 
@@ -136,7 +136,8 @@ fn valid_selection_restores_even_if_previous_current_track_is_different() {
         queue,
         volume: VolumePreferences::default(),
         current_track: Some(ListeningTrack {
-            track_id: 999,
+            track_id: Some(999),
+            path: None,
             title: None,
             artist: None,
         }),

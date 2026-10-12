@@ -1,0 +1,17 @@
+export const inboxMessages: Record<string, string> = {
+  所有艺术家: "All artists",
+  目标: "Destination",
+  来源: "Source",
+  文件夹: "Folder",
+  导入: "Import",
+  "已加入 Inbox：{count} 首": "Added to Inbox: {count} tracks",
+  曲目操作: "Track actions",
+  添加到音乐库: "Add to library",
+  "从 Inbox 移除": "Remove from Inbox",
+  刷新: "Refresh",
+  "{count} 个文件处理失败": "Failed to process {count} files",
+  "读取 Inbox 失败": "Could not read Inbox",
+  移除失败: "Could not remove items",
+  "已加入音乐库：{count} 首": "Added to library: {count} tracks",
+  添加到音乐库失败: "Could not add to library",
+};

@@ -130,7 +130,12 @@ export function playbackFixture(
       if (track)
         snapshot = {
           ...snapshot,
-          currentTrack: { trackId: track.trackId, title: track.title, artist: "Artist" },
+          currentTrack: {
+            trackId: track.trackId,
+            ...(track.path ? { path: track.path } : {}),
+            title: track.title,
+            artist: "Artist",
+          },
           currentPlaybackId: ++nextId,
           playbackStatus: {
             hasAudio: true,
@@ -153,7 +158,11 @@ export function playbackFixture(
       const ids = command.trackIds as number[];
       if (
         snapshot.currentTrack &&
-        ids.includes(snapshot.currentTrack.trackId) &&
+        ((snapshot.currentTrack.trackId !== null && ids.includes(snapshot.currentTrack.trackId)) ||
+          (snapshot.currentTrack.path !== undefined &&
+            ((command.paths as string[] | undefined) ?? []).includes(
+              snapshot.currentTrack.path,
+            ))) &&
         snapshot.currentPlaybackId !== null
       ) {
         if (options.canStop === false) throw new Error("未能确认播放文件已释放，请重试。");
@@ -169,7 +178,8 @@ export function playbackFixture(
       snapshot = { ...snapshot, isEditing: false };
     } else if (action === "updateMetadata") {
       const updates = command.tracks as Array<{
-        id: number;
+        id: number | null;
+        path?: string;
         title: string | null;
         artist: string | null;
         album: string | null;
@@ -178,7 +188,11 @@ export function playbackFixture(
       snapshot = {
         ...snapshot,
         displayedTracks: snapshot.displayedTracks.map((track) => {
-          const update = updates.find((update) => update.id === track.trackId);
+          const update = updates.find(
+            (update) =>
+              update.id === track.trackId &&
+              (update.id !== null || (update.path != null && update.path === track.path)),
+          );
           return update
             ? { ...track, title: update.title, album: update.album, durationMs: update.durationMs }
             : track;
@@ -187,7 +201,12 @@ export function playbackFixture(
           ? {
               ...snapshot.currentTrack,
               ...updates
-                .filter((update) => update.id === snapshot.currentTrack?.trackId)
+                .filter(
+                  (update) =>
+                    update.id === snapshot.currentTrack?.trackId &&
+                    (update.id !== null ||
+                      (update.path != null && update.path === snapshot.currentTrack?.path)),
+                )
                 .map(({ title, artist }) => ({ title, artist }))[0],
             }
           : null,

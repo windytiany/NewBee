@@ -14,9 +14,10 @@
 import { t } from "@/shared/i18n/locale";
 import { useTagEditor } from "@/features/metadata/manual/useEditor";
 import type { LibraryAlbumSelection } from "@/features/library/types";
+import type { MetadataTarget } from "@/features/metadata/types";
 
 const props = defineProps<{
-  trackIds?: readonly number[];
+  trackIds?: readonly MetadataTarget[];
   album?: LibraryAlbumSelection;
   disabled?: boolean;
 }>();

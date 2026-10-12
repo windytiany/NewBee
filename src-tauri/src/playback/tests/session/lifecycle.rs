@@ -76,7 +76,7 @@ fn inserting_next_replaces_prepared_successor_and_missing_file_does_not_interrup
             .find(&session.prepared.as_ref().unwrap().1)
             .unwrap()
             .track_id,
-        4
+        Some(4)
     );
     assert_eq!(session.audio.starts, [1]);
 }
@@ -120,7 +120,7 @@ fn live_skip_flags_filter_random_and_sequential_candidates_not_display_rows() {
                 .queue
                 .candidates(false, true, &session.skipped)
                 .iter()
-                .map(|track| track.track_id)
+                .filter_map(|track| track.track_id)
                 .collect::<Vec<_>>(),
             [4]
         );
@@ -361,7 +361,10 @@ fn editing_releases_playing_or_paused_target_and_retains_selection_without_autop
         }
         let token = execute(
             &mut session,
-            SessionCommand::BeginEditing { track_ids: vec![1] },
+            SessionCommand::BeginEditing {
+                paths: Vec::new(),
+                track_ids: vec![1],
+            },
         )
         .2
         .unwrap();
@@ -378,7 +381,8 @@ fn editing_releases_playing_or_paused_target_and_retains_selection_without_autop
             &mut session,
             SessionCommand::UpdateMetadata {
                 tracks: vec![MetadataUpdate {
-                    id: 1,
+                    id: Some(1),
+                    path: None,
                     title: Some("Updated".into()),
                     artist: Some("Artist 2".into()),
                     album: Some("Album 2".into()),
@@ -411,7 +415,10 @@ fn editing_other_file_cancels_prepared_decoder_without_stopping_current_audio() 
     play(&mut session, &[1, 2], 0);
     let token = execute(
         &mut session,
-        SessionCommand::BeginEditing { track_ids: vec![2] },
+        SessionCommand::BeginEditing {
+            paths: Vec::new(),
+            track_ids: vec![2],
+        },
     )
     .2
     .unwrap();
@@ -434,7 +441,10 @@ fn editing_requires_confirmed_release_and_rejects_stale_unlock_token() {
     let generation = session.generation.load(Ordering::SeqCst);
     assert!(session
         .execute(
-            SessionCommand::BeginEditing { track_ids: vec![1] },
+            SessionCommand::BeginEditing {
+                paths: Vec::new(),
+                track_ids: vec![1]
+            },
             generation
         )
         .is_err());
@@ -443,7 +453,10 @@ fn editing_requires_confirmed_release_and_rejects_stale_unlock_token() {
     session.audio.stop_result = None;
     let token = execute(
         &mut session,
-        SessionCommand::BeginEditing { track_ids: vec![1] },
+        SessionCommand::BeginEditing {
+            paths: Vec::new(),
+            track_ids: vec![1],
+        },
     )
     .2
     .unwrap();
@@ -492,4 +505,141 @@ fn stale_seek_never_cancels_a_newer_decode_intent() {
         .0
     );
     assert_eq!(current(&session), Some(2));
+}
+
+#[test]
+fn file_targets_share_editing_protection_but_not_library_identity() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory
+        .path()
+        .join("track.wav")
+        .to_string_lossy()
+        .into_owned();
+    for file_source in [false, true] {
+        let mut session = fixture();
+        session.audio.library_paths.insert(1, path.clone());
+        if file_source {
+            let target = QueueTrack {
+                track_id: None,
+                path: Some(path.clone()),
+                row_key: "file".into(),
+                title: None,
+                album: None,
+                duration_ms: Some(100),
+            };
+            assert!(
+                execute(
+                    &mut session,
+                    SessionCommand::PlayTracks {
+                        tracks: vec![target],
+                        start_row_key: "file".into(),
+                        allow_skipped: true
+                    }
+                )
+                .0
+            );
+            assert_eq!(session.current_track.as_ref().unwrap().track_id, None);
+        } else {
+            play(&mut session, &[1], 0);
+        }
+        let before = session.playback_id;
+        let unrelated = directory
+            .path()
+            .join("other.wav")
+            .to_string_lossy()
+            .into_owned();
+        let token = execute(
+            &mut session,
+            SessionCommand::BeginEditing {
+                track_ids: vec![],
+                paths: vec![unrelated],
+            },
+        )
+        .2
+        .unwrap();
+        assert_eq!(session.playback_id, before);
+        execute(&mut session, SessionCommand::EndEditing { token });
+        // A library edit must also release an Inbox audition of the same file.
+        let token = execute(
+            &mut session,
+            SessionCommand::BeginEditing {
+                track_ids: vec![1],
+                paths: vec![],
+            },
+        )
+        .2
+        .unwrap();
+        assert!(session.playback_id.is_none());
+        assert_eq!(session.audio.stops, [1]);
+        execute(&mut session, SessionCommand::EndEditing { token });
+        assert!(session.playback_id.is_none());
+    }
+    let mut session = fixture();
+    session.audio.library_paths.insert(1, path.clone());
+    play(&mut session, &[1], 0);
+    let token = execute(
+        &mut session,
+        SessionCommand::BeginEditing {
+            track_ids: vec![],
+            paths: vec![path],
+        },
+    )
+    .2
+    .unwrap();
+    assert!(session.playback_id.is_none());
+    assert_eq!(session.audio.stops, [1]);
+    execute(&mut session, SessionCommand::EndEditing { token });
+}
+
+#[test]
+fn file_metadata_updates_only_the_matching_file_source_without_touching_library_rows() {
+    let mut session = fixture();
+    let path = std::env::temp_dir()
+        .join("audition.wav")
+        .to_string_lossy()
+        .into_owned();
+    let mut tracks = rows(&[1, 1, 2]);
+    let file = &mut tracks[1];
+    file.track_id = None;
+    file.path = Some(path.clone());
+    let other = &mut tracks[2];
+    other.track_id = None;
+    other.path = Some(
+        std::env::temp_dir()
+            .join("other.wav")
+            .to_string_lossy()
+            .into_owned(),
+    );
+    execute(
+        &mut session,
+        SessionCommand::PlayTracks {
+            tracks,
+            start_row_key: "row:1".into(),
+            allow_skipped: true,
+        },
+    );
+    let update = serde_json::from_value(serde_json::json!({ "id": null, "path": path, "title": "File title", "artist": "File artist", "album": "File album", "durationMs": 500 })).unwrap();
+    execute(
+        &mut session,
+        SessionCommand::UpdateMetadata {
+            tracks: vec![update],
+        },
+    );
+    assert_eq!(
+        session.queue.displayed_tracks[0].title.as_deref(),
+        Some("Track 1")
+    );
+    assert_eq!(
+        session.queue.displayed_tracks[1].title.as_deref(),
+        Some("File title")
+    );
+    assert_eq!(
+        session.queue.displayed_tracks[2].title.as_deref(),
+        Some("Track 2")
+    );
+    assert_eq!(
+        session.current_track.as_ref().unwrap().title.as_deref(),
+        Some("File title")
+    );
+    assert_eq!(session.current_track.as_ref().unwrap().track_id, None);
 }

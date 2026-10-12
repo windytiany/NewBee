@@ -5,7 +5,8 @@ use std::num::{NonZeroU16, NonZeroU32};
 fn track(playback_id: u64, duration: Duration, samples: usize) -> PreparedTrack {
     PreparedTrack {
         track: NowPlayingTrack {
-            track_id: 1,
+            track_id: Some(1),
+            path: None,
             playback_id,
             title: None,
             artist: None,
@@ -153,4 +154,22 @@ fn pause_and_resume_do_not_advance_or_reset_the_round() {
     output.by_ref().take(700).for_each(drop);
     assert_eq!(receiver.try_recv().unwrap(), 1);
     assert!(receiver.try_recv().is_err());
+}
+
+#[test]
+fn inbox_audition_never_counts_even_when_same_file_is_in_the_library() {
+    for library_source in [false, true] {
+        let mut prepared = track(1, Duration::from_secs(10), 1000);
+        prepared.track.path = Some("same-file.wav".into());
+        if !library_source {
+            prepared.track.track_id = None;
+        }
+        let (sender, receiver) = mpsc::channel();
+        let (mut source, _, _) = ContinuousSource::new(prepared, Default::default(), sender);
+        source.by_ref().take(1200).for_each(drop);
+        assert_eq!(
+            receiver.try_iter().collect::<Vec<_>>(),
+            if library_source { vec![1] } else { vec![] }
+        );
+    }
 }

@@ -14,7 +14,7 @@ import { createHostNode, createHostRenderer, findNode } from "../../../support/h
 
 const browserSource = await Bun.file("src/features/library/browser/useBrowser.ts").text();
 const selectionSource = await Bun.file("src/features/library/browser/useSelection.ts").text();
-const artistSource = await Bun.file("src/features/library/browser/artists/ArtistList.vue").text();
+const artistSource = await Bun.file("src/features/artists/navigation/ArtistList.vue").text();
 const albumSource = await Bun.file("src/features/library/browser/albums/AlbumBrowser.vue").text();
 const descriptors = new Map(
   ["window", "localStorage", "document"].map((key) => [
@@ -356,7 +356,7 @@ it("offers both grouping options and emits the selected mode", async () => {
     {
       vue: Vue,
       "@lucide/vue": { Check: placeholder, ChevronDown: placeholder },
-      "@/features/library/browser/artists/ArtistRow.vue": placeholder,
+      "@/features/artists/navigation/ArtistRow.vue": placeholder,
     },
   );
   const grouping = Vue.ref<LibraryGrouping>("albumArtist");

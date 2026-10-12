@@ -1,5 +1,6 @@
 export type PlaybackTrack = {
-  trackId: number;
+  trackId: number | null;
+  path?: string;
   title: string | null;
   artist: string | null;
 };
@@ -18,7 +19,8 @@ export type PlaybackStatus = {
 };
 
 export type PlaybackDisplayTrack = {
-  trackId: number;
+  trackId: number | null;
+  path?: string;
   rowKey: string;
   title: string | null;
   album: string | null;
@@ -26,7 +28,8 @@ export type PlaybackDisplayTrack = {
 };
 
 export type TrackMetadataUpdate = {
-  id: number;
+  id: number | null;
+  path?: string;
   title: string | null;
   artist: string | null;
   album: string | null;

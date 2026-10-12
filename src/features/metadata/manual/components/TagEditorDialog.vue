@@ -180,7 +180,10 @@
         role="tabpanel"
         aria-labelledby="metadata-tab-lyrics"
       >
-        <div v-if="multiple" class="mb-4 space-y-2 text-sm">
+        <div
+          v-if="multiple && state.tracks.every(({ track }) => typeof track.id === 'number')"
+          class="mb-4 space-y-2 text-sm"
+        >
           <label for="metadata-lyrics-action" class="block">{{ t("无歌词标记") }}</label>
           <select
             id="metadata-lyrics-action"
@@ -208,7 +211,10 @@
           @mark="editor.changeLyricsAction('mark')"
         >
           <template #mark>
-            <label class="text-app-muted inline-flex shrink-0 items-center gap-2 text-xs">
+            <label
+              v-if="typeof singleTrack.id === 'number'"
+              class="text-app-muted inline-flex shrink-0 items-center gap-2 text-xs"
+            >
               <input
                 id="metadata-no-lyrics"
                 type="checkbox"

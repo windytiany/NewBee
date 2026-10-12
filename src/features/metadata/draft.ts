@@ -1,5 +1,5 @@
 import { t } from "@/shared/i18n/locale";
-import type { TrackDetails } from "@/features/library/types";
+import type { EditorTrack } from "@/features/metadata/types";
 
 export const TAG_FIELDS = [
   { key: "title", label: "标题", type: "text" },
@@ -103,7 +103,7 @@ export function buildTagChanges(
   return changes;
 }
 
-function validateNumberTotals(track: TrackDetails, changes: readonly TagChange[]) {
+function validateNumberTotals(track: EditorTrack, changes: readonly TagChange[]) {
   const updates = new Map(changes.map(({ field, value }) => [field, value]));
   const pairs = [
     ["trackNumber", "trackTotal"],

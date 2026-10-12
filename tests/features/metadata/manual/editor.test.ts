@@ -1,10 +1,11 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { describe, expect, it } from "bun:test";
 import { createTagEditor } from "@/features/metadata/manual/useEditor";
 import type { TagEditorOptions } from "@/features/metadata/manual/useEditor";
 import { buildTagChanges, createTagDraft, TAG_FIELDS } from "@/features/metadata/draft";
 import type { EditableTrack, TagChange, MetadataSaveResult } from "@/features/metadata/types";
 
-function editable(id: number, title = `Track ${id}`): EditableTrack {
+function editable(id: MetadataTarget, title = `Track ${id}`): EditableTrack {
   return {
     track: {
       id,
@@ -14,7 +15,7 @@ function editable(id: number, title = `Track ${id}`): EditableTrack {
       album: "Album",
       albumArtist: "Album Artist",
       releaseDate: "2024-02-29",
-      trackNumber: id,
+      trackNumber: typeof id === "number" ? id : null,
       discNumber: 1,
       trackTotal: 7,
       discTotal: 2,
@@ -30,7 +31,7 @@ function editable(id: number, title = `Track ${id}`): EditableTrack {
     issue: null,
   };
 }
-function result(trackId: number, success = true): MetadataSaveResult {
+function result(trackId: MetadataTarget, success = true): MetadataSaveResult {
   return {
     trackId,
     path: `/music/${trackId}.mp3`,
@@ -40,8 +41,8 @@ function result(trackId: number, success = true): MetadataSaveResult {
   };
 }
 function fixture(overrides: Partial<TagEditorOptions> = {}) {
-  const saves: Array<{ ids: number[]; changes: TagChange[] }> = [];
-  const synchronized: number[][] = [];
+  const saves: Array<{ ids: MetadataTarget[]; changes: TagChange[] }> = [];
+  const synchronized: MetadataTarget[][] = [];
   const editor = createTagEditor({
     loadTracks: async (ids) => ids.map((id) => editable(id)),
     loadAlbum: async () => [1, 2],
@@ -104,7 +105,7 @@ describe("metadata editing", () => {
   });
 
   it("saves cover-only replacement and deletion through file editing and preserves results on refresh failure", async () => {
-    const editing: number[][] = [];
+    const editing: MetadataTarget[][] = [];
     const covers: unknown[] = [];
     const { editor } = fixture({
       editFiles: (ids, save) => {
@@ -282,7 +283,7 @@ describe("metadata editing", () => {
   });
 
   it("preserves per-track results after partial failure without a retry entry", async () => {
-    const calls: number[][] = [];
+    const calls: MetadataTarget[][] = [];
     const { editor, synchronized } = fixture({
       save: async (ids, _changes, progress) => {
         calls.push(ids);
@@ -358,7 +359,7 @@ describe("metadata editing", () => {
   });
 
   it("preserves mark outcomes and the selected action after partial failure", async () => {
-    const calls: Array<{ ids: number[]; action: string }> = [];
+    const calls: Array<{ ids: MetadataTarget[]; action: string }> = [];
     const { editor } = fixture({
       save: async (ids, _changes, _progress, action) => {
         calls.push({ ids, action });
@@ -421,7 +422,7 @@ describe("metadata editing", () => {
   });
 
   it("preserves reported successes and every failed target after a request error", async () => {
-    const calls: number[][] = [];
+    const calls: MetadataTarget[][] = [];
     const { editor, synchronized } = fixture({
       save: async (ids, _changes, progress) => {
         calls.push(ids);
@@ -474,7 +475,7 @@ describe("metadata editing", () => {
   });
 
   it("releases every mark target even without cached lyrics, but not for unmarking", async () => {
-    const editing: number[][] = [];
+    const editing: MetadataTarget[][] = [];
     const { editor } = fixture({
       loadTracks: async (ids) =>
         ids.map((id) => ({ ...editable(id), lyrics: id === 1 ? "Old lyrics" : null })),

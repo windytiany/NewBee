@@ -1,3 +1,4 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { setLocale } from "@/shared/i18n/locale";
@@ -51,7 +52,7 @@ function createNode(type: string, text = ""): DialogNode {
   };
   return node;
 }
-function track(id: number): EditableTrack {
+function track(id: MetadataTarget): EditableTrack {
   return {
     track: {
       id,
@@ -61,7 +62,7 @@ function track(id: number): EditableTrack {
       album: "Album",
       albumArtist: "Group",
       releaseDate: null,
-      trackNumber: id,
+      trackNumber: typeof id === "number" ? id : null,
       discNumber: 1,
       trackTotal: 7,
       discTotal: 2,
@@ -595,7 +596,8 @@ describe("metadata editor views", () => {
   });
 
   it("the edit menu captures track IDs before closing and supports album targets", async () => {
-    const calls: Array<number[] | { albumArtist: string | null; album: string | null }> = [];
+    const calls: Array<MetadataTarget[] | { albumArtist: string | null; album: string | null }> =
+      [];
     const state = Vue.reactive({ open: false });
     const component = evaluateSource<{ default: Vue.Component }>(
       compileSfc(menuSource, "EditMenuItem.vue"),
@@ -604,7 +606,7 @@ describe("metadata editor views", () => {
         "@/features/metadata/manual/useEditor": {
           useTagEditor: () => ({
             state,
-            openTracks: (ids: number[]) => calls.push(ids),
+            openTracks: (ids: MetadataTarget[]) => calls.push(ids),
             openAlbum: (album: { albumArtist: string | null; album: string | null }) =>
               calls.push(album),
           }),

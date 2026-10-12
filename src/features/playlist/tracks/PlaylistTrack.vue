@@ -39,19 +39,7 @@
         @contextmenu="openTrackContextMenu"
         @keydown="handleContextMenuKeydown"
       >
-        <span class="flex min-w-0 flex-col gap-0.5">
-          <span
-            class="truncate font-medium"
-            :class="isCurrentTrack ? 'text-app-accent' : 'text-white'"
-          >
-            {{ track.title ?? t("未知曲目") }}
-          </span>
-          <span class="text-app-muted truncate text-xs">{{ track.artist ?? t("未知艺术家") }}</span>
-        </span>
-        <span class="text-app-muted hidden truncate text-xs sm:block">
-          {{ track.album ?? t("未知专辑") }}
-        </span>
-        <span class="text-app-muted text-right text-xs tabular-nums">{{ duration }}</span>
+        <TrackFields :track="track" :current="isCurrentTrack" />
       </button>
     </div>
   </li>
@@ -59,9 +47,8 @@
 
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { computed } from "vue";
+import TrackFields from "@/features/tracks/presentation/TrackFields.vue";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
-import { formatTrackDuration } from "@/features/library/format";
 import type { PlaylistTrackSummary } from "@/features/playlist/types";
 
 const props = withDefaults(
@@ -83,8 +70,6 @@ const props = withDefaults(
     dropPosition: null,
   },
 );
-
-const duration = computed(() => formatTrackDuration(props.track.durationMs) ?? t("时长未知"));
 
 const emit = defineEmits<{
   select: [modifiers: ItemSelectionModifiers];

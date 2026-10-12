@@ -41,7 +41,7 @@ fn background_worker_advances_and_persists_without_any_webview_or_status_request
         .recv_timeout(Duration::from_secs(2))
         .unwrap()
         .unwrap();
-    assert_eq!(reply.snapshot.current_track.unwrap().track_id, 1);
+    assert_eq!(reply.snapshot.current_track.unwrap().track_id, Some(1));
     // From this point there are no commands, IPC polls, WebViews or frontend timers.
     // The audio source ends and the Rust worker itself must select and start row 2.
     audio.lock().unwrap().ended = true;
@@ -52,7 +52,7 @@ fn background_worker_advances_and_persists_without_any_webview_or_status_request
         if snapshot
             .current_track
             .as_ref()
-            .is_some_and(|track| track.track_id == 2)
+            .is_some_and(|track| track.track_id == Some(2))
             && !snapshot.is_command_pending
         {
             break;
@@ -67,7 +67,7 @@ fn background_worker_advances_and_persists_without_any_webview_or_status_request
         if snapshot
             .current_track
             .as_ref()
-            .is_some_and(|track| track.track_id == 3)
+            .is_some_and(|track| track.track_id == Some(3))
             && !snapshot.is_command_pending
         {
             break;
@@ -117,7 +117,10 @@ fn tray_and_windows_media_actions_map_to_one_backend_session_entry() {
     );
     let token = execute(
         &mut session,
-        SessionCommand::BeginEditing { track_ids: vec![1] },
+        SessionCommand::BeginEditing {
+            paths: Vec::new(),
+            track_ids: vec![1],
+        },
     )
     .2
     .unwrap();

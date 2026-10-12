@@ -1,11 +1,14 @@
 import type { TrackDetails } from "@/features/library/types";
 import type { TAG_FIELDS } from "@/features/metadata/draft";
 
+export type MetadataTarget = number | string;
+export type EditorTrack = Omit<TrackDetails, "id"> & { id: MetadataTarget };
+
 export type TagField = (typeof TAG_FIELDS)[number]["key"] | "lyrics";
 export type LyricsMarkAction = "keep" | "mark" | "unmark";
 export type EditMode = "tracks" | "album";
 export type EditableTrack = {
-  track: TrackDetails;
+  track: EditorTrack;
   lyrics: string | null;
   noLyrics: boolean;
   writableFields: TagField[];
@@ -24,7 +27,7 @@ export type TagChange =
   | { field: IdentifierField; value: null; values: string[] };
 export type CoverEdit = { action: "replace"; data: number[] } | { action: "delete" };
 export type MetadataSaveResult = {
-  trackId: number;
+  trackId: MetadataTarget;
   path: string;
   fileWritten: boolean;
   databaseUpdated: boolean;

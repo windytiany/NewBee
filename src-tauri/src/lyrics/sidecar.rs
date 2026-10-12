@@ -75,3 +75,10 @@ pub(crate) mod accesses {
         selected
     }
 }
+
+#[tauri::command]
+pub(crate) async fn get_file_sidecar_lyrics(path: String) -> Result<Option<TrackLyrics>, String> {
+    tauri::async_runtime::spawn_blocking(move || read_sidecar(Path::new(&path)))
+        .await
+        .map_err(|error| error.to_string())
+}

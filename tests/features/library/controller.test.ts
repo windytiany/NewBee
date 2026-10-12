@@ -45,7 +45,7 @@ const modules: Record<string, unknown> = {
 const passiveComponent = { __esModule: true, default: Vue.defineComponent(() => () => null) };
 for (const path of [
   "features/library/browser/albums/AlbumBrowser.vue",
-  "features/library/browser/artists/ArtistList.vue",
+  "features/artists/navigation/ArtistList.vue",
   "shared/components/SidePane.vue",
   "features/library/components/dialogs/DeleteAlbumDialog.vue",
   "features/library/components/dialogs/DeleteTrackDialog.vue",

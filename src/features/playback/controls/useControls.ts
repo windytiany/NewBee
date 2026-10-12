@@ -25,7 +25,8 @@ export function usePlaybackControls() {
   }
 
   async function commitSeek() {
-    if (!isSeekInputActive.value || session.state.isPlaybackCommandPending.value) return;
+    if (!isSeekInputActive.value) return;
+    isSeekInputActive.value = false;
 
     try {
       await session.seekTo(selectedPositionMs.value);
@@ -49,6 +50,7 @@ export function usePlaybackControls() {
 
   return {
     ...session.state,
+    isSeekInputActive,
     selectedPositionMs,
     setRepeatOneEnabled: session.setRepeatOneEnabled,
     setShuffleEnabled: session.setShuffleEnabled,

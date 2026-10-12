@@ -9,6 +9,7 @@ import type { LyricLine, TrackLyrics } from "@/features/lyrics/types";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
+import { FILES_CHANGED_EVENT } from "@/features/metadata/events";
 
 export type LyricsState =
   | { status: "idle" }
@@ -22,7 +23,7 @@ export type ActiveLyricIndices = {
 };
 
 export type LyricsOptions = {
-  currentTrack: Readonly<Ref<Readonly<{ trackId: number }> | null>>;
+  currentTrack: Readonly<Ref<Readonly<{ trackId: number | null; path?: string }> | null>>;
   playbackStatus: Readonly<Ref<PlaybackStatus>>;
   invokeCommand?: PlaybackCommandInvoker;
   sidecarLyrics?: Readonly<Ref<TrackLyrics | null>>;
@@ -50,7 +51,7 @@ export function getActiveLyricIndices(
 const pendingReads = new WeakMap<
   PlaybackCommandInvoker,
   Map<
-    number,
+    number | string,
     {
       promise: Promise<TrackLyrics>;
       notified: boolean;
@@ -87,7 +88,7 @@ export function useLyrics(options: LyricsOptions) {
   });
   let requestVersion = 0;
 
-  async function loadLyrics(trackId: number, version: number) {
+  async function loadLyrics(trackId: number | string, version: number) {
     let reads = pendingReads.get(invokeCommand);
     if (!reads) {
       reads = new Map();
@@ -144,7 +145,7 @@ export function useLyrics(options: LyricsOptions) {
   }
 
   watch(
-    () => options.currentTrack.value?.trackId ?? null,
+    () => options.currentTrack.value?.trackId ?? options.currentTrack.value?.path ?? null,
     (trackId) => {
       const version = ++requestVersion;
       if (trackId === null) {
@@ -159,15 +160,17 @@ export function useLyrics(options: LyricsOptions) {
   );
 
   function reloadCurrentLyrics() {
-    const trackId = options.currentTrack.value?.trackId;
+    const trackId = options.currentTrack.value?.trackId ?? options.currentTrack.value?.path;
     if (trackId === undefined) return;
     lyricsState.value = { status: "loading" };
     void loadLyrics(trackId, ++requestVersion);
   }
   globalThis.window?.addEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentLyrics);
+  globalThis.window?.addEventListener(FILES_CHANGED_EVENT, reloadCurrentLyrics);
 
   onScopeDispose(() => {
     globalThis.window?.removeEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentLyrics);
+    globalThis.window?.removeEventListener(FILES_CHANGED_EVENT, reloadCurrentLyrics);
     requestVersion += 1;
   });
 

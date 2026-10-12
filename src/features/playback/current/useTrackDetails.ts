@@ -2,32 +2,33 @@ import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
-import type { TrackDetails } from "@/features/library/types";
+import type { EditorTrack } from "@/features/metadata/types";
+import { FILES_CHANGED_EVENT } from "@/features/metadata/events";
 import { logger } from "@/shared/logging/logger";
 import { notifications, notify } from "@/shared/notifications/center";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 
 export type TrackDetailsInvoker = <Result>(
-  command: "get_track",
-  args: { trackId: number },
+  command: "get_track" | "read_audio_file",
+  args: { trackId: number } | { path: string },
 ) => Promise<Result>;
 
 export function useTrackDetails(
-  trackIdSource: MaybeRefOrGetter<number | null>,
+  trackIdSource: MaybeRefOrGetter<number | string | null>,
   invokeCommand: TrackDetailsInvoker = invoke,
 ): {
-  currentTrackDetails: Readonly<Ref<TrackDetails | null>>;
+  currentTrackDetails: Readonly<Ref<EditorTrack | null>>;
   isLoading: Readonly<Ref<boolean>>;
   currentTrackDetailsError: Readonly<Ref<string>>;
   retry: () => void;
 } {
-  const currentTrackDetails = ref<TrackDetails | null>(null);
+  const currentTrackDetails = ref<EditorTrack | null>(null);
   const isLoading = ref(false);
   const currentTrackDetailsError = ref("");
-  let currentTrackId: number | null = null;
+  let currentTrackId: number | string | null = null;
   let detailsRequestGeneration = 0;
 
-  function syncCurrentTrackInfo(trackId: number | null) {
+  function syncCurrentTrackInfo(trackId: number | string | string | null) {
     currentTrackId = trackId;
     ++detailsRequestGeneration;
     currentTrackDetails.value = null;
@@ -38,7 +39,7 @@ export function useTrackDetails(
     void loadCurrentTrackDetails(trackId);
   }
 
-  function reportError(trackId: number, message: string, reason: unknown = message) {
+  function reportError(trackId: number | string, message: string, reason: unknown = message) {
     currentTrackDetailsError.value = message;
     logger.warn("playback", "details_read_failed", reason, { trackId });
     const key = `playback-details:${trackId}`;
@@ -47,13 +48,16 @@ export function useTrackDetails(
     }
   }
 
-  async function loadCurrentTrackDetails(trackId: number) {
+  async function loadCurrentTrackDetails(trackId: number | string) {
     const generation = ++detailsRequestGeneration;
     isLoading.value = true;
     currentTrackDetailsError.value = "";
 
     try {
-      const result = await invokeCommand<TrackDetails | null>("get_track", { trackId });
+      const result =
+        typeof trackId === "string"
+          ? await invokeCommand<EditorTrack>("read_audio_file", { path: trackId })
+          : await invokeCommand<EditorTrack | null>("get_track", { trackId });
       if (generation !== detailsRequestGeneration || currentTrackId !== trackId) return;
 
       if (!result) {
@@ -85,9 +89,11 @@ export function useTrackDetails(
     if (currentTrackId !== null) void loadCurrentTrackDetails(currentTrackId);
   }
   globalThis.window?.addEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentTrack);
+  globalThis.window?.addEventListener(FILES_CHANGED_EVENT, reloadCurrentTrack);
 
   onScopeDispose(() => {
     globalThis.window?.removeEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentTrack);
+    globalThis.window?.removeEventListener(FILES_CHANGED_EVENT, reloadCurrentTrack);
     currentTrackId = null;
     ++detailsRequestGeneration;
     stopWatching();

@@ -323,11 +323,11 @@ fn queue_boundary_validates_duplicates_selection_priorities_and_ids() {
     queue.next_row_keys.insert("missing".into());
     assert!(queue.validate().is_err());
     queue.next_row_keys.clear();
-    queue.displayed_tracks[0].track_id = -1;
+    queue.displayed_tracks[0].track_id = Some(-1);
     assert!(queue.validate().is_err());
-    queue.displayed_tracks[0].track_id = MAX_SAFE_INTEGER + 1;
+    queue.displayed_tracks[0].track_id = Some(MAX_SAFE_INTEGER + 1);
     assert!(queue.validate().is_err());
-    queue.displayed_tracks[0].track_id = 1;
+    queue.displayed_tracks[0].track_id = Some(1);
     queue.displayed_tracks[0].duration_ms = Some(MAX_SAFE_INTEGER as u64 + 1);
     assert!(queue.validate().is_err());
     let mut invalid = serde_json::to_value(Queue::with_tracks(rows(&[1]))).unwrap();

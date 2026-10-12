@@ -132,7 +132,9 @@
           "
           class="focus-visible:outline-app-accent absolute top-1/2 left-0 z-10 h-6 w-full -translate-y-1/2 cursor-pointer opacity-0 focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-not-allowed"
           :disabled="
-            !playbackStatus.hasAudio || playbackStatus.durationMs === 0 || isPlaybackCommandPending
+            !playbackStatus.hasAudio ||
+            playbackStatus.durationMs === 0 ||
+            (isPlaybackCommandPending && !isSeekInputActive)
           "
           :max="Math.max(playbackStatus.durationMs, 1)"
           min="0"
@@ -250,6 +252,7 @@ const {
   isPlaybackStatusSettled,
   playbackError,
   isSeeking,
+  isSeekInputActive,
   selectedPositionMs,
   currentTrack,
   currentPlaybackId,

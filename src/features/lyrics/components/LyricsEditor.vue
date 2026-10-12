@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import type { TrackDetails } from "@/features/library/types";
+import type { EditorTrack } from "@/features/metadata/types";
 import LyricsSearch from "@/features/lyrics/download/LyricsSearch.vue";
 
 const props = defineProps<{
-  track: TrackDetails;
+  track: EditorTrack;
   modelValue: string;
   originalValue?: string;
   writable: boolean;

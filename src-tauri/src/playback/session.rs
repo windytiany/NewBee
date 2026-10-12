@@ -9,7 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub trait SessionAudio {
-    fn start(&mut self, track_id: i64, row_key: &str) -> Result<NowPlayingTrack, String>;
+    fn start(&mut self, track: &QueueTrack) -> Result<NowPlayingTrack, String>;
+    fn paths(&self, track_ids: &[i64]) -> Result<Vec<String>, String>;
     fn status(&self) -> Result<PlaybackStatus, String>;
     fn prepare(
         &mut self,
@@ -28,7 +29,9 @@ pub trait SessionAudio {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ListeningTrack {
-    pub track_id: i64,
+    pub track_id: Option<i64>,
+    #[serde(default)]
+    pub path: Option<String>,
     pub title: Option<String>,
     pub artist: Option<String>,
 }
@@ -37,6 +40,7 @@ impl From<&NowPlayingTrack> for ListeningTrack {
     fn from(track: &NowPlayingTrack) -> Self {
         Self {
             track_id: track.track_id,
+            path: track.path.clone(),
             title: track.title.clone(),
             artist: track.artist.clone(),
         }
@@ -96,6 +100,8 @@ pub enum SessionCommand {
     },
     BeginEditing {
         track_ids: Vec<i64>,
+        #[serde(default)]
+        paths: Vec<String>,
     },
     EndEditing {
         token: u64,
@@ -108,7 +114,9 @@ pub enum SessionCommand {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataUpdate {
-    id: i64,
+    id: Option<i64>,
+    #[serde(default)]
+    path: Option<String>,
     title: Option<String>,
     artist: Option<String>,
     album: Option<String>,
@@ -305,16 +313,21 @@ impl<A: SessionAudio> Session<A> {
             if !self.is_current(generation) {
                 return Ok(false);
             }
-            if !(index == 0 && allow_first_skipped) && self.audio.skipped().contains(&item.track_id)
+            if !(index == 0 && allow_first_skipped)
+                && item
+                    .track_id
+                    .is_some_and(|id| self.audio.skipped().contains(&id))
             {
                 continue;
             }
             self.audio.set_volume(self.volume.volume)?;
-            match self.audio.start(item.track_id, &item.row_key) {
+            match self.audio.start(item) {
                 Ok(track) => {
                     if !self.is_current(generation)
                         || (!(index == 0 && allow_first_skipped)
-                            && self.audio.skipped().contains(&item.track_id))
+                            && item
+                                .track_id
+                                .is_some_and(|id| self.audio.skipped().contains(&id)))
                     {
                         self.audio.stop(track.playback_id)?;
                         if !self.is_current(generation) {
@@ -608,7 +621,7 @@ impl<A: SessionAudio> Session<A> {
                         .queue
                         .displayed_tracks
                         .iter()
-                        .all(|track| self.skipped.contains(&track.track_id))
+                        .all(|track| track.track_id.is_some_and(|id| self.skipped.contains(&id)))
                     {
                         if let Some(id) = self.playback_id.take() {
                             self.audio.stop(id)?;
@@ -675,7 +688,9 @@ impl<A: SessionAudio> Session<A> {
                         let candidates = self
                             .queue
                             .current()
-                            .filter(|track| !self.skipped.contains(&track.track_id))
+                            .filter(|track| {
+                                !track.track_id.is_some_and(|id| self.skipped.contains(&id))
+                            })
                             .cloned()
                             .into_iter()
                             .chain(self.queue.candidates(false, false, &self.skipped))
@@ -733,8 +748,7 @@ impl<A: SessionAudio> Session<A> {
             }
             SessionCommand::Add { tracks, next } => {
                 if tracks.iter().any(|track| {
-                    track.track_id <= 0
-                        || track.track_id > MAX_SAFE_INTEGER
+                    !track.valid_target()
                         || track
                             .duration_ms
                             .is_some_and(|duration| duration > MAX_SAFE_INTEGER as u64)
@@ -751,7 +765,7 @@ impl<A: SessionAudio> Session<A> {
                     .queue
                     .displayed_tracks
                     .iter()
-                    .filter(|track| track.track_id == track_id)
+                    .filter(|track| track.track_id == Some(track_id))
                     .map(|track| track.row_key.clone())
                     .collect();
                 removal = Some(self.remove(keys, generation)?);
@@ -777,20 +791,29 @@ impl<A: SessionAudio> Session<A> {
             SessionCommand::Shuffle { enabled } => {
                 self.queue.set_shuffle(enabled);
             }
-            SessionCommand::BeginEditing { track_ids } => {
+            SessionCommand::BeginEditing {
+                track_ids,
+                mut paths,
+            } => {
                 if track_ids.iter().any(|id| *id <= 0) {
                     return Err("Invalid editing track IDs".into());
                 }
+                if paths
+                    .iter()
+                    .any(|path| !std::path::Path::new(path).is_absolute())
+                {
+                    return Err("Invalid editing file paths".into());
+                }
+                paths.extend(self.audio.paths(&track_ids)?);
                 self.cancel_preparation()?;
                 {
                     // Reconcile once more after cancelling the prepared decoder, since the
                     // audio thread may have crossed the boundary during that cancellation.
                     self.reconcile()?;
-                    if self
-                        .current_track
-                        .as_ref()
-                        .is_some_and(|track| track_ids.contains(&track.track_id))
-                    {
+                    if self.current_track.as_ref().is_some_and(|track| {
+                        track.track_id.is_some_and(|id| track_ids.contains(&id))
+                            || track.path.as_ref().is_some_and(|path| paths.contains(path))
+                    }) {
                         if let Some(id) = self.playback_id {
                             if !self.audio.stop(id)? {
                                 return Err("Could not confirm playback file release".into());
@@ -815,16 +838,28 @@ impl<A: SessionAudio> Session<A> {
                         .queue
                         .displayed_tracks
                         .iter_mut()
-                        .filter(|track| track.track_id == update.id)
+                        .filter(|track| match update.id {
+                            Some(id) => track.track_id == Some(id),
+                            None => {
+                                track.track_id.is_none()
+                                    && update.path.is_some()
+                                    && track.path == update.path
+                            }
+                        })
                     {
                         track.title = update.title.clone();
                         track.album = update.album.clone();
                         track.duration_ms = update.duration_ms;
                     }
-                    if let Some(track) = self
-                        .current_track
-                        .as_mut()
-                        .filter(|track| track.track_id == update.id)
+                    if let Some(track) =
+                        self.current_track.as_mut().filter(|track| match update.id {
+                            Some(id) => track.track_id == Some(id),
+                            None => {
+                                track.track_id.is_none()
+                                    && update.path.is_some()
+                                    && track.path == update.path
+                            }
+                        })
                     {
                         track.title = update.title;
                         track.artist = update.artist;

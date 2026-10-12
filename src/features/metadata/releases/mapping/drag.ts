@@ -1,5 +1,6 @@
+import type { MetadataTarget } from "@/features/metadata/types";
 export type MappingDragPreview = {
-  trackId: number;
+  trackId: MetadataTarget;
   x: number;
   y: number;
   target: number | null | undefined;
@@ -7,7 +8,7 @@ export type MappingDragPreview = {
 export type MappingDragOptions = {
   canStart: () => boolean;
   preview: (value: MappingDragPreview | null) => void;
-  drop: (trackId: number, target: number | null) => void;
+  drop: (trackId: MetadataTarget, target: number | null) => void;
 };
 const MOVE_THRESHOLD = 6;
 const SCROLL_EDGE = 48;
@@ -47,7 +48,7 @@ export function createMappingDrag(options: MappingDragOptions) {
     cleanup?.();
     clearClickSuppression();
   }
-  function start(trackId: number, event: PointerEvent) {
+  function start(trackId: MetadataTarget, event: PointerEvent) {
     if (!options.canStart() || event.button !== 0 || !event.isPrimary) return;
     cancel();
     event.preventDefault();

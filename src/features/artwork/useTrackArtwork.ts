@@ -16,7 +16,7 @@ import { notify } from "@/shared/notifications/center";
 export type TrackArtworkStatus = "loading" | "ready" | "fallback";
 
 type SharedArtwork = {
-  trackId: number;
+  trackId: number | string;
   resource: ArtworkResource;
   subscriptions: number;
 };
@@ -27,7 +27,7 @@ const THUMBNAIL_CONCURRENCY = 2;
 let activeThumbnailLoads = 0;
 
 export function useTrackArtwork(
-  trackId: MaybeRefOrGetter<number | null>,
+  trackId: MaybeRefOrGetter<number | string | null>,
   size: MaybeRefOrGetter<number | null> = null,
 ): {
   status: Readonly<Ref<TrackArtworkStatus>>;
@@ -84,7 +84,7 @@ export function useTrackArtwork(
 }
 
 /** Reloads subscribed artwork, optionally restricted to changed tracks. */
-export function invalidateTrackArtworkCache(trackIds?: readonly number[]) {
+export function invalidateTrackArtworkCache(trackIds?: readonly (number | string)[]) {
   const changedIds = trackIds === undefined ? null : new Set(trackIds);
   for (const entry of [...sharedArtworkByKey.values()]) {
     if (changedIds === null || changedIds.has(entry.trackId)) entry.resource.reload();
@@ -92,7 +92,7 @@ export function invalidateTrackArtworkCache(trackIds?: readonly number[]) {
 }
 
 function subscribeToTrackArtwork(
-  trackId: number,
+  trackId: number | string,
   size: number | null,
   subscriber: (snapshot: ArtworkResourceSnapshot) => void,
 ) {
@@ -103,7 +103,10 @@ function subscribeToTrackArtwork(
       trackId,
       subscriptions: 0,
       resource: createArtworkResource(
-        () => invoke<TrackArtwork>("get_track_artwork", { trackId, size }),
+        () =>
+          typeof trackId === "string"
+            ? invoke<TrackArtwork>("get_file_artwork", { path: trackId, size })
+            : invoke<TrackArtwork>("get_track_artwork", { trackId, size }),
         (error) => {
           const message = error instanceof Error ? error.message : String(error ?? "未知错误");
           logger.warn("artwork", "read_failed", error, { trackId });

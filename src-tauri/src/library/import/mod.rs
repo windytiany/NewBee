@@ -20,10 +20,10 @@ pub struct ImportResult {
     added: u64,
     updated: u64,
     skipped: u64,
-    failed: u64,
+    pub(crate) failed: u64,
 }
 
-fn has_supported_extension(path: &Path) -> bool {
+pub(crate) fn has_supported_extension(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
@@ -33,7 +33,7 @@ fn has_supported_extension(path: &Path) -> bool {
         })
 }
 
-fn import_track(database: &Database, path: &Path, result: &mut ImportResult) {
+pub(crate) fn import_track(database: &Database, path: &Path, result: &mut ImportResult) {
     match crate::metadata::files::read_track(path) {
         Ok(Some(mut track)) => {
             let fallback = if track.artwork.is_none() {

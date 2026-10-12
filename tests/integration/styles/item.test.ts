@@ -22,7 +22,9 @@ type SfcFile = {
 const componentPaths = [
   "../../../src/features/playlist/list/PlaylistRow.vue",
   "../../../src/features/playlist/tracks/PlaylistTrack.vue",
-  "../../../src/features/library/browser/artists/ArtistRow.vue",
+  "../../../src/features/tracks/presentation/TrackFields.vue",
+  "../../../src/features/tracks/presentation/TrackRow.vue",
+  "../../../src/features/artists/navigation/ArtistRow.vue",
   "../../../src/features/library/browser/albums/AlbumCard.vue",
   "../../../src/features/library/browser/albums/AlbumTrack.vue",
   "../../../src/features/playback/queue/components/QueueRow.vue",
@@ -80,7 +82,7 @@ describe("列表条目状态样式", () => {
   it("除专辑卡片外，焦点和多选只使用背景，不显示状态 ring 或焦点 outline", () => {
     const withoutMultiSelectBackground = new Set(["PlaylistRow.vue", "ArtistRow.vue"]);
     for (const file of componentFiles) {
-      if (file.path.endsWith("AlbumCard.vue")) continue;
+      if (file.path.endsWith("AlbumCard.vue") || file.path.endsWith("TrackFields.vue")) continue;
       const hasSelectionBackground = ![...withoutMultiSelectBackground].some((suffix) =>
         file.path.endsWith(suffix),
       );
@@ -135,14 +137,20 @@ describe("列表条目状态样式", () => {
   });
 
   it("只有当前播放曲目的标题使用品牌绿色", () => {
-    for (const suffix of ["PlaylistTrack.vue", "AlbumTrack.vue", "QueueRow.vue"]) {
+    expect(findFile("PlaylistTrack.vue").templateSource).toContain(':current="isCurrentTrack"');
+    expect(findFile("TrackRow.vue").templateSource).toContain(':current="current"');
+    for (const suffix of ["TrackFields.vue", "AlbumTrack.vue", "QueueRow.vue"]) {
       const file = findFile(suffix);
       const titleBinding = elements(file.template)
         .filter(({ tag }) => tag === "span")
         .map(classBinding)
-        .find((binding) => binding?.includes("isCurrentTrack"));
+        .find((binding) =>
+          binding?.includes(suffix === "TrackFields.vue" ? "current" : "isCurrentTrack"),
+        );
 
-      expect(titleBinding).toContain("isCurrentTrack ? 'text-app-accent' : 'text-white'");
+      expect(titleBinding).toContain(
+        `${suffix === "TrackFields.vue" ? "current" : "isCurrentTrack"} ? 'text-app-accent' : 'text-white'`,
+      );
       expect(titleBinding).not.toContain("isFocused");
     }
   });

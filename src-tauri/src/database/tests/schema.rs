@@ -33,6 +33,7 @@ fn old_schema(connection: &Connection, version: i64) {
             "",
         ))
         .unwrap();
+    connection.execute_batch("DROP TABLE inbox;").unwrap();
     if version == 4 {
         connection
             .execute_batch("DROP TABLE track_play_statistics;")
@@ -217,5 +218,47 @@ fn rejects_old_schema_without_modifying_it() {
                 .get::<_, String>(0))
             .unwrap(),
         "song.mp3"
+    );
+}
+
+#[test]
+fn version_six_adds_only_independent_inbox_paths_without_changing_library_snapshots() {
+    let mut connection = Connection::open_in_memory().unwrap();
+    initialize_schema(&mut connection).unwrap();
+    connection.execute_batch("DROP TABLE inbox; INSERT INTO tracks (id, path, title) VALUES (1, 'song.wav', 'Stored');").unwrap();
+    connection.pragma_update(None, "user_version", 6).unwrap();
+    initialize_schema(&mut connection).unwrap();
+    assert_eq!(
+        connection
+            .pragma_query_value::<i64, _>(None, "user_version", |row| row.get(0))
+            .unwrap(),
+        SCHEMA_VERSION
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT title FROM tracks WHERE id = 1", [], |row| row
+                .get::<_, String>(0))
+            .unwrap(),
+        "Stored"
+    );
+    let mut statement = connection.prepare("PRAGMA table_info(inbox)").unwrap();
+    let columns: Vec<String> = statement
+        .query_map([], |row| row.get(1))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(columns, ["path"]);
+    connection
+        .execute("INSERT INTO inbox (path) VALUES ('song.wav')", [])
+        .unwrap();
+    assert!(connection
+        .execute("INSERT INTO inbox (path) VALUES ('song.wav')", [])
+        .is_err());
+    assert_eq!(
+        connection
+            .query_row("SELECT title FROM tracks WHERE id = 1", [], |row| row
+                .get::<_, String>(0))
+            .unwrap(),
+        "Stored"
     );
 }

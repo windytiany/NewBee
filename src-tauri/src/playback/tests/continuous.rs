@@ -8,7 +8,8 @@ use std::time::Duration;
 fn track(id: u64, samples: Vec<f32>) -> PreparedTrack {
     PreparedTrack {
         track: NowPlayingTrack {
-            track_id: id as i64,
+            track_id: Some(id as i64),
+            path: None,
             playback_id: id,
             row_key: Some(id.to_string()),
             previous_playback_id: None,
@@ -166,7 +167,7 @@ fn cancelling_skip_before_the_boundary_allows_the_prepared_track() {
     assert!(playback.prepare(1, 1, track(2, vec![0.3, 0.4])));
     skipped.write().unwrap().remove(&2);
     assert_eq!(source.take(4).collect::<Vec<_>>(), vec![0.1, 0.2, 0.3, 0.4]);
-    assert_eq!(transitions.try_recv().unwrap().track_id, 2);
+    assert_eq!(transitions.try_recv().unwrap().track_id, Some(2));
 }
 
 #[test]
@@ -179,7 +180,7 @@ fn explicit_initial_playback_ignores_skip_but_repeat_transitions_do_not() {
     );
     assert!(playback.reserve(1, 1));
     let mut repeated = track(2, vec![0.3, 0.4]);
-    repeated.track.track_id = 1;
+    repeated.track.track_id = Some(1);
     assert!(playback.prepare(1, 1, repeated));
     assert_eq!(source.take(4).collect::<Vec<_>>(), vec![0.1, 0.2, 0.0, 0.0]);
     assert!(transitions.try_recv().is_err());

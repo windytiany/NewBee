@@ -2,14 +2,20 @@
 import { t } from "@/shared/i18n/locale";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import { useReleaseEditor } from "@/features/metadata/releases/useEditor";
-const props = defineProps<{ album: LibraryAlbumSelection; disabled?: boolean }>();
+const props = defineProps<{
+  album?: LibraryAlbumSelection;
+  paths?: readonly string[];
+  disabled?: boolean;
+}>();
 const emit = defineEmits<{ close: [] }>();
 const editor = useReleaseEditor();
 function open() {
   if (props.disabled || editor.state.open) return;
-  const album = { ...props.album };
+  const album = props.album;
+  const paths = [...(props.paths ?? [])];
   emit("close");
-  void editor.open(album);
+  if (album) void editor.open({ ...album });
+  else void editor.openFiles(paths);
 }
 </script>
 

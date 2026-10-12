@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager};
 #[derive(Default)]
 struct FakeAudio {
     track: Option<NowPlayingTrack>,
+    library_paths: std::collections::HashMap<i64, String>,
     playing: bool,
     ended: bool,
     position: u64,
@@ -29,14 +30,32 @@ struct FakeAudio {
 }
 
 impl SessionAudio for FakeAudio {
-    fn start(&mut self, id: i64, key: &str) -> Result<NowPlayingTrack, String> {
+    fn paths(&self, ids: &[i64]) -> Result<Vec<String>, String> {
+        Ok(ids
+            .iter()
+            .map(|id| {
+                self.library_paths
+                    .get(id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("/track/{id}.wav"))
+            })
+            .collect())
+    }
+    fn start(&mut self, item: &QueueTrack) -> Result<NowPlayingTrack, String> {
+        let id = item.track_id.unwrap_or(0);
+        let key = &item.row_key;
         self.starts.push(id);
         if self.failed.contains(&id) {
             return Err("AUDIO_FILE_NOT_FOUND: missing file".into());
         }
         self.next_id += 1;
         let track = NowPlayingTrack {
-            track_id: id,
+            track_id: item.track_id,
+            path: item
+                .path
+                .clone()
+                .or_else(|| self.library_paths.get(&id).cloned())
+                .or_else(|| Some(format!("/track/{id}.wav"))),
             playback_id: self.next_id,
             title: Some(format!("Track {id}")),
             artist: Some("Artist".into()),
@@ -76,7 +95,7 @@ impl SessionAudio for FakeAudio {
     ) -> Result<bool, String> {
         self.preparations
             .push((id, track.map(|track| track.row_key.clone())));
-        if track.is_some_and(|track| self.failed.contains(&track.track_id)) {
+        if track.is_some_and(|track| track.track_id.is_some_and(|id| self.failed.contains(&id))) {
             return Err("AUDIO_FILE_NOT_FOUND: missing file".into());
         }
         Ok(self
@@ -136,7 +155,8 @@ fn rows(ids: &[i64]) -> Vec<QueueTrack> {
     ids.iter()
         .enumerate()
         .map(|(index, id)| QueueTrack {
-            track_id: *id,
+            track_id: Some(*id),
+            path: None,
             row_key: format!("row:{index}"),
             title: Some(format!("Track {id}")),
             album: None,
@@ -174,14 +194,17 @@ fn play(session: &mut Session<FakeAudio>, ids: &[i64], index: usize) -> bool {
     .0
 }
 fn current(session: &Session<FakeAudio>) -> Option<i64> {
-    session.current_track.as_ref().map(|track| track.track_id)
+    session
+        .current_track
+        .as_ref()
+        .and_then(|track| track.track_id)
 }
 fn ids(session: &Session<FakeAudio>) -> Vec<i64> {
     session
         .queue
         .displayed_tracks
         .iter()
-        .map(|track| track.track_id)
+        .filter_map(|track| track.track_id)
         .collect()
 }
 fn boundary(session: &mut Session<FakeAudio>, key: &str) {
@@ -189,6 +212,7 @@ fn boundary(session: &mut Session<FakeAudio>, key: &str) {
     session.audio.next_id += 1;
     session.audio.track = Some(NowPlayingTrack {
         track_id: item.track_id,
+        path: item.path.clone(),
         playback_id: session.audio.next_id,
         row_key: Some(key.into()),
         previous_playback_id: session.playback_id,
@@ -207,8 +231,11 @@ mod persistence;
 mod queue;
 
 impl SessionAudio for Arc<Mutex<FakeAudio>> {
-    fn start(&mut self, id: i64, key: &str) -> Result<NowPlayingTrack, String> {
-        self.lock().unwrap().start(id, key)
+    fn paths(&self, ids: &[i64]) -> Result<Vec<String>, String> {
+        self.lock().unwrap().paths(ids)
+    }
+    fn start(&mut self, item: &QueueTrack) -> Result<NowPlayingTrack, String> {
+        self.lock().unwrap().start(item)
     }
     fn status(&self) -> Result<PlaybackStatus, String> {
         self.lock().unwrap().status()

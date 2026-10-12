@@ -1,7 +1,10 @@
 mod aac;
 mod flac;
 pub(crate) mod lyrics;
+mod model;
 mod snapshot;
+pub(crate) use model::FileTrack;
+pub(crate) mod commands;
 use super::model::{EditingSnapshot, MetadataChange, MetadataField};
 use lofty::config::{ParseOptions, WriteOptions};
 use lofty::file::{FileType, TaggedFile, TaggedFileExt};
@@ -352,7 +355,7 @@ fn write_tag(
 }
 
 /// Lyric replacement also clears secondary lyric fields. Failed checks never touch the original.
-pub(super) fn write_file(path: &Path, changes: &[MetadataChange]) -> Result<(), String> {
+pub(crate) fn write_file(path: &Path, changes: &[MetadataChange]) -> Result<(), String> {
     write_file_with_cover(path, changes, None)
 }
 

@@ -3,7 +3,7 @@ import * as Vue from "vue";
 import { compileSfc, evaluateSource } from "../../../support/module/loader";
 import { createHostNode, createHostRenderer, findNode } from "../../../support/host/renderer";
 
-const source = await Bun.file("src/features/library/browser/artists/ArtistRow.vue").text();
+const source = await Bun.file("src/features/artists/navigation/ArtistRow.vue").text();
 const apps: Vue.App[] = [];
 afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();

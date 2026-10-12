@@ -71,6 +71,7 @@ const modules: Record<string, unknown> = {
   "@/features/playback/controls/useControls": {
     usePlaybackControls: () => ({
       ...activeSession.state,
+      isSeekInputActive: activeSession.state.isSeeking,
       selectedPositionMs: Vue.ref(0),
       setRepeatOneEnabled: activeSession.setRepeatOneEnabled,
       setShuffleEnabled: activeSession.setShuffleEnabled,
@@ -267,6 +268,27 @@ afterEach(() => {
 });
 
 describe("playback bar button", () => {
+  it("keeps an active progress drag enabled while beginSeeking is pending", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    await startQueue(fixture.session);
+    const root = mountBar(fixture.session);
+    const progress = findNode(root, (node) => node.props["aria-label"] === t("播放进度"));
+    if (!progress) throw new Error("Playback progress was not rendered");
+    const begin = deferred<ReturnType<typeof playbackReply>>();
+    fixture.defer(begin.promise);
+    fixture.session.beginSeeking();
+    fixture.emit({ isCommandPending: true });
+    await Vue.nextTick();
+    expect(progress.props.disabled).toBe(false);
+    expect(playButton(root).props.disabled).toBe(true);
+    fixture.emit({ isCommandPending: false });
+    begin.resolve(playbackReply(fixture.snapshot));
+    await fixture.session.seekTo(75);
+    await Vue.nextTick();
+    expect(progress.props.disabled).toBe(false);
+    expect(playButton(root).props.disabled).toBe(false);
+  });
   it("places the live spectrum after repeat and shuffle, and stops it when paused", async () => {
     const { session } = setupPlayback();
     await startQueue(session);
