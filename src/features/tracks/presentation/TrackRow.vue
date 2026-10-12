@@ -23,13 +23,9 @@ const emit = defineEmits<{
     request: { itemKey: string; x: number; y: number; trigger: globalThis.HTMLButtonElement },
   ];
 }>();
-function mousedown(event: globalThis.MouseEvent) {
-  if (event.button === 0) event.preventDefault();
-}
 function select(event: globalThis.MouseEvent) {
   if (event.button !== 0) return;
   emit("select", { ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
-  (event.currentTarget as globalThis.HTMLButtonElement).focus({ preventScroll: true });
 }
 function context(event: globalThis.MouseEvent) {
   event.preventDefault();
@@ -63,7 +59,6 @@ function keydown(event: globalThis.KeyboardEvent) {
       aria-haspopup="menu"
       :aria-expanded="menuOpen"
       :aria-controls="menuOpen ? menuId : undefined"
-      @mousedown="mousedown"
       @click="select"
       @dblclick="emit('play')"
       @contextmenu="context"

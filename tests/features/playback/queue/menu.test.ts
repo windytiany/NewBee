@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
+import { createItemSelection } from "@/shared/interaction/item/useSelection";
 import { playbackFixture, playbackSnapshot } from "../../../support/playback/session";
 import { compileSfc, evaluateSource } from "../../../support/module/loader";
 
@@ -100,6 +101,46 @@ it("reports failed persistence without changing the visible preference", async (
   });
   expect(h.errors).toEqual(["更新跳过标记失败"]);
   expect(h.preferences.skippedTrackIds.value).toContain(1);
+});
+
+it.each([
+  { ctrlKey: true, shiftKey: false, expected: ["first", "third"] },
+  { ctrlKey: false, shiftKey: true, expected: ["first", "second", "third"] },
+  { ctrlKey: true, shiftKey: true, expected: ["first", "second", "third"] },
+])("queue mouse selection preserves previous targets through native focus: %j", (modifiers) => {
+  const selection = createItemSelection();
+  const scope = "playback:queue";
+  const keys = ["first", "second", "third"];
+  selection.selectItem(scope, "first", keys);
+  const icon = Vue.defineComponent({ render: () => Vue.h("svg") });
+  const component = evaluateSource<{ default: Vue.Component }>(
+    compileSfc(rowSource, "src/features/playback/queue/components/QueueRow.vue"),
+    {
+      vue: Vue,
+      "@tauri-apps/api/core": { invoke: async () => null },
+      "@lucide/vue": { AudioLines: icon, Disc3: icon, SkipForward: icon },
+    },
+  ).default;
+  const root = createHostNode("root");
+  const app = createHostRenderer(createHostNode).createApp(component, {
+    trackId: 1,
+    rowKey: "third",
+    title: "Track",
+    album: "Album",
+    duration: "1:00",
+    isFocused: false,
+    onSelect: (event: { ctrlKey: boolean; shiftKey: boolean }) =>
+      selection.selectItem(scope, "third", keys, event),
+  });
+  app.mount(root);
+  apps.push(app);
+  const button = findNode(root, (node) => node.type === "button");
+  if (!button) throw new Error("Queue row was not rendered.");
+  selection.focusItem(scope, "third");
+  const click = button.props.onClick;
+  if (typeof click !== "function") throw new Error("Missing queue click handler.");
+  click({ button: 0, ...modifiers });
+  expect(selection.getSelectedItemKeys(scope, keys)).toEqual([...modifiers.expected]);
 });
 
 it("shows the skip icon while keeping queue double-click playback available", async () => {

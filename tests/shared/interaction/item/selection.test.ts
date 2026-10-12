@@ -71,6 +71,35 @@ describe("Item 焦点与列表选择", () => {
     expect(manager.selection.value).toBeNull();
   });
 
+  it.each([
+    { modifiers: ctrlClick, expected: ["a", "c"] },
+    { modifiers: shiftClick, expected: ["a", "b", "c"] },
+    { modifiers: ctrlShiftClick, expected: ["a", "b", "c"] },
+  ])("同一列表内 focusin 先于 click 时保留多选及锚点：%j", ({ modifiers, expected }) => {
+    const manager = createItemSelection();
+    const keys = ["a", "b", "c"];
+    manager.selectItem("tracks", "a", keys, plainClick);
+    manager.focusItem("tracks", "c");
+    expect(manager.focusedItem.value?.itemKey).toBe("c");
+    expect(manager.selection.value?.selectedItemKeys).toEqual(["a"]);
+    expect(manager.selection.value?.anchorItemKey).toBe("a");
+    manager.selectItem("tracks", "c", keys, modifiers);
+    expect(manager.getSelectedItemKeys("tracks", keys)).toEqual([...expected]);
+  });
+
+  it("普通点击仍替换选择，切换列表的焦点清空旧选择", () => {
+    const manager = createItemSelection();
+    const keys = ["a", "b", "c"];
+    manager.selectItem("tracks", "a", keys, plainClick);
+    manager.selectItem("tracks", "b", keys, ctrlClick);
+    manager.focusItem("tracks", "c");
+    manager.selectItem("tracks", "c", keys, plainClick);
+    expect(manager.selection.value?.selectedItemKeys).toEqual(["c"]);
+    expect(manager.selection.value?.anchorItemKey).toBe("c");
+    manager.focusItem("navigation", "artist");
+    expect(manager.selection.value).toBeNull();
+  });
+
   it("按 Ctrl、Shift 和 Ctrl+Shift 修饰键选择并保留 Shift 锚点", () => {
     const manager = createItemSelection();
     const visibleRows = ["a", "b", "c", "d", "e"];

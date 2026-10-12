@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { createItemKeyboard, findDirectionalItem } from "@/shared/interaction/item/keyboard";
+import { createItemSelection } from "@/shared/interaction/item/useSelection";
 
 type Bounds = Pick<DOMRect, "left" | "top" | "width" | "height">;
 const itemSelector = "[data-keyboard-item]";
@@ -190,6 +191,39 @@ afterEach(() => {
 });
 
 describe("Item 列表键盘", () => {
+  it.each([
+    { ctrlKey: true, shiftKey: false, expected: ["a", "c"] },
+    { ctrlKey: false, shiftKey: true, expected: ["a", "b", "c"] },
+    { ctrlKey: true, shiftKey: true, expected: ["a", "b", "c"] },
+  ])("focusin 与点击选择共用状态，不丢失锚点：%j", (modifiers) => {
+    const selection = createItemSelection();
+    const harness = createHarness();
+    harness.onFocus.mockImplementation((key) => selection.focusItem("tracks", key));
+    selection.selectItem("tracks", "a", harness.keys);
+    harness.keyboard.onFocusin(new TestFocusEvent(harness.items[2], harness.container));
+    selection.selectItem("tracks", "c", harness.keys, modifiers);
+    expect(selection.getSelectedItemKeys("tracks", harness.keys)).toEqual([...modifiers.expected]);
+    expect(selection.selection.value?.anchorItemKey).toBe("a");
+  });
+
+  it("Shift 方向键选择后触发原生 focusin，不清空选中范围", () => {
+    const selection = createItemSelection();
+    const harness = createHarness();
+    harness.onFocus.mockImplementation((key) => selection.focusItem("tracks", key));
+    harness.onMove.mockImplementation((key, event) => {
+      selection.selectItem("tracks", key, harness.keys, event);
+    });
+    harness.items[1].focus.mockImplementation(() => {
+      harness.keyboard.onFocusin(new TestFocusEvent(harness.items[1], harness.container));
+    });
+    selection.selectItem("tracks", "a", harness.keys);
+    harness.keyboard.onKeydown(
+      new TestKeyboardEvent("ArrowDown", harness.items[0], harness.container, { shiftKey: true }),
+    );
+    expect(selection.getSelectedItemKeys("tracks", harness.keys)).toEqual(["a", "b"]);
+    expect(selection.selection.value?.anchorItemKey).toBe("a");
+  });
+
   it.each([
     ["ArrowUp", 1, 0],
     ["ArrowDown", 1, 2],

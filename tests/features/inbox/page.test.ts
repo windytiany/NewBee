@@ -212,16 +212,7 @@ function menuButton(root: Scene, label: string) {
 function clickRow(root: Scene, row: Scene, modifiers: Record<string, unknown> = {}) {
   const list = findNode(root, (node) => node.type === "ol");
   if (!list) throw new Error("Missing track list");
-  let prevented = false;
-  if (typeof row.props.onMousedown === "function") {
-    dispatch(row, "onMousedown", {
-      ...modifiers,
-      preventDefault() {
-        prevented = true;
-      },
-    });
-  }
-  if (!prevented) dispatch(list, "onFocusin", { target: row });
+  row.focus();
   dispatch(row, "onClick", modifiers);
 }
 describe("Inbox workspace", () => {

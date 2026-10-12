@@ -48,7 +48,7 @@ export function createItemSelection() {
 
   function focusItem(listScope: string, itemKey: string) {
     focusedItem.value = { listScope, itemKey };
-    selection.value = null;
+    if (selection.value?.listScope !== listScope) selection.value = null;
   }
 
   function isFocused(listScope: string, itemKey: string) {
