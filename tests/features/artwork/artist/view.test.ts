@@ -47,7 +47,8 @@ function mountRow(initial: string | null, url: Vue.Ref<string | null>) {
 it("shows a circular artist photo in the sidebar without adding photo actions", async () => {
   const url = Vue.ref<string | null>(null);
   const row = mountRow("Artist", url);
-  expect(row.names).toEqual(["Artist"]);
+  await Vue.nextTick();
+  expect(row.names).toEqual([null, "Artist"]);
   expect(findNode(row.root, (node) => node.props["data-icon"] === "artist")).not.toBeNull();
   url.value = "blob:photo";
   await Vue.nextTick();

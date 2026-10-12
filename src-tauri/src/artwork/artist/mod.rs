@@ -1,4 +1,8 @@
+mod discogs;
+mod lookup;
 mod storage;
+
+pub(crate) use lookup::LookupState;
 
 use crate::data::write::WriteState;
 use tauri::{ipc::Response, Manager};
@@ -19,6 +23,25 @@ pub(crate) async fn get_artist_photo<R: tauri::Runtime>(
     })
     .await
     .map_err(|error| format!("读取演出者照片失败：{error}"))?
+}
+
+#[tauri::command]
+pub(crate) async fn find_artist_photo<R: tauri::Runtime>(
+    artist: String,
+    app: tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("读取照片目录失败：{error}"))?
+        .join("artists")
+        .join("photos");
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<LookupState>()
+            .find(&directory, &artist, &app.state::<WriteState>())
+    })
+    .await
+    .map_err(|error| format!("获取演出者照片失败：{error}"))?
 }
 
 #[tauri::command]

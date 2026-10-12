@@ -2,7 +2,7 @@ import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter } from "vue";
 import { createArtworkResource } from "@/features/artwork/resources";
 import type { ArtworkResource } from "@/features/artwork/resources";
-import { readArtistPhoto } from "@/features/artwork/artist/api";
+import { findArtistPhoto, readArtistPhoto } from "@/features/artwork/artist/api";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { t } from "@/shared/i18n/locale";
@@ -28,7 +28,16 @@ export function usePhoto(artist: MaybeRefOrGetter<string | null>) {
         entry = {
           subscriptions: 0,
           resource: createArtworkResource(
-            () => readArtistPhoto(name),
+            async () => {
+              const photo = await readArtistPhoto(name);
+              if (photo.byteLength > 0) return photo;
+              try {
+                if (await findArtistPhoto(name)) return await readArtistPhoto(name);
+              } catch (error) {
+                logger.warn("artwork.artist", "lookup_failed", error);
+              }
+              return photo;
+            },
             (error) => {
               logger.warn("artwork.artist", "read_failed", error);
               const message = t("读取演出者照片失败，请查看日志");

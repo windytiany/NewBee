@@ -17,6 +17,7 @@ pub fn run() {
     let result = tauri::Builder::default()
         .manage(playback::PlaybackState::default())
         .manage(data::write::WriteState::default())
+        .manage(artwork::artist::LookupState::default())
         .manage(backup::BackupState::default())
         .manage(lyrics::batch::LyricsBatchState::default())
         .setup(|app| {
@@ -138,6 +139,7 @@ pub fn run() {
             library::commands::get_track,
             artwork::get_track_artwork,
             artwork::artist::get_artist_photo,
+            artwork::artist::find_artist_photo,
             artwork::artist::save_artist_photo,
             artwork::transfer::has_clipboard_artwork,
             artwork::transfer::read_clipboard_artwork,

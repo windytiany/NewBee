@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const MAX_PHOTO_BYTES: usize = 20 * 1024 * 1024;
+pub(super) const MAX_PHOTO_BYTES: usize = 20 * 1024 * 1024;
 const PHOTO_SIZE: u32 = 512;
 
 fn path(directory: &Path, artist: &str) -> Result<PathBuf, String> {
@@ -23,7 +23,34 @@ pub(super) fn read(directory: &Path, artist: &str) -> Result<Vec<u8>, String> {
     }
 }
 
+pub(super) fn exists(directory: &Path, artist: &str) -> Result<bool, String> {
+    path(directory, artist)?
+        .try_exists()
+        .map_err(|error| format!("检查演出者照片失败：{error}"))
+}
+
+pub(super) fn searched(directory: &Path, artist: &str) -> Result<bool, String> {
+    path(directory, artist)?
+        .with_extension("missing")
+        .try_exists()
+        .map_err(|error| format!("读取照片搜索记录失败：{error}"))
+}
+
+pub(super) fn mark_missing(directory: &Path, artist: &str) -> Result<(), String> {
+    let destination = path(directory, artist)?.with_extension("missing");
+    std::fs::create_dir_all(directory).map_err(|error| format!("创建照片目录失败：{error}"))?;
+    std::fs::write(destination, []).map_err(|error| format!("保存照片搜索记录失败：{error}"))
+}
+
 pub(super) fn save(directory: &Path, artist: &str, data: &[u8]) -> Result<(), String> {
+    write(directory, artist, data, true).map(|_| ())
+}
+
+pub(super) fn save_if_absent(directory: &Path, artist: &str, data: &[u8]) -> Result<bool, String> {
+    write(directory, artist, data, false)
+}
+
+fn write(directory: &Path, artist: &str, data: &[u8], overwrite: bool) -> Result<bool, String> {
     let destination = path(directory, artist)?;
     if data.is_empty() || data.len() > MAX_PHOTO_BYTES {
         return Err("照片为空或超过 20 MiB。".to_owned());
@@ -36,10 +63,17 @@ pub(super) fn save(directory: &Path, artist: &str, data: &[u8]) -> Result<(), St
         .write_all(&photo)
         .and_then(|_| temporary.as_file().sync_all())
         .map_err(|error| format!("写入演出者照片失败：{error}"))?;
-    temporary
-        .persist(destination)
-        .map_err(|error| format!("保存演出者照片失败：{error}"))?;
-    Ok(())
+    if overwrite {
+        temporary
+            .persist(destination)
+            .map_err(|error| format!("保存演出者照片失败：{error}"))?;
+    } else if let Err(error) = temporary.persist_noclobber(destination) {
+        if error.error.kind() == std::io::ErrorKind::AlreadyExists {
+            return Ok(false);
+        }
+        return Err(format!("保存演出者照片失败：{error}"));
+    }
+    Ok(true)
 }
 
 #[cfg(test)]

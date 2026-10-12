@@ -31,15 +31,21 @@ it("uses the same exact artist identity for reading and replacing photos", async
     "@tauri-apps/api/core": {
       invoke: async (command: string, args: unknown) => {
         requests.push({ command, args });
-        return command === "get_artist_photo" ? content : undefined;
+        return command === "get_artist_photo"
+          ? content
+          : command === "find_artist_photo"
+            ? true
+            : undefined;
       },
     },
     "@tauri-apps/plugin-opener": { openUrl: async () => {} },
   });
   expect(await api.readArtistPhoto("Artist")).toBe(content);
+  expect(await api.findArtistPhoto("Artist")).toBe(true);
   await api.saveArtistPhoto("Artist", [4, 5, 6]);
   expect(requests).toEqual([
     { command: "get_artist_photo", args: { artist: "Artist" } },
+    { command: "find_artist_photo", args: { artist: "Artist" } },
     { command: "save_artist_photo", args: { artist: "Artist", data: [4, 5, 6] } },
   ]);
 });

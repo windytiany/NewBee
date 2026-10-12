@@ -5,6 +5,10 @@ export function readArtistPhoto(artist: string): Promise<ArrayBuffer> {
   return invoke<ArrayBuffer>("get_artist_photo", { artist });
 }
 
+export function findArtistPhoto(artist: string): Promise<boolean> {
+  return invoke<boolean>("find_artist_photo", { artist });
+}
+
 export function saveArtistPhoto(artist: string, data: number[]): Promise<void> {
   return invoke<void>("save_artist_photo", { artist, data });
 }

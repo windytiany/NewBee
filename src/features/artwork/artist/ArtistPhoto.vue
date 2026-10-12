@@ -1,5 +1,6 @@
 <template>
   <span
+    ref="photoElement"
     class="bg-app-interactive text-app-muted flex shrink-0 items-center justify-center overflow-hidden rounded-full"
   >
     <img
@@ -14,12 +15,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { UserRound } from "@lucide/vue";
 import { usePhoto } from "@/features/artwork/artist/usePhoto";
 
 const props = defineProps<{ artist: string | null }>();
-const { url } = usePhoto(() => props.artist);
+const photoElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const activated = ref(false);
+const { url } = usePhoto(() => (activated.value ? props.artist : null));
+let observer: InstanceType<typeof globalThis.IntersectionObserver> | null = null;
+onMounted(() => {
+  if (!globalThis.IntersectionObserver) {
+    activated.value = true;
+    return;
+  }
+  observer = new globalThis.IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    activated.value = true;
+    observer?.disconnect();
+  });
+  if (photoElement.value) observer.observe(photoElement.value);
+});
+onBeforeUnmount(() => observer?.disconnect());
 const failed = ref(false);
 watch(url, () => {
   failed.value = false;
