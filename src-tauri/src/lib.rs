@@ -1,8 +1,8 @@
 mod artwork;
 mod backup;
-mod data;
 mod database;
 mod library;
+mod locking;
 mod logging;
 pub mod lyrics;
 mod metadata;
@@ -16,7 +16,7 @@ mod window;
 pub fn run() {
     let result = tauri::Builder::default()
         .manage(playback::PlaybackState::default())
-        .manage(data::write::WriteState::default())
+        .manage(locking::write::WriteState::default())
         .manage(artwork::artist::LookupState::default())
         .manage(backup::BackupState::default())
         .manage(lyrics::batch::LyricsBatchState::default())

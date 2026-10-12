@@ -1,9 +1,9 @@
 pub(super) mod artwork;
 
 use super::{has_supported_extension, import_track, record_failure, ImportResult};
-use crate::data::write::WriteState;
 use crate::database::Database;
 use crate::library::model::MusicLibraryDirectory;
+use crate::locking::write::WriteState;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;

@@ -1,8 +1,8 @@
 use super::support::{change, Fixture};
 use crate::{
-    data::write::WriteState,
     database::Database,
     library::commands,
+    locking::write::WriteState,
     metadata::{files, model::MetadataField},
     playback::queue::commands as queue,
     playlist::commands as playlist,

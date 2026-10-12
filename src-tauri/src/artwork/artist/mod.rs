@@ -4,7 +4,7 @@ mod storage;
 
 pub(crate) use lookup::LookupState;
 
-use crate::data::write::WriteState;
+use crate::locking::write::WriteState;
 use tauri::{ipc::Response, Manager};
 
 #[tauri::command]

@@ -4,8 +4,8 @@ mod restore;
 mod tests;
 
 use crate::{
-    data::write::{WriteGuard, WriteState},
     database::Database,
+    locking::write::{WriteGuard, WriteState},
     settings::SettingsState,
 };
 use archive::{InterfaceState, Manifest, Workspace};
