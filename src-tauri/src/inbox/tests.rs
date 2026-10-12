@@ -50,6 +50,7 @@ fn paths_coexist_with_snapshots_and_only_scanning_updates_the_library() {
     assert_eq!(database.get_track(id).unwrap().unwrap().title, None);
     assert_eq!(
         refresh(&database).unwrap().tracks[0]
+            .file
             .snapshot
             .title
             .as_deref(),
@@ -117,15 +118,30 @@ fn persists_paths_without_tags_and_removal_does_not_change_files() {
         .to_string_lossy()
         .into_owned();
     let db_path = files.0.join("inbox.sqlite3");
+    let added_at;
     {
         let database = Database::open(&db_path).unwrap();
         register(&database, vec![path.clone()]);
+        assert!(refresh(&database).unwrap().tracks[0].added_at > 0);
+        database
+            .connection()
+            .unwrap()
+            .execute("UPDATE inbox SET added_at = 123", [])
+            .unwrap();
+        added_at = refresh(&database).unwrap().tracks[0].added_at;
+        let serialized = serde_json::to_value(refresh(&database).unwrap()).unwrap();
+        assert_eq!(serialized["tracks"][0]["addedAt"], added_at);
+        assert_eq!(serialized["tracks"][0]["path"], path);
     }
     let database = Database::open(&db_path).unwrap();
     assert_eq!(database.inbox_paths().unwrap(), std::slice::from_ref(&path));
+    assert_eq!(refresh(&database).unwrap().tracks[0].added_at, added_at);
+    assert!(register(&database, vec![path.clone()])[0].skipped);
+    assert_eq!(refresh(&database).unwrap().tracks[0].added_at, added_at);
     files::write_file(Path::new(&path), &[title("External")]).unwrap();
     assert_eq!(
         refresh(&database).unwrap().tracks[0]
+            .file
             .snapshot
             .title
             .as_deref(),
@@ -141,6 +157,8 @@ fn persists_paths_without_tags_and_removal_does_not_change_files() {
             .as_deref(),
         Some("External")
     );
+    assert!(register(&database, vec![path])[0].success);
+    assert!(refresh(&database).unwrap().tracks[0].added_at > added_at);
 }
 
 #[test]

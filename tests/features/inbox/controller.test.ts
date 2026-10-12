@@ -9,6 +9,7 @@ function track(path: string, artist = "Artist"): InboxTrack {
   return {
     id: path,
     path,
+    addedAt: 1_700_000_000_000,
     title: path,
     artist,
     album: "Album",

@@ -222,6 +222,36 @@ fn rejects_old_schema_without_modifying_it() {
 }
 
 #[test]
+fn version_seven_adds_registration_dates_to_an_empty_inbox() {
+    let mut connection = Connection::open_in_memory().unwrap();
+    initialize_schema(&mut connection).unwrap();
+    connection
+        .execute_batch("DROP TABLE inbox; CREATE TABLE inbox (path TEXT PRIMARY KEY NOT NULL);")
+        .unwrap();
+    connection.pragma_update(None, "user_version", 7).unwrap();
+    initialize_schema(&mut connection).unwrap();
+    initialize_schema(&mut connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO inbox (path, added_at) VALUES ('song.wav', 123)",
+            [],
+        )
+        .unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT added_at FROM inbox", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        123
+    );
+    assert_eq!(
+        connection
+            .pragma_query_value::<i64, _>(None, "user_version", |row| row.get(0))
+            .unwrap(),
+        SCHEMA_VERSION
+    );
+}
+
+#[test]
 fn version_six_adds_only_independent_inbox_paths_without_changing_library_snapshots() {
     let mut connection = Connection::open_in_memory().unwrap();
     initialize_schema(&mut connection).unwrap();
@@ -247,12 +277,18 @@ fn version_six_adds_only_independent_inbox_paths_without_changing_library_snapsh
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
-    assert_eq!(columns, ["path"]);
+    assert_eq!(columns, ["path", "added_at"]);
     connection
-        .execute("INSERT INTO inbox (path) VALUES ('song.wav')", [])
+        .execute(
+            "INSERT INTO inbox (path, added_at) VALUES ('song.wav', 123)",
+            [],
+        )
         .unwrap();
     assert!(connection
-        .execute("INSERT INTO inbox (path) VALUES ('song.wav')", [])
+        .execute(
+            "INSERT INTO inbox (path, added_at) VALUES ('song.wav', 456)",
+            []
+        )
         .is_err());
     assert_eq!(
         connection

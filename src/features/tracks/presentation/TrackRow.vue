@@ -53,8 +53,13 @@ function keydown(event: globalThis.KeyboardEvent) {
       data-item-interaction
       data-track-select
       type="button"
-      class="focus-visible:bg-app-track grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm transition-colors outline-none sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
-      :class="focused ? 'bg-app-track' : selected ? 'bg-white/10' : 'hover:bg-white/5'"
+      class="focus-visible:bg-app-track grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm transition-colors outline-none"
+      :class="[
+        focused ? 'bg-app-track' : selected ? 'bg-white/10' : 'hover:bg-white/5',
+        $slots['before-duration']
+          ? 'sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_9rem_3rem]'
+          : 'sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]',
+      ]"
       :aria-pressed="selected ? true : undefined"
       aria-haspopup="menu"
       :aria-expanded="menuOpen"
@@ -65,7 +70,11 @@ function keydown(event: globalThis.KeyboardEvent) {
       @keydown="keydown"
     >
       <span class="text-app-muted w-full text-right text-xs tabular-nums">{{ number }}</span>
-      <TrackFields :track="track" :current="current" />
+      <TrackFields :track="track" :current="current">
+        <template v-if="$slots['before-duration']" #before-duration>
+          <slot name="before-duration" />
+        </template>
+      </TrackFields>
     </button>
   </li>
 </template>

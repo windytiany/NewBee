@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, toRef, watch } from "vue";
 import { useInbox } from "@/features/inbox/useInbox";
+import { formatAddedDate } from "@/features/inbox/format";
 import { usePlaybackSession } from "@/features/playback/session";
 import SidePane from "@/shared/components/SidePane.vue";
 import ArtistList from "@/features/artists/navigation/ArtistList.vue";
@@ -124,10 +125,11 @@ watch(keys, (keys) => {
       @keydown.f5.prevent="inbox.refresh()"
     >
       <div
-        class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 px-4 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
+        class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 px-4 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_9rem_3rem]"
       >
         <span class="text-right">#</span><span>{{ t("歌曲") }}</span
         ><span class="hidden sm:block">{{ t("专辑") }}</span
+        ><span class="hidden sm:block">{{ t("添加日期") }}</span
         ><span class="text-right">{{ t("时长") }}</span>
       </div>
       <p v-if="state.loading" role="status" class="text-app-muted py-4 text-sm">
@@ -150,7 +152,13 @@ watch(keys, (keys) => {
           @select="selection.selectItem(track.path, keys, $event)"
           @play="inbox.play(track.path)"
           @context-menu="open"
-        />
+        >
+          <template #before-duration>
+            <span class="text-app-muted hidden text-xs tabular-nums sm:block">{{
+              formatAddedDate(track.addedAt)
+            }}</span>
+          </template>
+        </TrackRow>
       </ol>
     </section>
     <div

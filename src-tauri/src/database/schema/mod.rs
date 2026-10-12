@@ -7,20 +7,25 @@ pub(super) fn definition() -> &'static str {
     include_str!("definition.sql")
 }
 
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 
 pub(super) fn initialize_schema(connection: &mut Connection) -> rusqlite::Result<()> {
     let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
     if version == SCHEMA_VERSION {
         return Ok(());
     }
-    if matches!(version, 4..=6) {
+    if matches!(version, 4..=7) {
         if matches!(version, 4 | 5) {
             migration::artwork::migrate(connection)?;
         }
         let transaction = connection.transaction()?;
-        transaction
-            .execute_batch("CREATE TABLE IF NOT EXISTS inbox (path TEXT PRIMARY KEY NOT NULL);")?;
+        if version == 7 {
+            transaction.execute_batch("ALTER TABLE inbox ADD COLUMN added_at INTEGER NOT NULL;")?;
+        } else {
+            transaction.execute_batch(
+                "CREATE TABLE IF NOT EXISTS inbox (path TEXT PRIMARY KEY NOT NULL, added_at INTEGER NOT NULL);",
+            )?;
+        }
         transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         return transaction.commit();
     }

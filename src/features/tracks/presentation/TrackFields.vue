@@ -22,6 +22,7 @@ defineProps<{
   <span class="text-app-muted hidden truncate text-xs sm:block">{{
     track.album ?? t("未知专辑")
   }}</span>
+  <slot name="before-duration" />
   <span class="text-app-muted text-right text-xs tabular-nums">{{
     formatTrackDuration(track.durationMs) ?? t("时长未知")
   }}</span>

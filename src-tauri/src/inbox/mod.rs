@@ -15,16 +15,24 @@ pub(crate) struct FileResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct InboxRead {
-    tracks: Vec<FileTrack>,
+    tracks: Vec<InboxTrack>,
     failures: Vec<FileResult>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct InboxTrack {
+    #[serde(flatten)]
+    file: FileTrack,
+    added_at: i64,
 }
 
 fn refresh(database: &Database) -> Result<InboxRead, String> {
     let mut tracks = Vec::new();
     let mut failures = Vec::new();
-    for path in database.inbox_paths()? {
+    for (path, added_at) in database.inbox_entries()? {
         match FileTrack::read(&path) {
-            Ok(track) => tracks.push(track),
+            Ok(file) => tracks.push(InboxTrack { file, added_at }),
             Err(error) => {
                 database.remove_inbox_path(&path)?;
                 failures.push(FileResult {

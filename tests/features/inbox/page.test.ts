@@ -85,6 +85,7 @@ function track(index: number): InboxTrack {
   return {
     id: path,
     path,
+    addedAt: new Date(2026, 0, index, 9, 5).getTime(),
     title: `Song ${index}`,
     artist: "Artist",
     album: "Album",
@@ -216,6 +217,20 @@ function clickRow(root: Scene, row: Scene, modifiers: Record<string, unknown> = 
   dispatch(row, "onClick", modifiers);
 }
 describe("Inbox workspace", () => {
+  it("shows local added dates between album and duration without changing row order", async () => {
+    const context = await mount();
+    const rows = context.rows();
+    expect(rows).toHaveLength(3);
+    for (const [index, row] of rows.entries()) {
+      const text = getTextContent(row);
+      expect(text).toContain(`Song ${index + 1}`);
+      expect(text).toContain(`2026-01-0${index + 1} 09:05`);
+      expect(text.indexOf("Album")).toBeLessThan(text.indexOf("2026-"));
+      expect(text.indexOf("2026-")).toBeLessThan(text.indexOf("0:01"));
+    }
+    expect(getTextContent(context.root)).toContain("添加日期");
+  });
+
   it("preserves Ctrl toggles and Shift ranges through mouse focus before click", async () => {
     const context = await mount();
     clickRow(context.root, context.rows()[0]);

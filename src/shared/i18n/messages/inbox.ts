@@ -1,5 +1,6 @@
 export const inboxMessages: Record<string, string> = {
   所有艺术家: "All artists",
+  添加日期: "Date added",
   目标: "Destination",
   来源: "Source",
   文件夹: "Folder",
