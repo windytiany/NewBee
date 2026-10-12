@@ -137,6 +137,8 @@ pub fn run() {
             playback::queue::commands::set_tracks_skipped,
             library::commands::get_track,
             artwork::get_track_artwork,
+            artwork::artist::get_artist_photo,
+            artwork::artist::save_artist_photo,
             artwork::transfer::has_clipboard_artwork,
             artwork::transfer::read_clipboard_artwork,
             artwork::transfer::artwork_extensions,

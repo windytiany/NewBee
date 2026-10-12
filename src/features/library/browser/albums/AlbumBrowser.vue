@@ -9,8 +9,12 @@
     @focusin="albumKeyboard.onFocusin"
   >
     <template v-if="props.artist">
-      <header class="shrink-0 px-5 py-6 sm:px-8 sm:py-8">
-        <h1 id="album-browser-heading" class="text-3xl font-bold tracking-tight sm:text-4xl">
+      <header class="flex shrink-0 items-center gap-5 px-5 py-6 sm:gap-7 sm:px-8 sm:py-8">
+        <PhotoEditor :artist="props.artist.artist" class="size-28 sm:size-36" />
+        <h1
+          id="album-browser-heading"
+          class="min-w-0 text-3xl font-bold tracking-tight break-words sm:text-4xl"
+        >
           {{ props.artist.artist ?? t("未知演出者") }}
         </h1>
       </header>
@@ -127,6 +131,7 @@ import type {
 } from "@/features/library/types";
 
 import type { PlaylistSummary } from "@/features/playlist/types";
+import PhotoEditor from "@/features/artwork/artist/PhotoEditor.vue";
 import AlbumDetail from "@/features/library/browser/albums/AlbumDetail.vue";
 import AlbumCard from "@/features/library/browser/albums/AlbumCard.vue";
 import AlbumContextMenu from "@/features/library/browser/albums/AlbumContextMenu.vue";

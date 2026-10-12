@@ -27,6 +27,7 @@ for (const path of [
     path,
     evaluateSource<{ default: Vue.Component }>(compileSfc(source, filename), {
       vue: Vue,
+      "@/features/artwork/artist/ArtistPhoto.vue": Vue.defineComponent({ setup: () => () => null }),
       "@lucide/vue": { AudioLines: Vue.defineComponent({ setup: () => () => null }) },
       "@/features/library/format": { formatTrackDuration },
     }).default,
@@ -102,6 +103,7 @@ describe("library and playlist translations", () => {
 
   it("updates artist album counts when the locale changes without remounting", async () => {
     const root = mount("library/browser/artists/ArtistRow.vue", {
+      artist: "演出者数据",
       name: "演出者数据",
       albumCount: 3,
       isSelected: false,

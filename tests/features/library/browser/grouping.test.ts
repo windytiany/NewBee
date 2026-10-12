@@ -405,6 +405,7 @@ it("keeps same-name albums distinct and passes the artist scope to album menu an
     compileSfc(albumSource, "AlbumBrowser.vue"),
     {
       vue: Vue,
+      "@/features/artwork/artist/PhotoEditor.vue": placeholder,
       "@tauri-apps/api/core": { invoke: async () => [] },
       "@/features/artwork/useAlbumArtwork": {
         useAlbumArtwork: () => ({ background: Vue.ref(null) }),

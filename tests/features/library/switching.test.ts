@@ -43,6 +43,7 @@ function mountBrowser() {
   const placeholder = Vue.defineComponent({ render: () => null });
   const dependencies: Record<string, unknown> = {
     vue: Vue,
+    "@/features/artwork/artist/PhotoEditor.vue": placeholder,
     "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
     "@tauri-apps/api/core": {
       invoke: async (command: string) => {

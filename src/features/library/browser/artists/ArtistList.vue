@@ -66,6 +66,7 @@
         <ArtistRow
           v-for="artist in props.artists"
           :key="getArtistKey(artist.artist)"
+          :artist="artist.artist"
           :name="artist.artist ?? t('未知演出者')"
           :album-count="artist.albumCount"
           :is-selected="isSelectedArtist(artist)"

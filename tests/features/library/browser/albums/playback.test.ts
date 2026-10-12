@@ -17,6 +17,7 @@ const modules: Record<string, unknown> = {
     }),
   },
   vue: Vue,
+  "@/features/artwork/artist/PhotoEditor.vue": passive,
   "@lucide/vue": {
     DiscAlbum: icon,
     ChevronRight: icon,

@@ -21,6 +21,10 @@ const icon = Vue.defineComponent(() => () => null);
 const passiveComponent = { __esModule: true, default: icon };
 const dependencies: Record<string, unknown> = {
   vue: Vue,
+  "@/features/artwork/artist/PhotoEditor.vue": Vue.defineComponent({
+    props: ["artist"],
+    setup: (props) => () => Vue.h("photo", { "data-artist": props.artist }),
+  }),
   "@lucide/vue": { ChevronRight: icon, Play: icon, Pause: icon, X: icon, DiscAlbum: icon },
   "@/features/settings/composables/useCoverBackground": {
     useCoverBackground: (setting: string) => {

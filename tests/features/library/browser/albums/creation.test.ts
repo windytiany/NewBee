@@ -37,6 +37,7 @@ function mountBrowser() {
     compileSfc(source, "src/features/library/browser/albums/AlbumBrowser.vue"),
     {
       vue: Vue,
+      "@/features/artwork/artist/PhotoEditor.vue": placeholder,
       "@tauri-apps/api/core": {
         invoke: async (command: string, args: unknown) => {
           requests.push({ command, args });

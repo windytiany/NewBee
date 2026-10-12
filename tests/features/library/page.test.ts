@@ -72,6 +72,8 @@ const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 
 const dependencies: Record<string, unknown> = {
   vue: Vue,
+  "@/features/artwork/artist/PhotoEditor.vue": Vue.defineComponent({ setup: () => () => null }),
+  "@/features/artwork/artist/ArtistPhoto.vue": Vue.defineComponent({ setup: () => () => null }),
   "@/features/settings/events": { SETTINGS_CHANGED_EVENT },
 };
 dependencies["@tauri-apps/api/core"] = {
