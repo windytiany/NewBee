@@ -7,18 +7,14 @@ import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
 const pending = ref(false);
 export function useInboxImport() {
-  async function importFiles(directory: boolean) {
+  async function runImport(directory: boolean, droppedPaths?: string[]) {
     if (pending.value || !isTauri()) return;
     pending.value = true;
     try {
-      const extensions = await invoke<string[]>("supported_audio_extensions");
-      const picked = await open({
-        title: t("导入音频文件"),
-        directory,
-        multiple: true,
-        ...(directory ? {} : { filters: [{ name: t("支持的音频文件"), extensions }] }),
-      });
-      if (!picked) return;
+      const picked = droppedPaths
+        ? await invoke<string[]>("readable_audio_files", { paths: droppedPaths })
+        : await pickFiles(directory);
+      if (!picked || picked.length === 0) return;
       const results = await createInboxApi().register(
         Array.isArray(picked) ? picked : [picked],
         directory,
@@ -27,15 +23,16 @@ export function useInboxImport() {
         if (result.error)
           logger.warn("inbox", "register_failed", result.error, { path: result.path });
       const failed = results.filter((result) => !result.success).length;
-      notify({
-        type: failed ? "warning" : "success",
-        message: failed
-          ? t("导入完成，{count} 首失败（详情见日志）", { count: failed })
-          : t("已加入 Inbox：{count} 首", {
-              count: results.filter((result) => result.success && !result.skipped).length,
-            }),
-        key: "inbox-import",
-      });
+      if (!droppedPaths || failed || results.some((result) => result.success && !result.skipped))
+        notify({
+          type: failed ? "warning" : "success",
+          message: failed
+            ? t("导入完成，{count} 首失败（详情见日志）", { count: failed })
+            : t("已加入 Inbox：{count} 首", {
+                count: results.filter((result) => result.success && !result.skipped).length,
+              }),
+          key: "inbox-import",
+        });
       globalThis.window.dispatchEvent(new globalThis.Event(INBOX_CHANGED_EVENT));
     } catch (error) {
       logger.error("inbox", "register_failed", error);
@@ -44,5 +41,19 @@ export function useInboxImport() {
       pending.value = false;
     }
   }
-  return { pending, importFiles };
+  async function pickFiles(directory: boolean) {
+    const extensions = await invoke<string[]>("supported_audio_extensions");
+    return open({
+      title: t("导入音频文件"),
+      directory,
+      multiple: true,
+      ...(directory ? {} : { filters: [{ name: t("支持的音频文件"), extensions }] }),
+    });
+  }
+
+  return {
+    pending,
+    importFiles: (directory: boolean) => runImport(directory),
+    importPaths: (paths: string[]) => runImport(false, paths),
+  };
 }

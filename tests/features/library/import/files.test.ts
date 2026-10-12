@@ -102,6 +102,55 @@ function deferred<T>() {
 }
 
 describe("audio file import", () => {
+  it("validates dropped paths without opening a picker and imports only readable files", async () => {
+    const importer = createImport({
+      invoke: async (command) =>
+        command === "readable_audio_files" ? ["/Music/good.wav"] : result,
+    });
+    await importer.importPaths(["/Music/good.wav", "/Music/broken.mp3", "/Music/folder"]);
+    expect(importer.pickerOptions).toEqual([]);
+    expect(importer.calls.map(([command]) => command)).toEqual([
+      "readable_audio_files",
+      "import_music_files",
+    ]);
+    expect(importer.calls[1]?.[1]).toMatchObject({ paths: ["/Music/good.wav"] });
+    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
+    expect(importer.notices[0]?.type).toBe("success");
+  });
+
+  it("silently ignores an entirely invalid drop", async () => {
+    const importer = createImport({ invoke: async () => [] });
+    await importer.importPaths(["/Music/broken.mp3"]);
+    expect(importer.calls).toHaveLength(1);
+    expect(importer.notices).toEqual([]);
+    expect(importer.events).toEqual([]);
+    expect(importer.isImporting.value).toBe(false);
+  });
+
+  it("holds the shared import lock while dropped files are being validated", async () => {
+    const validation = deferred<string[]>();
+    const importer = createImport({ invoke: () => validation.promise });
+    const pending = importer.importPaths(["/Music/broken.mp3"]);
+    await importer.factory().importMusicFiles();
+    await importer.factory().importPaths(["/Music/other.wav"]);
+    expect(importer.calls).toHaveLength(1);
+    expect(importer.pickerOptions).toEqual([]);
+    validation.resolve([]);
+    await pending;
+    expect(importer.isImporting.value).toBe(false);
+  });
+
+  it("reports system errors from a drop and releases the lock", async () => {
+    const importer = createImport({
+      invoke: async () => {
+        throw new Error("task failed");
+      },
+    });
+    await importer.importPaths(["/Music/song.wav"]);
+    expect(importer.notices[0]?.type).toBe("error");
+    expect(importer.isImporting.value).toBe(false);
+  });
+
   it("evaluates picker titles, filters, and count notifications in the current locale", async () => {
     const importer = createImport();
     setLocale("en");

@@ -4,6 +4,100 @@ import { evaluateSource, transpileScript } from "../../support/module/loader";
 import { INBOX_CHANGED_EVENT } from "@/features/inbox/api";
 import type { useInboxImport } from "@/features/inbox/import";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
+import type { InboxResult } from "@/features/inbox/api";
+import type { NotificationInput } from "@/shared/notifications/center";
+
+const importOutput = transpileScript(await Bun.file("src/features/inbox/import.ts").text());
+
+function createDropImporter(validate: () => Promise<string[]>, results: InboxResult[]) {
+  const notices: NotificationInput[] = [];
+  const registrations: unknown[] = [];
+  const events: string[] = [];
+  const module = evaluateSource<{ useInboxImport: typeof useInboxImport }>(importOutput, {
+    vue: Vue,
+    "@tauri-apps/api/core": { isTauri: () => true, invoke: validate },
+    "@tauri-apps/plugin-dialog": {
+      open: () => {
+        throw new Error("Unexpected picker");
+      },
+    },
+    "@/features/inbox/api": {
+      INBOX_CHANGED_EVENT,
+      createInboxApi: () => ({
+        register: async (...args: unknown[]) => {
+          registrations.push(args);
+          return results;
+        },
+      }),
+    },
+    "@/shared/notifications/center": {
+      notify: (notice: NotificationInput) => notices.push(notice),
+    },
+    "@/shared/logging/logger": { logger: { warn: () => {}, error: () => {} } },
+  });
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      dispatchEvent: (event: Event) => events.push(event.type),
+    },
+  });
+  return {
+    ...module.useInboxImport(),
+    notices,
+    registrations,
+    events,
+    restore: () => {
+      if (previous) Object.defineProperty(globalThis, "window", previous);
+      else Reflect.deleteProperty(globalThis, "window");
+    },
+  };
+}
+
+it("registers only validated dropped files and excludes duplicates from the notice", async () => {
+  const importer = createDropImporter(
+    async () => ["good.wav", "duplicate.wav"],
+    [
+      { path: "good.wav", success: true, skipped: false, error: null },
+      { path: "duplicate.wav", success: true, skipped: true, error: null },
+    ],
+  );
+  try {
+    await importer.importPaths(["good.wav", "duplicate.wav", "bad.mp3"]);
+    expect(importer.registrations).toEqual([[["good.wav", "duplicate.wav"], false]]);
+    expect(importer.notices[0]?.message).toBe("已加入 Inbox：1 首");
+    expect(importer.events).toEqual([INBOX_CHANGED_EVENT]);
+  } finally {
+    importer.restore();
+  }
+});
+
+it("silently ignores invalid drops and releases the Inbox pending state", async () => {
+  const importer = createDropImporter(async () => [], []);
+  try {
+    await importer.importPaths(["bad.mp3"]);
+    expect(importer.registrations).toEqual([]);
+    expect(importer.notices).toEqual([]);
+    expect(importer.events).toEqual([]);
+    expect(importer.pending.value).toBe(false);
+  } finally {
+    importer.restore();
+  }
+});
+
+it("reports system failures rather than suppressing them for drops", async () => {
+  const importer = createDropImporter(
+    async () => ["good.wav"],
+    [{ path: "good.wav", success: false, error: "database unavailable" }],
+  );
+  try {
+    await importer.importPaths(["good.wav"]);
+    expect(importer.notices[0]?.type).toBe("warning");
+    expect(importer.pending.value).toBe(false);
+  } finally {
+    importer.restore();
+  }
+});
 
 it("uses the existing native import interactions to register paths without importing library snapshots, and does not count duplicates as added", async () => {
   const calls: Array<{ command: string; args: unknown }> = [];

@@ -10,7 +10,7 @@ import { notify } from "@/shared/notifications/center";
 const isImporting = ref(false);
 
 export function useLibraryFileImport() {
-  async function importMusicFiles() {
+  async function runImport(droppedPaths?: string[]) {
     if (!isTauri() || isImporting.value) return;
     // Hold the lock while the picker is open too, so repeated clicks cannot open
     // another picker or submit a second batch.
@@ -18,13 +18,9 @@ export function useLibraryFileImport() {
     const id = operationId("library-import");
     const started = performance.now();
     try {
-      const extensions = await invoke<string[]>("supported_audio_extensions");
-      const paths = await open({
-        title: t("导入音频文件"),
-        directory: false,
-        multiple: true,
-        filters: [{ name: t("支持的音频文件"), extensions }],
-      });
+      const paths = droppedPaths
+        ? await invoke<string[]>("readable_audio_files", { paths: droppedPaths })
+        : await pickFiles();
       if (!paths || paths.length === 0) {
         logger.info("library", "file_import_cancelled", { operationId: id });
         return;
@@ -36,16 +32,17 @@ export function useLibraryFileImport() {
         elapsedMs: Math.round(performance.now() - started),
         ...result,
       });
-      notify({
-        type: result.failed > 0 ? "warning" : "success",
-        message: result.failed
-          ? t("导入完成，{count} 首失败（详情见日志）", { count: result.failed })
-          : t("导入完成：新增 {added} 首，更新 {updated} 首", {
-              added: result.added,
-              updated: result.updated,
-            }),
-        key: "library-file-import",
-      });
+      if (!droppedPaths || result.added + result.updated > 0 || result.failed > 0)
+        notify({
+          type: result.failed > 0 ? "warning" : "success",
+          message: result.failed
+            ? t("导入完成，{count} 首失败（详情见日志）", { count: result.failed })
+            : t("导入完成：新增 {added} 首，更新 {updated} 首", {
+                added: result.added,
+                updated: result.updated,
+              }),
+          key: "library-file-import",
+        });
       reportLibraryImport(result);
     } catch (reason) {
       logger.error("library", "file_import_failed", reason, { operationId: id });
@@ -55,5 +52,19 @@ export function useLibraryFileImport() {
     }
   }
 
-  return { isImporting, importMusicFiles };
+  async function pickFiles() {
+    const extensions = await invoke<string[]>("supported_audio_extensions");
+    return open({
+      title: t("导入音频文件"),
+      directory: false,
+      multiple: true,
+      filters: [{ name: t("支持的音频文件"), extensions }],
+    });
+  }
+
+  return {
+    isImporting,
+    importMusicFiles: () => runImport(),
+    importPaths: (paths: string[]) => runImport(paths),
+  };
 }

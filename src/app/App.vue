@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef } from "vue";
+import { useDropImport } from "@/features/import/useDropImport";
 import { usePersistentActivePage } from "@/app/pages";
 import { useShortcuts } from "@/features/settings/shortcuts/useShortcuts";
 import type { PlaylistCatalog } from "@/features/playlist/types";
@@ -19,6 +20,7 @@ import TitleBar from "@/app/shell/TitleBar.vue";
 
 useShortcuts();
 const { activePage } = usePersistentActivePage();
+const { label: dropLabel } = useDropImport(activePage);
 const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
 </script>
 
@@ -47,5 +49,13 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
     <LyricsDownloadDialog />
     <ReleaseTagDialog />
     <NotificationHost />
+    <div
+      v-if="dropLabel"
+      data-drop-import
+      role="status"
+      class="border-app-accent bg-app-base/80 pointer-events-none fixed inset-2 z-90 grid place-items-center rounded-xl border-2 text-xl font-semibold"
+    >
+      {{ dropLabel }}
+    </div>
   </div>
 </template>

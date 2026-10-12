@@ -50,6 +50,7 @@ const libraryTrackActionPending = Vue.ref(false);
 const playlistActionError = Vue.ref("");
 const artistsError = Vue.ref("");
 const activePage = Vue.ref("Library");
+const dropLabel = Vue.ref("");
 
 async function createComponent(source: string) {
   const output = compileSfc(source, "src/app/App.vue", { id: "app-test" });
@@ -194,6 +195,12 @@ async function createComponent(source: string) {
     "@/features/lyrics/download/LyricsDownloadDialog.vue": defaultModule(passiveComponent),
     "@/features/metadata/releases/components/ReleaseTagDialog.vue": defaultModule(passiveComponent),
     "@/shared/notifications/NotificationHost.vue": defaultModule(passiveComponent),
+    "@/features/import/useDropImport": {
+      useDropImport: (page: Vue.Ref<string>) => {
+        expect(page).toBe(activePage);
+        return { label: dropLabel };
+      },
+    },
     "@/app/pages": {
       usePersistentActivePage: () => ({ activePage }),
     },
@@ -282,6 +289,7 @@ beforeEach(() => {
   playlistActionError.value = "";
   artistsError.value = "";
   activePage.value = "Library";
+  dropLabel.value = "";
   notifications.clear();
 });
 
@@ -291,6 +299,20 @@ afterEach(() => {
 });
 
 describe("App workspace lifecycle", () => {
+  it("shows the window-wide drop feedback only when imports are enabled", async () => {
+    const root = mountApp();
+    function findDrop(node: HostNode): HostNode | undefined {
+      if ("data-drop-import" in node.props) return node;
+      return node.children.map(findDrop).find(Boolean);
+    }
+    expect(findDrop(root)).toBeUndefined();
+    dropLabel.value = "导入音乐库";
+    await Vue.nextTick();
+    expect(findDrop(root)?.props.role).toBe("status");
+    dropLabel.value = "";
+    await Vue.nextTick();
+    expect(findDrop(root)).toBeUndefined();
+  });
   it("keeps both feature instances and the shared layout mounted across page changes", async () => {
     mountApp();
     for (const page of ["Playlist", "Playing", "Library"]) {

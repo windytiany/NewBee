@@ -1,6 +1,7 @@
 mod artwork;
 mod backup;
 mod database;
+mod import;
 mod inbox;
 mod library;
 mod locking;
@@ -111,6 +112,7 @@ pub fn run() {
             library::commands::migrate_library_paths,
             library::import::directory::scan_music_library,
             library::import::supported_audio_extensions,
+            import::readable_audio_files,
             library::import::files::import_music_files,
             lyrics::embedded::get_track_lyrics,
             lyrics::embedded::get_file_lyrics,

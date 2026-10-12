@@ -227,6 +227,7 @@ const appModules: Record<string, unknown> = {
   },
   "@/shared/notifications/NotificationHost.vue": { __esModule: true, default: passiveComponent },
   "@/app/pages": { usePersistentActivePage: () => ({ activePage }) },
+  "@/features/import/useDropImport": { useDropImport: () => ({ label: Vue.ref("") }) },
   "@/features/library/browser/useBrowser": { useLibraryBrowser: emptyLibraryPage },
   "@/features/playback/session": {
     usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
