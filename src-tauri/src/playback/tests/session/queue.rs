@@ -104,6 +104,32 @@ fn batches_and_repeated_next_insertions_keep_visible_order_and_unique_keys() {
 }
 
 #[test]
+fn repeated_appends_to_idle_queue_never_start_playback() {
+    let mut session = fixture();
+    for expected in [vec![1, 2], vec![1, 2, 1, 2]] {
+        assert!(
+            execute(
+                &mut session,
+                SessionCommand::Add {
+                    tracks: rows(&[1, 2]),
+                    next: false,
+                },
+            )
+            .0
+        );
+        assert_eq!(ids(&session), expected);
+        assert!(session.audio.starts.is_empty());
+        assert!(session.audio.stops.is_empty());
+        assert!(session.audio.preparations.is_empty());
+        let snapshot = session.snapshot().unwrap();
+        assert!(snapshot.current_playback_id.is_none());
+        assert!(!snapshot.playback_status.is_playing);
+        assert!(snapshot.playback_error.is_empty());
+        assert!(snapshot.queue_playback_error.is_empty());
+    }
+}
+
+#[test]
 fn appended_batch_preserves_visible_order_without_interrupting() {
     let mut session = fixture();
     play(&mut session, &[1, 2], 0);

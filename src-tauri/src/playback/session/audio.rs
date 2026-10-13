@@ -6,17 +6,29 @@ use tauri::{AppHandle, Manager};
 
 pub struct DesktopAudio(pub AppHandle);
 
+pub(super) fn register(
+    database: &Database,
+    write: &crate::locking::write::WriteState,
+    tracks: &mut Vec<playback::queue::QueueTrack>,
+) -> Result<super::identity::Registration, String> {
+    let _guard = if tracks.iter().any(|track| track.path.is_some()) {
+        Some(write.acquire()?)
+    } else {
+        None
+    };
+    super::identity::register(database, tracks)
+}
+
 impl SessionAudio for DesktopAudio {
     fn register(
         &mut self,
         tracks: &mut Vec<playback::queue::QueueTrack>,
     ) -> Result<Vec<String>, String> {
-        let guard = self
-            .0
-            .state::<crate::locking::write::WriteState>()
-            .acquire()?;
-        let registration = super::identity::register(&self.0.state::<Database>(), tracks)?;
-        drop(guard);
+        let registration = register(
+            &self.0.state::<Database>(),
+            &self.0.state::<crate::locking::write::WriteState>(),
+            tracks,
+        )?;
         crate::tracks::scheduling::schedule(&self.0, registration.pending);
         Ok(registration.failures)
     }

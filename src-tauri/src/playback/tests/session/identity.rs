@@ -14,6 +14,33 @@ fn target(path: &str, key: &str) -> QueueTrack {
 }
 
 #[test]
+fn registered_queue_targets_do_not_require_the_metadata_writer_lock() {
+    let database = Database::open(":memory:").unwrap();
+    let write = crate::locking::write::WriteState::default();
+    let _metadata_write = write.acquire().unwrap();
+    let mut tracks = rows(&[1, 2]);
+    let original = tracks.clone();
+    for _ in 0..2 {
+        let registration = super::super::audio::register(&database, &write, &mut tracks).unwrap();
+        assert!(registration.pending.is_empty());
+        assert!(registration.failures.is_empty());
+        assert_eq!(tracks, original);
+    }
+    assert!(write.acquire().is_err());
+}
+
+#[test]
+fn path_registration_still_requires_the_writer_lock() {
+    let database = Database::open(":memory:").unwrap();
+    let write = crate::locking::write::WriteState::default();
+    let _metadata_write = write.acquire().unwrap();
+    let mut tracks = vec![target("/song.wav", "path")];
+    let original = tracks.clone();
+    assert!(super::super::audio::register(&database, &write, &mut tracks).is_err());
+    assert_eq!(tracks, original);
+}
+
+#[test]
 fn path_batch_reuses_ids_without_clearing_inbox_membership_statistics_or_skip() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("song.flac");

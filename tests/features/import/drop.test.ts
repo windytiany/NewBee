@@ -5,7 +5,9 @@ import type { DragDropEvent } from "@tauri-apps/api/webview";
 import type { useDropImport } from "@/features/import/useDropImport";
 import type { NotificationInput } from "@/shared/notifications/center";
 import type { TrackRegistrationResult, TrackDetails } from "@/features/tracks/types";
+import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
+import { playbackFixture } from "../../support/playback/session";
 
 const output = transpileScript(await Bun.file("src/features/import/useDropImport.ts").text());
 const originals = ["document", "MutationObserver"].map(
@@ -61,7 +63,7 @@ function createDrop({
   validate?: () => Promise<string[]>;
   subscription?: Promise<() => void>;
   registration?: () => Promise<TrackRegistrationResult[]>;
-  append?: () => Promise<boolean>;
+  append?: (tracks: readonly Omit<PlaybackDisplayTrack, "rowKey">[]) => Promise<boolean>;
   playlistAppend?: (
     ids: readonly number[],
   ) => Promise<import("@/features/playlist/types").PlaylistAppendResult[]>;
@@ -179,9 +181,9 @@ function createDrop({
     "@/features/library/import/useScan": { useLibraryScan: () => ({ isScanning: scanning }) },
     "@/features/playback/session": {
       usePlaybackSession: () => ({
-        addTracksToQueueEnd: async (tracks: unknown) => {
+        addTracksToQueueEnd: async (tracks: readonly Omit<PlaybackDisplayTrack, "rowKey">[]) => {
           calls.push(["queue", tracks]);
-          return append();
+          return append(tracks);
         },
         updateTrackMetadata: async (tracks: unknown) => {
           calls.push(["metadata", tracks]);
@@ -342,6 +344,26 @@ it("queue drop uses IDs only and refreshes the DB snapshot after append", async 
   ]);
   drop.unmount();
 });
+it("first and repeated queue drops append through the session without requesting playback or showing failures", async () => {
+  const fixture = playbackFixture();
+  await fixture.session.ready;
+  const drop = createDrop({ append: fixture.session.addTracksToQueueEnd });
+  await drop.mount();
+  drop.region.value = "queue";
+  for (let count = 1; count <= 2; count++) {
+    await drop.emit("drop");
+    expect(fixture.session.state.displayedTracks.value).toHaveLength(count);
+    expect(fixture.calls).toEqual(["snapshot", ...Array(count).fill("add")]);
+    expect(fixture.session.state.currentPlaybackId.value).toBeNull();
+    expect(fixture.session.state.playbackStatus.value.isPlaying).toBe(false);
+    expect(fixture.session.state.playbackError.value).toBe("");
+    expect(fixture.session.state.queuePlaybackError.value).toBe("");
+    expect(drop.notices).toEqual([]);
+  }
+  drop.unmount();
+  fixture.session.dispose();
+});
+
 it("reports append failure separately from registration and leaves existing destinations untouched on all failure", async () => {
   const drop = createDrop({ append: async () => false });
   await drop.mount();
