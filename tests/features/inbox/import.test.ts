@@ -54,7 +54,7 @@ function createDropImporter(validate: () => Promise<string[]>, results: InboxRes
   };
 }
 
-it("registers only validated dropped files and excludes duplicates from the notice", async () => {
+it("registers validated dropped files and refreshes Inbox without a success notice", async () => {
   const importer = createDropImporter(
     async () => ["good.wav", "duplicate.wav"],
     [
@@ -65,7 +65,7 @@ it("registers only validated dropped files and excludes duplicates from the noti
   try {
     await importer.importPaths(["good.wav", "duplicate.wav", "bad.mp3"]);
     expect(importer.registrations).toEqual([[["good.wav", "duplicate.wav"], false]]);
-    expect(importer.notices[0]?.message).toBe("已加入 Inbox：1 首");
+    expect(importer.notices).toEqual([]);
     expect(importer.events).toEqual([INBOX_CHANGED_EVENT]);
   } finally {
     importer.restore();
@@ -78,6 +78,42 @@ it("silently ignores invalid drops and releases the Inbox pending state", async 
     await importer.importPaths(["bad.mp3"]);
     expect(importer.registrations).toEqual([]);
     expect(importer.notices).toEqual([]);
+    expect(importer.events).toEqual([]);
+    expect(importer.pending.value).toBe(false);
+  } finally {
+    importer.restore();
+  }
+});
+
+it("retains partial failure warnings while refreshing successful dropped registrations", async () => {
+  const importer = createDropImporter(
+    async () => ["good.wav", "failed.wav"],
+    [
+      { path: "good.wav", success: true, error: null },
+      { path: "failed.wav", success: false, error: "database unavailable" },
+    ],
+  );
+  try {
+    await importer.importPaths(["good.wav", "failed.wav"]);
+    expect(importer.notices).toEqual([
+      { type: "warning", message: "导入完成，1 首失败（详情见日志）", key: "inbox-import" },
+    ]);
+    expect(importer.events).toEqual([INBOX_CHANGED_EVENT]);
+    expect(importer.pending.value).toBe(false);
+  } finally {
+    importer.restore();
+  }
+});
+
+it("reports unexpected drop errors and releases the pending state", async () => {
+  const importer = createDropImporter(async () => {
+    throw new Error("validation failed");
+  }, []);
+  try {
+    await importer.importPaths(["good.wav"]);
+    expect(importer.notices).toEqual([
+      { type: "error", message: "导入失败，请查看日志", key: "inbox-import" },
+    ]);
     expect(importer.events).toEqual([]);
     expect(importer.pending.value).toBe(false);
   } finally {
@@ -99,7 +135,7 @@ it("reports system failures rather than suppressing them for drops", async () =>
   }
 });
 
-it("uses the existing native import interactions to register paths without importing library snapshots, and does not count duplicates as added", async () => {
+it("registers picked files and folders and refreshes Inbox without success notices", async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const pickerOptions: OpenDialogOptions[] = [];
   const notifications: Array<{ message: string }> = [];
@@ -162,7 +198,7 @@ it("uses the existing native import interactions to register paths without impor
       command: "register_inbox",
       args: { paths: ["C:\\music\\new.wav", "C:\\music\\duplicate.wav"], directory: false },
     });
-    expect(notifications[0].message).toBe("已加入 Inbox：1 首");
+    expect(notifications).toEqual([]);
     await controller.importFiles(true);
     expect(pickerOptions[1].directory).toBe(true);
     expect(pickerOptions[1].filters).toBeUndefined();
@@ -177,6 +213,7 @@ it("uses the existing native import interactions to register paths without impor
       "register_inbox",
     ]);
     expect(changes).toBe(2);
+    expect(notifications).toEqual([]);
     expect(controller.pending.value).toBe(false);
     expect(warnings).toEqual([]);
   } finally {

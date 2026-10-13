@@ -23,14 +23,10 @@ export function useInboxImport() {
         if (result.error)
           logger.warn("inbox", "register_failed", result.error, { path: result.path });
       const failed = results.filter((result) => !result.success).length;
-      if (!droppedPaths || failed || results.some((result) => result.success && !result.skipped))
+      if (failed)
         notify({
-          type: failed ? "warning" : "success",
-          message: failed
-            ? t("导入完成，{count} 首失败（详情见日志）", { count: failed })
-            : t("已加入 Inbox：{count} 首", {
-                count: results.filter((result) => result.success && !result.skipped).length,
-              }),
+          type: "warning",
+          message: t("导入完成，{count} 首失败（详情见日志）", { count: failed }),
           key: "inbox-import",
         });
       globalThis.window.dispatchEvent(new globalThis.Event(INBOX_CHANGED_EVENT));

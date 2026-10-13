@@ -101,6 +101,18 @@ describe("Inbox controller", () => {
     expect(context.playback[1][0]).toMatchObject({ trackId: null, path: "C:\\music\\two.wav" });
     expect(context.changed()).toBe(0);
   });
+  it("updates Inbox and library after successful ingest without a success notice", async () => {
+    const context = fixture();
+    await context.inbox.refresh();
+    await context.inbox.ingest(["C:\\music\\one.wav"]);
+    expect(context.inbox.state.results).toEqual([
+      { path: "C:\\music\\one.wav", success: true, error: null },
+    ]);
+    expect(context.inbox.state.tracks.map((track) => track.path)).toEqual(["C:\\music\\two.wav"]);
+    expect(context.changed()).toBe(1);
+    expect(notifications.items.value).toEqual([]);
+    expect(context.inbox.state.pending).toBe(false);
+  });
   it("retains individual ingest failures and actual results through a later refresh failure", async () => {
     const context = fixture();
     await context.inbox.refresh();
@@ -108,6 +120,7 @@ describe("Inbox controller", () => {
     expect(context.inbox.state.results.map((result) => result.success)).toEqual([true, false]);
     expect(context.inbox.state.tracks.map((track) => track.path)).toEqual(["C:\\music\\two.wav"]);
     expect(context.changed()).toBe(1);
+    expect(notifications.items.value.map((item) => item.type)).toEqual(["warning"]);
     context.fail();
     await context.inbox.refresh();
     expect(context.inbox.state.results.map((result) => result.success)).toEqual([true, false]);

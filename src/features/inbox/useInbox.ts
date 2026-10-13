@@ -119,14 +119,7 @@ export function createInbox(options: InboxOptions) {
       );
       state.tracks = state.tracks.filter((track) => !succeeded.has(track.path));
       report(results);
-      if (succeeded.size) {
-        options.changed();
-        notify({
-          type: "success",
-          message: t("已加入音乐库：{count} 首", { count: succeeded.size }),
-          key: "inbox-ingest",
-        });
-      }
+      if (succeeded.size) options.changed();
     } catch (error) {
       logger.error("inbox", "ingest_failed", error);
       notify({ type: "error", message: t("添加到音乐库失败"), key: "inbox-ingest" });
