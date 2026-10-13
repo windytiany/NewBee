@@ -1,4 +1,4 @@
-use crate::database::{model::TrackWriteInput, ArtworkUpdate, Database};
+use crate::database::{model::TrackWriteInput, Database};
 use crate::metadata::model::EditingSnapshot;
 use crate::tracks::model::TrackReadResult;
 use rusqlite::params;
@@ -66,7 +66,7 @@ impl Database {
             }
             let error = match item.snapshot {
                 Ok(snapshot) => {
-                    super::persist_track(savepoint, &snapshot, &ArtworkUpdate::Preserve)?;
+                    super::persist_track(savepoint, &snapshot, None)?;
                     None
                 }
                 Err(error) => {

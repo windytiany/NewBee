@@ -90,7 +90,7 @@ impl Database {
     pub(crate) fn upsert_track(
         &self,
         track: &TrackWriteInput,
-        update: super::ArtworkUpdate,
+        scan: Option<&crate::artwork::collection::Scan>,
     ) -> Result<TrackWriteOutcome, String> {
         let mut connection = self.connection()?;
         let transaction = connection
@@ -103,7 +103,7 @@ impl Database {
                 |row| row.get(0),
             )
             .map_err(|error| error.to_string())?;
-        let track_id = super::tracks::persist_track(&transaction, track, &update)?;
+        let track_id = super::tracks::persist_track(&transaction, track, scan)?;
         transaction
             .execute("UPDATE tracks SET in_library = 1 WHERE id = ?1", [track_id])
             .map_err(|error| format!("Failed to grant library membership: {error}"))?;
@@ -219,7 +219,7 @@ impl Database {
             .query_row(
                 "SELECT ai.mime_type, ai.image
                  FROM tracks t
-                 INNER JOIN track_artwork ta ON ta.track_id = t.id
+                 INNER JOIN track_artwork ta ON ta.track_id = t.id AND ta.is_display = 1
                  INNER JOIN artwork_images ai ON ai.id = ta.image_id
                  WHERE t.in_library = 1 AND t.album_artist IS ?1 AND t.album IS ?2
                  ORDER BY t.disc_number IS NULL, t.disc_number,

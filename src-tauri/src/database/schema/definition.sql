@@ -50,10 +50,25 @@ CREATE TABLE IF NOT EXISTS artwork_images (
 CREATE INDEX IF NOT EXISTS idx_artwork_images_digest ON artwork_images(digest);
 
 CREATE TABLE IF NOT EXISTS track_artwork (
-    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
     image_id INTEGER NOT NULL REFERENCES artwork_images(id),
-    source_kind TEXT NOT NULL CHECK (source_kind IN ('embedded', 'directory')),
-    source_path TEXT NOT NULL
+    picture_type INTEGER NOT NULL CHECK (picture_type BETWEEN 0 AND 255),
+    type_override INTEGER CHECK (type_override BETWEEN 0 AND 255),
+    is_display INTEGER NOT NULL DEFAULT 0 CHECK (is_display IN (0, 1)),
+    UNIQUE (track_id, image_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_track_artwork_display
+    ON track_artwork(track_id) WHERE is_display = 1;
+
+CREATE TABLE IF NOT EXISTS track_artwork_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artwork_id INTEGER NOT NULL REFERENCES track_artwork(id) ON DELETE CASCADE,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('embedded', 'directory', 'manual')),
+    source_path TEXT NOT NULL,
+    picture_type INTEGER NOT NULL CHECK (picture_type BETWEEN 0 AND 255),
+    UNIQUE (artwork_id, source_kind, source_path)
 );
 
 CREATE TABLE IF NOT EXISTS music_library_directories (

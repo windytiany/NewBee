@@ -127,7 +127,9 @@ fn saving_one_field_preserves_external_fields_and_refreshes_the_confirmed_snapsh
     database
         .upsert_track(
             &files::read_track(&path).unwrap().unwrap(),
-            crate::database::ArtworkUpdate::Embedded,
+            Some(&crate::database::tests::support::embedded(
+                &files::read_track(&path).unwrap().unwrap(),
+            )),
         )
         .unwrap();
     files::write_file(&path, &[change(MetadataField::Artist, Some("external"))]).unwrap();
@@ -230,7 +232,10 @@ fn every_scan_reparses_audio_without_sidecar_reads_and_clears_confirmed_removals
     );
     assert!(accesses
         .iter()
-        .all(|(path, _)| path.extension().unwrap() == "flac"));
+        .all(|(path, kind)| *kind == "directory artwork lookup"
+            || path
+                .extension()
+                .is_some_and(|extension| extension == "flac")));
     use lofty::{config::WriteOptions, file::TaggedFileExt, prelude::*};
     let mut file = lofty::read_from_path(&path).unwrap();
     let tag = file.primary_tag_mut().unwrap();
@@ -373,7 +378,8 @@ fn save_command_rechecks_permissions_and_tag_format_per_target() {
             track_ids: vec![1, 2, 3],
             changes: vec![change(MetadataField::AlbumArtist, Some("selected"))],
             lyrics_action: LyricsMarkAction::Keep,
-            cover: None,
+            artwork_drafts: Vec::new(),
+            embed_artwork: false,
         },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
@@ -488,7 +494,8 @@ fn release_command_and_lyrics_editor_write_only_selected_embedded_content() {
             track_ids: vec![1],
             changes: vec![change(MetadataField::Lyrics, Some("new embedded"))],
             lyrics_action: LyricsMarkAction::Keep,
-            cover: None,
+            artwork_drafts: Vec::new(),
+            embed_artwork: false,
         },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
@@ -522,7 +529,8 @@ fn release_command_and_lyrics_editor_write_only_selected_embedded_content() {
             track_ids: vec![1],
             changes: vec![],
             lyrics_action: LyricsMarkAction::Unmark,
-            cover: None,
+            artwork_drafts: Vec::new(),
+            embed_artwork: false,
         },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
@@ -546,7 +554,10 @@ fn typed_editing_capabilities_survive_database_reopen_and_confirmed_rescan_clear
     {
         let database = Database::open(&database_path).unwrap();
         database
-            .upsert_track(&input, crate::database::ArtworkUpdate::Embedded)
+            .upsert_track(
+                &input,
+                Some(&crate::database::tests::support::embedded(&input)),
+            )
             .unwrap();
         database
             .record_scan_issue(&input.path, "读取文件标签失败：音频离线")
@@ -559,7 +570,10 @@ fn typed_editing_capabilities_survive_database_reopen_and_confirmed_rescan_clear
     assert_eq!(cached.writable_fields, expected.writable_fields);
     assert_eq!(cached.issue.as_deref(), Some("读取文件标签失败：音频离线"));
     database
-        .upsert_track(&input, crate::database::ArtworkUpdate::Embedded)
+        .upsert_track(
+            &input,
+            Some(&crate::database::tests::support::embedded(&input)),
+        )
         .unwrap();
     assert_eq!(
         database.get_editing_snapshot(1).unwrap().issue,

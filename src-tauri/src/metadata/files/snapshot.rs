@@ -8,15 +8,32 @@ use lofty::{
 };
 use std::path::Path;
 
+#[derive(Clone, Copy)]
+enum Mode {
+    Metadata,
+    Cover,
+    Collection,
+}
+
+pub(crate) struct ArtworkSnapshot {
+    pub track: TrackWriteInput,
+    pub embedded: Result<Vec<crate::artwork::collection::Picture>, String>,
+}
+
 pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String> {
-    read_snapshot(path, true)
+    read_snapshot(path, Mode::Cover).map(|snapshot| snapshot.map(|snapshot| snapshot.track))
 }
 
 pub(crate) fn read_track_metadata(path: &Path) -> Result<Option<TrackWriteInput>, String> {
-    read_snapshot(path, false)
+    read_snapshot(path, Mode::Metadata).map(|snapshot| snapshot.map(|snapshot| snapshot.track))
 }
 
-fn read_snapshot(path: &Path, include_artwork: bool) -> Result<Option<TrackWriteInput>, String> {
+pub(crate) fn read_track_collection(path: &Path) -> Result<Option<ArtworkSnapshot>, String> {
+    read_snapshot(path, Mode::Collection)
+}
+
+fn read_snapshot(path: &Path, mode: Mode) -> Result<Option<ArtworkSnapshot>, String> {
+    let include_artwork = !matches!(mode, Mode::Metadata);
     let tagged_file = super::read_file_with_options(
         path,
         lofty::config::ParseOptions::default().read_cover_art(include_artwork),
@@ -45,7 +62,7 @@ fn read_snapshot(path: &Path, include_artwork: bool) -> Result<Option<TrackWrite
                     .or_else(|| tag_text(tag, &ItemKey::ReleaseDate)),
                 tag_number(tag, &ItemKey::DiscNumber),
                 tag_number(tag, &ItemKey::TrackNumber),
-                if include_artwork {
+                if matches!(mode, Mode::Cover) {
                     read_artwork(tag)?
                 } else {
                     None
@@ -55,7 +72,7 @@ fn read_snapshot(path: &Path, include_artwork: bool) -> Result<Option<TrackWrite
         };
 
     let mut artwork = artwork;
-    if include_artwork && artwork.is_none() {
+    if matches!(mode, Mode::Cover) && artwork.is_none() {
         for other in tagged_file
             .tags()
             .iter()
@@ -72,26 +89,33 @@ fn read_snapshot(path: &Path, include_artwork: bool) -> Result<Option<TrackWrite
         .ok()
         .filter(|duration| *duration > 0);
 
-    Ok(Some(TrackWriteInput {
-        path: path.to_string_lossy().into_owned(),
-        title,
-        artist,
-        album,
-        album_artist,
-        release_date,
-        disc_number,
-        track_number,
-        disc_total: tag.and_then(|tag| tag.disk_total()).map(i64::from),
-        track_total: tag.and_then(|tag| tag.track_total()).map(i64::from),
-        duration_ms,
-        codec: codec_for_file_type(file_type).map(str::to_owned),
-        sample_rate_hz: properties.sample_rate().map(i64::from),
-        bitrate_kbps: properties.audio_bitrate().map(i64::from),
-        channels: properties.channels().map(i64::from),
-        artwork,
-        editing: Some(editing),
-        lyrics: crate::metadata::files::lyrics::embedded_lyrics_text(&tagged_file)
-            .map(str::to_owned),
+    Ok(Some(ArtworkSnapshot {
+        embedded: if matches!(mode, Mode::Collection) {
+            super::artwork::pictures_from_file(&tagged_file)
+        } else {
+            Ok(Vec::new())
+        },
+        track: TrackWriteInput {
+            path: path.to_string_lossy().into_owned(),
+            title,
+            artist,
+            album,
+            album_artist,
+            release_date,
+            disc_number,
+            track_number,
+            disc_total: tag.and_then(|tag| tag.disk_total()).map(i64::from),
+            track_total: tag.and_then(|tag| tag.track_total()).map(i64::from),
+            duration_ms,
+            codec: codec_for_file_type(file_type).map(str::to_owned),
+            sample_rate_hz: properties.sample_rate().map(i64::from),
+            bitrate_kbps: properties.audio_bitrate().map(i64::from),
+            channels: properties.channels().map(i64::from),
+            artwork,
+            editing: Some(editing),
+            lyrics: crate::metadata::files::lyrics::embedded_lyrics_text(&tagged_file)
+                .map(str::to_owned),
+        },
     }))
 }
 

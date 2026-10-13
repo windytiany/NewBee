@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use tauri::Manager;
 
 mod artwork;
-pub(crate) use artwork::ArtworkUpdate;
 mod inbox;
 mod library;
 mod lyrics;

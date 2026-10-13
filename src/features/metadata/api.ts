@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Channel } from "@tauri-apps/api/core";
 import type {
-  CoverEdit,
   EditableTrack,
   LyricsMarkAction,
   TagChange,
@@ -16,6 +15,7 @@ import type {
   TrackPatch,
 } from "@/features/metadata/releases/types";
 import { t } from "@/shared/i18n/locale";
+import type { ArtworkDraft } from "@/features/artwork/collection/types";
 
 function filePaths(targets: readonly MetadataTarget[]): string[] | null {
   if (targets.every((target) => typeof target === "number")) return null;
@@ -33,25 +33,16 @@ export function createMetadataApi(invokeCommand: typeof invoke = invoke) {
         : invokeCommand<EditableTrack[]>("get_editable_tracks", { trackIds });
     },
     saveMetadata: (
-      trackIds: MetadataTarget[],
+      trackIds: number[],
       changes: TagChange[],
       onProgress: Channel<MetadataSaveResult>,
       lyricsAction: LyricsMarkAction,
       operationId?: string,
-      cover?: CoverEdit | null,
+      artworkDrafts: ArtworkDraft[] = [],
+      embedArtwork = false,
     ) => {
-      const paths = filePaths(trackIds);
-      if (paths) {
-        if (lyricsAction !== "keep") throw new Error(t("无效的文件操作"));
-        return invokeCommand<MetadataSaveResult[]>("save_file_metadata", {
-          patches: paths.map((path) => ({ path, changes, writeCover: cover != null })),
-          cover: cover ?? null,
-          onProgress,
-          ...(operationId ? { operationId } : {}),
-        });
-      }
       return invokeCommand<MetadataSaveResult[]>("save_track_metadata", {
-        request: { trackIds, changes, lyricsAction, cover: cover ?? null },
+        request: { trackIds, changes, lyricsAction, artworkDrafts, embedArtwork },
         onProgress,
         ...(operationId ? { operationId } : {}),
       });

@@ -44,36 +44,13 @@ impl Database {
         };
         let _guard = write.acquire()?;
         let audio = std::path::Path::new(&path);
-        let outcome = (|| {
-            let embedded = crate::metadata::files::artwork::read_embedded_cover(audio)?;
-            if let Some(cover) = embedded {
-                return Ok((Some(cover), crate::database::ArtworkUpdate::Embedded));
-            }
-            match crate::metadata::files::artwork::read_directory_cover(audio)? {
-                Some((cover, source)) => Ok((
-                    Some(cover),
-                    crate::database::ArtworkUpdate::Directory(
-                        source.to_string_lossy().into_owned(),
-                    ),
-                )),
-                None => Ok((None, crate::database::ArtworkUpdate::Embedded)),
-            }
-        })();
-        match outcome {
-            Ok((content, source)) => {
-                self.confirm_track_artwork(track_id, &path, content.as_ref(), &source)
-            }
-            Err(error) => {
-                // A failed initial lookup is also terminal. Explicit reread/import
-                // can accept later file changes; browsing must not repeatedly probe.
-                self.confirm_track_artwork(
-                    track_id,
-                    &path,
-                    None,
-                    &crate::database::ArtworkUpdate::Embedded,
-                )?;
-                Err(error)
-            }
+        let scan = crate::metadata::files::artwork::read_collection(audio);
+        self.confirm_track_artwork(track_id, &path, &scan)?;
+        let issues = scan.issues();
+        if issues.is_empty() {
+            Ok(())
+        } else {
+            Err(issues.join("; "))
         }
     }
 
@@ -101,9 +78,28 @@ impl Database {
         self.artwork_bytes(size, derive, |connection| {
             connection
                 .query_row(
-                    "SELECT image_id FROM track_artwork WHERE track_id = ?1",
+                    "SELECT image_id FROM track_artwork WHERE track_id = ?1 AND is_display = 1",
                     [track_id],
                     |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(|error| error.to_string())
+        })
+    }
+
+    pub fn artwork_content_bytes(
+        &self,
+        content_id: &str,
+        size: Option<u32>,
+        derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
+    ) -> Result<Vec<u8>, String> {
+        use rusqlite::OptionalExtension;
+        self.artwork_bytes(size, derive, |connection| {
+            connection
+                .query_row(
+                    "SELECT id FROM artwork_images WHERE content_id = ?1",
+                    [content_id],
+                    |row| row.get(0),
                 )
                 .optional()
                 .map_err(|error| error.to_string())
@@ -122,7 +118,7 @@ impl Database {
             connection
                 .query_row(
                     "SELECT ta.image_id FROM tracks t
-             INNER JOIN track_artwork ta ON ta.track_id = t.id
+             INNER JOIN track_artwork ta ON ta.track_id = t.id AND ta.is_display = 1
              WHERE t.in_library = 1 AND t.album_artist IS ?1 AND t.album IS ?2
              ORDER BY t.disc_number IS NULL, t.disc_number,
                       t.track_number IS NULL, t.track_number, t.id LIMIT 1",

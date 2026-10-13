@@ -40,7 +40,7 @@ fn digest_candidates_compare_full_bytes_and_keep_collisions_distinct() {
     for (track, image) in [(1, first), (2, second)] {
         transaction
             .execute(
-                "INSERT INTO track_artwork VALUES (?1, ?2, 'embedded', 'offline.mp3')",
+                "INSERT INTO track_artwork (track_id, image_id, picture_type, is_display) VALUES (?1, ?2, 3, 1)",
                 params![track, image],
             )
             .unwrap();

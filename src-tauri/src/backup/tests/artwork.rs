@@ -30,10 +30,11 @@ fn library(root: &Path, cache: &Path, image: &[u8]) -> Database {
         .update_metadata_cover_and_lyrics(
             1,
             &[],
-            Some(&ArtworkContent {
+            Some(Some(&ArtworkContent {
                 mime_type: "image/png".into(),
                 image: image.to_vec(),
-            }),
+            })),
+            None,
             LyricsMarkAction::Keep,
             None,
         )
@@ -153,5 +154,110 @@ fn restoring_reused_database_ids_never_returns_previous_library_cache() {
             .track_artwork_bytes(1, None, |_, _| panic!("original derived"))
             .unwrap(),
         red
+    );
+}
+
+#[test]
+fn backup_round_trip_preserves_collection_sources_type_override_and_display_selection() {
+    use crate::artwork::collection::{DirectoryPicture, Draft, DraftPicture, Picture, Scan};
+    let source = Directory::new();
+    let target = Directory::new();
+    let caches = tempfile::tempdir().unwrap();
+    let red = original([255, 0, 0, 255]);
+    let blue = original([0, 0, 255, 255]);
+    let green = original([0, 255, 0, 255]);
+    let content = |image: Vec<u8>| ArtworkContent {
+        mime_type: "image/png".into(),
+        image,
+    };
+    let database = library(&source.0, &caches.path().join("source"), &red);
+    database
+        .sync_artwork_collection(
+            1,
+            "/offline/missing.mp3",
+            &Scan {
+                embedded: Ok(vec![Picture {
+                    content: content(red.clone()),
+                    picture_type: 3,
+                }]),
+                directory: Ok(vec![
+                    DirectoryPicture {
+                        path: "/offline/cover.png".into(),
+                        content: Ok(content(red)),
+                    },
+                    DirectoryPicture {
+                        path: "/offline/folder.png".into(),
+                        content: Ok(content(blue)),
+                    },
+                ]),
+            },
+        )
+        .unwrap();
+    let mut draft = Draft::from(database.get_artwork_collection(1).unwrap());
+    let DraftPicture::Existing { picture_type, .. } = &mut draft.pictures[0] else {
+        panic!("existing picture")
+    };
+    *picture_type = 18;
+    draft.pictures.push(DraftPicture::New(Picture {
+        content: content(green.clone()),
+        picture_type: 4,
+    }));
+    draft.display_index = Some(2);
+    database.save_artwork_drafts(&[(1, draft)]).unwrap();
+    let before = database.get_artwork_collection(1).unwrap();
+    let file = source.0.join("collection.newbee");
+    archive::write(&database, &manifest(), &file).unwrap();
+    let backup = Connection::open(&file).unwrap();
+    let sources: i64 = backup
+        .query_row("SELECT COUNT(*) FROM track_artwork_sources", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(sources, 5);
+    drop(backup);
+    drop(database);
+    fs::copy(file, target.0.join(restore::PENDING_FILE)).unwrap();
+    assert!(apply_pending_restore(&target.0).unwrap());
+    let restored = Database::open_with_cache(
+        target.0.join("music-library.sqlite3"),
+        &caches.path().join("target"),
+    )
+    .unwrap();
+    let after = restored.get_artwork_collection(1).unwrap();
+    assert_eq!(after.display_index, before.display_index);
+    assert_eq!(after.images.len(), 3);
+    for (actual, expected) in after.images.iter().zip(&before.images) {
+        assert_eq!(actual.content_id, expected.content_id);
+        assert_eq!(actual.picture.picture_type, expected.picture.picture_type);
+        assert_eq!(actual.picture.content.image, expected.picture.content.image);
+    }
+    assert_eq!(
+        restored
+            .track_artwork_bytes(1, None, |_, _| panic!("original derived"))
+            .unwrap(),
+        green
+    );
+    restored
+        .sync_artwork_collection(
+            1,
+            "/offline/missing.mp3",
+            &Scan {
+                embedded: Ok(vec![]),
+                directory: Ok(vec![]),
+            },
+        )
+        .unwrap();
+    let remaining = restored.get_artwork_collection(1).unwrap();
+    assert_eq!(
+        remaining.images.len(),
+        2,
+        "manual sources survive successful scan removal"
+    );
+    assert_eq!(remaining.images[0].picture.picture_type, 18);
+    assert_eq!(
+        restored
+            .track_artwork_bytes(1, None, |_, _| panic!("original derived"))
+            .unwrap(),
+        green
     );
 }

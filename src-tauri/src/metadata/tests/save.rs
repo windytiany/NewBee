@@ -23,7 +23,9 @@ fn deleted_cover_and_file_only_fields_sync_or_report_database_failure_and_retry(
     database
         .upsert_track(
             &files::read_track(&path).unwrap().unwrap(),
-            crate::database::ArtworkUpdate::Embedded,
+            Some(&crate::database::tests::support::embedded(
+                &files::read_track(&path).unwrap().unwrap(),
+            )),
         )
         .unwrap();
     assert!(save_track(&database, 1, &[], LyricsMarkAction::Keep, Some(&cover)).database_updated);
@@ -128,7 +130,7 @@ fn writes_selected_fields_and_updates_the_confirmed_database_snapshot() {
                 editing: None,
                 lyrics: None,
             },
-            crate::database::ArtworkUpdate::Embedded,
+            None,
         )
         .unwrap();
     let result = save_track(

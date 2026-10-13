@@ -1,6 +1,6 @@
 use super::register;
 use crate::{
-    database::{tracks::persist_track, ArtworkUpdate, Database},
+    database::{tracks::persist_track, Database},
     metadata::{
         files,
         model::{MetadataChange, MetadataField},
@@ -159,7 +159,12 @@ fn preserves_confirmed_snapshots_statistics_skip_lyrics_artwork_and_inbox_withou
     let id = {
         let mut connection = database.connection().unwrap();
         let transaction = connection.transaction().unwrap();
-        let id = persist_track(&transaction, &confirmed, &ArtworkUpdate::Embedded).unwrap();
+        let id = persist_track(
+            &transaction,
+            &confirmed,
+            Some(&crate::database::tests::support::embedded(&confirmed)),
+        )
+        .unwrap();
         transaction.commit().unwrap();
         id
     };

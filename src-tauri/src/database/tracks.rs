@@ -92,7 +92,7 @@ impl Database {
             .query_row(
                 "SELECT ai.mime_type, ai.image
                  FROM tracks t
-                 LEFT JOIN track_artwork ta ON ta.track_id = t.id
+                 LEFT JOIN track_artwork ta ON ta.track_id = t.id AND ta.is_display = 1
                  LEFT JOIN artwork_images ai ON ai.id = ta.image_id
                  WHERE t.id = ?1",
                 [track_id],
@@ -122,7 +122,7 @@ impl Database {
 pub(crate) fn persist_track(
     transaction: &rusqlite::Transaction<'_>,
     track: &TrackWriteInput,
-    artwork_update: &super::ArtworkUpdate,
+    artwork_scan: Option<&crate::artwork::collection::Scan>,
 ) -> Result<i64, String> {
     let existing_id = transaction
         .query_row(
@@ -179,15 +179,8 @@ pub(crate) fn persist_track(
         .map_err(|error| format!("Failed to write track metadata: {error}"))?;
 
     let track_id = existing_id.unwrap_or_else(|| transaction.last_insert_rowid());
-    super::artwork::persist_artwork(
-        transaction,
-        track_id,
-        track.artwork.as_ref(),
-        artwork_update,
-        &track.path,
-    )?;
-
-    if !matches!(artwork_update, super::ArtworkUpdate::Preserve) {
+    if let Some(scan) = artwork_scan {
+        super::artwork::synchronization::sync(transaction, track_id, &track.path, scan)?;
         transaction
             .execute(
                 "DELETE FROM track_artwork_pending WHERE track_id = ?1",
@@ -195,7 +188,6 @@ pub(crate) fn persist_track(
             )
             .map_err(|error| error.to_string())?;
     }
-
     if let Some(editing) = &track.editing {
         let editing = serde_json::to_string(editing)
             .map_err(|error| format!("Failed to serialize editing snapshot: {error}"))?;

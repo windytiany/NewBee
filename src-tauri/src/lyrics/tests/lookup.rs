@@ -27,7 +27,7 @@ fn track() -> TrackDetails {
                 editing: None,
                 lyrics: None,
             },
-            crate::database::ArtworkUpdate::Embedded,
+            None,
         )
         .unwrap();
     database.get_track(1).unwrap().unwrap()

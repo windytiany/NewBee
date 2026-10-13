@@ -17,33 +17,20 @@ pub struct ImportResult {
 }
 
 pub(crate) fn import_track(database: &Database, path: &Path, result: &mut ImportResult) {
-    match crate::metadata::files::read_track(path) {
-        Ok(Some(mut track)) => {
-            let fallback = if track.artwork.is_none() {
-                crate::metadata::files::artwork::read_directory_cover(path)
-            } else {
-                Ok(None)
+    match crate::metadata::files::read_track_collection(path) {
+        Ok(Some(snapshot)) => {
+            let track = snapshot.track;
+            let scan = crate::artwork::collection::Scan {
+                embedded: snapshot.embedded,
+                directory: crate::metadata::files::artwork::read_directory_pictures(path),
             };
-            let (source, issue) = match fallback {
-                Ok(Some((artwork, source))) => {
-                    track.artwork = Some(artwork);
-                    (
-                        crate::database::ArtworkUpdate::Directory(
-                            source.to_string_lossy().into_owned(),
-                        ),
-                        None,
-                    )
-                }
-                Ok(None) => (crate::database::ArtworkUpdate::Embedded, None),
-                Err(error) => (crate::database::ArtworkUpdate::Preserve, Some(error)),
-            };
-            match database.upsert_track(&track, source) {
+            match database.upsert_track(&track, Some(&scan)) {
                 Ok(TrackWriteOutcome::Added) => result.added += 1,
                 Ok(TrackWriteOutcome::Updated) => result.updated += 1,
                 Err(error) => record_failure(database, result, path, &error),
             }
-            if let Some(issue) = issue {
-                record_failure(database, result, path, &issue);
+            for issue in scan.issues() {
+                record_failure(database, result, path, issue);
             }
         }
         Ok(None) => result.skipped += 1,

@@ -53,7 +53,8 @@ impl Database {
         &self,
         track_id: i64,
         changes: &[MetadataChange],
-        cover: Option<&ArtworkContent>,
+        cover: Option<Option<&ArtworkContent>>,
+        artwork: Option<&crate::artwork::collection::Draft>,
         action: LyricsMarkAction,
         confirmed: Option<&super::model::TrackWriteInput>,
     ) -> Result<(), String> {
@@ -62,11 +63,7 @@ impl Database {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
         if let Some(confirmed) = confirmed {
-            super::tracks::persist_track(
-                &transaction,
-                confirmed,
-                &super::ArtworkUpdate::PreserveDirectory,
-            )?;
+            super::tracks::persist_track(&transaction, confirmed, None)?;
         }
         for change in changes {
             if change.field == MetadataField::Lyrics {
@@ -99,19 +96,25 @@ impl Database {
                 )
                 .map_err(|error| format!("更新无歌词标记失败：{error}"))?;
         }
-        if let Some(cover) = cover {
-            let path: String = transaction
-                .query_row("SELECT path FROM tracks WHERE id = ?1", [track_id], |row| {
-                    row.get(0)
-                })
-                .map_err(|error| error.to_string())?;
-            super::artwork::persist_artwork(
+        if let Some(Some(cover)) = cover {
+            super::artwork::collection::add_cover(
                 &transaction,
                 track_id,
-                Some(cover),
-                &super::ArtworkUpdate::Embedded,
-                &path,
+                cover,
+                confirmed.map(|track| track.path.as_str()),
             )?;
+        }
+        if matches!(cover, Some(None)) {
+            transaction
+                .execute(
+                    "DELETE FROM track_artwork WHERE track_id = ?1 AND is_display = 1",
+                    [track_id],
+                )
+                .map_err(|error| error.to_string())?;
+            super::artwork::synchronization::select_display(&transaction, track_id)?;
+        }
+        if let Some(draft) = artwork {
+            super::artwork::collection::save(&transaction, track_id, draft)?;
         }
         transaction
             .commit()

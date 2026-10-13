@@ -151,6 +151,8 @@ pub fn run() {
             tracks::commands::register_local_tracks,
             tracks::commands::reread_track_tags,
             artwork::get_track_artwork,
+            artwork::collection::commands::get_track_artwork_collections,
+            artwork::collection::commands::get_artwork_content,
             artwork::files::get_file_artwork,
             artwork::artist::get_artist_photo,
             artwork::artist::find_artist_photo,

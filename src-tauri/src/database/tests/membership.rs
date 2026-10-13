@@ -1,4 +1,4 @@
-use super::super::{model::TrackWriteInput, model::TrackWriteOutcome, ArtworkUpdate, Database};
+use super::super::{model::TrackWriteInput, model::TrackWriteOutcome, Database};
 use crate::artwork::model::{ArtworkContent, TrackArtwork};
 use crate::library::model::{LibraryGroup, LibraryGrouping};
 use crate::metadata::model::LyricsMarkAction;
@@ -33,8 +33,12 @@ fn snapshot(path: &str, artist: Option<&str>, album: Option<&str>) -> TrackWrite
 fn register(database: &Database, track: &TrackWriteInput) -> i64 {
     let mut connection = database.connection().unwrap();
     let transaction = connection.transaction().unwrap();
-    let id =
-        super::super::tracks::persist_track(&transaction, track, &ArtworkUpdate::Embedded).unwrap();
+    let id = super::super::tracks::persist_track(
+        &transaction,
+        track,
+        Some(&crate::database::tests::support::embedded(track)),
+    )
+    .unwrap();
     transaction.commit().unwrap();
     id
 }
@@ -63,7 +67,10 @@ fn external_targets_exclude_members_missing_ids_and_duplicates() {
     let external_id = register(&database, &external);
     let member = snapshot("member.flac", None, None);
     database
-        .upsert_track(&member, ArtworkUpdate::Embedded)
+        .upsert_track(
+            &member,
+            Some(&crate::database::tests::support::embedded(&member)),
+        )
         .unwrap();
     let member_id = register(&database, &member);
     assert_eq!(
@@ -73,7 +80,10 @@ fn external_targets_exclude_members_missing_ids_and_duplicates() {
         vec![external_id]
     );
     database
-        .upsert_track(&external, ArtworkUpdate::Embedded)
+        .upsert_track(
+            &external,
+            Some(&crate::database::tests::support::embedded(&external)),
+        )
         .unwrap();
     assert!(database
         .external_track_ids(&[external_id, member_id])
@@ -120,7 +130,10 @@ fn external_snapshots_do_not_contribute_to_library_queries_or_album_aggregates()
     member.release_date = Some("2020".into());
     member.artwork = None;
     database
-        .upsert_track(&member, ArtworkUpdate::Embedded)
+        .upsert_track(
+            &member,
+            Some(&crate::database::tests::support::embedded(&member)),
+        )
         .unwrap();
     register(
         &database,
@@ -190,13 +203,19 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
 
     assert!(matches!(
         database
-            .upsert_track(&track, ArtworkUpdate::Embedded)
+            .upsert_track(
+                &track,
+                Some(&crate::database::tests::support::embedded(&track))
+            )
             .unwrap(),
         TrackWriteOutcome::Added
     ));
     assert!(matches!(
         database
-            .upsert_track(&track, ArtworkUpdate::Embedded)
+            .upsert_track(
+                &track,
+                Some(&crate::database::tests::support::embedded(&track))
+            )
             .unwrap(),
         TrackWriteOutcome::Updated
     ));
@@ -238,7 +257,7 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
     database.register_inbox_path(&path).unwrap();
     track.title = Some("Confirmed".into());
     database
-        .update_metadata_cover_and_lyrics(id, &[], None, LyricsMarkAction::Keep, Some(&track))
+        .update_metadata_cover_and_lyrics(id, &[], None, None, LyricsMarkAction::Keep, Some(&track))
         .unwrap();
     assert!(database.library_track_paths().unwrap().is_empty());
     assert_eq!(database.inbox_paths().unwrap(), vec![path.clone()]);
@@ -248,7 +267,10 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
     );
     assert!(matches!(
         database
-            .upsert_track(&track, ArtworkUpdate::Embedded)
+            .upsert_track(
+                &track,
+                Some(&crate::database::tests::support::embedded(&track))
+            )
             .unwrap(),
         TrackWriteOutcome::Added
     ));
@@ -284,7 +306,10 @@ fn library_import_rolls_back_snapshot_and_membership_if_inbox_removal_fails() {
     database.connection().unwrap().execute_batch("CREATE TRIGGER reject_inbox_removal BEFORE DELETE ON inbox BEGIN SELECT RAISE(ABORT, 'blocked'); END;").unwrap();
     track.title = Some("New snapshot".into());
     assert!(database
-        .upsert_track(&track, ArtworkUpdate::Embedded)
+        .upsert_track(
+            &track,
+            Some(&crate::database::tests::support::embedded(&track))
+        )
         .is_err());
     assert_eq!(
         database.get_track(id).unwrap().unwrap().title.as_deref(),
@@ -317,7 +342,10 @@ fn directory_relocation_updates_external_tracks_without_granting_membership() {
     let database = Database::open(":memory:").unwrap();
     let member = snapshot("/old/member.flac", None, None);
     database
-        .upsert_track(&member, ArtworkUpdate::Embedded)
+        .upsert_track(
+            &member,
+            Some(&crate::database::tests::support::embedded(&member)),
+        )
         .unwrap();
     let external = register(&database, &snapshot("/old/external.flac", None, None));
     database.add_music_library_directory("/old").unwrap();
@@ -341,7 +369,7 @@ fn directory_relocation_updates_external_tracks_without_granting_membership() {
         .connection()
         .unwrap()
         .query_row(
-            "SELECT source_path FROM track_artwork WHERE track_id = ?1",
+            "SELECT source_path FROM track_artwork_sources s JOIN track_artwork a ON a.id = s.artwork_id WHERE a.track_id = ?1",
             [external],
             |row| row.get(0),
         )

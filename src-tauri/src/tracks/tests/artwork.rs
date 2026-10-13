@@ -124,7 +124,7 @@ fn absent_cover_is_confirmed_once_and_directory_fallback_matches_import() {
             .connection()
             .unwrap()
             .query_row(
-                "SELECT source_kind FROM track_artwork WHERE track_id = ?1",
+                "SELECT source_kind FROM track_artwork_sources s JOIN track_artwork a ON a.id = s.artwork_id WHERE a.track_id = ?1",
                 [other_id],
                 |row| row.get::<_, String>(0)
             )
@@ -174,11 +174,16 @@ fn lazy_snapshot_never_removes_original_cover_on_edit_and_stale_extraction_canno
         cover.data()
     );
     database
+        .complete_track_artwork(id, &WriteState::default())
+        .unwrap();
+    database
         .confirm_track_artwork(
             id,
             &database.get_track(id).unwrap().unwrap().path,
-            None,
-            &ArtworkUpdate::Embedded,
+            &crate::artwork::collection::Scan {
+                embedded: Ok(Vec::new()),
+                directory: Ok(Vec::new()),
+            },
         )
         .unwrap();
     assert_eq!(

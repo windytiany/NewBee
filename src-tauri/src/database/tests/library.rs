@@ -440,7 +440,7 @@ fn removing_track_preserves_playlist_items_snapshots_and_the_file() {
             [],
         )
         .unwrap();
-    database.connection().unwrap().execute("INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) VALUES (1, 1, 'embedded', ?1)", [&path_string]).unwrap();
+    database.connection().unwrap().execute("INSERT INTO track_artwork (track_id, image_id, picture_type, is_display) VALUES (1, 1, 3, 1)", []).unwrap();
     database
         .append_playlist_tracks(playlist_id, vec![1])
         .unwrap();

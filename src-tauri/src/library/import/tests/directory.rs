@@ -210,7 +210,7 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
             let id = crate::database::tracks::persist_track(
                 &transaction,
                 &track,
-                &crate::database::ArtworkUpdate::Embedded,
+                Some(&crate::database::tests::support::embedded(&track)),
             )
             .unwrap();
             transaction.commit().unwrap();
@@ -218,7 +218,10 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
         };
         if name == "member.wav" {
             database
-                .upsert_track(&track, crate::database::ArtworkUpdate::Embedded)
+                .upsert_track(
+                    &track,
+                    Some(&crate::database::tests::support::embedded(&track)),
+                )
                 .unwrap();
         }
         if name != "present.wav" {

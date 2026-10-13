@@ -244,7 +244,10 @@ pub(crate) struct MetadataSaveRequest {
     pub(crate) track_ids: Vec<i64>,
     pub(crate) changes: Vec<MetadataChange>,
     pub(crate) lyrics_action: LyricsMarkAction,
-    pub(crate) cover: Option<CoverRequest>,
+    #[serde(default)]
+    pub(crate) artwork_drafts: Vec<crate::artwork::collection::editing::TrackDraft>,
+    #[serde(default)]
+    pub(crate) embed_artwork: bool,
 }
 
 #[derive(Deserialize)]
@@ -263,7 +266,6 @@ impl CoverRequest {
         }
     }
 }
-
 pub(crate) fn validate_track_ids(track_ids: &[i64]) -> Result<Vec<i64>, String> {
     if track_ids.is_empty() || track_ids.iter().any(|id| *id <= 0) {
         return Err("请选择有效的曲目".to_owned());

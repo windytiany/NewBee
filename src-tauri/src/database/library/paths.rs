@@ -129,7 +129,7 @@ impl Database {
         for (table, id, path, unique) in [
             ("tracks", "id", "path", true),
             ("music_library_directories", "id", "path", true),
-            ("track_artwork", "track_id", "source_path", false),
+            ("track_artwork_sources", "id", "source_path", false),
         ] {
             count += migrate_table(&transaction, table, id, path, unique, &old_path, &new_path)?;
         }

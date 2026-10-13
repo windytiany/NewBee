@@ -13,7 +13,7 @@ use lofty::picture::{Picture, PictureType};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::{ItemKey, MergeTag, SplitTag, Tag, TagItem, TagType};
-pub(crate) use snapshot::{read_track, read_track_metadata};
+pub(crate) use snapshot::{read_track, read_track_collection, read_track_metadata};
 pub(crate) mod artwork;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Seek};
@@ -30,13 +30,15 @@ fn read_file(path: &Path) -> Result<TaggedFile, String> {
 fn read_file_with_options(path: &Path, options: ParseOptions) -> Result<TaggedFile, String> {
     #[cfg(test)]
     access::record(path, "parse");
-    Probe::open(path)
+    let mut file = Probe::open(path)
         .map_err(|error| format!("读取文件标签失败：{error}"))?
         .guess_file_type()
         .map_err(|error| format!("识别文件格式失败：{error}"))?
         .options(options)
         .read()
-        .map_err(|error| format!("读取文件标签失败：{error}"))
+        .map_err(|error| format!("读取文件标签失败：{error}"))?;
+    artwork::populate_ape_pictures(path, &mut file, options)?;
+    Ok(file)
 }
 
 fn editing_tag(file: &TaggedFile) -> Tag {
@@ -348,10 +350,15 @@ fn write_tag(
             save_tag(&merged, file)
         }
         (FileType::Mpeg, TagType::Ape) => {
-            let native = lofty::mpeg::MpegFile::read_from(file, options)
+            let mut native = lofty::mpeg::MpegFile::read_from(file, options)
                 .map_err(|error| error.to_string())?
                 .remove_ape()
                 .unwrap_or_default();
+            if edit_cover {
+                for key in lofty::ape::APE_PICTURE_TYPES {
+                    native.remove(key);
+                }
+            }
             let (remainder, _) = native.split_tag();
             save_tag(&remainder.merge_tag(tag.clone()), file)
         }
@@ -385,6 +392,35 @@ pub(crate) fn write_file_with_cover(
     changes: &[MetadataChange],
     cover: Option<CoverAction<'_>>,
 ) -> Result<(), String> {
+    let pictures = match cover {
+        Some(CoverAction::Replace(picture)) => {
+            let picture_type = if read_file(path)?.file_type() == FileType::Mp4 {
+                PictureType::Other.as_u8()
+            } else {
+                picture.pic_type().as_u8()
+            };
+            Some(vec![crate::artwork::collection::Picture {
+                content: crate::artwork::model::ArtworkContent {
+                    mime_type: picture
+                        .mime_type()
+                        .map(ToString::to_string)
+                        .ok_or_else(|| "封面缺少 MIME 类型".to_owned())?,
+                    image: picture.data().to_vec(),
+                },
+                picture_type,
+            }])
+        }
+        Some(CoverAction::Delete) => Some(Vec::new()),
+        None => None,
+    };
+    write_file_with_pictures(path, changes, pictures.as_deref())
+}
+
+pub(crate) fn write_file_with_pictures(
+    path: &Path,
+    changes: &[MetadataChange],
+    pictures: Option<&[crate::artwork::collection::Picture]>,
+) -> Result<(), String> {
     let metadata = file_metadata(path).map_err(|error| error.to_string())?;
     if metadata.permissions().readonly() {
         return Err("文件为只读".to_owned());
@@ -393,7 +429,14 @@ pub(crate) fn write_file_with_cover(
     if !is_supported_file_type(original.file_type()) {
         return Err("此文件格式不支持标签写入".to_owned());
     }
-    let mut tag = editing_tag(&original);
+    let mut tag = if pictures.is_some() && original.file_type() == FileType::Flac {
+        original
+            .tag(TagType::VorbisComments)
+            .cloned()
+            .unwrap_or_else(|| Tag::new(TagType::VorbisComments))
+    } else {
+        editing_tag(&original)
+    };
     // A newly selected modern tag must not duplicate pictures from a fallback tag.
     // The original tag's pictures remain untouched unless the cover is edited.
     if original.tag(tag.tag_type()).is_none() {
@@ -410,21 +453,12 @@ pub(crate) fn write_file_with_cover(
     validate_totals(&tag, changes)?;
     let before = tag.clone();
     apply_changes(&mut tag, changes)?;
-    if let Some(ref cover) = cover {
-        if !matches!(
-            tag.tag_type(),
-            TagType::Id3v2 | TagType::Mp4Ilst | TagType::VorbisComments
-        ) {
-            return Err("此标签格式不支持内嵌封面".to_owned());
-        }
+    if let Some(pictures) = pictures {
+        let prepared = artwork::prepare_pictures(pictures, tag.tag_type())?;
         while !tag.pictures().is_empty() {
             tag.remove_picture(0);
         }
-        if let CoverAction::Replace(picture) = cover {
-            let mut picture = (*picture).clone();
-            if tag.tag_type() == TagType::Mp4Ilst {
-                picture.set_pic_type(PictureType::Other);
-            }
+        for picture in prepared {
             tag.push_picture(picture);
         }
     }
@@ -441,7 +475,7 @@ pub(crate) fn write_file_with_cover(
         .filter(|other| other.tag_type() != tag.tag_type())
         .map(|other| {
             let mut updated = other.clone();
-            if cover.is_some() {
+            if pictures.is_some() {
                 while !updated.pictures().is_empty() {
                     updated.remove_picture(0);
                 }
@@ -473,7 +507,7 @@ pub(crate) fn write_file_with_cover(
                 other.get_strings(ItemKey::Lyrics).next().is_some()
                     || other.get_strings(ItemKey::UnsyncLyrics).next().is_some()
             });
-    let secondary_pictures = cover.is_some()
+    let secondary_pictures = pictures.is_some()
         && original
             .tags()
             .iter()
@@ -502,7 +536,7 @@ pub(crate) fn write_file_with_cover(
         &mut destination,
         original.file_type(),
         &tag,
-        cover.is_some(),
+        pictures.is_some(),
     )
     .map_err(|error| format!("写入标签失败，原文件未修改：{error}"))?;
     if secondary_lyrics || secondary_pictures || secondary_clears {
@@ -512,7 +546,7 @@ pub(crate) fn write_file_with_cover(
                 &mut destination,
                 original.file_type(),
                 other,
-                cover.is_some(),
+                pictures.is_some(),
             )
             .map_err(|error| format!("清理其他标签失败，原文件未修改：{error}"))?;
         }
@@ -528,11 +562,11 @@ pub(crate) fn write_file_with_cover(
     // importing would read, so secondary old values cannot silently resurrect cleared fields.
     let after = editing_tag(&written);
     verify_changes(&after, changes)?;
-    if cover.is_none() && before.pictures() != after.pictures() {
+    if pictures.is_none() && before.pictures() != after.pictures() {
         return Err("写入影响了内嵌封面，原文件未修改".to_owned());
     }
-    if cover.is_some() && tag.pictures() != after.pictures() {
-        return Err("封面回读不一致或其他图片发生变化，原文件未修改".to_owned());
+    if let Some(pictures) = pictures {
+        artwork::verify_pictures(&written, pictures)?;
     }
     // Verify the requested final tag, allowing empty items to disappear and numbers
     // to lose leading zeroes. Nonempty generic values must survive.

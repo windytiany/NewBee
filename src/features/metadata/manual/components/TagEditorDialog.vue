@@ -2,7 +2,7 @@
   <dialog
     ref="dialogElement"
     aria-labelledby="metadata-editor-title"
-    class="bg-app-surface m-auto max-h-[90vh] w-[min(48rem,calc(100vw-2rem))] max-w-none overflow-y-auto rounded-xl border border-white/10 p-0 text-white shadow-2xl backdrop:bg-black/70"
+    class="bg-app-surface m-auto max-h-[90vh] w-[min(48rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-lg border border-white/15 p-0 text-white shadow-2xl backdrop:bg-black/70"
     @cancel.prevent="editor.requestClose()"
     @mousedown.stop
   >
@@ -75,6 +75,25 @@
         {{ t("更多标签") }}
       </button>
       <button
+        id="metadata-tab-artwork"
+        ref="artworkTab"
+        type="button"
+        role="tab"
+        aria-controls="metadata-panel-artwork"
+        :aria-selected="activeTab === 'artwork'"
+        :tabindex="activeTab === 'artwork' ? 0 : -1"
+        :class="
+          activeTab === 'artwork'
+            ? 'border-app-accent text-white'
+            : 'text-app-muted border-transparent'
+        "
+        class="focus-visible:outline-app-accent border-b-2 px-5 py-3 text-sm hover:text-white focus-visible:outline-2"
+        @click="activeTab = 'artwork'"
+        @keydown="onTabKeydown"
+      >
+        {{ t("封面") }}
+      </button>
+      <button
         id="metadata-tab-lyrics"
         ref="lyricsTab"
         type="button"
@@ -95,7 +114,7 @@
       </button>
     </div>
 
-    <div class="space-y-4 px-5 py-5">
+    <div class="max-h-[calc(90vh-12rem)] space-y-4 overflow-y-auto px-5 py-5">
       <p v-if="state.loading" role="status" class="text-app-muted text-sm">{{ t("加载中…") }}</p>
 
       <section
@@ -113,7 +132,7 @@
         </dl>
       </section>
 
-      <form id="metadata-editor-form" @submit.prevent="editor.prepareSave()">
+      <form id="metadata-editor-form" @submit.prevent="prepareSave">
         <section
           v-for="tab in fieldTabs"
           v-show="activeTab === tab"
@@ -123,16 +142,19 @@
           :aria-labelledby="`metadata-tab-${tab}`"
         >
           <div v-if="!state.loading && state.tracks.length" class="flex items-start gap-5">
-            <TagCoverEditor
-              v-if="tab === 'tags'"
-              :track-id="state.tracks[0]?.track.id ?? null"
-              :cover="state.cover"
+            <ArtworkPreview
+              v-if="tab === 'tags' && state.open"
+              :selection="displayPicture"
               :disabled="
-                !state.open || state.saving || state.confirmDiscard || activeTab !== 'tags'
+                state.saving ||
+                state.confirmDiscard ||
+                selectingArtwork ||
+                state.importingArtwork ||
+                activeTab !== 'tags'
               "
-              class="size-36 shrink-0"
-              @change="editor.changeCover($event)"
-              @failed="editor.coverSelectionFailed($event)"
+              exportable
+              class="w-36 shrink-0"
+              @failed="editor.artworkSelectionFailed($event)"
             />
             <div class="min-w-0 flex-1 space-y-4">
               <div
@@ -174,6 +196,31 @@
         </section>
       </form>
 
+      <section
+        v-show="activeTab === 'artwork'"
+        id="metadata-panel-artwork"
+        role="tabpanel"
+        aria-labelledby="metadata-tab-artwork"
+      >
+        <CollectionEditor
+          v-if="state.open && !state.loading"
+          :draft="state.artwork"
+          :pictures="pictures"
+          :display="displayPicture"
+          :ready="artworkReady"
+          :disabled="state.saving || state.confirmDiscard || activeTab !== 'artwork'"
+          :importing="state.importingArtwork"
+          :embed-artwork="state.embedArtwork"
+          :add-picture="editor.addPicture"
+          @type="editor.changePictureType"
+          @delete="editor.deletePicture"
+          @display="editor.setDisplayPicture"
+          @embed="editor.changeEmbedArtwork"
+          @failed="editor.artworkSelectionFailed"
+          @busy="selectingArtwork = $event"
+        />
+      </section>
+      <p v-if="state.error" role="alert" class="text-sm text-red-400">{{ state.error }}</p>
       <section
         v-show="activeTab === 'lyrics'"
         id="metadata-panel-lyrics"
@@ -245,7 +292,7 @@
       <button
         type="button"
         class="focus-visible:outline-app-accent rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        :disabled="state.saving"
+        :disabled="state.saving || state.importingArtwork || selectingArtwork"
         @click="editor.requestClose()"
       >
         {{ t("取消") }}
@@ -299,7 +346,9 @@ import { t } from "@/shared/i18n/locale";
 import { computed, nextTick, ref, watch } from "vue";
 import { useTagEditor } from "@/features/metadata/manual/useEditor";
 import type { DraftField, LyricsMarkAction, TagField } from "@/features/metadata/types";
-import TagCoverEditor from "@/features/metadata/manual/components/TagCoverEditor.vue";
+import ArtworkPreview from "@/features/artwork/collection/ArtworkPreview.vue";
+import CollectionEditor from "@/features/artwork/collection/CollectionEditor.vue";
+import { collectionChanged } from "@/features/artwork/collection/model";
 import { formatTrackDuration } from "@/features/tracks/format";
 import { formatPathForDisplay } from "@/shared/filesystem/presentation";
 import LyricsEditor from "@/features/lyrics/components/LyricsEditor.vue";
@@ -307,15 +356,18 @@ import { useLyricsBatch } from "@/features/lyrics/download/batch";
 
 const editor = useTagEditor();
 const state = editor.state;
+const { artworkReady, pictures, displayPicture } = editor;
+const selectingArtwork = ref(false);
 const batch = useLyricsBatch();
 const fieldTabs = ["tags", "additional"] as const;
-type EditorTab = "properties" | (typeof fieldTabs)[number] | "lyrics";
+type EditorTab = "properties" | (typeof fieldTabs)[number] | "lyrics" | "artwork";
 const activeTab = ref<EditorTab>("tags");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const discardDialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const propertiesTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const tagsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const additionalTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
+const artworkTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const lyricsTab = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const lyricsField = computed(() => state.draft.find((field) => field.key === "lyrics"));
 const multiple = computed(() => state.tracks.length > 1);
@@ -373,10 +425,12 @@ const canSave = computed(
   () =>
     !state.loading &&
     !state.saving &&
+    !state.importingArtwork &&
+    !selectingArtwork.value &&
     !batch.state.running &&
     !state.confirmDiscard &&
     state.tracks.length > 0 &&
-    (state.cover !== null ||
+    ((artworkReady.value && (state.embedArtwork || state.artwork.tracks.some(collectionChanged))) ||
       state.lyricsAction !== "keep" ||
       state.draft.some((field) => field.writable && !field.mixed)),
 );
@@ -396,6 +450,9 @@ watch(
   },
   { immediate: true },
 );
+function prepareSave() {
+  if (canSave.value) editor.prepareSave();
+}
 function changeLyricsAction(event: InstanceType<typeof globalThis.Event>) {
   const action = (event.target as InstanceType<typeof globalThis.HTMLSelectElement>).value;
   if (["keep", "mark", "unmark"].includes(action))
@@ -418,8 +475,8 @@ function clearMixedValue(field: DraftField, event: InstanceType<typeof globalThi
 }
 function onTabKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
   const tabs: EditorTab[] = singleTrack.value
-    ? ["properties", "tags", "additional", "lyrics"]
-    : ["tags", "additional", "lyrics"];
+    ? ["properties", "tags", "additional", "artwork", "lyrics"]
+    : ["tags", "additional", "artwork", "lyrics"];
   const index = tabs.indexOf(activeTab.value);
   let nextIndex: number;
   if (event.key === "Home") nextIndex = 0;
@@ -434,6 +491,7 @@ function onTabKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
     tags: tagsTab,
     additional: additionalTab,
     lyrics: lyricsTab,
+    artwork: artworkTab,
   };
   buttons[activeTab.value].value?.focus();
 }

@@ -195,7 +195,7 @@ fn repeated_scans_share_one_content_identity_and_confirmed_removal_cleans_storag
             .unwrap()
     };
     assert_eq!(rows(), (2, 1, Some(1)));
-    let source_rows: i64 = storage.query_row("SELECT COUNT(*) FROM track_artwork WHERE source_kind = 'directory' AND source_path = ?1",[std::fs::canonicalize(&source).unwrap().to_string_lossy().as_ref()],|row|row.get(0)).unwrap();
+    let source_rows: i64 = storage.query_row("SELECT COUNT(*) FROM track_artwork_sources WHERE source_kind = 'directory' AND source_path = ?1",[std::fs::canonicalize(&source).unwrap().to_string_lossy().as_ref()],|row|row.get(0)).unwrap();
     assert_eq!(source_rows, 2);
     assert_eq!(library.scan()["updated"], 2);
     assert_eq!(rows(), (2, 1, Some(1)));
@@ -287,7 +287,7 @@ fn write_embedded_cover(path: &std::path::Path, bytes: &[u8]) {
 }
 
 #[test]
-fn each_scan_rechecks_content_embedded_takes_priority_and_removal_uses_current_fallback() {
+fn each_scan_rechecks_all_sources_and_preserves_valid_display_until_removal() {
     let library = ArtworkLibrary::new();
     let path = std::path::PathBuf::from(
         library
@@ -313,21 +313,22 @@ fn each_scan_rechecks_content_embedded_takes_priority_and_removal_uses_current_f
     assert_eq!(artwork(&library.webview, 1), replacement);
     let embedded = include_bytes!("../../../fixtures/cover.png");
     write_embedded_cover(&path, embedded);
-    // An invalid fallback cannot interfere with available embedded artwork.
+    // The failed directory read retains the selected snapshot; adding embedded art
+    // does not steal a valid display choice.
     std::fs::write(&cover_path, b"broken fallback").unwrap();
     crate::metadata::files::access::take(&library.files.0);
-    assert_eq!(library.scan()["failed"], 0);
-    assert_eq!(artwork(&library.webview, 1), embedded);
+    assert_eq!(library.scan()["failed"], 1);
+    assert_eq!(artwork(&library.webview, 1), replacement);
     assert!(crate::metadata::files::access::take(&library.files.0)
         .iter()
-        .all(|(_, kind)| !kind.starts_with("directory artwork")));
-    let source: String = library
+        .any(|(_, kind)| *kind == "directory artwork read"));
+    let sources: i64 = library
         .storage()
-        .query_row("SELECT source_kind FROM track_artwork", [], |row| {
+        .query_row("SELECT COUNT(*) FROM track_artwork_sources", [], |row| {
             row.get(0)
         })
         .unwrap();
-    assert_eq!(source, "embedded");
+    assert_eq!(sources, 2);
     write_embedded_cover(&path, &[]);
     std::fs::write(&cover_path, &replacement).unwrap();
     assert_eq!(library.scan()["failed"], 0);
@@ -538,7 +539,7 @@ fn cover_write_changes_only_target_embedded_tags_and_preserves_file_and_database
     assert_eq!(artwork(&library.webview, 2), directory);
     let sources: Vec<String> = library
         .storage()
-        .prepare("SELECT source_kind FROM track_artwork ORDER BY track_id")
+        .prepare("SELECT source_kind FROM track_artwork_sources s JOIN track_artwork a ON a.id = s.artwork_id WHERE a.is_display = 1 ORDER BY a.track_id")
         .unwrap()
         .query_map([], |row| row.get(0))
         .unwrap()
@@ -555,7 +556,8 @@ fn cover_write_changes_only_target_embedded_tags_and_preserves_file_and_database
                 value: Some("new title".into()),
             }],
             lyrics_action: crate::metadata::model::LyricsMarkAction::Keep,
-            cover: None,
+            artwork_drafts: Vec::new(),
+            embed_artwork: false,
         },
         tauri::ipc::Channel::new(|_| Ok(())),
         None,
@@ -614,7 +616,7 @@ fn cover_write_changes_only_target_embedded_tags_and_preserves_file_and_database
         .storage()
         .query_row("SELECT COUNT(*) FROM artwork_images", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(contents, 1);
+    assert_eq!(contents, 2);
     library.reopen();
     std::fs::remove_file(target).unwrap();
     std::fs::remove_file(other).unwrap();
@@ -766,10 +768,11 @@ fn association_replacement_during_derivation_does_not_publish_old_thumbnail() {
             .update_metadata_cover_and_lyrics(
                 1,
                 &[],
-                Some(&crate::artwork::model::ArtworkContent {
+                Some(Some(&crate::artwork::model::ArtworkContent {
                     mime_type: "image/png".into(),
                     image: b"replacement".to_vec(),
-                }),
+                })),
+                None,
                 crate::metadata::model::LyricsMarkAction::Keep,
                 None,
             )
@@ -844,6 +847,7 @@ fn album_selection_change_during_derivation_does_not_return_old_thumbnail() {
                     field: crate::metadata::model::MetadataField::Album,
                     value: Some("Other album".into()),
                 }],
+                None,
                 None,
                 crate::metadata::model::LyricsMarkAction::Keep,
                 None,

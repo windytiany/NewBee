@@ -170,7 +170,8 @@ fn migrates_sources_and_directories_without_changing_library_relationships() {
             "INSERT INTO playlists (id, name) VALUES (1, 'playlist');
              INSERT INTO playlist_items (playlist_id, track_id, position) VALUES (1, 1, 0);
              INSERT INTO artwork_images (mime_type, digest, image) VALUES ('image/png', zeroblob(32), X'0102');
-             INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) VALUES (1, 1, 'embedded', '/old/song.flac');
+             INSERT INTO track_artwork (track_id, image_id, picture_type, is_display) VALUES (1, 1, 3, 1);
+             INSERT INTO track_artwork_sources (artwork_id, source_kind, source_path, picture_type) VALUES (1, 'embedded', '/old/song.flac', 3);
              INSERT INTO music_library_directories (path) VALUES ('/old');",
         ).unwrap();
     }
@@ -190,7 +191,7 @@ fn migrates_sources_and_directories_without_changing_library_relationships() {
     let source: String = database
         .connection()
         .unwrap()
-        .query_row("SELECT source_path FROM track_artwork", [], |row| {
+        .query_row("SELECT source_path FROM track_artwork_sources", [], |row| {
             row.get(0)
         })
         .unwrap();

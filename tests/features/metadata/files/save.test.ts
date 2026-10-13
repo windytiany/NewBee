@@ -11,7 +11,7 @@ function result(target = path): MetadataSaveResult {
 }
 afterEach(() => notifications.clear());
 describe("file metadata save", () => {
-  it("routes manual edits and release matching to file writes, never library snapshot writes", async () => {
+  it("retains file snapshot loading and release file writes while manual saves use registered IDs", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const api = createMetadataApi(async <T>(command: string, args?: InvokeArgs) => {
       if (Array.isArray(args) || args instanceof ArrayBuffer || ArrayBuffer.isView(args))
@@ -21,7 +21,7 @@ describe("file metadata save", () => {
     });
     const channel = {} as Channel<MetadataSaveResult>;
     await api.editableTracks([path]);
-    await api.saveMetadata([path], [{ field: "lyrics", value: "words" }], channel, "keep");
+    await api.saveMetadata([7], [{ field: "lyrics", value: "words" }], channel, "keep");
     await api.saveRelease(
       [{ trackId: path, changes: [{ field: "title", value: "New" }], writeCover: true }],
       { mimeType: "image/png", data: [1, 2] },
@@ -29,12 +29,16 @@ describe("file metadata save", () => {
     );
     expect(calls.map((call) => call.command)).toEqual([
       "get_editable_files",
-      "save_file_metadata",
+      "save_track_metadata",
       "save_file_metadata",
     ]);
-    expect(calls[1].args?.patches).toEqual([
-      { path, changes: [{ field: "lyrics", value: "words" }], writeCover: false },
-    ]);
+    expect(calls[1].args?.request).toEqual({
+      trackIds: [7],
+      changes: [{ field: "lyrics", value: "words" }],
+      lyricsAction: "keep",
+      artworkDrafts: [],
+      embedArtwork: false,
+    });
     expect(calls[2].args?.patches).toEqual([
       { path, changes: [{ field: "title", value: "New" }], writeCover: true },
     ]);

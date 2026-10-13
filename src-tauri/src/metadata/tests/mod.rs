@@ -1,3 +1,4 @@
+mod collection;
 mod library;
 mod lyrics;
 mod model;

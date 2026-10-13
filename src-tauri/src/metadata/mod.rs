@@ -78,7 +78,8 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
         track_ids,
         mut changes,
         lyrics_action,
-        cover,
+        artwork_drafts,
+        embed_artwork,
     } = request;
     let track_ids = validate_track_ids(&track_ids)?;
     if changes
@@ -87,7 +88,8 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
     {
         return Err("标识仅支持在线导入".to_owned());
     }
-    if !changes.is_empty() || (lyrics_action == LyricsMarkAction::Keep && cover.is_none()) {
+    if !changes.is_empty() || (lyrics_action == LyricsMarkAction::Keep && artwork_drafts.is_empty())
+    {
         normalize_changes(&mut changes)?;
     }
     if track_ids.len() != 1
@@ -101,13 +103,26 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
     tauri::async_runtime::spawn_blocking(move || {
         crate::logging::with_operation(operation_id.clone(), || {
             let _guard = guard;
-            let cover = cover.map(|request| request.prepare()).transpose()?;
             let database = app.state::<Database>();
+            let artwork = crate::artwork::collection::editing::prepare(
+                &database,
+                &track_ids,
+                artwork_drafts,
+                embed_artwork,
+            )?;
             let results = track_ids
                 .into_iter()
                 .map(|id| {
-                    let result =
-                        save::save_track(&database, id, &changes, lyrics_action, cover.as_ref());
+                    let result = save::save_track_collection(
+                        &database,
+                        id,
+                        &changes,
+                        lyrics_action,
+                        artwork
+                            .iter()
+                            .find(|(track_id, _)| *track_id == id)
+                            .map(|(_, prepared)| prepared),
+                    );
                     if let Err(error) = on_progress.send(result.clone()) {
                         log::warn!("Could not report metadata progress: {error}");
                     }

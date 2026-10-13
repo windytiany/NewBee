@@ -44,6 +44,27 @@ pub(crate) fn save_track(
     action: LyricsMarkAction,
     cover: Option<&CoverUpdate>,
 ) -> MetadataSaveResult {
+    persist_track(database, track_id, changes, action, cover, None)
+}
+
+pub(crate) fn save_track_collection(
+    database: &Database,
+    track_id: i64,
+    changes: &[MetadataChange],
+    action: LyricsMarkAction,
+    artwork: Option<&crate::artwork::collection::editing::Prepared>,
+) -> MetadataSaveResult {
+    persist_track(database, track_id, changes, action, None, artwork)
+}
+
+fn persist_track(
+    database: &Database,
+    track_id: i64,
+    changes: &[MetadataChange],
+    action: LyricsMarkAction,
+    cover: Option<&CoverUpdate>,
+    artwork: Option<&crate::artwork::collection::editing::Prepared>,
+) -> MetadataSaveResult {
     let mut result = MetadataSaveResult {
         track_id,
         path: String::new(),
@@ -65,7 +86,10 @@ pub(crate) fn save_track(
                 value: None,
             });
         }
-        if !effective_changes.is_empty() || cover.is_some() {
+        if !effective_changes.is_empty()
+            || cover.is_some()
+            || artwork.is_some_and(|artwork| artwork.embed)
+        {
             database.begin_track_inspection(track_id)?;
             let path = Path::new(track.path());
             if let Some(cover) = cover {
@@ -77,6 +101,14 @@ pub(crate) fn save_track(
                         None => files::CoverAction::Delete,
                     }),
                 )?;
+            } else if artwork.is_some_and(|artwork| artwork.embed) {
+                files::write_file_with_pictures(
+                    path,
+                    &effective_changes,
+                    artwork
+                        .filter(|artwork| artwork.embed)
+                        .map(|artwork| artwork.pictures.as_slice()),
+                )?;
             } else {
                 files::write_file(path, &effective_changes)?;
             }
@@ -87,9 +119,17 @@ pub(crate) fn save_track(
             }
         }
         let synchronize = (|| {
+            if !result.file_written
+                && effective_changes.is_empty()
+                && action == LyricsMarkAction::Keep
+            {
+                if let Some(artwork) = artwork {
+                    return database.save_artwork_drafts(&[(track_id, artwork.draft.clone())]);
+                }
+            }
             let confirmed = if result.file_written {
                 Some(
-                    files::read_track(Path::new(track.path()))?
+                    files::read_track_metadata(Path::new(track.path()))?
                         .ok_or_else(|| "写后文件格式不支持快照".to_owned())?,
                 )
             } else {
@@ -98,7 +138,8 @@ pub(crate) fn save_track(
             database.update_metadata_cover_and_lyrics(
                 track_id,
                 &effective_changes,
-                cover.and_then(|cover| cover.artwork.as_ref()),
+                cover.map(|cover| cover.artwork.as_ref()),
+                artwork.map(|artwork| &artwork.draft),
                 action,
                 confirmed.as_ref(),
             )

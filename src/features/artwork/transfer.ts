@@ -19,6 +19,35 @@ export async function readOriginalCover(trackId: number | string): Promise<numbe
   return Array.from(new Uint8Array(data));
 }
 
+export async function pictureMimeType(data: number[]): Promise<string> {
+  const extensions = await invoke<string[]>("artwork_extensions", { data });
+  const types: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    bmp: "image/bmp",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+    ico: "image/x-icon",
+    avif: "image/avif",
+    tga: "image/x-tga",
+    pbm: "image/x-portable-bitmap",
+    pgm: "image/x-portable-graymap",
+    ppm: "image/x-portable-pixmap",
+    pam: "image/x-portable-arbitrarymap",
+    dds: "image/vnd-ms.dds",
+    hdr: "image/vnd.radiance",
+    exr: "image/x-exr",
+    ff: "image/farbfeld",
+    qoi: "image/qoi",
+  };
+  const mimeType = extensions.map((extension) => types[extension]).find(Boolean);
+  if (!mimeType) throw new Error(t("无法识别图片格式"));
+  return mimeType;
+}
+
 export async function saveCover(data: number[], isCurrent: () => boolean): Promise<void> {
   const extensions = await invoke<string[]>("artwork_extensions", { data });
   if (!isCurrent()) return;

@@ -47,6 +47,27 @@ describe("cover transfer", () => {
     expect(calls).toEqual([{ command: "get_track_artwork", args: { trackId: 17, size: null } }]);
   });
 
+  it("detects import MIME from original bytes through the backend", async () => {
+    for (const [extension, mime] of [
+      ["jpg", "image/jpeg"],
+      ["png", "image/png"],
+      ["webp", "image/webp"],
+      ["gif", "image/gif"],
+      ["tif", "image/tiff"],
+      ["ico", "image/x-icon"],
+    ]) {
+      const { api, calls } = load(() => [extension]);
+      expect(await api.pictureMimeType([0, 255, 3])).toBe(mime);
+      expect(calls).toEqual([{ command: "artwork_extensions", args: { data: [0, 255, 3] } }]);
+    }
+    const unknown = load(() => ["unknown"]);
+    await expect(unknown.api.pictureMimeType([1])).rejects.toThrow("无法识别图片格式");
+    const failed = load(() => {
+      throw new Error("invalid bytes");
+    });
+    await expect(failed.api.pictureMimeType([1])).rejects.toThrow("invalid bytes");
+  });
+
   it("exports unchanged bytes with detected format and a save dialog", async () => {
     const data = [1, 2, 3];
     const { api, calls, dialogs } = load(

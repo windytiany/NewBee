@@ -96,24 +96,36 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     database
         .upsert_track(
             &track("/fixture/one.mp3", red.clone()),
-            crate::database::ArtworkUpdate::Embedded,
+            Some(&crate::database::tests::support::embedded(&track(
+                "/fixture/one.mp3",
+                red.clone(),
+            ))),
         )
         .unwrap();
     database
         .upsert_track(
-            &track("/fixture/two.mp3", blue),
-            crate::database::ArtworkUpdate::Embedded,
+            &track("/fixture/two.mp3", blue.clone()),
+            Some(&crate::database::tests::support::embedded(&track(
+                "/fixture/two.mp3",
+                blue,
+            ))),
         )
         .unwrap();
     let mut missing = track("/fixture/missing.mp3", Vec::new());
     missing.artwork = None;
     database
-        .upsert_track(&missing, crate::database::ArtworkUpdate::Embedded)
+        .upsert_track(
+            &missing,
+            Some(&crate::database::tests::support::embedded(&missing)),
+        )
         .unwrap();
     database
         .upsert_track(
             &track("/fixture/corrupt.mp3", vec![1, 2, 3]),
-            crate::database::ArtworkUpdate::Embedded,
+            Some(&crate::database::tests::support::embedded(&track(
+                "/fixture/corrupt.mp3",
+                vec![1, 2, 3],
+            ))),
         )
         .unwrap();
     let webview = webview(database);
@@ -168,7 +180,10 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
         .state::<Database>()
         .upsert_track(
             &track("/fixture/one.mp3", fixture(Rgba([0, 255, 0, 255]))),
-            crate::database::ArtworkUpdate::Embedded,
+            Some(&crate::database::tests::support::embedded(&track(
+                "/fixture/one.mp3",
+                fixture(Rgba([0, 255, 0, 255])),
+            ))),
         )
         .unwrap();
     let updated = invoke(
@@ -218,7 +233,10 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
         database
             .upsert_track(
                 &track(&format!("/fixture/{index}.mp3"), original.clone()),
-                crate::database::ArtworkUpdate::Embedded,
+                Some(&crate::database::tests::support::embedded(&track(
+                    &format!("/fixture/{index}.mp3"),
+                    original.clone(),
+                ))),
             )
             .unwrap();
     }
@@ -256,16 +274,14 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
     let cache = directory.path().join("cache");
     let database = Database::open_with_cache(&path, &cache).unwrap();
     let red = fixture(Rgba([255, 0, 0, 255]));
-    for (name, update) in [
-        ("one", crate::database::ArtworkUpdate::Embedded),
-        (
-            "two",
-            crate::database::ArtworkUpdate::Directory("/offline/cover.png".into()),
-        ),
-    ] {
-        database
-            .upsert_track(&track(&format!("/offline/{name}.mp3"), red.clone()), update)
-            .unwrap();
+    for name in ["one", "two"] {
+        let track = track(&format!("/offline/{name}.mp3"), red.clone());
+        let scan = if name == "one" {
+            crate::database::tests::support::embedded(&track)
+        } else {
+            crate::database::tests::support::directory(&track, "/offline/cover.png")
+        };
+        database.upsert_track(&track, Some(&scan)).unwrap();
     }
     let view = webview(database);
     assert_eq!(view.state::<Database>().artwork_decode_count(), 0);

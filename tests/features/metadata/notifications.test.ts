@@ -142,6 +142,16 @@ describe("tag business notifications", () => {
         loadTracks: async () => {
           throw error;
         },
+        loadCollections: async (ids) =>
+          ids.map((trackId) => ({
+            trackId,
+            pictures: [],
+            displayIndex: null,
+            error: null,
+          })),
+        readArtwork: async () => {
+          throw new Error("No artwork in this fixture");
+        },
         loadAlbum: async () => [],
         save: async () => [],
         editFiles: (_ids, execute) => execute(),

@@ -2,6 +2,8 @@ import { afterEach, expect, it } from "bun:test";
 import { createTagSynchronization } from "@/features/metadata/synchronize";
 import { createTagEditor } from "@/features/metadata/manual/useEditor";
 import { FILES_CHANGED_EVENT } from "@/features/metadata/events";
+import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
+import { createManualLoading } from "@/features/metadata/manual/loading";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import type { EditableTrack } from "@/features/metadata/types";
 import { notifications } from "@/shared/notifications/center";
@@ -35,7 +37,7 @@ function editable(): EditableTrack {
     issue: null,
   };
 }
-it("opens real file targets in the shared tag editor and synchronizes only file metadata after saving", async () => {
+it("maps file snapshots to registered numeric targets and refreshes file and database views", async () => {
   const { session, commands } = playbackFixture();
   await session.playTracks(
     [
@@ -46,7 +48,7 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
         album: "Album",
         durationMs: 1000,
       },
-      { rowKey: "file", trackId: null, path, title: "Original", album: "Album", durationMs: 1000 },
+      { rowKey: "file", trackId: 11, path, title: "Original", album: "Album", durationMs: 1000 },
       {
         rowKey: "other",
         trackId: null,
@@ -61,6 +63,10 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
   const events = new EventTarget();
   let fileEvents = 0;
   let libraryEvents = 0;
+  let trackEvents = 0;
+  events.addEventListener(TRACKS_CHANGED_EVENT, () => {
+    trackEvents++;
+  });
   events.addEventListener(FILES_CHANGED_EVENT, () => {
     fileEvents += 1;
   });
@@ -73,7 +79,9 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
   try {
     const sync = createTagSynchronization(session, async <T>(command: string) => {
       invoked.push(command);
-      return { ...editable().track, title: "Written" } as T;
+      if (command === "read_audio_file") return { ...editable().track, title: "Written" } as T;
+      if (command === "get_tracks") return [{ ...editable().track, id: 11, title: "Written" }] as T;
+      throw new Error(`Unexpected ${command}`);
     });
     const api = {
       editableTracks: async (targets: Array<number | string>) => {
@@ -84,14 +92,26 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
         targets: Array<number | string>,
         changes: Array<{ field: string; value: string | null }>,
       ) => {
-        expect(targets).toEqual([path]);
+        expect(targets).toEqual([11]);
         expect(changes).toContainEqual({ field: "title", value: "Written" });
         expect(session.state.currentPlaybackId.value).toBeNull();
-        return [{ trackId: path, path, fileWritten: true, databaseUpdated: false, error: null }];
+        return [{ trackId: 11, path, fileWritten: true, databaseUpdated: true, error: null }];
       },
     };
     const editor = createTagEditor({
-      loadTracks: api.editableTracks,
+      loadTracks: createManualLoading(api, {
+        registerLocalFiles: async (paths) => {
+          expect(paths).toEqual([path]);
+          return [
+            { status: "registered", track: { ...editable().track, id: 11 }, needsMetadata: true },
+          ];
+        },
+      }),
+      loadCollections: async (ids) =>
+        ids.map((trackId) => ({ trackId, pictures: [], displayIndex: null, error: null })),
+      readArtwork: async () => {
+        throw new Error("No artwork in this fixture");
+      },
       loadAlbum: async () => [],
       save: api.saveMetadata,
       editFiles: session.withMetadataEditing,
@@ -99,7 +119,7 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
     });
     await editor.openTracks([path]);
     expect(editor.state.open).toBe(true);
-    expect(editor.state.tracks[0].track.id).toBe(path);
+    expect(editor.state.tracks[0].track.id).toBe(11);
     const field = editor.state.draft.find((field) => field.key === "title");
     if (!field) throw new Error("Missing title field");
     editor.changeField(field, "Written");
@@ -107,10 +127,11 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
     await Bun.sleep(0);
     expect(editor.state.saving).toBe(false);
     expect(editor.state.results).toEqual([
-      { trackId: path, path, fileWritten: true, databaseUpdated: false, error: null },
+      { trackId: 11, path, fileWritten: true, databaseUpdated: true, error: null },
     ]);
     expect(editor.state.open).toBe(false);
-    expect(invoked).toEqual(["read_audio_file"]);
+    expect(invoked).toEqual(["read_audio_file", "get_tracks"]);
+    expect(trackEvents).toBe(1);
     expect(fileEvents).toBe(1);
     expect(libraryEvents).toBe(0);
     expect(session.state.displayedTracks.value.map((track) => track.title)).toEqual([
@@ -121,8 +142,7 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
     expect(session.state.currentTrack.value?.title).toBe("Written");
     expect(commands.find((command) => command.action === "beginEditing")).toEqual({
       action: "beginEditing",
-      trackIds: [],
-      paths: [path],
+      trackIds: [11],
     });
     expect(commands.find((command) => command.action === "metadata")?.tracks).toContainEqual(
       expect.objectContaining({ id: null, path, title: "Written" }),

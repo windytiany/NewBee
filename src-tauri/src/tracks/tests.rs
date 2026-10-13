@@ -1,5 +1,5 @@
 use crate::{
-    database::{tracks::persist_track, ArtworkUpdate, Database},
+    database::{tracks::persist_track, Database},
     locking::write::WriteState,
     metadata::{
         files,
@@ -9,6 +9,8 @@ use crate::{
 };
 #[path = "tests/artwork.rs"]
 mod artwork;
+#[path = "tests/collection.rs"]
+mod collection;
 
 use serde_json::{json, Value};
 use std::path::Path;
@@ -26,7 +28,12 @@ fn register(database: &Database, path: &Path) -> i64 {
     let track = files::read_track(path).unwrap().unwrap();
     let mut connection = database.connection().unwrap();
     let transaction = connection.transaction().unwrap();
-    let id = persist_track(&transaction, &track, &ArtworkUpdate::Embedded).unwrap();
+    let id = persist_track(
+        &transaction,
+        &track,
+        Some(&crate::database::tests::support::embedded(&track)),
+    )
+    .unwrap();
     transaction.commit().unwrap();
     id
 }

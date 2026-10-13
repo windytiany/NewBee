@@ -1,6 +1,7 @@
 pub(crate) mod artist;
 pub(crate) mod cache;
 mod clipboard;
+pub(crate) mod collection;
 pub(crate) mod encoding;
 pub(crate) mod files;
 pub(crate) mod model;

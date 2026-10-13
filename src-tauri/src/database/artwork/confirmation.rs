@@ -1,5 +1,4 @@
-use super::ArtworkUpdate;
-use crate::artwork::model::ArtworkContent;
+use crate::artwork::collection::Scan;
 use crate::database::Database;
 use rusqlite::params;
 
@@ -8,8 +7,7 @@ impl Database {
         &self,
         track_id: i64,
         path: &str,
-        content: Option<&ArtworkContent>,
-        source: &ArtworkUpdate,
+        scan: &Scan,
     ) -> Result<(), String> {
         let mut connection = self.connection()?;
         let transaction = connection
@@ -22,7 +20,7 @@ impl Database {
         if !pending {
             return Ok(());
         }
-        super::persist_artwork(&transaction, track_id, content, source, path)?;
+        super::synchronization::sync(&transaction, track_id, path, scan)?;
         transaction
             .execute(
                 "DELETE FROM track_artwork_pending WHERE track_id = ?1",

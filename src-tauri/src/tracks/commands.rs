@@ -56,12 +56,13 @@ pub async fn reread_track_tags<R: tauri::Runtime>(
             .into_iter()
             .filter(|id| seen.insert(*id))
             .map(|track_id| {
-                let outcome = super::reading::reread(database, track_id);
-                super::model::TrackReadResult {
-                    track_id,
-                    database_updated: outcome.is_ok(),
-                    error: outcome.err(),
-                }
+                super::reading::reread(database, track_id).unwrap_or_else(|error| {
+                    super::model::TrackReadResult {
+                        track_id,
+                        database_updated: false,
+                        error: Some(error),
+                    }
+                })
             })
             .collect())
     })

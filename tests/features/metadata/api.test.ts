@@ -3,7 +3,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { createMetadataApi } from "@/features/metadata/api";
 import type { MetadataSaveResult } from "@/features/metadata/types";
 
-it("sends manual metadata and cover actions in the shared save request", async () => {
+it("sends manual metadata and complete artwork drafts in the shared save request", async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
   const api = createMetadataApi(async <T>(command: string, args?: unknown) => {
     calls.push({ command, args });
@@ -22,7 +22,14 @@ it("sends manual metadata and cover actions in the shared save request", async (
       onProgress,
       "keep",
       "operation",
-      { action: "replace", data: [1, 2] },
+      [
+        {
+          trackId: 1,
+          pictures: [{ source: "new", data: [1, 2], pictureType: 3 }],
+          displayIndex: 0,
+        },
+      ],
+      true,
     );
     expect(calls[0]).toEqual({
       command: "save_track_metadata",
@@ -31,17 +38,32 @@ it("sends manual metadata and cover actions in the shared save request", async (
           trackIds: [1],
           changes: [{ field: "label", value: "Label" }],
           lyricsAction: "keep",
-          cover: { action: "replace", data: [1, 2] },
+          artworkDrafts: [
+            {
+              trackId: 1,
+              pictures: [{ source: "new", data: [1, 2], pictureType: 3 }],
+              displayIndex: 0,
+            },
+          ],
+          embedArtwork: true,
         },
         onProgress,
         operationId: "operation",
       },
     });
-    await api.saveMetadata([1], [], onProgress, "keep", undefined, { action: "delete" });
+    await api.saveMetadata([1], [], onProgress, "keep", undefined, [
+      { trackId: 1, pictures: [], displayIndex: null },
+    ]);
     expect(calls[1]).toEqual({
       command: "save_track_metadata",
       args: {
-        request: { trackIds: [1], changes: [], lyricsAction: "keep", cover: { action: "delete" } },
+        request: {
+          trackIds: [1],
+          changes: [],
+          lyricsAction: "keep",
+          artworkDrafts: [{ trackId: 1, pictures: [], displayIndex: null }],
+          embedArtwork: false,
+        },
         onProgress,
       },
     });
@@ -53,7 +75,8 @@ it("sends manual metadata and cover actions in the shared save request", async (
           trackIds: [1],
           changes: [{ field: "artistSort", value: null }],
           lyricsAction: "keep",
-          cover: null,
+          artworkDrafts: [],
+          embedArtwork: false,
         },
         onProgress,
       },
