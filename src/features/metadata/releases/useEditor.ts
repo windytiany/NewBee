@@ -107,7 +107,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     state.results = [];
   }
   async function open(album: LibraryAlbumSelection, paths?: string[]) {
-    if (state.open) return;
+    if (state.open || state.saving) return;
     const generation = ++lifetime;
     saving.reset();
     Object.assign(state, {
@@ -182,6 +182,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     ++releaseGeneration;
     ++coverGeneration;
     state.open = false;
+    state.confirmSave = false;
     state.confirmDiscard = false;
     state.cover = null;
     savedCover = null;
@@ -424,7 +425,8 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
   }
   async function save() {
     if (!state.confirmSave || state.saving) return;
-    state.confirmSave = false;
+    const cover = savedCover;
+    close();
     const patches = state.patches.map((patch) => ({
       ...patch,
       changes: patch.changes.map((change) => ({ ...change })),
@@ -436,7 +438,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     const results = await saving.run({
       targets,
       writeTrackIds: patches.map(({ trackId }) => trackId),
-      execute: (progress, operationId) => options.save(patches, savedCover, progress, operationId),
+      execute: (progress, operationId) => options.save(patches, cover, progress, operationId),
     });
     const updated = new Set(
       results.flatMap((result) => (metadataSaved(result) ? [result.trackId] : [])),
@@ -458,9 +460,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
         }
       }
     }
-    const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
     state.dirty = state.results.some((result) => !metadataSaved(result));
-    if (!state.dirty && !error) close();
   }
   return {
     state,

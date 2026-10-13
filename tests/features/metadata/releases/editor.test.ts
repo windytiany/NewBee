@@ -205,7 +205,7 @@ describe("album tag editing", () => {
     });
     editor.prepareSave();
     await editor.save();
-    expect(editor.state.open).toBe(true);
+    expect(editor.state.open).toBe(false);
     expect(editor.state.results.length).toBe(2);
     expect(calls).toHaveLength(1);
     expect(editor.state.patches.map((patch) => patch.trackId)).toEqual([1, 2]);
@@ -226,23 +226,27 @@ describe("album tag editing", () => {
     });
     editor.prepareSave();
     await editor.save();
-    expect(editor.state.open).toBe(true);
+    expect(editor.state.open).toBe(false);
     expect(editor.state.dirty).toBe(false);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.synchronizationError).toContain("reload failed");
     expect("retrySynchronization" in editor).toBe(false);
     expect(attempts).toBe(1);
     expect(saves).toHaveLength(1);
-    expect(editor.state.open).toBe(true);
+    expect(editor.state.open).toBe(false);
   });
-  it("does not allow closing or saving twice during a write", async () => {
+  it("closes on confirmation and prevents reopening or saving twice during a write", async () => {
     const pending = deferred<MetadataSaveResult[]>();
     const { editor } = await ready({ save: () => pending.promise });
     editor.prepareSave();
     const saving = editor.save();
     editor.requestClose();
     editor.close();
-    expect(editor.state.open).toBe(true);
+    await editor.open(album);
+    await editor.save();
+    expect(editor.state.open).toBe(false);
+    expect(editor.state.confirmSave).toBe(false);
+    expect(editor.state.confirmDiscard).toBe(false);
     expect(editor.state.saving).toBe(true);
     pending.resolve([result(1), result(2)]);
     await saving;

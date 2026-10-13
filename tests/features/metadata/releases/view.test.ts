@@ -191,7 +191,7 @@ describe("album tag views", () => {
     expect(refreshes).toBe(1);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.synchronizationError).toContain("reload failed");
-    expect(editor.state.open).toBe(true);
+    expect(editor.state.open).toBe(false);
   });
 
   it("wires album context-menu selection to the album editor", async () => {
@@ -478,6 +478,36 @@ describe("album tag views", () => {
     expect(editor.state.rows.map((row) => row.source?.title)).toEqual(sourceTitles);
     expect(getTextContent(root)).toContain("原始标题");
   });
+  it("closes all dialogs on confirmation before saving finishes", async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const editor = fixture(() => pending);
+    const root = mountDialog(editor);
+    await editor.open(album);
+    editor.selectRelease(release().summary.id);
+    await settle();
+    editor.prepareSave();
+    await settle();
+    const confirmation = node(
+      root,
+      (entry) => entry.props["aria-labelledby"] === "album-tags-save-title",
+    ) as DialogNode;
+    expect(confirmation.open).toBe(true);
+    const confirm = node(
+      confirmation,
+      (entry) => entry.type === "button" && getTextContent(entry).trim() === "确认写入",
+    );
+    event(confirm, "onClick");
+    await settle();
+    expect(editor.state.saving).toBe(true);
+    expect(
+      findNode(root, (entry) => entry.type === "dialog" && (entry as DialogNode).open),
+    ).toBeNull();
+    finish();
+    await settle();
+  });
   it("uses native modal dialogs, requires save confirmation and handles discard", async () => {
     const editor = fixture();
     const root = mountDialog(editor);
@@ -503,7 +533,17 @@ describe("album tag views", () => {
     expect(getTextContent(root)).toContain("确认写入");
     expect(getTextContent(root)).not.toContain("保存后不可撤销");
     expect(editor.state.confirmSave).toBe(true);
-    editor.state.confirmSave = false;
+    const confirmation = node(
+      root,
+      (entry) => entry.props["aria-labelledby"] === "album-tags-save-title",
+    ) as DialogNode;
+    expect(confirmation.type).toBe("dialog");
+    expect(confirmation.open).toBe(true);
+    expect(confirmation.parent).toBe(main.parent);
+    event(confirmation, "onCancel");
+    await settle();
+    expect(confirmation.open).toBe(false);
+    expect(main.open).toBe(true);
     editor.move(1, 2);
     event(main, "onCancel");
     await settle();

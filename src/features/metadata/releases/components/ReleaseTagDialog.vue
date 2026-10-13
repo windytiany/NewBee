@@ -10,6 +10,7 @@ const editor = useReleaseEditor();
 const state = editor.state;
 const dialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const discardDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
+const saveDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const disabled = computed(
   () => state.loading || state.saving || state.confirmSave || state.confirmDiscard,
 );
@@ -23,14 +24,17 @@ const pendingFields = computed(() => {
   ];
 });
 watch(
-  () => [state.open, state.confirmDiscard],
+  () => [state.open, state.confirmDiscard, state.confirmSave],
   async () => {
     await nextTick();
-    if (!state.confirmDiscard && discardDialog.value?.open) discardDialog.value.close();
+    if ((!state.open || !state.confirmSave) && saveDialog.value?.open) saveDialog.value.close();
+    if ((!state.open || !state.confirmDiscard) && discardDialog.value?.open)
+      discardDialog.value.close();
     if (state.open && !dialog.value?.open) dialog.value?.showModal();
     else if (!state.open && dialog.value?.open) dialog.value.close();
     if (state.open && state.confirmDiscard && !discardDialog.value?.open)
       discardDialog.value?.showModal();
+    if (state.open && state.confirmSave && !saveDialog.value?.open) saveDialog.value?.showModal();
   },
   { immediate: true },
 );
@@ -92,40 +96,47 @@ watch(
         <p>{{ t("正在保存 {count} / {total}", { count: state.completed, total: state.total }) }}</p>
         <progress :value="state.completed" :max="state.total" class="w-full"></progress>
       </div>
-      <section
-        v-if="state.confirmSave"
-        :aria-label="t('确认覆盖标签')"
-        class="flex shrink-0 items-center justify-between gap-2 rounded border border-amber-200/30 px-2 py-1 text-xs"
-      >
-        <p class="min-w-0 truncate">
-          {{
-            t("{count} 首 · {fields}", {
-              count: state.patches.length,
-              fields: pendingFields.join(" / "),
-            })
-          }}
-        </p>
-        <div class="flex shrink-0 gap-2">
-          <button
-            type="button"
-            class="rounded px-2 py-1 hover:bg-white/10"
-            @click="state.confirmSave = false"
-          >
-            {{ t("返回核对") }}</button
-          ><button
-            type="button"
-            class="bg-app-accent rounded px-2 py-1 font-semibold text-black"
-            @click="editor.save()"
-          >
-            {{ t("确认写入") }}
-          </button>
-        </div>
-      </section>
       <TrackMapping
         :editor="editor"
         :disabled="disabled || state.loadingRelease"
         class="shrink-0"
       />
+    </div>
+  </dialog>
+  <dialog
+    ref="saveDialog"
+    role="alertdialog"
+    :aria-label="t('确认覆盖标签')"
+    aria-labelledby="album-tags-save-title"
+    class="bg-app-surface m-auto w-[min(24rem,calc(100vw-2rem))] max-w-none space-y-4 rounded-xl border border-white/10 p-5 text-white backdrop:bg-black/50"
+    @cancel.prevent="state.confirmSave = false"
+    @mousedown.stop
+  >
+    <h2 id="album-tags-save-title" class="font-semibold">{{ t("确认覆盖标签") }}</h2>
+    <p class="text-sm">
+      {{
+        t("{count} 首 · {fields}", {
+          count: state.patches.length,
+          fields: pendingFields.join(" / "),
+        })
+      }}
+    </p>
+    <div class="flex justify-end gap-3">
+      <button
+        type="button"
+        autofocus
+        class="rounded px-3 py-2 hover:bg-white/10"
+        @click="state.confirmSave = false"
+      >
+        {{ t("返回核对") }}
+      </button>
+      <button
+        type="button"
+        class="bg-app-accent rounded px-3 py-2 font-semibold text-black"
+        @click="editor.save()"
+      >
+        {{ t("确认写入") }}
+      </button>
     </div>
   </dialog>
   <dialog
