@@ -102,13 +102,13 @@ function track(index: number): InboxTrack {
     channels: null,
   };
 }
-async function mount() {
+async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
   const edited: Array<readonly (number | string)[]> = [];
   const matched: string[][] = [];
   const played: string[] = [];
   const inbox = createInbox({
     api: {
-      read: async () => ({ tracks: [track(1), track(2), track(3)], failures: [] }),
+      read: async () => ({ tracks, failures: [] }),
       register: async () => [],
       remove: async () => {},
       ingest: async (paths) => paths.map((path) => ({ path, success: true, error: null })),
@@ -217,6 +217,13 @@ function clickRow(root: Scene, row: Scene, modifiers: Record<string, unknown> = 
   dispatch(row, "onClick", modifiers);
 }
 describe("Inbox workspace", () => {
+  it("keeps all artists without an empty artist notice when Inbox is empty", async () => {
+    const context = await mount([]);
+    expect(context.rows()).toHaveLength(0);
+    expect(getTextContent(context.root)).toContain("所有艺术家");
+    expect(getTextContent(context.root)).not.toContain("无演出者");
+  });
+
   it("shows local added dates between album and duration without changing row order", async () => {
     const context = await mount();
     const rows = context.rows();
