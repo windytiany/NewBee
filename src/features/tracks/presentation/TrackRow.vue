@@ -57,7 +57,7 @@ function keydown(event: globalThis.KeyboardEvent) {
       :class="[
         focused ? 'bg-app-track' : selected ? 'bg-white/10' : 'hover:bg-white/5',
         $slots['before-duration']
-          ? 'sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_9rem_3rem]'
+          ? 'sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_3rem]'
           : 'sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]',
       ]"
       :aria-pressed="selected ? true : undefined"

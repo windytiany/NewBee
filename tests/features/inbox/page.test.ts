@@ -224,21 +224,35 @@ describe("Inbox workspace", () => {
     expect(getTextContent(context.root)).not.toContain("无演出者");
   });
 
-  it("keeps full columns wide enough and scrollable between narrow side panes", async () => {
+  it("shrinks all content columns together with single-line headers and dates", async () => {
     const context = await mount();
     const pane = findNode(
       context.root,
       (node) => node.type === "section" && node.props["data-local-drop"] === "Inbox",
     );
-    expect(String(pane?.props.class).split(/\s+/)).toContain("overflow-auto");
-    const table = findNode(context.root, (node) =>
-      String(node.props.class).split(/\s+/).includes("sm:min-w-[40rem]"),
-    );
-    expect(table).not.toBeNull();
-    expect(table && findNode(table, (node) => node.type === "ol")).not.toBeNull();
+    expect(String(pane?.props.class).split(/\s+/)).toContain("overflow-y-auto");
     expect(
-      table && findNode(table, (node) => String(node.props.class).includes("sticky top-0")),
-    ).not.toBeNull();
+      findNode(context.root, (node) => String(node.props.class).includes("min-w-[")),
+    ).toBeNull();
+    const header = findNode(context.root, (node) =>
+      String(node.props.class).includes("sticky top-0"),
+    );
+    if (!header) throw new Error("Missing table header");
+    const columns = "sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_3rem]";
+    expect(String(header.props.class).split(/\s+/)).toContain(columns);
+    const labels = header.children.filter((node) => node.type === "span");
+    expect(labels).toHaveLength(5);
+    for (const label of labels)
+      expect(String(label.props.class).split(/\s+/)).toContain("truncate");
+    for (const row of context.rows()) {
+      expect(String(row.props.class).split(/\s+/)).toContain(columns);
+      expect(String(row.props.class).split(/\s+/)).toContain("w-full");
+      const date = findNode(
+        row,
+        (node) => node.type === "span" && getTextContent(node).startsWith("2026-"),
+      );
+      expect(String(date?.props.class).split(/\s+/)).toContain("truncate");
+    }
   });
 
   it("shows local added dates between album and duration without changing row order", async () => {
