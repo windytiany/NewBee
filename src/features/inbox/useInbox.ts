@@ -6,6 +6,7 @@ import type { InboxResult, InboxTrack } from "@/features/inbox/api";
 import type { ArtistSummary, LibraryGrouping } from "@/features/library/types";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import { FILES_CHANGED_EVENT } from "@/features/metadata/events";
+import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { notify } from "@/shared/notifications/center";
@@ -174,9 +175,11 @@ export function useInbox(active: Ref<boolean>) {
   );
   globalThis.window.addEventListener(INBOX_CHANGED_EVENT, refresh);
   globalThis.window.addEventListener(FILES_CHANGED_EVENT, refresh);
+  globalThis.window.addEventListener(TRACKS_CHANGED_EVENT, refresh);
   onScopeDispose(() => {
     globalThis.window.removeEventListener(INBOX_CHANGED_EVENT, refresh);
     globalThis.window.removeEventListener(FILES_CHANGED_EVENT, refresh);
+    globalThis.window.removeEventListener(TRACKS_CHANGED_EVENT, refresh);
   });
   return inbox;
 }

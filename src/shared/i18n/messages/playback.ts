@@ -4,6 +4,7 @@ export const playbackMessages: Record<string, string> = {
   上一首: "Previous track",
   暂停: "Pause",
   播放: "Play",
+  立刻播放: "Play now",
   下一首: "Next track",
   取消静音: "Unmute",
   静音: "Mute",

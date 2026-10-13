@@ -55,6 +55,18 @@ function createPlaylistBrowserComponent(source: string) {
   const icon = createIcon();
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/features/metadata/releases/components/ReleaseMenuItem.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
+    "@/features/playlist/tracks/AppendMenuItem.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
+    "@/features/library/import/ImportMenuItem.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
+    "@/features/playlist/creation/CreatePlaylistDialog.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
     "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon, X: icon },
     "@/features/metadata/manual/components/EditMenuItem.vue": icon,
     "@/features/tracks/presentation/RereadMenuItem.vue": icon,

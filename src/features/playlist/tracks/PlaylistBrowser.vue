@@ -137,12 +137,30 @@
         >
           {{ t("添加到队尾") }}
         </button>
-        <RereadMenuItem
+        <SkipMenuItem
           :track-ids="contextTargetTrackIds"
           :disabled="props.isPlaylistActionPending"
           @close="closeContextMenu(true)"
         />
+        <div class="my-1 border-t border-white/10" role="separator"></div>
+        <AppendMenuItem
+          :track-ids="contextTargetTrackIds"
+          :disabled="props.isPlaylistActionPending"
+          @create="createPlaylistWithTracks"
+          @close="closeContextMenu(true)"
+        />
+        <ImportMenuItem
+          :track-ids="contextTargetTrackIds"
+          :disabled="props.isPlaylistActionPending"
+          @close="closeContextMenu(true)"
+        />
+        <div class="my-1 border-t border-white/10" role="separator"></div>
         <EditMenuItem
+          :track-ids="contextTargetTrackIds"
+          :disabled="props.isPlaylistActionPending"
+          @close="closeContextMenu(true)"
+        />
+        <ReleaseMenuItem
           :track-ids="contextTargetTrackIds"
           :disabled="props.isPlaylistActionPending"
           @close="closeContextMenu(true)"
@@ -152,7 +170,7 @@
           :disabled="props.isPlaylistActionPending"
           @close="closeContextMenu(true)"
         />
-        <SkipMenuItem
+        <RereadMenuItem
           :track-ids="contextTargetTrackIds"
           :disabled="props.isPlaylistActionPending"
           @close="closeContextMenu(true)"
@@ -198,6 +216,7 @@
         {{ t("请选择歌单") }}
       </p>
     </div>
+    <CreatePlaylistDialog ref="createPlaylistDialog" @created="reportPlaylistChanged" />
   </section>
 </template>
 
@@ -218,6 +237,11 @@ import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue"
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
+import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
+import AppendMenuItem from "@/features/playlist/tracks/AppendMenuItem.vue";
+import ImportMenuItem from "@/features/library/import/ImportMenuItem.vue";
+import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDialog.vue";
+import { reportPlaylistChanged } from "@/features/playlist/events";
 import { useTable } from "@/shared/interaction/table/useTable";
 import TableHeader from "@/shared/interaction/table/TableHeader.vue";
 import { trackColumns, trackColumnValue } from "@/features/tracks/table/columns";
@@ -243,6 +267,10 @@ const props = withDefaults(
   },
 );
 
+const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
+function createPlaylistWithTracks(ids: number[]) {
+  createPlaylistDialog.value?.show(async () => ids);
+}
 const columns = computed(() => trackColumns());
 const table = useTable({
   columns: () => columns.value,

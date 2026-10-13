@@ -17,11 +17,10 @@ export const inboxMessages: Record<string, string> = {
   "导入 Inbox": "Import to Inbox",
   导入进行中: "Import in progress",
   曲目操作: "Track actions",
-  添加到音乐库: "Add to library",
+
   "从 Inbox 移除": "Remove from Inbox",
   刷新: "Refresh",
   "{count} 个文件处理失败": "Failed to process {count} files",
   "读取 Inbox 失败": "Could not read Inbox",
   移除失败: "Could not remove items",
-  添加到音乐库失败: "Could not add to library",
 };

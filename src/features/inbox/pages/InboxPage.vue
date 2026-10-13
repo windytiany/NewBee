@@ -8,6 +8,15 @@ import ArtistList from "@/features/artists/navigation/ArtistList.vue";
 import TrackRow from "@/features/tracks/presentation/TrackRow.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
+import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
+import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
+import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import AppendMenuItem from "@/features/playlist/tracks/AppendMenuItem.vue";
+import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDialog.vue";
+import { reportPlaylistChanged } from "@/features/playlist/events";
+import { createTracksApi } from "@/features/tracks/api";
+import { logger } from "@/shared/logging/logger";
+import { notify } from "@/shared/notifications/center";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
@@ -45,7 +54,10 @@ const root = ref<globalThis.HTMLElement | null>(null);
 const list = ref<globalThis.HTMLOListElement | null>(null);
 const menuElement = ref<globalThis.HTMLElement | null>(null);
 const firstMenuItemElement = ref<globalThis.HTMLElement | null>(null);
-const menu = useContextMenu<{ itemKey: string | null; paths: string[] }>({
+const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
+const registration = createTracksApi();
+let menuGeneration = 0;
+const menu = useContextMenu<{ itemKey: string | null; paths: string[]; trackIds: number[] }>({
   menuElement,
   firstMenuItemElement,
   fallbackFocusElement: root,
@@ -53,6 +65,10 @@ const menu = useContextMenu<{ itemKey: string | null; paths: string[] }>({
 const request = menu.request;
 const position = menu.position;
 const paths = computed(() => request.value?.payload.paths ?? []);
+const trackIds = computed(() => request.value?.payload.trackIds ?? []);
+function createPlaylist(ids: number[]) {
+  createPlaylistDialog.value?.show(async () => ids);
+}
 const keyboard = createItemKeyboard({
   getItemKeys: () => (state.loading || state.pending ? [] : keys.value),
   itemSelector: "button[data-track-select]",
@@ -64,7 +80,7 @@ const keyboard = createItemKeyboard({
     void inbox.play(key, keys.value);
   },
 });
-function open(request: {
+async function open(request: {
   itemKey: string;
   x: number;
   y: number;
@@ -72,15 +88,37 @@ function open(request: {
 }) {
   const paths = selection.contextMenuTargets(request.itemKey, keys.value);
   if (!paths.length) return;
-  menu.open({ ...request, payload: { itemKey: request.itemKey, paths } });
+  const generation = ++menuGeneration;
+  try {
+    const results = await registration.registerLocalFiles(paths);
+    if (
+      generation !== menuGeneration ||
+      !props.active ||
+      paths.some((path) => !keys.value.includes(path))
+    )
+      return;
+    const trackIds = results.flatMap((result) =>
+      result.status === "registered" ? [result.track.id] : [],
+    );
+    const failures = results.filter((result) => result.status === "failed");
+    if (failures.length) {
+      logger.warn("inbox", "menu_registration_failed", failures);
+      notify({ type: "warning", message: t("{count} 个文件登记失败", { count: failures.length }) });
+    }
+    menu.open({ ...request, payload: { itemKey: request.itemKey, paths, trackIds } });
+  } catch (error) {
+    logger.error("inbox", "menu_registration_failed", error);
+    notify({ type: "error", message: t("文件处理失败") });
+  }
 }
 function emptyMenu(event: globalThis.MouseEvent) {
   event.preventDefault();
+  ++menuGeneration;
   menu.open({
     x: event.clientX,
     y: event.clientY,
     trigger: event.currentTarget as globalThis.HTMLElement,
-    payload: { itemKey: null, paths: [] },
+    payload: { itemKey: null, paths: [], trackIds: [] },
   });
 }
 async function action(kind: "next" | "end" | "ingest" | "remove" | "refresh") {
@@ -108,7 +146,10 @@ async function action(kind: "next" | "end" | "ingest" | "remove" | "refresh") {
 watch(
   () => props.active,
   (active) => {
-    if (!active) menu.close();
+    if (!active) {
+      ++menuGeneration;
+      menu.close();
+    }
   },
 );
 watch(keys, (keys) => {
@@ -211,6 +252,24 @@ watch(keys, (keys) => {
       >
         {{ t("添加到队尾") }}
       </button>
+      <SkipMenuItem :track-ids="trackIds" :disabled="state.pending" @close="menu.close(true)" />
+      <div class="my-1 border-t border-white/10" role="separator" />
+      <AppendMenuItem
+        :track-ids="trackIds"
+        :disabled="state.pending"
+        @create="createPlaylist"
+        @close="menu.close(true)"
+      />
+      <button
+        role="menuitem"
+        type="button"
+        :disabled="!paths.length || state.pending"
+        class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+        @click="action('ingest')"
+      >
+        {{ t("添加到音乐库") }}
+      </button>
+      <div class="my-1 border-t border-white/10" role="separator" />
       <EditMenuItem
         :track-ids="paths"
         :disabled="!paths.length || state.pending"
@@ -221,16 +280,28 @@ watch(keys, (keys) => {
         :disabled="!paths.length || state.pending"
         @close="menu.close(true)"
       />
-      <div class="my-1 border-t border-white/10" role="separator" />
+      <DownloadMenuItem
+        :track-ids="trackIds"
+        :disabled="!trackIds.length || state.pending"
+        @close="menu.close(true)"
+      />
+      <RereadMenuItem
+        v-if="paths.length"
+        :track-ids="trackIds"
+        :disabled="state.pending"
+        @close="menu.close(true)"
+      />
       <button
+        v-else
         role="menuitem"
         type="button"
-        :disabled="!paths.length || state.pending"
+        :disabled="state.loading || state.pending"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        @click="action('ingest')"
+        @click="action('refresh')"
       >
-        {{ t("添加到音乐库") }}
+        {{ t("重新读取标签") }}
       </button>
+      <div class="my-1 border-t border-white/10" role="separator" />
       <button
         role="menuitem"
         type="button"
@@ -240,16 +311,7 @@ watch(keys, (keys) => {
       >
         {{ t("从 Inbox 移除") }}
       </button>
-      <div class="my-1 border-t border-white/10" role="separator" />
-      <button
-        role="menuitem"
-        type="button"
-        :disabled="state.loading || state.pending"
-        class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        @click="action('refresh')"
-      >
-        {{ t("刷新") }}
-      </button>
     </div>
+    <CreatePlaylistDialog ref="createPlaylistDialog" @created="reportPlaylistChanged" />
   </div>
 </template>

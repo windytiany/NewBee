@@ -13,6 +13,25 @@ use crate::tracks::model::TrackSummary;
 use rusqlite::{params, OptionalExtension};
 
 impl Database {
+    pub(crate) fn external_track_ids(&self, track_ids: &[i64]) -> Result<Vec<i64>, String> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare("SELECT id FROM tracks WHERE id = ?1 AND in_library = 0")
+            .map_err(|error| error.to_string())?;
+        let mut seen = std::collections::HashSet::new();
+        let mut ids = Vec::new();
+        for id in track_ids.iter().filter(|id| seen.insert(**id)) {
+            if let Some(id) = statement
+                .query_row([id], |row| row.get(0))
+                .optional()
+                .map_err(|error| error.to_string())?
+            {
+                ids.push(id);
+            }
+        }
+        Ok(ids)
+    }
+
     pub(crate) fn library_track_paths(&self) -> Result<Vec<String>, String> {
         let connection = self.connection()?;
         let mut statement = connection

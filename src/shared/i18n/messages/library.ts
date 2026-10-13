@@ -104,6 +104,8 @@ export const libraryMessages: Record<string, string> = {
   没有匹配原路径的记录: "No records match the old path",
   添加为下一首: "Play next",
   添加到播放列表: "Add to playlist",
+  添加到音乐库: "Add to library",
+  添加到音乐库失败: "Could not add to library",
   添加到队尾: "Add to queue",
   添加目录: "Add directory",
   "添加目录失败，请查看日志": "Could not add directory. Check the logs.",

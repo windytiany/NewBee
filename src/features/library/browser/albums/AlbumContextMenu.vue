@@ -4,7 +4,7 @@
     id="album-context-menu"
     ref="menuElement"
     data-item-interaction
-    class="bg-app-interactive fixed z-100 w-64 rounded-md p-1 shadow-xl ring-1 ring-white/10"
+    class="bg-app-interactive fixed z-100 w-56 rounded-md p-1 shadow-xl ring-1 ring-white/10"
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
     role="menu"
     :aria-label="t('专辑操作')"
@@ -30,6 +30,7 @@
     >
       {{ t("添加到队尾") }}
     </button>
+    <div class="my-1 border-t border-white/10" role="separator"></div>
     <button
       ref="playlistTriggerElement"
       class="focus-visible:outline-app-accent flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm focus-visible:outline-2 disabled:opacity-50"
@@ -84,9 +85,10 @@
         {{ playlist.name }}
       </button>
     </div>
+    <div class="my-1 border-t border-white/10" role="separator"></div>
     <EditMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
-    <DownloadMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
     <ReleaseMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
+    <DownloadMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
     <div class="my-1 border-t border-white/10" role="separator"></div>
     <button
       class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"

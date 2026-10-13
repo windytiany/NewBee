@@ -164,6 +164,15 @@ function createComponent(source: string) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/features/metadata/releases/components/ReleaseMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h(
+          "button",
+          { "data-release-targets": JSON.stringify(props.trackIds), role: "menuitem" },
+          "根据专辑更新标签",
+        ),
+    }),
     "@lucide/vue": { ChevronRight: icon, Play: icon, Pause: icon, X: icon },
     "@/shared/interaction/useContextMenu": contextMenuModule,
     "@/shared/interaction/item/useSelection": { useItemSelection: useTestItemFocusList },

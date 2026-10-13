@@ -201,6 +201,7 @@ describe("album tag views", () => {
       compileSfc(menuSource, "ReleaseMenuItem.vue"),
       {
         vue: Vue,
+        "@/features/tracks/api": { createTracksApi: () => ({}) },
         "@/features/metadata/releases/useEditor": { useReleaseEditor: () => editor },
       },
     ).default;

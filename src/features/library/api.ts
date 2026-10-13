@@ -13,6 +13,8 @@ export type LibraryInvoker = typeof invoke;
 
 export function createLibraryApi(invokeCommand: LibraryInvoker = invoke) {
   return {
+    listExternalTrackIds: (trackIds: readonly number[]) =>
+      invokeCommand<number[]>("list_external_track_ids", { trackIds }),
     listArtists: (grouping: LibraryGrouping) =>
       invokeCommand<ArtistSummary[]>("list_artists", { grouping }),
     listAlbums: (group: LibraryGroup) => invokeCommand<AlbumSummary[]>("list_albums", { group }),

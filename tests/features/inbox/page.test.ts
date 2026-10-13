@@ -102,7 +102,13 @@ function track(index: number): InboxTrack {
     channels: null,
   };
 }
-async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
+async function mount(
+  tracks: InboxTrack[] = [track(1), track(2), track(3)],
+  failedPaths: string[] = [],
+) {
+  const registeredPaths: string[][] = [];
+  const ingestedPaths: string[][] = [];
+  const messages: unknown[] = [];
   const edited: Array<readonly (number | string)[]> = [];
   const matched: string[][] = [];
   const played: string[] = [];
@@ -114,7 +120,10 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
       read: async () => ({ tracks, failures: [] }),
       register: async () => [],
       remove: async () => {},
-      ingest: async (paths) => paths.map((path) => ({ path, success: true, error: null })),
+      ingest: async (paths) => {
+        ingestedPaths.push(paths);
+        return paths.map((path) => ({ path, success: true, error: null }));
+      },
     },
     session: {
       playTracks: async (tracks, key) => {
@@ -138,6 +147,64 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
     compileSfc(await Bun.file("src/features/inbox/pages/InboxPage.vue").text(), "InboxPage.vue"),
     {
       vue: Vue,
+      "@/features/tracks/api": {
+        createTracksApi: () => ({
+          registerLocalFiles: async (paths: readonly string[]) => {
+            registeredPaths.push([...paths]);
+            return paths.map((path) =>
+              failedPaths.includes(path)
+                ? { status: "failed", path, error: "unreadable file" }
+                : {
+                    status: "registered",
+                    track: {
+                      ...track(Number(path.match(/(\d+)\.wav$/)?.[1])),
+                      id: Number(path.match(/(\d+)\.wav$/)?.[1]),
+                    },
+                  },
+            );
+          },
+        }),
+      },
+      "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
+        props: ["trackIds"],
+        setup: (props) => () =>
+          Vue.h(
+            "button",
+            { role: "menuitem", "data-lyrics-targets": JSON.stringify(props.trackIds) },
+            "更新缺少的歌词",
+          ),
+      }),
+      "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
+        props: ["trackIds"],
+        setup: (props) => () =>
+          Vue.h(
+            "button",
+            { role: "menuitem", "data-reread-targets": JSON.stringify(props.trackIds) },
+            "重新读取标签",
+          ),
+      }),
+      "@/features/playback/queue/components/SkipMenuItem.vue": Vue.defineComponent({
+        props: ["trackIds"],
+        setup: (props) => () =>
+          Vue.h(
+            "button",
+            { role: "menuitem", "data-skip-targets": JSON.stringify(props.trackIds) },
+            "跳过",
+          ),
+      }),
+      "@/features/playlist/tracks/AppendMenuItem.vue": Vue.defineComponent({
+        props: ["trackIds"],
+        setup: (props) => () =>
+          Vue.h(
+            "button",
+            { role: "menuitem", "data-append-targets": JSON.stringify(props.trackIds) },
+            "添加到播放列表",
+          ),
+      }),
+      "@/features/playlist/creation/CreatePlaylistDialog.vue": Vue.defineComponent({
+        setup: () => () => null,
+      }),
+      "@/shared/notifications/center": { notify: (message: unknown) => messages.push(message) },
       "@lucide/vue": {
         ChevronDown: Vue.defineComponent(() => () => null),
         Check: Vue.defineComponent(() => () => null),
@@ -193,12 +260,14 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
     playbackOrders,
     addedNext,
     addedEnd,
+    registeredPaths,
+    ingestedPaths,
+    messages,
     rows: () => root.querySelectorAll("button[data-track-select]"),
   };
 }
 async function settle() {
-  await Vue.nextTick();
-  await Vue.nextTick();
+  for (let turn = 0; turn < 4; turn++) await Vue.nextTick();
 }
 function dispatch(node: Scene, handler: string, fields: Record<string, unknown> = {}) {
   const callback = node.props[handler];
@@ -230,6 +299,57 @@ function clickRow(root: Scene, row: Scene, modifiers: Record<string, unknown> = 
   dispatch(row, "onClick", modifiers);
 }
 describe("Inbox workspace", () => {
+  it("groups track actions and resolves identities without importing or removing Inbox files", async () => {
+    const context = await mount();
+    clickRow(context.root, context.rows()[0]);
+    clickRow(context.root, context.rows()[2], { shiftKey: true });
+    dispatch(context.rows()[1], "onContextmenu");
+    await settle();
+    const items: string[] = [];
+    const menu = findNode(context.root, (node) => node.props.id === "inbox-context-menu");
+    if (!menu) throw new Error("Missing Inbox menu");
+    visit(menu, (node) => {
+      if (node.props.role === "menuitem") items.push(getTextContent(node));
+      if (node.props.role === "separator") items.push("|");
+    });
+    expect(items).toEqual([
+      "添加为下一首",
+      "添加到队尾",
+      "跳过",
+      "|",
+      "添加到播放列表",
+      "添加到音乐库",
+      "|",
+      "编辑",
+      "根据专辑更新标签",
+      "更新缺少的歌词",
+      "重新读取标签",
+      "|",
+      "从 Inbox 移除",
+    ]);
+    for (const key of ["lyrics", "reread", "skip", "append"]) {
+      expect(
+        findNode(context.root, (node) => `data-${key}-targets` in node.props)?.props[
+          `data-${key}-targets`
+        ],
+      ).toBe("[1,2,3]");
+    }
+    expect(context.registeredPaths).toEqual([[track(1).path, track(2).path, track(3).path]]);
+    expect(context.ingestedPaths).toEqual([]);
+    expect(context.inbox.state.tracks).toHaveLength(3);
+  });
+  it("keeps Inbox entries and limits ID-based actions to successfully registered targets", async () => {
+    const context = await mount(undefined, [track(2).path]);
+    clickRow(context.root, context.rows()[0]);
+    clickRow(context.root, context.rows()[2], { shiftKey: true });
+    dispatch(context.rows()[1], "onContextmenu");
+    await settle();
+    expect(menuButton(context.root, "添加到播放列表").props["data-append-targets"]).toBe("[1,3]");
+    expect(menuButton(context.root, "更新缺少的歌词").props["data-lyrics-targets"]).toBe("[1,3]");
+    expect(context.inbox.state.tracks).toHaveLength(3);
+    expect(context.ingestedPaths).toEqual([]);
+    expect(context.messages).toEqual([{ type: "warning", message: "1 个文件登记失败" }]);
+  });
   it("keeps all artists without an empty artist notice when Inbox is empty", async () => {
     const context = await mount([]);
     expect(context.rows()).toHaveLength(0);

@@ -176,6 +176,30 @@ function createComponent(source: string) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/features/metadata/releases/components/ReleaseMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h(
+          "button",
+          { "data-release-targets": JSON.stringify(props.trackIds), role: "menuitem" },
+          "根据专辑更新标签",
+        ),
+    }),
+    "@/features/playlist/tracks/AppendMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h(
+          "button",
+          { "data-append-targets": JSON.stringify(props.trackIds), role: "menuitem" },
+          "添加到播放列表",
+        ),
+    }),
+    "@/features/library/import/ImportMenuItem.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
+    "@/features/playlist/creation/CreatePlaylistDialog.vue": Vue.defineComponent({
+      setup: () => () => null,
+    }),
     "@lucide/vue": { DiscAlbum: icon, Play: icon, X: icon },
     "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,

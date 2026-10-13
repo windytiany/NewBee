@@ -40,7 +40,9 @@ const modules: Record<string, unknown> = {
       Vue.h("button", { "data-update-album": JSON.stringify(props.album) }, "根据专辑更新标签"),
   }),
   "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
-    setup: () => () => null,
+    props: ["album"],
+    setup: (props) => () =>
+      Vue.h("button", { "data-lyrics-album": JSON.stringify(props.album) }, "更新缺少的歌词"),
   }),
   "@/features/metadata/manual/components/EditMenuItem.vue": Vue.defineComponent({
     props: ["album"],
@@ -146,6 +148,37 @@ afterEach(() => {
 });
 
 describe("album context menu", () => {
+  it("matches track menu width, action groups and metadata order", async () => {
+    const menu = mountMenu();
+    await menu.open();
+    const container = findNodes(menu.root, (node) => node.props.id === "album-context-menu")[0];
+    expect(container).toBeDefined();
+    expect(String(container.props.class).split(/\s+/)).toContain("w-56");
+    const text = (node: HostNode): string => node.text + node.children.map(text).join("");
+    expect(
+      container.children.flatMap((node) => {
+        if (node.props.role === "separator") return ["|"];
+        const label = text(node).trim();
+        return label ? [label] : [];
+      }),
+    ).toEqual([
+      "添加为下一首",
+      "添加到队尾",
+      "|",
+      "添加到播放列表",
+      "|",
+      "编辑",
+      "根据专辑更新标签",
+      "更新缺少的歌词",
+      "|",
+      "从库中删除",
+    ]);
+    for (const key of ["data-edit-album", "data-update-album", "data-lyrics-album"]) {
+      expect(findNodes(container, (node) => key in node.props)[0]?.props[key]).toBe(
+        JSON.stringify(album),
+      );
+    }
+  });
   it("passes the exact right-clicked group to the metadata editor", async () => {
     const menu = mountMenu();
     await menu.open();

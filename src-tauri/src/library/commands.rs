@@ -78,6 +78,14 @@ pub async fn list_albums<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+pub async fn list_external_track_ids<R: tauri::Runtime>(
+    track_ids: Vec<i64>,
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<i64>, String> {
+    blocking(app, move |database| database.external_track_ids(&track_ids)).await
+}
+
+#[tauri::command]
 pub async fn list_album_tracks<R: tauri::Runtime>(
     album_artist: Option<String>,
     album: Option<String>,

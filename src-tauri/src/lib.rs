@@ -134,6 +134,7 @@ pub fn run() {
             library::commands::list_albums,
             artwork::get_album_artwork,
             library::commands::list_album_tracks,
+            library::commands::list_external_track_ids,
             library::commands::remove_track_from_library,
             playlist::commands::create_playlist,
             playlist::commands::rename_playlist,

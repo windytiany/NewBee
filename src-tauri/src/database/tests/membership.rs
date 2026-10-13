@@ -57,6 +57,31 @@ fn albums(
 }
 
 #[test]
+fn external_targets_exclude_members_missing_ids_and_duplicates() {
+    let database = Database::open(":memory:").unwrap();
+    let external = snapshot("external.flac", None, None);
+    let external_id = register(&database, &external);
+    let member = snapshot("member.flac", None, None);
+    database
+        .upsert_track(&member, ArtworkUpdate::Embedded)
+        .unwrap();
+    let member_id = register(&database, &member);
+    assert_eq!(
+        database
+            .external_track_ids(&[member_id, external_id, external_id, -1])
+            .unwrap(),
+        vec![external_id]
+    );
+    database
+        .upsert_track(&external, ArtworkUpdate::Embedded)
+        .unwrap();
+    assert!(database
+        .external_track_ids(&[external_id, member_id])
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
 fn external_snapshots_do_not_contribute_to_library_queries_or_album_aggregates() {
     let database = Database::open(":memory:").unwrap();
     let external = snapshot("external.flac", Some("Artist"), Some("Album"));

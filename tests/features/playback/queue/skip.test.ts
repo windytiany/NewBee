@@ -43,6 +43,21 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
     compileSfc(source, "src/features/playback/queue/components/QueueList.vue"),
     {
       vue: Vue,
+      "@/shared/interaction/useContextMenu": {
+        useContextMenu: () => {
+          const request = Vue.shallowRef<unknown>(null);
+          return {
+            request,
+            position: Vue.ref({ x: 0, y: 0 }),
+            open: (value: unknown) => {
+              request.value = value;
+            },
+            close: () => {
+              request.value = null;
+            },
+          };
+        },
+      },
       "@/shared/interaction/item/useSelection": {
         useItemSelection: () => ({
           isSelected: () => true,
@@ -66,7 +81,7 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
   const skippedIds = Vue.ref([7]);
   const root = createHostNode("root");
   const app = createHostRenderer<HostNode>((type, text) =>
-    Object.assign(createHostNode(type, text), { focus() {} }),
+    Object.assign(createHostNode(type, text), { focus() {}, querySelector: () => null }),
   ).createApp(
     Vue.defineComponent({
       setup: () => () =>

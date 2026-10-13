@@ -33,7 +33,7 @@
           :is-skipped="track.trackId !== null && props.skippedTrackIds.includes(track.trackId)"
           :row-key="getTrackRowKey(track)"
           :can-remove-from-queue="props.canRemoveFromQueue"
-          :is-context-menu-open="contextMenu?.rowKey === getTrackRowKey(track)"
+          :is-context-menu-open="contextMenu?.payload.rowKey === getTrackRowKey(track)"
           :title="track.title ?? t('未知曲目')"
           :album="track.album ?? t('未知专辑')"
           :duration="formatTrackDuration(track.durationMs) ?? t('时长未知')"
@@ -51,39 +51,53 @@
       v-if="contextMenu"
       ref="queueContextMenuElement"
       data-item-interaction
-      class="bg-app-interactive fixed z-100 w-52 rounded-md p-1 shadow-xl ring-1 ring-white/10"
+      class="bg-app-interactive fixed z-100 w-56 rounded-md p-1 shadow-xl ring-1 ring-white/10"
       :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
       role="menu"
       :aria-label="t('队列曲目操作')"
       @pointerdown.stop
     >
       <button
-        ref="removeMenuItemElement"
+        v-if="contextMenu.payload.targetRowKeys.length === 1"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
+        role="menuitem"
+        type="button"
+        @click.stop="playContextMenuItem"
+      >
+        {{ t("立刻播放") }}
+      </button>
+      <SkipMenuItem
+        v-if="contextRegisteredTrackIds.length === contextTargetTrackIds.length"
+        :track-ids="contextRegisteredTrackIds"
+        @close="closeQueueContextMenu(true)"
+      />
+      <div
+        v-if="
+          contextMenu.payload.targetRowKeys.length === 1 ||
+          contextRegisteredTrackIds.length === contextTargetTrackIds.length
+        "
+        class="my-1 border-t border-white/10"
+        role="separator"
+      />
+      <EditMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
+      <RereadMenuItem :track-ids="contextRegisteredTrackIds" @close="closeQueueContextMenu(true)" />
+      <div class="my-1 border-t border-white/10" role="separator" />
+      <button
+        class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
         role="menuitem"
         type="button"
         @click.stop="removeContextMenuItem"
       >
         {{ t("从播放队列移除") }}
       </button>
-      <RereadMenuItem
-        :track-ids="contextRegisteredTrackIds"
-        :disabled="false"
-        @close="closeQueueContextMenu(true)"
-      />
-      <EditMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
-      <SkipMenuItem
-        v-if="contextRegisteredTrackIds.length === contextTargetTrackIds.length"
-        :track-ids="contextRegisteredTrackIds"
-        @close="closeQueueContextMenu(true)"
-      />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
@@ -105,13 +119,21 @@ type QueueContextMenuTrigger = {
   trigger: InstanceType<typeof globalThis.HTMLButtonElement>;
 };
 
-type QueueContextMenuRequest = QueueContextMenuTrigger & { targetRowKeys: string[] };
+type QueueContextMenuPayload = { rowKey: string; targetRowKeys: string[] };
 const headingElement = ref<InstanceType<typeof globalThis.HTMLHeadingElement> | null>(null);
 const listElement = ref<InstanceType<typeof globalThis.HTMLUListElement> | null>(null);
 const queueContextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
-const removeMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
-const contextMenu = shallowRef<QueueContextMenuRequest | null>(null);
-const menuPosition = ref({ x: 0, y: 0 });
+const firstMenuItemElement = ref<globalThis.HTMLElement | null>(null);
+const {
+  request: contextMenu,
+  position: menuPosition,
+  open: openContextMenu,
+  close: closeQueueContextMenu,
+} = useContextMenu<QueueContextMenuPayload>({
+  menuElement: queueContextMenuElement,
+  firstMenuItemElement,
+  fallbackFocusElement: headingElement,
+});
 
 function getTrackRowKey(track: Track) {
   return track.rowKey;
@@ -143,7 +165,7 @@ const displayEmptyMessage = computed(() => props.emptyMessage ?? t("暂无曲目
 
 const visibleRowKeys = computed(() => props.tracks.map(getTrackRowKey));
 const contextTargetTrackIds = computed(() => {
-  const rowKeys = new Set(contextMenu.value?.targetRowKeys ?? []);
+  const rowKeys = new Set(contextMenu.value?.payload.targetRowKeys ?? []);
   return props.tracks
     .filter((track) => rowKeys.has(track.rowKey))
     .flatMap<number | string>((track) =>
@@ -174,51 +196,27 @@ const keyboard = createItemKeyboard({
 function openQueueContextMenu(request: QueueContextMenuTrigger) {
   if (!props.canRemoveFromQueue) return;
 
-  const menuWidth = 216;
-  const menuHeight = 132;
-  menuPosition.value = {
-    x: Math.max(0, Math.min(request.x, globalThis.innerWidth - menuWidth)),
-    y: Math.max(0, Math.min(request.y, globalThis.innerHeight - menuHeight)),
-  };
   const targetRowKeys = queueFocus.contextMenuTargets(request.rowKey, visibleRowKeys.value);
   if (targetRowKeys.length === 0) return;
-  contextMenu.value = { ...request, targetRowKeys };
-  void nextTick(() => removeMenuItemElement.value?.focus());
-}
-
-function closeQueueContextMenu(restoreFocus: boolean) {
-  const trigger = contextMenu.value?.trigger;
-  contextMenu.value = null;
-  if (!restoreFocus) return;
-
+  openContextMenu({ ...request, payload: { rowKey: request.rowKey, targetRowKeys } });
   void nextTick(() => {
-    if (trigger?.isConnected) trigger.focus();
-    else headingElement.value?.focus();
+    firstMenuItemElement.value =
+      queueContextMenuElement.value?.querySelector<globalThis.HTMLElement>(
+        'button[role="menuitem"]:not(:disabled)',
+      ) ?? null;
   });
 }
 
-function closeQueueContextMenuOnOutsidePointer(
-  event: InstanceType<typeof globalThis.PointerEvent>,
-) {
-  if (!contextMenu.value) return;
-  if (
-    event.target instanceof globalThis.Node &&
-    queueContextMenuElement.value?.contains(event.target)
-  ) {
-    return;
-  }
-  closeQueueContextMenu(false);
-}
-
-function closeQueueContextMenuOnEscape(event: InstanceType<typeof globalThis.KeyboardEvent>) {
-  if (event.key !== "Escape" || !contextMenu.value) return;
-
-  event.preventDefault();
+function playContextMenuItem() {
+  const rowKeys = contextMenu.value?.payload.targetRowKeys;
+  if (rowKeys?.length !== 1) return;
+  const rowKey = rowKeys[0]!;
   closeQueueContextMenu(true);
+  emit("playQueueItem", rowKey);
 }
 
 function removeContextMenuItem() {
-  const targetRowKeys = contextMenu.value?.targetRowKeys;
+  const targetRowKeys = contextMenu.value?.payload.targetRowKeys;
   if (!targetRowKeys?.length) return;
 
   const targetRows = new Set(targetRowKeys);
@@ -241,7 +239,7 @@ function removeContextMenuItem() {
 
 watch(
   () => {
-    const rowKeys = contextMenu.value?.targetRowKeys;
+    const rowKeys = contextMenu.value?.payload.targetRowKeys;
     return (
       rowKeys === undefined ||
       rowKeys.every((rowKey) => props.tracks.some((track) => track.rowKey === rowKey))
@@ -251,16 +249,6 @@ watch(
     if (!isRowStillDisplayed) closeQueueContextMenu(true);
   },
 );
-
-onMounted(() => {
-  globalThis.document.addEventListener("pointerdown", closeQueueContextMenuOnOutsidePointer);
-  globalThis.document.addEventListener("keydown", closeQueueContextMenuOnEscape);
-});
-
-onUnmounted(() => {
-  globalThis.document.removeEventListener("pointerdown", closeQueueContextMenuOnOutsidePointer);
-  globalThis.document.removeEventListener("keydown", closeQueueContextMenuOnEscape);
-});
 
 function selectTrack(rowKey: string, modifiers: ItemSelectionModifiers) {
   queueFocus.selectItem(rowKey, visibleRowKeys.value, modifiers);
