@@ -57,35 +57,43 @@ export function usePlaylistPlayback(
     }));
   }
 
-  async function playTrackFromPlaylist(playlistItemId: number) {
+  function displayedPlaylistTracks(orderedPlaylistItemIds: readonly number[]) {
+    const playlistId = selectedPlaylistId.value;
     if (
+      playlistId === null ||
       isLoadingPlaylistTracks.value ||
-      playlistTracksPlaylistId.value !== selectedPlaylistId.value ||
-      loadedPlaylistTracksId.value !== selectedPlaylistId.value ||
-      !playlistTracks.value.some((track) => track.playlistItemId === playlistItemId)
-    ) {
-      return;
-    }
-
-    const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
-    await playTracks(displayedTracks, `playlist-item:${playlistItemId}`);
+      playlistTracksPlaylistId.value !== playlistId ||
+      loadedPlaylistTracksId.value !== playlistId
+    )
+      return [];
+    const availableIds = new Set(playlistTracks.value.map((track) => track.playlistItemId));
+    if (
+      orderedPlaylistItemIds.length !== availableIds.size ||
+      new Set(orderedPlaylistItemIds).size !== availableIds.size ||
+      orderedPlaylistItemIds.some((id) => !availableIds.has(id))
+    )
+      return [];
+    return getTargetPlaylistTracks(playlistId, orderedPlaylistItemIds);
   }
 
-  async function playPlaylistFromPage() {
-    if (
-      isLoadingPlaylistTracks.value ||
-      playlistTracksPlaylistId.value !== selectedPlaylistId.value ||
-      loadedPlaylistTracksId.value !== selectedPlaylistId.value ||
-      playlistTracks.value.length === 0
-    ) {
-      return;
-    }
+  async function playTrackFromPlaylist(
+    playlistItemId: number,
+    orderedPlaylistItemIds: readonly number[],
+  ) {
+    const tracks = displayedPlaylistTracks(orderedPlaylistItemIds);
+    if (!tracks.some((track) => track.playlistItemId === playlistItemId)) return;
+    await playTracks(toPlaybackDisplayTracks(tracks), `playlist-item:${playlistItemId}`);
+  }
 
-    const firstTrack = playlistTracks.value[0];
+  async function playPlaylistFromPage(orderedPlaylistItemIds: readonly number[]) {
+    const tracks = displayedPlaylistTracks(orderedPlaylistItemIds);
+    const firstTrack = tracks[0];
     if (!firstTrack) return;
-
-    const displayedTracks = toPlaybackDisplayTracks(playlistTracks.value);
-    await playTracks(displayedTracks, `playlist-item:${firstTrack.playlistItemId}`, false);
+    await playTracks(
+      toPlaybackDisplayTracks(tracks),
+      `playlist-item:${firstTrack.playlistItemId}`,
+      false,
+    );
   }
 
   async function enqueuePlaylistItems(

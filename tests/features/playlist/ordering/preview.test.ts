@@ -18,6 +18,7 @@ type DragPreview = {
 };
 
 type DragCallbacks = {
+  canStart: () => boolean;
   onDragStart: (details: {
     playlistItemId: number;
     itemIds: number[];
@@ -83,15 +84,26 @@ function createPlaylistBrowserComponent(source: string) {
     "@/features/playlist/tracks/PlaylistTrack.vue": {
       __esModule: true,
       default: Vue.defineComponent({
-        props: ["track", "dropPosition"],
-        setup(props) {
+        props: ["track", "dropPosition", "isDragDisabled", "trackNumber"],
+        emits: ["play"],
+        setup(props, { emit }) {
           return () =>
             Vue.h(
               "li",
-              { "data-playlist-item-id": String(props.track.playlistItemId) },
-              props.dropPosition
-                ? [Vue.h("span", { "data-test-drop-position": props.dropPosition })]
-                : [],
+              {
+                "data-playlist-item-id": String(props.track.playlistItemId),
+                "data-drag-disabled": props.isDragDisabled,
+                "data-track-number": props.trackNumber,
+              },
+              [
+                Vue.h("button", {
+                  "data-playlist-track-select": "",
+                  onDblclick: () => emit("play"),
+                }),
+                ...(props.dropPosition
+                  ? [Vue.h("span", { "data-test-drop-position": props.dropPosition })]
+                  : []),
+              ],
             );
         },
       }),
@@ -116,6 +128,8 @@ const playlistBrowser = createPlaylistBrowserComponent(
 );
 
 function mountPlaylistBrowser() {
+  const playedTracks: Array<{ start: number; order: number[] }> = [];
+  const playedPlaylists: number[][] = [];
   const tracks = Vue.reactive(
     [101, 102, 103].map((id) => ({
       playlistItemId: id,
@@ -144,11 +158,13 @@ function mountPlaylistBrowser() {
         isPlaylistActionPending: false,
         playlistActionError: "",
         onReorderPlaylistItems: (ids: number[]) => emittedReorders.push(ids),
+        onPlayTrack: (start: number, order: number[]) => playedTracks.push({ start, order }),
+        onPlayPlaylist: (order: number[]) => playedPlaylists.push(order),
       }),
   });
   app.mount(root);
   mountedApps.push(app);
-  return { root, tracks };
+  return { root, tracks, playedTracks, playedPlaylists };
 }
 
 afterEach(() => {
@@ -159,6 +175,58 @@ afterEach(() => {
 });
 
 describe("歌单拖拽预览", () => {
+  it("sorts the view in both directions and only permits reordering in original order", async () => {
+    const { root, tracks, playedTracks, playedPlaylists } = mountPlaylistBrowser();
+    Object.assign(tracks[0]!, { title: "Song 10", album: "C", durationMs: 1000 });
+    Object.assign(tracks[1]!, { title: "Song 2", album: "A", durationMs: 90000 });
+    Object.assign(tracks[2]!, { title: "Song 1", album: "B", durationMs: 2000 });
+    const sortBy = async (key: string) => {
+      const button = findNode(root, (node) => node.props["data-table-sort"] === key);
+      const click = button?.props.onClick;
+      if (typeof click !== "function") throw new Error("Missing sort button");
+      click();
+      await Vue.nextTick();
+    };
+    const rows = () => {
+      const ids: string[] = [];
+      visit(root, (node) => {
+        if (node.type === "li") ids.push(String(node.props["data-playlist-item-id"]));
+      });
+      return ids;
+    };
+    await sortBy("title");
+    expect(rows()).toEqual(["103", "102", "101"]);
+    expect(dragCallbacks?.canStart()).toBe(false);
+    const first = findNode(root, (node) => node.props["data-playlist-item-id"] === "103");
+    expect(first?.props["data-drag-disabled"]).toBe(true);
+    expect(first?.props["data-track-number"]).toBe(3);
+    const rowButton = first && findNode(first, (node) => node.type === "button");
+    const doubleclick = rowButton?.props.onDblclick;
+    if (typeof doubleclick !== "function") throw new Error("Missing row playback handler");
+    doubleclick();
+    expect(playedTracks).toEqual([{ start: 103, order: [103, 102, 101] }]);
+    const playButton = findNode(root, (node) => node.props["aria-label"] === "播放歌单");
+    const play = playButton?.props.onClick;
+    if (typeof play !== "function") throw new Error("Missing playlist playback handler");
+    play();
+    expect(playedPlaylists).toEqual([[103, 102, 101]]);
+    await sortBy("title");
+    expect(rows()).toEqual(["101", "102", "103"]);
+    await sortBy("album");
+    expect(rows()).toEqual(["102", "103", "101"]);
+    await sortBy("durationMs");
+    expect(rows()).toEqual(["101", "103", "102"]);
+    await sortBy("durationMs");
+    expect(rows()).toEqual(["102", "103", "101"]);
+    await sortBy("number");
+    expect(rows()).toEqual(["101", "102", "103"]);
+    expect(dragCallbacks?.canStart()).toBe(true);
+    await sortBy("number");
+    expect(rows()).toEqual(["103", "102", "101"]);
+    expect(dragCallbacks?.canStart()).toBe(false);
+    expect(tracks.map((track) => track.playlistItemId)).toEqual([101, 102, 103]);
+    expect(emittedReorders).toEqual([]);
+  });
   it("拖动到首位时保持原顺序，只显示数量和落点线，松手后提交", async () => {
     const { root, tracks } = mountPlaylistBrowser();
     const callbacks = dragCallbacks;

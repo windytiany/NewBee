@@ -87,12 +87,25 @@ export function createInbox(options: InboxOptions) {
       durationMs: track.durationMs,
     };
   }
-  function play(path: string) {
-    return options.session.playTracks(visibleTracks.value.map(playback), `inbox:${path}`);
+  function play(path: string, orderedPaths: readonly string[]) {
+    const visible = visibleTracks.value;
+    const availablePaths = new Set(visible.map((track) => track.path));
+    if (
+      state.loading ||
+      !orderedPaths.includes(path) ||
+      orderedPaths.length !== availablePaths.size ||
+      new Set(orderedPaths).size !== availablePaths.size ||
+      orderedPaths.some((path) => !availablePaths.has(path))
+    )
+      return false;
+    return options.session.playTracks(targets(orderedPaths, visible), `inbox:${path}`);
   }
-  function targets(paths: string[]) {
-    const selected = new Set(paths);
-    return state.tracks.filter((track) => selected.has(track.path)).map(playback);
+  function targets(paths: readonly string[], source: readonly InboxTrack[]) {
+    const tracks = new Map(source.map((track) => [track.path, track]));
+    return [...new Set(paths)].flatMap((path) => {
+      const track = tracks.get(path);
+      return track ? [playback(track)] : [];
+    });
   }
   async function remove(paths: string[]) {
     if (state.pending) return;
@@ -135,8 +148,8 @@ export function createInbox(options: InboxOptions) {
     play,
     remove,
     ingest,
-    addNext: (paths: string[]) => options.session.addTracksToNext(targets(paths)),
-    addEnd: (paths: string[]) => options.session.addTracksToQueueEnd(targets(paths)),
+    addNext: (paths: string[]) => options.session.addTracksToNext(targets(paths, state.tracks)),
+    addEnd: (paths: string[]) => options.session.addTracksToQueueEnd(targets(paths, state.tracks)),
     selectGrouping: (grouping: LibraryGrouping) => {
       state.grouping = grouping;
       state.artist = null;

@@ -68,6 +68,7 @@ describe("library and playlist translations", () => {
     for (const source of [
       ...collectSources("src/features/library"),
       ...collectSources("src/features/playlist"),
+      ...collectSources("src/features/tracks/table"),
     ]) {
       const file = ts.createSourceFile("source.ts", source, ts.ScriptTarget.Latest, true);
       function visit(node: ts.Node) {

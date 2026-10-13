@@ -71,6 +71,43 @@ describe("歌单曲目拖拽手势", () => {
     }
   });
 
+  it("blocks reorder gestures while sorting but still allows track selection", () => {
+    const root = createHostNode("root");
+    let drags = 0;
+    let selections = 0;
+    const app = createHostRenderer(createHostNode).createApp(playlistTrack, {
+      track,
+      trackNumber: 1,
+      isFocused: false,
+      isSelected: false,
+      isCurrentTrack: false,
+      isDragDisabled: true,
+      onReorderPointerDown: () => {
+        drags++;
+      },
+      onSelect: () => {
+        selections++;
+      },
+    });
+    app.mount(root);
+    try {
+      const button = findNode(
+        root,
+        (node) => node.props["data-playlist-track-select"] !== undefined,
+      );
+      const pointerdown = button?.props.onPointerdown;
+      const click = button?.props.onClick;
+      if (typeof pointerdown !== "function" || typeof click !== "function")
+        throw new Error("Missing row handlers");
+      pointerdown({ pointerType: "mouse" });
+      click({ button: 0, ctrlKey: false, shiftKey: false });
+      expect(drags).toBe(0);
+      expect(selections).toBe(1);
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("从曲目主体按下时启动重排手势", () => {
     const renderer = createHostRenderer(createHostNode);
     const emitted: Array<{ playlistItemId: number; event: unknown }> = [];

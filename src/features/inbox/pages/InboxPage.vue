@@ -13,10 +13,28 @@ import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { t } from "@/shared/i18n/locale";
+import { useTable } from "@/shared/interaction/table/useTable";
+import TableHeader from "@/shared/interaction/table/TableHeader.vue";
+import { trackColumns, trackColumnValue } from "@/features/tracks/table/columns";
 const props = defineProps<{ active: boolean }>();
 const inbox = useInbox(toRef(props, "active"));
 const state = inbox.state;
-const tracks = inbox.visibleTracks;
+const columns = computed(() =>
+  trackColumns([
+    { key: "addedAt", label: t("添加日期"), width: "minmax(0,1fr)", desktopOnly: true },
+  ]),
+);
+const table = useTable({
+  columns: () => columns.value,
+  rows: () => inbox.visibleTracks.value,
+  value: (track, key, index) =>
+    key === "addedAt" ? track.addedAt : trackColumnValue(track, key, index),
+});
+const tracks = table.rows;
+const tableStyle = table.style;
+const trackNumbers = computed(
+  () => new Map(inbox.visibleTracks.value.map((track, index) => [track.path, index + 1])),
+);
 const artists = inbox.artists;
 const playback = usePlaybackSession().state;
 const scope = computed(() => JSON.stringify(["inbox", state.grouping, state.artist]));
@@ -43,7 +61,7 @@ const keyboard = createItemKeyboard({
   },
   onMove: (key, event) => selection.selectItem(key, keys.value, event),
   onActivate: (key) => {
-    void inbox.play(key);
+    void inbox.play(key, keys.value);
   },
 });
 function open(request: {
@@ -125,15 +143,14 @@ watch(keys, (keys) => {
       @contextmenu="emptyMenu"
       @keydown.f5.prevent="inbox.refresh()"
     >
-      <div class="min-w-0">
-        <div
-          class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 px-4 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_3rem]"
-        >
-          <span class="truncate text-right">#</span><span class="truncate">{{ t("歌曲") }}</span
-          ><span class="hidden truncate sm:block">{{ t("专辑") }}</span
-          ><span class="hidden truncate sm:block">{{ t("添加日期") }}</span
-          ><span class="truncate text-right">{{ t("时长") }}</span>
-        </div>
+      <div class="min-w-0" :style="tableStyle">
+        <TableHeader
+          :columns="columns"
+          :sort="table.sort.value"
+          class="sticky top-0 z-10 px-4"
+          @sort="table.toggle"
+          @resize="table.resize"
+        />
         <p v-if="state.loading" role="status" class="text-app-muted py-4 text-sm">
           {{ t("加载中…") }}
         </p>
@@ -141,18 +158,18 @@ watch(keys, (keys) => {
         <p v-else-if="!tracks.length" class="text-app-muted py-4 text-sm">{{ t("无曲目") }}</p>
         <ol v-else ref="list" @keydown="keyboard.onKeydown" @focusin="keyboard.onFocusin">
           <TrackRow
-            v-for="(track, index) in tracks"
+            v-for="track in tracks"
             :key="track.path"
             :item-key="track.path"
             :track="track"
-            :number="index + 1"
+            :number="trackNumbers.get(track.path) ?? 0"
             :focused="selection.isFocused(track.path)"
             :selected="selection.isSelected(track.path)"
             :current="playback.activeQueueRowKey.value === `inbox:${track.path}`"
             :menu-open="request?.payload.itemKey === track.path"
             menu-id="inbox-context-menu"
             @select="selection.selectItem(track.path, keys, $event)"
-            @play="inbox.play(track.path)"
+            @play="inbox.play(track.path, keys)"
             @context-menu="open"
           >
             <template #before-duration>

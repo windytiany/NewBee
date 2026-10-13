@@ -7,7 +7,7 @@
       :class="dropPosition === 'before' ? 'top-0' : 'bottom-0'"
     ></span>
     <div
-      class="grid w-full grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-md px-4 transition-colors sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
+      class="grid w-full grid-cols-[var(--table-columns,1.5rem_minmax(0,1fr)_3rem)] items-center gap-3 rounded-md px-4 transition-colors sm:grid-cols-[var(--table-desktop-columns,2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem)]"
       :class="isFocused ? 'bg-app-track' : isSelected ? 'bg-white/10' : 'hover:bg-white/5'"
     >
       <button
@@ -21,12 +21,12 @@
         @click.stop.prevent
         @dblclick.stop.prevent
       >
-        <span class="w-full text-right text-xs tabular-nums">{{ trackNumber }}</span>
+        <span class="w-full truncate text-right text-xs tabular-nums">{{ trackNumber }}</span>
       </button>
       <button
         data-item-interaction
         data-playlist-track-select
-        class="focus-visible:bg-app-track col-start-2 -col-end-1 grid w-full grid-cols-[minmax(0,1fr)_3rem] items-center gap-3 rounded-md py-2.5 pl-0 text-left text-sm transition-colors outline-none sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
+        class="focus-visible:bg-app-track col-start-2 -col-end-1 grid w-full grid-cols-[var(--table-body-columns,minmax(0,1fr)_3rem)] items-center gap-3 rounded-md py-2.5 pl-0 text-left text-sm transition-colors outline-none sm:grid-cols-[var(--table-desktop-body-columns,minmax(0,1.5fr)_minmax(0,1fr)_3rem)]"
         :class="isDragging ? 'cursor-grabbing' : 'cursor-grab'"
         :aria-pressed="isSelected ? true : undefined"
         aria-haspopup="menu"
@@ -91,7 +91,7 @@ function handleSelect(event: InstanceType<typeof globalThis.MouseEvent>) {
 }
 
 function handleReorderPointerDown(event: InstanceType<typeof globalThis.PointerEvent>) {
-  if (event.pointerType === "touch") return;
+  if (props.isDragDisabled || event.pointerType === "touch") return;
   emit("reorderPointerDown", props.track.playlistItemId, event);
 }
 

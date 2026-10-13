@@ -47,7 +47,7 @@
             :disabled="props.isLoadingTracks || props.tracks.length === 0"
             :title="t('播放歌单')"
             type="button"
-            @click="emit('playPlaylist')"
+            @click="emit('playPlaylist', visiblePlaylistItemIds)"
           >
             <Play aria-hidden="true" class="ml-0.5 size-5 fill-current" />
           </button>
@@ -58,15 +58,15 @@
         ref="trackScrollContainerElement"
         v-persistent-scroll="JSON.stringify(['playlist', props.playlist?.id])"
         class="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8"
+        :style="tableStyle"
       >
-        <div
-          class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 px-4 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem]"
-        >
-          <span class="text-right">#</span>
-          <span>{{ t("歌曲") }}</span>
-          <span class="hidden sm:block">{{ t("专辑") }}</span>
-          <span class="text-right">{{ t("时长") }}</span>
-        </div>
+        <TableHeader
+          :columns="columns"
+          :sort="table.sort.value"
+          class="sticky top-0 z-10 px-4"
+          @sort="table.toggle"
+          @resize="table.resize"
+        />
 
         <p
           v-if="
@@ -86,19 +86,21 @@
           @focusin="keyboard.onFocusin"
         >
           <PlaylistTrack
-            v-for="(track, index) in props.tracks"
+            v-for="(track, index) in sortedTracks"
             :key="track.playlistItemId"
             :track="track"
-            :track-number="index + 1"
+            :track-number="trackNumbers.get(track.playlistItemId) ?? 0"
             :is-focused="playlistTrackFocus.isFocused(String(track.playlistItemId))"
             :is-selected="playlistTrackFocus.isSelected(String(track.playlistItemId))"
             :is-current-track="props.currentRowKey === getTrackRowKey(track.playlistItemId)"
             :is-context-menu-open="contextMenu?.payload.itemKey === String(track.playlistItemId)"
-            :is-drag-disabled="props.isLoadingTracks || props.isPlaylistActionPending"
+            :is-drag-disabled="
+              !naturalOrder || props.isLoadingTracks || props.isPlaylistActionPending
+            "
             :is-dragging="dragPreview?.movingItemIds.includes(track.playlistItemId) ?? false"
             :drop-position="getTrackDropPosition(track.playlistItemId, index)"
             @select="selectTrack(track.playlistItemId, $event)"
-            @play="emit('playTrack', track.playlistItemId)"
+            @play="emit('playTrack', track.playlistItemId, visiblePlaylistItemIds)"
             @context-menu="openTrackContextMenu"
             @reorder-pointer-down="beginTrackReorder"
           />
@@ -216,6 +218,9 @@ import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue"
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
+import { useTable } from "@/shared/interaction/table/useTable";
+import TableHeader from "@/shared/interaction/table/TableHeader.vue";
+import { trackColumns, trackColumnValue } from "@/features/tracks/table/columns";
 
 const props = withDefaults(
   defineProps<{
@@ -238,11 +243,30 @@ const props = withDefaults(
   },
 );
 
+const columns = computed(() => trackColumns());
+const table = useTable({
+  columns: () => columns.value,
+  rows: () => props.tracks,
+  value: trackColumnValue,
+});
+const sortedTracks = table.rows;
+const tableStyle = table.style;
+const naturalOrder = computed(
+  () =>
+    !table.sort.value ||
+    (table.sort.value.key === "number" && table.sort.value.direction === "ascending"),
+);
+const trackNumbers = computed(
+  () => new Map(props.tracks.map((track, index) => [track.playlistItemId, index + 1])),
+);
 const playlistTrackScope = computed(() =>
   JSON.stringify(["playlist", "tracks", props.playlist?.id ?? null]),
 );
 const playlistTrackFocus = useItemSelection(playlistTrackScope);
-const visibleTrackKeys = computed(() => props.tracks.map((track) => String(track.playlistItemId)));
+const visiblePlaylistItemIds = computed(() =>
+  sortedTracks.value.map((track) => track.playlistItemId),
+);
+const visibleTrackKeys = computed(() => visiblePlaylistItemIds.value.map(String));
 type PlaylistDragPreview = {
   beforeItemId: number | null;
   movingItemIds: number[];
@@ -295,8 +319,8 @@ watch(visibleTrackKeys, (itemKeys) => playlistTrackFocus.syncVisibleItems(itemKe
 });
 
 const emit = defineEmits<{
-  playTrack: [playlistItemId: number];
-  playPlaylist: [];
+  playTrack: [playlistItemId: number, orderedPlaylistItemIds: number[]];
+  playPlaylist: [orderedPlaylistItemIds: number[]];
   addPlaylistItemsToNext: [playlistItemIds: number[]];
   addPlaylistItemsToQueueEnd: [playlistItemIds: number[]];
   removePlaylistItems: [playlistItemIds: number[]];
@@ -317,7 +341,7 @@ const keyboard = createItemKeyboard({
   },
   onActivate: (key) => {
     const track = props.tracks.find((entry) => String(entry.playlistItemId) === key);
-    if (track) emit("playTrack", track.playlistItemId);
+    if (track) emit("playTrack", track.playlistItemId, visiblePlaylistItemIds.value);
   },
 });
 
@@ -331,14 +355,17 @@ function selectTrack(playlistItemId: number, modifiers: ItemSelectionModifiers) 
 
 function getContextTargetPlaylistItemIds(itemKeys: readonly string[]) {
   const targetKeys = new Set(itemKeys);
-  return props.tracks.flatMap((track) =>
+  return sortedTracks.value.flatMap((track) =>
     targetKeys.has(String(track.playlistItemId)) ? [track.playlistItemId] : [],
   );
 }
 
 const playlistDragReorder = createPlaylistDragReorder({
   canStart: () =>
-    props.playlist !== null && !props.isLoadingTracks && !props.isPlaylistActionPending,
+    props.playlist !== null &&
+    naturalOrder.value &&
+    !props.isLoadingTracks &&
+    !props.isPlaylistActionPending,
   getItemIds: () => props.tracks.map((track) => track.playlistItemId),
   getListElement: () => trackListElement.value,
   getScrollContainer: () => trackScrollContainerElement.value,
@@ -445,7 +472,9 @@ function removeFromPlaylist() {
   if (!targetPlaylistItemIds || playlistId === undefined) return;
 
   const targetIds = new Set(targetPlaylistItemIds);
-  const firstRemovedIndex = props.tracks.findIndex((track) => targetIds.has(track.playlistItemId));
+  const firstRemovedIndex = sortedTracks.value.findIndex((track) =>
+    targetIds.has(track.playlistItemId),
+  );
   if (firstRemovedIndex < 0) {
     closeContextMenu(true);
     return;
@@ -468,8 +497,8 @@ function focusPlaylistHeading() {
 }
 
 function focusTrackAt(index: number) {
-  const trackIndex = Math.min(index, props.tracks.length - 1);
-  const track = props.tracks[trackIndex];
+  const trackIndex = Math.min(index, sortedTracks.value.length - 1);
+  const track = sortedTracks.value[trackIndex];
   const row = trackListElement.value?.children.item(trackIndex);
   const button = row?.querySelector<InstanceType<typeof globalThis.HTMLButtonElement>>(
     "button[data-playlist-track-select]",

@@ -34,6 +34,7 @@ function fixture() {
   let failure = false;
   const calls: Array<{ action: string; paths: string[] }> = [];
   const playback: Array<readonly PlaybackDisplayTrack[]> = [];
+  const starts: string[] = [];
   let changed = 0;
   const inbox = createInbox({
     api: {
@@ -56,7 +57,7 @@ function fixture() {
     },
     session: {
       playTracks: async (tracks, start) => {
-        expect(start).toBe(`inbox:${tracks[0]?.path}`);
+        starts.push(start);
         playback.push(tracks);
         return true;
       },
@@ -77,6 +78,7 @@ function fixture() {
     inbox,
     calls,
     playback,
+    starts,
     changed: () => changed,
     read: (value: InboxRead) => {
       read = value;
@@ -92,7 +94,10 @@ describe("Inbox controller", () => {
     const context = fixture();
     await context.inbox.refresh();
     context.inbox.state.artist = { artist: "Artist", albumCount: 1 };
-    await context.inbox.play(context.inbox.visibleTracks.value[0].path);
+    await context.inbox.play(
+      context.inbox.visibleTracks.value[0].path,
+      context.inbox.visibleTracks.value.map((track) => track.path),
+    );
     expect(context.playback[0]).toHaveLength(1);
     expect(context.playback[0][0]).toMatchObject({ trackId: null, path: "C:\\music\\one.wav" });
     context.inbox.selectGrouping("artist");
@@ -100,6 +105,31 @@ describe("Inbox controller", () => {
     await context.inbox.addNext(["C:\\music\\two.wav"]);
     expect(context.playback[1][0]).toMatchObject({ trackId: null, path: "C:\\music\\two.wav" });
     expect(context.changed()).toBe(0);
+  });
+  it("uses the supplied visible order for playback and selected queue additions", async () => {
+    const context = fixture();
+    await context.inbox.refresh();
+    const paths = context.inbox.visibleTracks.value.map((track) => track.path).reverse();
+    await context.inbox.play(paths[1]!, paths);
+    await context.inbox.addNext(paths);
+    await context.inbox.addEnd(paths);
+    expect(context.playback.map((tracks) => tracks.map((track) => track.path))).toEqual([
+      paths,
+      paths,
+      paths,
+    ]);
+    expect(context.starts).toEqual([`inbox:${paths[1]}`]);
+    expect(context.inbox.state.tracks.map((track) => track.path)).toEqual([...paths].reverse());
+  });
+  it("rejects stale, incomplete or duplicate display orders instead of queuing original order", async () => {
+    const context = fixture();
+    await context.inbox.refresh();
+    const paths = context.inbox.visibleTracks.value.map((track) => track.path);
+    await context.inbox.play(paths[0]!, [paths[0]!]);
+    await context.inbox.play(paths[0]!, [paths[0]!, paths[0]!]);
+    await context.inbox.play(paths[0]!, [paths[0]!, "missing.wav"]);
+    await context.inbox.play("missing.wav", paths);
+    expect(context.playback).toEqual([]);
   });
   it("updates Inbox and library after successful ingest without a success notice", async () => {
     const context = fixture();

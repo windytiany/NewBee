@@ -106,6 +106,9 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
   const edited: Array<readonly (number | string)[]> = [];
   const matched: string[][] = [];
   const played: string[] = [];
+  const playbackOrders: string[][] = [];
+  const addedNext: string[][] = [];
+  const addedEnd: string[][] = [];
   const inbox = createInbox({
     api: {
       read: async () => ({ tracks, failures: [] }),
@@ -114,12 +117,19 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
       ingest: async (paths) => paths.map((path) => ({ path, success: true, error: null })),
     },
     session: {
-      playTracks: async (_tracks, key) => {
+      playTracks: async (tracks, key) => {
         played.push(key);
+        playbackOrders.push(tracks.map((track) => track.path ?? ""));
         return true;
       },
-      addTracksToNext: async () => true,
-      addTracksToQueueEnd: async () => true,
+      addTracksToNext: async (tracks) => {
+        addedNext.push(tracks.map((track) => track.path ?? ""));
+        return true;
+      },
+      addTracksToQueueEnd: async (tracks) => {
+        addedEnd.push(tracks.map((track) => track.path ?? ""));
+        return true;
+      },
     },
     changed: () => {},
   });
@@ -180,6 +190,9 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
     edited,
     matched,
     played,
+    playbackOrders,
+    addedNext,
+    addedEnd,
     rows: () => root.querySelectorAll("button[data-track-select]"),
   };
 }
@@ -238,14 +251,18 @@ describe("Inbox workspace", () => {
       String(node.props.class).includes("sticky top-0"),
     );
     if (!header) throw new Error("Missing table header");
-    const columns = "sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_3rem]";
+    const columns = "sm:grid-cols-[var(--table-desktop-columns)]";
     expect(String(header.props.class).split(/\s+/)).toContain(columns);
-    const labels = header.children.filter((node) => node.type === "span");
+    const labels: Scene[] = [];
+    visit(header, (node) => {
+      if (node.type === "span" && String(node.props.class).split(/\s+/).includes("truncate"))
+        labels.push(node);
+    });
     expect(labels).toHaveLength(5);
     for (const label of labels)
       expect(String(label.props.class).split(/\s+/)).toContain("truncate");
     for (const row of context.rows()) {
-      expect(String(row.props.class).split(/\s+/)).toContain(columns);
+      expect(String(row.props.class)).toContain("sm:grid-cols-[var(--table-desktop-columns,");
       expect(String(row.props.class).split(/\s+/)).toContain("w-full");
       const date = findNode(
         row,
@@ -253,6 +270,88 @@ describe("Inbox workspace", () => {
       );
       expect(String(date?.props.class).split(/\s+/)).toContain("truncate");
     }
+  });
+
+  it("applies resized proportions to the table without triggering sorting", async () => {
+    const context = await mount();
+    const separator = findNode(context.root, (node) => node.props["data-table-resize"] === "title");
+    if (!separator) throw new Error("Missing resize handle");
+    const widths = [32, 180, 120, 120, 48];
+    const columnKeys = ["number", "title", "album", "addedAt", "durationMs"];
+    dispatch(separator, "onPointerdown", {
+      pointerId: 1,
+      clientX: 100,
+      currentTarget: {
+        closest: () => ({
+          querySelectorAll: () =>
+            columnKeys.map((key, index) => ({
+              dataset: { tableColumn: key },
+              getBoundingClientRect: () => ({ width: widths[index] }),
+            })),
+        }),
+      },
+    });
+    const event = new Event("pointermove");
+    Object.assign(event, { pointerId: 1, clientX: 140 });
+    window.dispatchEvent(event);
+    await settle();
+    const container = findNode(context.root, (node) => {
+      const style = node.props.style;
+      return typeof style === "object" && style !== null && "--table-desktop-columns" in style;
+    });
+    expect(container?.props.style).toMatchObject({
+      "--table-desktop-columns":
+        "minmax(0,32fr) minmax(0,220fr) minmax(0,80fr) minmax(0,120fr) minmax(0,48fr)",
+    });
+    expect(context.rows().map((row) => getTextContent(row).match(/Song \d/)?.[0])).toEqual([
+      "Song 1",
+      "Song 2",
+      "Song 3",
+    ]);
+    expect(findNode(context.root, (node) => node.props["aria-sort"] === "ascending")).toBeNull();
+  });
+
+  it("sorts by header clicks in both directions without changing source order", async () => {
+    const context = await mount([track(3), track(1), track(2)]);
+    const sortBy = async (key: string) => {
+      const button = findNode(context.root, (node) => node.props["data-table-sort"] === key);
+      if (!button) throw new Error("Missing sort button");
+      dispatch(button, "onClick");
+      await settle();
+    };
+    const titles = () => context.rows().map((row) => getTextContent(row).match(/Song \d/)?.[0]);
+    await sortBy("title");
+    expect(titles()).toEqual(["Song 1", "Song 2", "Song 3"]);
+    dispatch(context.rows()[1], "onDblclick");
+    expect(context.playbackOrders).toEqual([[track(1).path, track(2).path, track(3).path]]);
+    expect(context.played).toEqual([`inbox:${track(2).path}`]);
+    clickRow(context.root, context.rows()[0]);
+    clickRow(context.root, context.rows()[2], { shiftKey: true });
+    await settle();
+    expect(context.rows().map((row) => row.props["aria-pressed"])).toEqual([true, true, true]);
+    await sortBy("title");
+    expect(titles()).toEqual(["Song 3", "Song 2", "Song 1"]);
+    const list = findNode(context.root, (node) => node.type === "ol");
+    if (!list) throw new Error("Missing track list");
+    dispatch(list, "onKeydown", { target: context.rows()[0], key: "Enter" });
+    expect(context.playbackOrders[1]).toEqual([track(3).path, track(2).path, track(1).path]);
+    expect(context.played[1]).toBe(`inbox:${track(3).path}`);
+    dispatch(context.rows()[0], "onContextmenu", { clientX: 10, clientY: 20 });
+    await settle();
+    dispatch(menuButton(context.root, "添加为下一首"), "onClick");
+    await settle();
+    expect(context.addedNext).toEqual([[track(3).path, track(2).path, track(1).path]]);
+    dispatch(context.rows()[0], "onContextmenu", { clientX: 10, clientY: 20 });
+    await settle();
+    dispatch(menuButton(context.root, "添加到队尾"), "onClick");
+    await settle();
+    expect(context.addedEnd).toEqual([[track(3).path, track(2).path, track(1).path]]);
+    await sortBy("addedAt");
+    expect(titles()).toEqual(["Song 1", "Song 2", "Song 3"]);
+    await sortBy("addedAt");
+    expect(titles()).toEqual(["Song 3", "Song 2", "Song 1"]);
+    await sortBy("number");
+    expect(titles()).toEqual(["Song 3", "Song 1", "Song 2"]);
   });
 
   it("shows local added dates between album and duration without changing row order", async () => {

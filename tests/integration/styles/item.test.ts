@@ -82,7 +82,7 @@ describe("列表条目状态样式", () => {
   it("播放列表和 Inbox 的表头与曲目行保持一致的左右内边距", async () => {
     const rowClasses = ["PlaylistTrack.vue", "TrackRow.vue"].map((suffix) => {
       const row = elements(findFile(suffix).template).find((node) =>
-        staticClass(node).includes("grid-cols-[1.5rem_minmax(0,1fr)_3rem]"),
+        staticClass(node).includes("grid-cols-[var(--table-columns,1.5rem_minmax(0,1fr)_3rem)]"),
       );
       if (!row) throw new Error(`Missing track row: ${suffix}`);
       return staticClass(row).split(/\s+/);

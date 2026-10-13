@@ -4,6 +4,7 @@ import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 import { computed, effectScope, isReadonly, nextTick, ref } from "vue";
 import type { PlaylistSummary, PlaylistTrackSummary } from "@/features/playlist/types";
+import type { PlaybackDisplayTrack } from "@/features/playback/types";
 
 type Deferred<Value> = {
   promise: Promise<Value>;
@@ -68,6 +69,11 @@ let hasLoadedPlaylists = false;
 let initialPlaylistId: number | null = 1;
 let invokeHandler: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 let invokeCalls: Array<{ command: string; args?: Record<string, unknown> }>;
+let playBatches: Array<{
+  tracks: readonly PlaybackDisplayTrack[];
+  start: string;
+  allowSkipped?: boolean;
+}>;
 let addToNextBatches: number[][];
 let addToQueueEndBatches: number[][];
 let enqueueResult: () => Promise<boolean>;
@@ -107,7 +113,14 @@ dependencies["@/features/playlist/composables/useSelection"] = {
 
 dependencies["@/features/playback/session"] = {
   usePlaybackSession: () => ({
-    playTracks: async () => true,
+    playTracks: async (
+      tracks: readonly PlaybackDisplayTrack[],
+      start: string,
+      allowSkipped?: boolean,
+    ) => {
+      playBatches.push({ tracks, start, allowSkipped });
+      return true;
+    },
     addTracksToNext: async (tracks: readonly { trackId: number }[]) => {
       addToNextBatches.push(tracks.map(({ trackId }) => trackId));
       return enqueueResult();
@@ -186,6 +199,7 @@ beforeEach(() => {
   hasLoadedPlaylists = false;
   initialPlaylistId = firstPlaylist.id;
   invokeCalls = [];
+  playBatches = [];
   addToNextBatches = [];
   addToQueueEndBatches = [];
   enqueueResult = async () => true;
@@ -335,14 +349,45 @@ describe("歌单状态与动作", () => {
     ]);
   });
 
-  it("按歌单顺序入队并保留不同条目中的重复歌曲", async () => {
+  it("plays the entire visible order from the requested row or the first displayed row", async () => {
+    const page = await createLoadedPlaylistState();
+    const order = [203, 201, 202];
+    await page.playTrackFromPlaylist(202, order);
+    await page.playPlaylistFromPage(order);
+    expect(playBatches.map(({ tracks }) => tracks.map((track) => track.rowKey))).toEqual([
+      ["playlist-item:203", "playlist-item:201", "playlist-item:202"],
+      ["playlist-item:203", "playlist-item:201", "playlist-item:202"],
+    ]);
+    expect(playBatches.map(({ tracks }) => tracks.map((track) => track.trackId))).toEqual([
+      [501, 501, 502],
+      [501, 501, 502],
+    ]);
+    expect(playBatches.map(({ start }) => start)).toEqual([
+      "playlist-item:202",
+      "playlist-item:203",
+    ]);
+    expect(playBatches[1]?.allowSkipped).toBe(false);
+    expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
+  });
+
+  it("rejects stale or invalid visible orders without falling back to original order", async () => {
+    const page = await createLoadedPlaylistState();
+    for (const order of [[201], [201, 201, 203], [201, 202, 999], []]) {
+      await page.playTrackFromPlaylist(201, order);
+      await page.playPlaylistFromPage(order);
+    }
+    await page.playTrackFromPlaylist(999, [201, 202, 203]);
+    expect(playBatches).toEqual([]);
+  });
+
+  it("按用户提供的可见顺序入队并保留不同条目中的重复歌曲", async () => {
     const page = await createLoadedPlaylistState();
 
     await page.addPlaylistItemsToNext([203, 201, 202]);
     await page.addPlaylistItemsToQueueEnd([203, 201, 202]);
 
-    expect(addToNextBatches).toEqual([[501, 502, 501]]);
-    expect(addToQueueEndBatches).toEqual([[501, 502, 501]]);
+    expect(addToNextBatches).toEqual([[501, 501, 502]]);
+    expect(addToQueueEndBatches).toEqual([[501, 501, 502]]);
   });
 
   it("移除失败时保留当前列表和封面来源", async () => {

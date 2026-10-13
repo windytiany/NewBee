@@ -261,13 +261,14 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     playlistItemIds: readonly number[],
   ): PlaylistTrackSummary[] {
     const sourceTracks = getLoadedPlaylistTracks(playlistId);
-    const availableIds = new Set(sourceTracks.map(({ playlistItemId }) => playlistItemId));
-    if (playlistItemIds.some((playlistItemId) => !availableIds.has(playlistItemId))) {
+    const availableTracks = new Map(sourceTracks.map((track) => [track.playlistItemId, track]));
+    if (playlistItemIds.some((playlistItemId) => !availableTracks.has(playlistItemId))) {
       throw new Error("部分目标条目不属于当前已加载的歌单。");
     }
 
-    const targetIds = new Set(playlistItemIds);
-    return sourceTracks.filter(({ playlistItemId }) => targetIds.has(playlistItemId));
+    return [...new Set(playlistItemIds)].map((playlistItemId) =>
+      availableTracks.get(playlistItemId)!,
+    );
   }
 
   function replacePlaylistSummary(summary: PlaylistSummary) {

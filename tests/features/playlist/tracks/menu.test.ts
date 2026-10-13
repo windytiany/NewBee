@@ -449,6 +449,33 @@ describe("歌单曲目上下文菜单", () => {
     expect(focusedNode).toBe(third);
   });
 
+  it("queues selected rows in their sorted visible order", async () => {
+    const root = mountPlaylistBrowser();
+    const first = findTrackButton(root, 101);
+    const third = findTrackButton(root, 103);
+    const sort = findNode(root, (node) => node.props["data-table-sort"] === "number");
+    if (!first || !third || !sort) throw new Error("Missing table controls");
+    clickNode(first);
+    clickNode(third, { ctrlKey: true, shiftKey: false });
+    clickNode(sort);
+    clickNode(sort);
+    await settle();
+    openContextMenu(third);
+    await settle();
+    const next = findMenuItem(root, "添加为下一首");
+    if (!next) throw new Error("Missing queue action");
+    clickNode(next);
+    await settle();
+    expect(addToNextCalls).toEqual([[103, 101]]);
+    openContextMenu(third);
+    await settle();
+    const end = findMenuItem(root, "添加到队尾");
+    if (!end) throw new Error("Missing queue action");
+    clickNode(end);
+    await settle();
+    expect(addToQueueEndCalls).toEqual([[103, 101]]);
+  });
+
   it("右键未选中行只对目标行操作", async () => {
     const root = mountPlaylistBrowser();
     const first = findTrackButton(root, 101);
