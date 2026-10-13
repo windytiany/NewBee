@@ -1,11 +1,11 @@
 use super::model::{
     AlbumSummary, ArtistSummary, LibraryGroup, LibraryGrouping, MusicLibraryDirectory,
-    TrackDetails, TrackSummary,
 };
 use crate::database::blocking;
-use crate::playback::session::{synchronize_removal, RemovalResult, SessionCommand};
+use crate::playback::session::RemovalResult;
+use crate::tracks::model::TrackSummary;
 use std::path::Path;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 #[tauri::command]
 pub async fn list_music_library_directories<R: tauri::Runtime>(
@@ -98,22 +98,8 @@ pub async fn remove_track_from_library<R: tauri::Runtime>(
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<crate::database::Database>()
             .remove_track_from_library(track_id)?;
-        if let Err(error) = app.emit(crate::playback::statistics::CHANGED_EVENT, ()) {
-            log::warn!("Could not publish playback statistics removal: {error}");
-        }
-        Ok(synchronize_removal(
-            &app,
-            SessionCommand::RemoveTrack { track_id },
-        ))
+        Ok(RemovalResult::Removed)
     })
     .await
     .map_err(|error| format!("Could not remove library track: {error}"))?
-}
-
-#[tauri::command]
-pub async fn get_track<R: tauri::Runtime>(
-    track_id: i64,
-    app: tauri::AppHandle<R>,
-) -> Result<Option<TrackDetails>, String> {
-    blocking(app, move |database| database.get_track(track_id)).await
 }

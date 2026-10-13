@@ -61,7 +61,7 @@ fn paths_coexist_with_snapshots_and_only_scanning_updates_the_library() {
         database.get_track(id).unwrap().unwrap().title.as_deref(),
         Some("Edited")
     );
-    assert_eq!(database.inbox_paths().unwrap(), std::slice::from_ref(&path));
+    assert!(database.inbox_paths().unwrap().is_empty());
     files::write_file(Path::new(&path), &[title("Final")]).unwrap();
     assert!(ingest(&database, vec![path.clone()])[0].success);
     assert_eq!(
@@ -81,7 +81,7 @@ fn paths_coexist_with_snapshots_and_only_scanning_updates_the_library() {
 }
 
 #[test]
-fn partial_ingest_preserves_failures_and_refresh_removes_unreadable_registrations() {
+fn partial_ingest_and_refresh_preserve_unreadable_registrations() {
     let files = TestFiles::new();
     let good = std::fs::canonicalize(files.wav("good.wav"))
         .unwrap()
@@ -102,12 +102,16 @@ fn partial_ingest_preserves_failures_and_refresh_removes_unreadable_registration
         std::slice::from_ref(&missing)
     );
     let read = refresh(&database).unwrap();
-    assert!(read.tracks.is_empty());
+    assert_eq!(read.tracks.len(), 1);
+    assert_eq!(read.tracks[0].file.snapshot.path, missing);
     assert_eq!(read.failures.len(), 1);
-    assert!(database.inbox_paths().unwrap().is_empty());
+    assert_eq!(
+        database.inbox_paths().unwrap(),
+        std::slice::from_ref(&missing)
+    );
     assert!(Path::new(&good).exists());
-    assert!(!register(&database, vec![missing])[0].success);
-    assert!(database.inbox_paths().unwrap().is_empty());
+    assert!(!register(&database, vec![missing.clone()])[0].success);
+    assert_eq!(database.inbox_paths().unwrap(), [missing]);
 }
 
 #[test]
@@ -201,7 +205,9 @@ fn refresh_cannot_unregister_a_file_while_application_writes_are_in_progress() {
     let read =
         tauri::async_runtime::block_on(read_inbox(app.handle().clone(), app.state())).unwrap();
     assert_eq!(read.failures.len(), 1);
-    assert!(app.state::<Database>().inbox_paths().unwrap().is_empty());
+    assert_eq!(read.tracks.len(), 1);
+    assert_eq!(read.tracks[0].file.snapshot.path, path);
+    assert_eq!(app.state::<Database>().inbox_paths().unwrap(), [path]);
 }
 
 #[test]
@@ -233,4 +239,27 @@ fn recursive_registration_keeps_successes_and_skips_only_inbox_duplicates() {
         .iter()
         .all(|result| result.success && result.skipped));
     assert_eq!(database.inbox_paths().unwrap().len(), 2);
+}
+
+#[test]
+fn inbox_accepts_broken_tags_and_keeps_an_audition_target_with_failure_feedback() {
+    let files = TestFiles::new();
+    let path = files.write("broken.flac", b"broken tags and audio");
+    let database = Database::open(":memory:").unwrap();
+    assert!(register(&database, vec![path.clone()])[0].success);
+    let canonical = Path::new(&path)
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let read = refresh(&database).unwrap();
+    assert_eq!(read.tracks.len(), 1);
+    assert_eq!(read.tracks[0].file.snapshot.path, canonical);
+    assert_eq!(read.failures.len(), 1);
+    assert!(read.failures[0]
+        .error
+        .as_ref()
+        .is_some_and(|error| !error.is_empty()));
+    assert_eq!(database.inbox_paths().unwrap(), [canonical]);
+    assert!(database.library_track_paths().unwrap().is_empty());
 }

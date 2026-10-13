@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef } from "vue";
+import { useTrackBridge } from "@/features/tracks/bridge";
 import { useDropImport } from "@/features/import/useDropImport";
 import { usePersistentActivePage } from "@/app/pages";
 import { useShortcuts } from "@/features/settings/shortcuts/useShortcuts";
@@ -19,8 +20,9 @@ import TrackInfoPanel from "@/features/playback/current/TrackInfoPanel.vue";
 import TitleBar from "@/app/shell/TitleBar.vue";
 
 useShortcuts();
+useTrackBridge();
 const { activePage } = usePersistentActivePage();
-const { label: dropLabel } = useDropImport(activePage);
+const { highlight: dropHighlight } = useDropImport();
 const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
 </script>
 
@@ -50,12 +52,11 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
     <ReleaseTagDialog />
     <NotificationHost />
     <div
-      v-if="dropLabel"
+      v-if="dropHighlight"
       data-drop-import
-      role="status"
-      class="border-app-accent bg-app-base/80 pointer-events-none fixed inset-2 z-90 grid place-items-center rounded-xl border-2 text-xl font-semibold"
-    >
-      {{ dropLabel }}
-    </div>
+      aria-hidden="true"
+      :style="dropHighlight"
+      class="border-app-accent pointer-events-none fixed z-90 border-2"
+    ></div>
   </div>
 </template>

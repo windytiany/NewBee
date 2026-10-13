@@ -12,8 +12,8 @@ pub(crate) fn insert_track(
     let connection = database.connection().unwrap();
     connection
         .execute(
-            "INSERT INTO tracks (id, path, album, album_artist, track_number)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO tracks (id, path, album, album_artist, track_number, in_library)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1)",
             params![
                 id,
                 format!("track-{id}.mp3"),

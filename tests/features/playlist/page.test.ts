@@ -24,14 +24,16 @@ function createPage(initialActive: boolean) {
   const modes: PlaylistAvailability[] = [];
   const refreshes: Array<[number | undefined, boolean | undefined]> = [];
   let availability!: Readonly<Vue.Ref<PlaylistAvailability>>;
+  const changes: unknown[] = [];
   const state = {
+    updateTrackMetadata: (change: unknown) => changes.push(change),
     refreshPlaylists: async (playlistId?: number, force?: boolean) => {
       refreshes.push([playlistId, force]);
     },
   };
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/features/library/events": { LIBRARY_CHANGED_EVENT: "library-changed" },
+    "@/features/tracks/events": { TRACKS_CHANGED_EVENT: "newbee:tracks-changed" },
     "@/features/playlist/composables/useState": {
       usePlaylistState: (value: typeof availability) => {
         availability = value;
@@ -69,6 +71,7 @@ function createPage(initialActive: boolean) {
     active,
     modes,
     refreshes,
+    changes,
     page,
     state,
     unmount: () => {
@@ -89,15 +92,20 @@ describe("歌单页面 lifecycle adapter", () => {
   });
 
   for (const active of [true, false]) {
-    it(`${active ? "活跃" : "后台"} 页面将媒体库变更转换为强制刷新，卸载后停止订阅`, () => {
+    it(`${active ? "活跃" : "后台"} 页面传递批量曲目变化，卸载后停止订阅`, () => {
       const harness = createPage(active);
-      globalThis.window.dispatchEvent(new Event("library-changed"));
-      expect(harness.refreshes).toEqual([[undefined, true]]);
+      const change = { trackIds: [7] };
+      globalThis.window.dispatchEvent(new CustomEvent("newbee:tracks-changed", { detail: change }));
+      expect(harness.changes).toEqual([change]);
+      expect(harness.refreshes).toEqual([]);
+      globalThis.window.dispatchEvent(new CustomEvent("newbee:playlist-changed", { detail: 3 }));
+      expect(harness.refreshes).toEqual([[undefined, undefined]]);
       harness.unmount();
       expect(harness.modes[harness.modes.length - 1]).toBe("unavailable");
-      globalThis.window.dispatchEvent(new Event("library-changed"));
+      globalThis.window.dispatchEvent(new Event("newbee:tracks-changed"));
       harness.active.value = !active;
       expect(harness.refreshes).toHaveLength(1);
+      expect(harness.changes).toHaveLength(1);
       expect(harness.modes[harness.modes.length - 1]).toBe("unavailable");
     });
   }

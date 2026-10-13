@@ -12,7 +12,7 @@ function createPlaylistTrackComponent(source: string) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/features/library/format": { formatTrackDuration: () => "0:01" },
+    "@/features/tracks/format": { formatTrackDuration: () => "0:01" },
   };
   return evaluateSource<{ default: Vue.Component }>(output, modules).default;
 }

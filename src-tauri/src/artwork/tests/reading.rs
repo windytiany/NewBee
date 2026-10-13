@@ -78,7 +78,11 @@ fn deleting_shared_associations_only_cleans_cache_after_the_last_reference() {
     database
         .track_artwork_bytes(1, Some(128), |_, _| Ok(b"shared thumbnail".to_vec()))
         .unwrap();
-    database.remove_track_from_library(1).unwrap();
+    database
+        .connection()
+        .unwrap()
+        .execute("DELETE FROM track_artwork WHERE track_id = 1", [])
+        .unwrap();
     database.clean_artwork_cache().unwrap();
     assert_eq!(
         database
@@ -86,7 +90,11 @@ fn deleting_shared_associations_only_cleans_cache_after_the_last_reference() {
             .unwrap(),
         b"shared thumbnail"
     );
-    database.remove_track_from_library(2).unwrap();
+    database
+        .connection()
+        .unwrap()
+        .execute("DELETE FROM track_artwork WHERE track_id = 2", [])
+        .unwrap();
     database.clean_artwork_cache().unwrap();
     assert_eq!(fs::read_dir(cache).unwrap().count(), 0);
 }

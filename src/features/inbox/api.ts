@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 export type InboxTrack = Omit<TrackDetails, "id"> & { id: string; addedAt: number };
 export type InboxResult = {
   path: string;

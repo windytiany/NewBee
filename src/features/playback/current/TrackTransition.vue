@@ -55,10 +55,10 @@ const props = defineProps<{
   artworkSize?: number | null;
 }>();
 const { currentTrackDetails, isLoading, currentTrackDetailsError } = useTrackDetails(
-  () => props.track?.trackId ?? props.track?.path ?? null,
+  () => props.track?.trackId ?? null,
 );
 const { status, url, error, present, release } = useTrackArtworkPresentation(
-  () => props.track?.trackId ?? props.track?.path ?? null,
+  () => props.track?.trackId ?? null,
   () => props.artworkSize ?? null,
 );
 const displayed = shallowRef<DisplayedTrack | null>(null);

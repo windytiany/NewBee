@@ -141,7 +141,7 @@ function mountDialog(
               onChange: (cover: { action: "delete" }) => emit("change", cover),
             }),
       }),
-      "@/features/library/format": { formatTrackDuration: () => "0:01" },
+      "@/features/tracks/format": { formatTrackDuration: () => "0:01" },
     },
   ).default;
   const root = createNode("root");

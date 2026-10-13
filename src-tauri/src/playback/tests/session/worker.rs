@@ -29,6 +29,7 @@ fn background_worker_advances_and_persists_without_any_webview_or_status_request
             |snapshot| {
                 observed.send(snapshot.clone()).unwrap();
             },
+            |_| {},
         )
     });
     let reply = handle
@@ -177,6 +178,7 @@ fn large_queue_progress_reads_and_unchanged_snapshot_neither_save_nor_broadcast(
             |snapshot| {
                 observed.send(snapshot.clone()).unwrap();
             },
+            |_| {},
         )
     });
     let snapshot = handle
@@ -197,7 +199,7 @@ fn large_queue_progress_reads_and_unchanged_snapshot_neither_save_nor_broadcast(
             .unwrap();
         assert_eq!(progress.revision, 0);
         let json = serde_json::to_value(progress).unwrap();
-        assert_eq!(json.as_object().unwrap().len(), 2);
+        assert_eq!(json.as_object().unwrap().len(), 3);
         assert!(json.get("displayedTracks").is_none());
         assert!(json.get("playbackStatus").is_some());
     }

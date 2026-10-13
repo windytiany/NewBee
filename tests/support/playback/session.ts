@@ -7,6 +7,7 @@ export function playbackSnapshot(
 ): PlaybackSessionSnapshot {
   return {
     revision: 0,
+    structuralRevision: overrides.revision ?? 0,
     displayedTracks: [],
     currentRowKey: null,
     currentTrack: null,
@@ -68,6 +69,7 @@ export function playbackFixture(
         const reply = await query;
         return {
           revision: reply.snapshot.revision,
+          structuralRevision: reply.snapshot.structuralRevision,
           playbackStatus: {
             ...reply.snapshot.playbackStatus,
             playbackId: reply.snapshot.currentPlaybackId,
@@ -76,10 +78,11 @@ export function playbackFixture(
       }
       return {
         revision: snapshot.revision,
+        structuralRevision: snapshot.structuralRevision,
         playbackStatus: { ...snapshot.playbackStatus, playbackId: snapshot.currentPlaybackId },
       } as T;
     }
-    if (name !== "playback_session_command") {
+    if (name !== "playback_session_command" && name !== "playback_session_metadata") {
       if (name === "set_tracks_skipped") {
         if (options.invokeExtra) await options.invokeExtra(name, args);
         const ids = args?.trackIds as number[];
@@ -93,7 +96,10 @@ export function playbackFixture(
       }
       return (options.invokeExtra ? await options.invokeExtra(name, args) : null) as T;
     }
-    const command = args?.command as Record<string, unknown>;
+    const command =
+      name === "playback_session_metadata"
+        ? { action: "metadata", tracks: args?.tracks }
+        : (args?.command as Record<string, unknown>);
     commands.push(command);
     const action = String(command.action);
     calls.push(action);
@@ -176,7 +182,16 @@ export function playbackFixture(
       editToken = 1;
     } else if (action === "endEditing") {
       snapshot = { ...snapshot, isEditing: false };
-    } else if (action === "updateMetadata") {
+    } else if (action === "add") {
+      const tracks = command.tracks as PlaybackSessionSnapshot["displayedTracks"];
+      snapshot = {
+        ...snapshot,
+        displayedTracks: [
+          ...snapshot.displayedTracks,
+          ...tracks.map((track) => ({ ...track, rowKey: `queue:${++nextId}` })),
+        ],
+      };
+    } else if (action === "metadata") {
       const updates = command.tracks as Array<{
         id: number | null;
         path?: string;
@@ -223,6 +238,21 @@ export function playbackFixture(
       };
     }
     snapshot = { ...snapshot, revision: snapshot.revision + 1 };
+    if (name === "playback_session_metadata") {
+      const updates = command.tracks as Array<{ id: number | null; path?: string }>;
+      return {
+        revision: snapshot.revision,
+        structuralRevision: snapshot.structuralRevision,
+        displayedTracks: snapshot.displayedTracks.filter((row) =>
+          updates.some(
+            (update) =>
+              update.id === row.trackId && (update.id !== null || update.path === row.path),
+          ),
+        ),
+        currentTrack: snapshot.currentTrack,
+      } as T;
+    }
+    snapshot = { ...snapshot, structuralRevision: snapshot.revision };
     return playbackReply(snapshot, { editToken }) as T;
   };
   const session = createPlaybackSession({
@@ -243,7 +273,12 @@ export function playbackFixture(
       return snapshot;
     },
     emit: (overrides: Partial<PlaybackSessionSnapshot>) => {
-      snapshot = { ...snapshot, ...overrides, revision: snapshot.revision + 1 };
+      snapshot = {
+        ...snapshot,
+        ...overrides,
+        revision: snapshot.revision + 1,
+        structuralRevision: snapshot.revision + 1,
+      };
       receive(snapshot);
     },
     fail: (action: string, error: Error) => {

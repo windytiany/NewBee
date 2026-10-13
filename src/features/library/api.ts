@@ -5,10 +5,9 @@ import type {
   LibraryGrouping,
   LibraryGroup,
   AlbumSummary,
-  TrackDetails,
-  TrackSummary,
   LibraryAlbumSelection,
 } from "@/features/library/types";
+import type { TrackSummary } from "@/features/tracks/types";
 
 export type LibraryInvoker = typeof invoke;
 
@@ -19,7 +18,6 @@ export function createLibraryApi(invokeCommand: LibraryInvoker = invoke) {
     listAlbums: (group: LibraryGroup) => invokeCommand<AlbumSummary[]>("list_albums", { group }),
     listAlbumTracks: (album: LibraryAlbumSelection) =>
       invokeCommand<TrackSummary[]>("list_album_tracks", album),
-    getTrack: (trackId: number) => invokeCommand<TrackDetails | null>("get_track", { trackId }),
     removeTrack: (trackId: number) =>
       invokeCommand<QueueTrackRemovalResult>("remove_track_from_library", { trackId }),
   };

@@ -9,7 +9,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub trait SessionAudio {
+    fn register(&mut self, tracks: &mut Vec<QueueTrack>) -> Result<Vec<String>, String>;
     fn start(&mut self, track: &QueueTrack) -> Result<NowPlayingTrack, String>;
+    fn metadata(&self, track_ids: &[i64]) -> Result<Vec<MetadataUpdate>, String>;
     fn paths(&self, track_ids: &[i64]) -> Result<Vec<String>, String>;
     fn status(&self) -> Result<PlaybackStatus, String>;
     fn prepare(
@@ -106,9 +108,6 @@ pub enum SessionCommand {
     EndEditing {
         token: u64,
     },
-    UpdateMetadata {
-        tracks: Vec<MetadataUpdate>,
-    },
 }
 
 #[derive(Deserialize)]
@@ -170,6 +169,7 @@ impl SessionCommand {
 #[serde(rename_all = "camelCase")]
 pub struct SessionSnapshot {
     pub revision: u64,
+    pub structural_revision: u64,
     pub displayed_tracks: Vec<QueueTrack>,
     pub current_row_key: Option<String>,
     pub current_track: Option<ListeningTrack>,
@@ -193,7 +193,6 @@ pub enum RemovalResult {
     NotFound,
     Removed,
     StopFailed { message: String },
-    QueueError { message: String },
     StopUnconfirmed,
     Superseded,
 }
@@ -208,8 +207,11 @@ pub struct SessionReply {
 }
 
 mod audio;
+mod identity;
+mod metadata;
+pub use metadata::MetadataDelta;
 pub(crate) mod runtime;
-pub(crate) use runtime::{initialize, synchronize_removal, system_command};
+pub(crate) use runtime::{initialize, system_command};
 #[cfg(test)]
 use runtime::{run_worker, system_operation, PlaybackSession};
 
@@ -220,10 +222,12 @@ pub struct Session<A: SessionAudio> {
     audio: A,
     generation: Arc<AtomicU64>,
     revision: u64,
+    structural_revision: u64,
     preparation_revision: u64,
     preparation_dirty: bool,
     prepared: Option<(u64, String)>,
     preparation_signature: Option<(u64, Vec<String>)>,
+    preparation_failures: HashSet<String>,
     handled_end: Option<u64>,
     editing: Option<u64>,
     seeking: bool,
@@ -237,10 +241,13 @@ pub struct Session<A: SessionAudio> {
 impl<A: SessionAudio> Session<A> {
     pub fn new(mut audio: A, mut saved: SavedSession, generation: Arc<AtomicU64>) -> Self {
         saved.queue.restore();
-        let playback_error = audio
-            .set_volume(saved.volume.volume)
-            .err()
-            .unwrap_or_default();
+        let hydration_error = metadata::hydrate(&audio, &mut saved).err();
+        let volume_error = audio.set_volume(saved.volume.volume).err();
+        let playback_error = [hydration_error, volume_error]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("\n");
         let skipped = audio.skipped();
         Self {
             queue: saved.queue,
@@ -249,10 +256,12 @@ impl<A: SessionAudio> Session<A> {
             audio,
             generation,
             revision: 0,
+            structural_revision: 0,
             preparation_revision: 0,
             preparation_dirty: true,
             prepared: None,
             preparation_signature: None,
+            preparation_failures: HashSet::new(),
             handled_end: None,
             editing: None,
             seeking: false,
@@ -277,6 +286,7 @@ impl<A: SessionAudio> Session<A> {
         skipped_track_ids.sort_unstable();
         Ok(SessionSnapshot {
             revision: self.revision,
+            structural_revision: self.structural_revision,
             displayed_tracks: self.queue.displayed_tracks.clone(),
             current_row_key: self.queue.current_row_key.clone(),
             current_track: self.current_track.clone(),
@@ -309,7 +319,11 @@ impl<A: SessionAudio> Session<A> {
         allow_first_skipped: bool,
         previous: bool,
     ) -> Result<bool, String> {
+        let mut attempted = HashSet::new();
         for (index, item) in candidates.iter().enumerate() {
+            if !attempted.insert(&item.row_key) {
+                continue;
+            }
             if !self.is_current(generation) {
                 return Ok(false);
             }
@@ -340,6 +354,7 @@ impl<A: SessionAudio> Session<A> {
                     self.handled_end = None;
                     self.prepared = None;
                     self.preparation_signature = None;
+                    self.preparation_failures.clear();
                     self.preparation_dirty = true;
                     self.queue.commit(&item.row_key, previous);
                     self.playback_error.clear();
@@ -349,6 +364,7 @@ impl<A: SessionAudio> Session<A> {
                     if !self.is_current(generation) {
                         return Ok(false);
                     }
+                    log::warn!("Playback row {} failed: {error}", item.row_key);
                     self.queue_errors.push(format!(
                         "{}: {error}",
                         item.title.as_deref().unwrap_or("Unknown track")
@@ -362,6 +378,7 @@ impl<A: SessionAudio> Session<A> {
     fn cancel_preparation(&mut self) -> Result<(), String> {
         self.prepared = None;
         self.preparation_signature = None;
+        self.preparation_failures.clear();
         self.preparation_dirty = true;
         if let Some(id) = self.playback_id {
             self.preparation_revision += 1;
@@ -381,7 +398,11 @@ impl<A: SessionAudio> Session<A> {
         let candidates = if self.handled_end == Some(id) {
             Vec::new()
         } else {
-            self.queue.candidates(false, true, &self.skipped)
+            self.queue
+                .candidates(false, true, &self.skipped)
+                .into_iter()
+                .filter(|track| !self.preparation_failures.contains(&track.row_key))
+                .collect()
         };
         let signature = (
             id,
@@ -423,10 +444,14 @@ impl<A: SessionAudio> Session<A> {
                         return Ok(());
                     }
                     Ok(false) => return Ok(()),
-                    Err(error) => self.queue_errors.push(format!(
-                        "{}: {error}",
-                        item.title.as_deref().unwrap_or("Unknown track")
-                    )),
+                    Err(error) => {
+                        self.preparation_failures.insert(item.row_key.clone());
+                        log::warn!("Preloading row {} failed: {error}", item.row_key);
+                        self.queue_errors.push(format!(
+                            "{}: {error}",
+                            item.title.as_deref().unwrap_or("Unknown track")
+                        ));
+                    }
                 }
             }
         }
@@ -470,6 +495,7 @@ impl<A: SessionAudio> Session<A> {
         self.handled_end = None;
         self.prepared = None;
         self.preparation_signature = None;
+        self.preparation_failures.clear();
         self.preparation_dirty = true;
         Ok(true)
     }
@@ -563,9 +589,7 @@ impl<A: SessionAudio> Session<A> {
         if self.editing.is_some()
             && !matches!(
                 command,
-                SessionCommand::Snapshot
-                    | SessionCommand::EndEditing { .. }
-                    | SessionCommand::UpdateMetadata { .. }
+                SessionCommand::Snapshot | SessionCommand::EndEditing { .. }
             )
         {
             return Err("Playback file editing is in progress".into());
@@ -592,15 +616,24 @@ impl<A: SessionAudio> Session<A> {
             SessionCommand::System { .. } => unreachable!(),
             SessionCommand::Snapshot => {}
             SessionCommand::PlayTracks {
-                tracks,
+                mut tracks,
                 start_row_key,
                 allow_skipped,
             } => {
-                let mut queue = Queue::with_tracks(tracks);
-                queue.validate()?;
-                if queue.find(&start_row_key).is_none() {
+                if !tracks.iter().any(|track| track.row_key == start_row_key) {
                     return Ok((false, None, None));
                 }
+                self.queue_errors = self.audio.register(&mut tracks)?;
+                if tracks.is_empty() {
+                    return Ok((false, None, None));
+                }
+                let mut queue = Queue::with_tracks(tracks);
+                queue.validate()?;
+                let start_row_key = if queue.find(&start_row_key).is_some() {
+                    start_row_key
+                } else {
+                    queue.displayed_tracks[0].row_key.clone()
+                };
                 queue.shuffle_enabled = self.queue.shuffle_enabled;
                 queue.repeat_one_enabled = self.queue.repeat_one_enabled;
                 queue.start_round(&start_row_key);
@@ -613,8 +646,9 @@ impl<A: SessionAudio> Session<A> {
                     .cloned()
                     .into_iter()
                     .collect::<Vec<_>>();
-                candidates.extend(self.queue.candidates(false, false, &self.skipped));
-                self.queue_errors.clear();
+                if !allow_skipped {
+                    candidates.extend(self.queue.candidates(false, false, &self.skipped));
+                }
                 applied = self.start_candidates(candidates, generation, allow_skipped, false)?;
                 if !applied {
                     if self
@@ -628,7 +662,7 @@ impl<A: SessionAudio> Session<A> {
                         }
                         self.current_track = None;
                         self.queue.current_row_key = None;
-                    } else {
+                    } else if self.playback_id.is_some() {
                         self.queue = old_queue;
                     }
                 }
@@ -641,13 +675,7 @@ impl<A: SessionAudio> Session<A> {
                 self.cancel_preparation()?;
                 let old_queue = self.queue.clone();
                 self.queue.start_round(&row_key);
-                let mut candidates = self
-                    .queue
-                    .current()
-                    .cloned()
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                candidates.extend(self.queue.candidates(false, false, &self.skipped));
+                let candidates = self.queue.current().cloned().into_iter().collect();
                 self.queue_errors.clear();
                 applied = self.start_candidates(candidates, generation, true, false)?;
                 if !applied {
@@ -685,16 +713,12 @@ impl<A: SessionAudio> Session<A> {
                 }
                 if should_play != status.is_playing {
                     if should_play && (!status.has_audio || status.has_ended) {
-                        let candidates = self
-                            .queue
-                            .current()
-                            .filter(|track| {
-                                !track.track_id.is_some_and(|id| self.skipped.contains(&id))
-                            })
-                            .cloned()
-                            .into_iter()
-                            .chain(self.queue.candidates(false, false, &self.skipped))
-                            .collect();
+                        let candidates = if let Some(track) = self.queue.current() {
+                            vec![track.clone()]
+                        } else {
+                            self.queue.candidates(false, false, &self.skipped)
+                        };
+                        self.queue_errors.clear();
                         applied = self.start_candidates(candidates, generation, false, false)?;
                     } else if status.has_audio {
                         if should_play {
@@ -746,7 +770,11 @@ impl<A: SessionAudio> Session<A> {
                     self.handled_end = None;
                 }
             }
-            SessionCommand::Add { tracks, next } => {
+            SessionCommand::Add { mut tracks, next } => {
+                self.queue_errors.extend(self.audio.register(&mut tracks)?);
+                if tracks.is_empty() {
+                    return Ok((false, None, None));
+                }
                 if tracks.iter().any(|track| {
                     !track.valid_target()
                         || track
@@ -831,40 +859,6 @@ impl<A: SessionAudio> Session<A> {
                 }
                 self.editing = None;
                 self.preparation_signature = None;
-            }
-            SessionCommand::UpdateMetadata { tracks } => {
-                for update in tracks {
-                    for track in self
-                        .queue
-                        .displayed_tracks
-                        .iter_mut()
-                        .filter(|track| match update.id {
-                            Some(id) => track.track_id == Some(id),
-                            None => {
-                                track.track_id.is_none()
-                                    && update.path.is_some()
-                                    && track.path == update.path
-                            }
-                        })
-                    {
-                        track.title = update.title.clone();
-                        track.album = update.album.clone();
-                        track.duration_ms = update.duration_ms;
-                    }
-                    if let Some(track) =
-                        self.current_track.as_mut().filter(|track| match update.id {
-                            Some(id) => track.track_id == Some(id),
-                            None => {
-                                track.track_id.is_none()
-                                    && update.path.is_some()
-                                    && track.path == update.path
-                            }
-                        })
-                    {
-                        track.title = update.title;
-                        track.artist = update.artist;
-                    }
-                }
             }
         }
         // Metadata editing releases the current file and keeps the listening selection;

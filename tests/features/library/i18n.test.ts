@@ -6,7 +6,7 @@ import * as ts from "typescript";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { libraryMessages } from "@/shared/i18n/messages/library";
 import { setLocale, t } from "@/shared/i18n/locale";
-import { formatAudioSummary, formatTrackDuration } from "@/features/library/format";
+import { formatAudioSummary, formatTrackDuration } from "@/features/tracks/format";
 import { compileSfc, evaluateSource } from "../../support/module/loader";
 import {
   createHostNode,
@@ -29,7 +29,7 @@ for (const path of [
       vue: Vue,
       "@/features/artwork/artist/ArtistPhoto.vue": Vue.defineComponent({ setup: () => () => null }),
       "@lucide/vue": { AudioLines: Vue.defineComponent({ setup: () => () => null }) },
-      "@/features/library/format": { formatTrackDuration },
+      "@/features/tracks/format": { formatTrackDuration },
     }).default,
   );
 }

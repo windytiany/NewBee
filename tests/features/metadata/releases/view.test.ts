@@ -231,7 +231,7 @@ describe("album tag views", () => {
       {
         vue: Vue,
         "@/features/metadata/draft": metadata,
-        "@/features/library/format": { formatTrackDuration: () => "3:00" },
+        "@/features/tracks/format": { formatTrackDuration: () => "3:00" },
         "@/features/metadata/releases/mapping/drag": {
           createMappingDrag: (options: MappingDragOptions) => ({
             start: (id: number) => {
@@ -443,7 +443,7 @@ describe("album tag views", () => {
       {
         vue: Vue,
         "@/features/metadata/draft": metadata,
-        "@/features/library/format": { formatTrackDuration: () => "3:00" },
+        "@/features/tracks/format": { formatTrackDuration: () => "3:00" },
         "@/features/metadata/releases/mapping/drag": {
           createMappingDrag: () => ({ start() {}, cancel() {}, suppressClick() {} }),
         },

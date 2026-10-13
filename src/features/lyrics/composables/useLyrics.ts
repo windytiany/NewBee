@@ -8,7 +8,7 @@ import type { PlaybackCommandInvoker, PlaybackStatus } from "@/features/playback
 import type { LyricLine, TrackLyrics } from "@/features/lyrics/types";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
-import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
+import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { FILES_CHANGED_EVENT } from "@/features/metadata/events";
 
 export type LyricsState =
@@ -165,11 +165,11 @@ export function useLyrics(options: LyricsOptions) {
     lyricsState.value = { status: "loading" };
     void loadLyrics(trackId, ++requestVersion);
   }
-  globalThis.window?.addEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentLyrics);
+  globalThis.window?.addEventListener(TRACKS_CHANGED_EVENT, reloadCurrentLyrics);
   globalThis.window?.addEventListener(FILES_CHANGED_EVENT, reloadCurrentLyrics);
 
   onScopeDispose(() => {
-    globalThis.window?.removeEventListener(LIBRARY_CHANGED_EVENT, reloadCurrentLyrics);
+    globalThis.window?.removeEventListener(TRACKS_CHANGED_EVENT, reloadCurrentLyrics);
     globalThis.window?.removeEventListener(FILES_CHANGED_EVENT, reloadCurrentLyrics);
     requestVersion += 1;
   });

@@ -7,7 +7,8 @@ import { createLibraryApi } from "@/features/library/api";
 import { createPlaylistApi } from "@/features/playlist/api";
 import { usePlaybackSession } from "@/features/playback/session";
 import { reportLibraryRemoval } from "@/features/library/events";
-import type { LibraryAlbumSelection, TrackSummary } from "@/features/library/types";
+import type { LibraryAlbumSelection } from "@/features/library/types";
+import type { TrackSummary } from "@/features/tracks/types";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 
 type LibraryTrackRemovalResult =
@@ -189,28 +190,37 @@ export function useLibraryActions(
   ) {
     const successfulTrackIds: number[] = [];
     const failures: { trackId: number; trackName: string; message: string }[] = [];
-    for (const trackId of trackIds) {
-      const track = sourceTracks.find((entry) => entry.id === trackId);
-      if (!track) {
-        failures.push({
-          trackId,
-          trackName: `曲目 ${trackId}`,
-          message: "曲目已不可用",
-        });
-        continue;
+    const sourceById = new Map(sourceTracks.map((track) => [track.id, track]));
+    const availableIds = trackIds.filter((trackId) => {
+      if (sourceById.has(trackId)) return true;
+      failures.push({ trackId, trackName: `曲目 ${trackId}`, message: "曲目已不可用" });
+      return false;
+    });
+    try {
+      const results = await playlistApi.appendTracks(playlistId, availableIds);
+      for (const result of results) {
+        if (result.status === "added") successfulTrackIds.push(result.trackId);
+        else {
+          logger.warn("library", "playlist_add_failed", result.error, {
+            trackId: result.trackId,
+            playlistId,
+          });
+          failures.push({
+            trackId: result.trackId,
+            trackName: sourceById.get(result.trackId)?.title ?? `曲目 ${result.trackId}`,
+            message: result.error,
+          });
+        }
       }
-
-      try {
-        await playlistApi.addTrack(trackId, playlistId);
-        successfulTrackIds.push(trackId);
-      } catch (error) {
-        logger.warn("library", "playlist_add_failed", error, { trackId, playlistId });
-        failures.push({
+    } catch (error) {
+      logger.warn("library", "playlist_add_failed", error, { playlistId });
+      failures.push(
+        ...availableIds.map((trackId) => ({
           trackId,
-          trackName: track.title ?? `曲目 ${trackId}`,
+          trackName: sourceById.get(trackId)?.title ?? `曲目 ${trackId}`,
           message: errorMessage(error),
-        });
-      }
+        })),
+      );
     }
 
     trackActionMessageType.value = failures.length ? "warning" : "success";

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { setLocale } from "@/shared/i18n/locale";
 import * as Vue from "vue";
 import type { PlaybackTrack } from "@/features/playback/types";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 import type { AlbumArtworkSelection } from "@/features/artwork/useAlbumArtwork";
 import { compileSfc, evaluateSource } from "../../../support/module/loader";
 import { createHostRenderer, findNode, visit } from "../../../support/host/renderer";

@@ -3,7 +3,7 @@ use super::{
     LyricsSearchResults,
 };
 
-use crate::{database::Database, library::model::TrackDetails, settings::SettingsState};
+use crate::{database::Database, settings::SettingsState, tracks::model::TrackDetails};
 use std::{
     path::Path,
     sync::atomic::{AtomicBool, Ordering},

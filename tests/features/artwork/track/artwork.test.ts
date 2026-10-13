@@ -9,7 +9,8 @@ import { useNotification } from "@/shared/notifications/useNotification";
 import { createHostNode, createHostRenderer } from "../../../support/host/renderer";
 import type { HostNode as ArtworkHostNode } from "../../../support/host/renderer";
 import type { TrackArtwork } from "@/features/artwork/types";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 
 type Deferred<Value> = {
   promise: Promise<Value>;
@@ -77,7 +78,7 @@ class TestImage {
 const dependencies: Record<string, unknown> = {
   vue: Vue,
   "@/shared/notifications/center": { notifications, notify },
-  "@/features/library/events": { LIBRARY_CHANGED_EVENT: "newbee:library-changed" },
+  "@/features/tracks/events": { TRACKS_CHANGED_EVENT: "newbee:tracks-changed" },
   "@/shared/notifications/useNotification": { useNotification },
 };
 dependencies["@tauri-apps/api/core"] = {

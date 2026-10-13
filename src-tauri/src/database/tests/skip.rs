@@ -17,7 +17,8 @@ fn skip_preferences_are_global_idempotent_and_atomic() {
     assert_eq!(database.list_skipped_track_ids().unwrap(), vec![2]);
     assert!(!database.skipped_tracks().read().unwrap().contains(&1));
     database.remove_track_from_library(2).unwrap();
-    assert!(database.list_skipped_track_ids().unwrap().is_empty());
+    assert_eq!(database.list_skipped_track_ids().unwrap(), vec![2]);
+    assert!(database.skipped_tracks().read().unwrap().contains(&2));
 }
 
 #[test]

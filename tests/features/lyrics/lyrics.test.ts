@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { notifications, notify } from "@/shared/notifications/center";
-import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
+import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 import { effectScope, nextTick, ref } from "vue";
@@ -92,7 +92,7 @@ const { getActiveLyricIndices, useLyrics } = evaluateSource<
   {
     vue: Vue,
     "@/shared/notifications/center": { notify },
-    "@/features/library/events": { LIBRARY_CHANGED_EVENT },
+    "@/features/tracks/events": { TRACKS_CHANGED_EVENT },
     "@tauri-apps/api/core": {
       invoke: async () => {
         throw new Error("The default invoke should not be used in these tests.");
@@ -121,7 +121,7 @@ describe("NowPlayingPage 歌词状态", () => {
       );
       await settleLyricsRequests();
       text = "Edited";
-      window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
+      window.dispatchEvent(new Event(TRACKS_CHANGED_EVENT));
       await settleLyricsRequests();
       expect(lyrics.state.value).toEqual({
         status: "ready",
@@ -129,7 +129,7 @@ describe("NowPlayingPage 歌词状态", () => {
       });
       expect(calls).toHaveLength(2);
       scope.stop();
-      window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
+      window.dispatchEvent(new Event(TRACKS_CHANGED_EVENT));
       expect(calls).toHaveLength(2);
     } finally {
       if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);

@@ -1,5 +1,6 @@
 <template>
   <section
+    data-local-drop="queue"
     :aria-label="displayTitle"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
@@ -65,10 +66,15 @@
       >
         {{ t("从播放队列移除") }}
       </button>
+      <RereadMenuItem
+        :track-ids="contextRegisteredTrackIds"
+        :disabled="false"
+        @close="closeQueueContextMenu(true)"
+      />
       <EditMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
       <SkipMenuItem
-        v-if="contextLibraryTrackIds.length === contextTargetTrackIds.length"
-        :track-ids="contextLibraryTrackIds"
+        v-if="contextRegisteredTrackIds.length === contextTargetTrackIds.length"
+        :track-ids="contextRegisteredTrackIds"
         @close="closeQueueContextMenu(true)"
       />
     </div>
@@ -83,9 +89,10 @@ import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
-import { formatTrackDuration } from "@/features/library/format";
+import { formatTrackDuration } from "@/features/tracks/format";
 import QueueRow from "@/features/playback/queue/components/QueueRow.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 
 type Track = PlaybackDisplayTrack;
@@ -143,7 +150,7 @@ const contextTargetTrackIds = computed(() => {
       track.trackId !== null ? [track.trackId] : track.path ? [track.path] : [],
     );
 });
-const contextLibraryTrackIds = computed(() =>
+const contextRegisteredTrackIds = computed(() =>
   contextTargetTrackIds.value.filter((target): target is number => typeof target === "number"),
 );
 

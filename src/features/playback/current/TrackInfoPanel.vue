@@ -58,7 +58,7 @@ import { useArtworkSize } from "@/features/artwork/useArtworkSize";
 import { Disc3 } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
 import TrackTransition from "@/features/playback/current/TrackTransition.vue";
-import { formatAudioSummary } from "@/features/library/format";
+import { formatAudioSummary } from "@/features/tracks/format";
 
 const coverElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const artworkSize = useArtworkSize(coverElement);

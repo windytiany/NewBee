@@ -19,10 +19,14 @@ export function usePlaylistCreation(api: ReturnType<typeof createPlaylistApi>) {
     try {
       if (remainingTrackIds === null) remainingTrackIds = [...(await loadTrackIds())];
       if (playlistId.value === null) playlistId.value = await api.create(name);
-      while (remainingTrackIds.length > 0) {
-        await api.addTrack(remainingTrackIds[0]!, playlistId.value);
-        remainingTrackIds.shift();
-        addedCount.value++;
+      if (remainingTrackIds.length > 0) {
+        const results = await api.appendTracks(playlistId.value, remainingTrackIds);
+        addedCount.value += results.filter((result) => result.status === "added").length;
+        remainingTrackIds = results.flatMap((result) =>
+          result.status === "failed" ? [result.trackId] : [],
+        );
+        const failures = results.filter((result) => result.status === "failed");
+        if (failures.length) throw new Error(failures.map((result) => result.error).join("\n"));
       }
       return playlistId.value;
     } catch (cause) {

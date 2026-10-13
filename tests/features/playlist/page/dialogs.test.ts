@@ -243,6 +243,7 @@ const appModules: Record<string, unknown> = {
       pendingPlaylistIds,
       playlistsError: Vue.ref(""),
       playlistTracksError: Vue.ref(""),
+      trackMetadataError: Vue.ref(""),
       isPlaylistActionPending: Vue.ref(false),
       playlistActionError: Vue.ref(""),
       coverTrackId: Vue.computed(() => selectedPlaylist.value?.coverTrackId ?? null),
@@ -327,6 +328,7 @@ const appModules: Record<string, unknown> = {
     default: passiveComponent,
   },
 };
+appModules["@/features/tracks/bridge"] = { useTrackBridge: () => {} };
 await loadLibraryModules(appModules);
 await loadPlaylistModules(appModules);
 const appComponent = compileComponent(

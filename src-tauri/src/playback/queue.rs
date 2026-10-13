@@ -58,7 +58,8 @@ impl Queue {
     pub fn validate(&self) -> Result<(), String> {
         let mut keys = HashSet::new();
         for track in &self.displayed_tracks {
-            if !track.valid_target()
+            if track.track_id.is_none()
+                || !track.valid_target()
                 || track
                     .duration_ms
                     .is_some_and(|duration| duration > MAX_SAFE_INTEGER as u64)
@@ -151,8 +152,15 @@ impl Queue {
             );
             keys.extend(self.remaining.iter().cloned());
         }
+        let tracks: std::collections::HashMap<_, _> = self
+            .displayed_tracks
+            .iter()
+            .map(|track| (track.row_key.as_str(), track))
+            .collect();
+        let mut seen = HashSet::new();
         keys.iter()
-            .filter_map(|key| self.find(key))
+            .filter(|key| seen.insert(*key))
+            .filter_map(|key| tracks.get(key.as_str()).copied())
             .filter(|track| !track.track_id.is_some_and(|id| skipped.contains(&id)))
             .cloned()
             .collect()

@@ -1,4 +1,4 @@
-import type { TrackDetails } from "@/features/library/types";
+import type { TrackDetails } from "@/features/tracks/types";
 import type { TAG_FIELDS } from "@/features/metadata/draft";
 
 export type MetadataTarget = number | string;

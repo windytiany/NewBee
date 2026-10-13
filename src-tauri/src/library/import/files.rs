@@ -1,6 +1,7 @@
-use super::{has_supported_extension, import_track, record_failure, ImportResult};
+use super::{import_track, record_failure, ImportResult};
 use crate::database::Database;
 use crate::locking::write::WriteState;
+use crate::tracks::discovery::has_supported_extension;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;

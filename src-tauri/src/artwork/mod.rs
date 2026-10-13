@@ -24,6 +24,8 @@ pub(crate) async fn get_track_artwork<R: tauri::Runtime>(
     tauri::async_runtime::spawn_blocking(move || {
         let database = app.state::<Database>();
         database
+            .complete_track_artwork(track_id, &app.state::<crate::locking::write::WriteState>())?;
+        database
             .track_artwork_bytes(track_id, size, |data, size| {
                 thumbnail(&database, data, size)
             })

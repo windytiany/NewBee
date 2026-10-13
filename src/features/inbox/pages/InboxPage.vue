@@ -118,6 +118,7 @@ watch(keys, (keys) => {
     <section
       ref="root"
       v-persistent-scroll="scope"
+      data-local-drop="Inbox"
       tabindex="-1"
       :aria-label="t('Inbox')"
       class="sidebar-scrollbars bg-app-base col-start-1 row-start-1 h-full min-h-0 min-w-0 overflow-y-auto px-5 pb-6 text-white outline-none sm:px-8 md:col-start-3"

@@ -75,7 +75,7 @@ fn skips_duplicate_selections_and_updates_existing_tracks_without_changing_ids()
     let result = run_import(&database, &[path.clone(), path.clone()]);
     assert_eq!((result.added, result.skipped), (1, 1));
     let playlist = database.create_playlist("playlist").unwrap();
-    database.add_track_to_playlist(playlist, 1).unwrap();
+    database.append_playlist_tracks(playlist, vec![1]).unwrap();
     let result = run_import(&database, &[path]);
     assert_eq!((result.added, result.updated), (0, 1));
     assert!(database.get_track(1).unwrap().is_some());

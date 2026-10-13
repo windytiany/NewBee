@@ -1,7 +1,6 @@
 use super::{download, LyricsContent, LyricsProvider};
 use crate::{
     database::Database,
-    library::model::TrackDetails,
     locking::write::{WriteGuard, WriteState},
     metadata::{
         model::{
@@ -11,6 +10,7 @@ use crate::{
         MetadataSaveResult,
     },
     settings::SettingsState,
+    tracks::model::TrackDetails,
 };
 use serde::Serialize;
 use std::{

@@ -114,7 +114,7 @@ describe("audio file import", () => {
       "import_music_files",
     ]);
     expect(importer.calls[1]?.[1]).toMatchObject({ paths: ["/Music/good.wav"] });
-    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
+    expect(importer.events).toEqual(["newbee:tracks-changed", LIBRARY_CHANGED_EVENT]);
     expect(importer.notices[0]?.type).toBe("success");
   });
 
@@ -168,7 +168,7 @@ describe("audio file import", () => {
       message: "Import complete: 2 tracks added, 1 updated",
     });
     expect(importer.calls[1]?.[0]).toBe("import_music_files");
-    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
+    expect(importer.events).toEqual(["newbee:tracks-changed", LIBRARY_CHANGED_EVENT]);
   });
 
   it("uses backend-supported extensions, imports the selection, and refreshes the library", async () => {
@@ -196,8 +196,8 @@ describe("audio file import", () => {
       type: "success",
       message: "导入完成：新增 2 首，更新 1 首",
     });
-    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
-    expect(importer.effects).toEqual(["artwork", "albums", "refresh"]);
+    expect(importer.events).toEqual(["newbee:tracks-changed", LIBRARY_CHANGED_EVENT]);
+    expect(importer.effects).toEqual(["artwork", "albums", "refresh", "refresh"]);
     expect(importer.isImporting.value).toBe(false);
   });
 
@@ -229,7 +229,7 @@ describe("audio file import", () => {
     await importer.importMusicFiles();
     expect(importer.notices[0]?.type).toBe("warning");
     expect(importer.notices[0]?.message).toContain("1 首失败");
-    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT]);
+    expect(importer.events).toEqual(["newbee:tracks-changed", LIBRARY_CHANGED_EVENT]);
   });
 
   it("keeps the completion notice but skips invalidation when nothing was written", async () => {

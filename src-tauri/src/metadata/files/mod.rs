@@ -13,7 +13,8 @@ use lofty::picture::{Picture, PictureType};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::{ItemKey, MergeTag, SplitTag, Tag, TagItem, TagType};
-pub(crate) use snapshot::read_track;
+pub(crate) use snapshot::{read_track, read_track_metadata};
+pub(crate) mod artwork;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Seek};
 use std::path::{Path, PathBuf};
@@ -23,12 +24,17 @@ pub(crate) const MAX_COVER_BYTES: usize = 20 * 1024 * 1024;
 static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 
 fn read_file(path: &Path) -> Result<TaggedFile, String> {
+    read_file_with_options(path, ParseOptions::default())
+}
+
+fn read_file_with_options(path: &Path, options: ParseOptions) -> Result<TaggedFile, String> {
     #[cfg(test)]
     access::record(path, "parse");
     Probe::open(path)
         .map_err(|error| format!("读取文件标签失败：{error}"))?
         .guess_file_type()
         .map_err(|error| format!("识别文件格式失败：{error}"))?
+        .options(options)
         .read()
         .map_err(|error| format!("读取文件标签失败：{error}"))
 }

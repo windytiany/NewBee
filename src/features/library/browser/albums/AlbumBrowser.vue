@@ -2,6 +2,7 @@
   <section
     ref="browserElement"
     v-persistent-scroll="JSON.stringify(['library', grouping, artist?.artist, selectedAlbum])"
+    data-local-drop="Library"
     aria-labelledby="album-browser-heading"
     :aria-busy="props.trackActionPending || props.albumsLoading"
     class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 [scrollbar-gutter:stable] flex-col overflow-y-auto text-white"
@@ -127,8 +128,8 @@ import type {
   ArtistSummary,
   LibraryGrouping,
   AlbumSummary,
-  TrackSummary,
 } from "@/features/library/types";
+import type { TrackSummary } from "@/features/tracks/types";
 
 import type { PlaylistSummary } from "@/features/playlist/types";
 import PhotoEditor from "@/features/artwork/artist/PhotoEditor.vue";

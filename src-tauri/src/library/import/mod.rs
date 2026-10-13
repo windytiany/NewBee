@@ -7,13 +7,6 @@ pub(crate) mod files;
 #[cfg(test)]
 pub(crate) mod tests;
 
-const SUPPORTED_AUDIO_EXTENSIONS: &[&str] = &["mp3", "aac", "m4a", "ogg", "oga", "flac", "wav"];
-
-#[tauri::command]
-pub fn supported_audio_extensions() -> Vec<&'static str> {
-    SUPPORTED_AUDIO_EXTENSIONS.to_vec()
-}
-
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {
@@ -23,21 +16,11 @@ pub struct ImportResult {
     pub(crate) failed: u64,
 }
 
-pub(crate) fn has_supported_extension(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            SUPPORTED_AUDIO_EXTENSIONS
-                .iter()
-                .any(|supported| extension.eq_ignore_ascii_case(supported))
-        })
-}
-
 pub(crate) fn import_track(database: &Database, path: &Path, result: &mut ImportResult) {
     match crate::metadata::files::read_track(path) {
         Ok(Some(mut track)) => {
             let fallback = if track.artwork.is_none() {
-                directory::artwork::read_directory_cover(path)
+                crate::metadata::files::artwork::read_directory_cover(path)
             } else {
                 Ok(None)
             };

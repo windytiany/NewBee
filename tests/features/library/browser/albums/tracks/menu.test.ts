@@ -11,7 +11,8 @@ import {
 import { createItemSelection } from "@/shared/interaction/item/useSelection";
 import * as contextMenuModule from "@/shared/interaction/useContextMenu";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
-import type { TrackSummary } from "@/features/library/types";
+
+import type { TrackSummary } from "@/features/tracks/types";
 
 type HostNode = {
   type: string;
@@ -173,6 +174,11 @@ function createComponent(source: string) {
     "@/features/library/browser/albums/useTrackColumns": { useTrackColumns: () => Vue.ref(2) },
     "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,
+    }),
+    "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h("button", { "data-reread-targets": JSON.stringify(props.trackIds) }, "重新读取标签"),
     }),
     "@/features/metadata/manual/components/EditMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
@@ -392,6 +398,11 @@ describe("专辑曲目上下文菜单目标", () => {
     expect(
       findNode(root, (node) => node.props["data-edit-targets"] !== undefined)?.props[
         "data-edit-targets"
+      ],
+    ).toBe("[1,3]");
+    expect(
+      findNode(root, (node) => node.props["data-reread-targets"] !== undefined)?.props[
+        "data-reread-targets"
       ],
     ).toBe("[1,3]");
     const deleteButton = findMenuItem(root, "从库中删除");

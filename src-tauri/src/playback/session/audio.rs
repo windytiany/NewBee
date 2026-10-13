@@ -7,7 +7,25 @@ use tauri::{AppHandle, Manager};
 pub struct DesktopAudio(pub AppHandle);
 
 impl SessionAudio for DesktopAudio {
+    fn register(
+        &mut self,
+        tracks: &mut Vec<playback::queue::QueueTrack>,
+    ) -> Result<Vec<String>, String> {
+        let guard = self
+            .0
+            .state::<crate::locking::write::WriteState>()
+            .acquire()?;
+        let registration = super::identity::register(&self.0.state::<Database>(), tracks)?;
+        drop(guard);
+        crate::tracks::scheduling::schedule(&self.0, registration.pending);
+        Ok(registration.failures)
+    }
     fn start(&mut self, track: &playback::queue::QueueTrack) -> Result<NowPlayingTrack, String> {
+        if let Some(id) = track.track_id {
+            self.0
+                .state::<crate::tracks::scheduling::SchedulingState>()
+                .prioritize(id);
+        }
         playback::play_target(
             &self.0,
             track,
@@ -16,6 +34,9 @@ impl SessionAudio for DesktopAudio {
         )
     }
 
+    fn metadata(&self, ids: &[i64]) -> Result<Vec<super::MetadataUpdate>, String> {
+        super::metadata::read(&self.0.state::<Database>(), ids)
+    }
     fn paths(&self, track_ids: &[i64]) -> Result<Vec<String>, String> {
         track_ids
             .iter()

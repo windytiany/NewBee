@@ -1,4 +1,4 @@
-use super::super::{has_supported_extension, supported_audio_extensions};
+use super::{has_supported_extension, supported_audio_extensions};
 use std::path::Path;
 
 #[test]

@@ -148,3 +148,66 @@ fn valid_selection_restores_even_if_previous_current_track_is_different() {
     execute(&mut session, SessionCommand::Toggle);
     assert_eq!(session.audio.starts, [22]);
 }
+
+#[test]
+fn disconnected_files_round_trip_outside_library_queue_without_registration_or_disk_checks() {
+    let directory = tempfile::tempdir().unwrap();
+    let audio_path = directory.path().join("outside.flac");
+    std::fs::write(
+        &audio_path,
+        include_bytes!("../../../../fixtures/silence.flac"),
+    )
+    .unwrap();
+    let database = crate::database::Database::open(":memory:").unwrap();
+    let mut tracks = rows(&[1, 1, 2]);
+    for track in &mut tracks {
+        track.track_id = None;
+        track.path = Some(audio_path.to_string_lossy().into_owned());
+    }
+    super::super::identity::register(&database, &mut tracks).unwrap();
+    let id = tracks[0].track_id.unwrap();
+    let mut queue = Queue::with_tracks(tracks);
+    queue.current_row_key = Some("row:1".into());
+    let saved = SavedSession {
+        queue,
+        current_track: Some(ListeningTrack {
+            track_id: Some(id),
+            path: Some(audio_path.to_string_lossy().into_owned()),
+            title: None,
+            artist: None,
+        }),
+        volume: VolumePreferences::default(),
+    };
+    let path = directory.path().join("session.json");
+    let (mut persistence, _) = SessionPersistence::load(path.clone());
+    persistence.save(&saved).unwrap();
+    std::fs::remove_file(&audio_path).unwrap();
+    let (_, restored) = SessionPersistence::load(path);
+    let audio = FakeAudio {
+        database: Some(database),
+        ..FakeAudio::default()
+    };
+    let mut session = Session::new(audio, restored, Arc::new(AtomicU64::new(0)));
+    assert_eq!(ids(&session), [id, id, id]);
+    assert_eq!(session.queue.current_row_key.as_deref(), Some("row:1"));
+    assert_eq!(current(&session), Some(id));
+    assert_eq!(session.audio.registrations, 0);
+    assert!(session.audio.decoder_attempts.is_empty());
+    assert!(!execute(&mut session, SessionCommand::Toggle).0);
+    assert_eq!(session.audio.decoder_attempts, [id]);
+    assert_eq!(ids(&session), [id, id, id]);
+    assert_eq!(session.queue.current_row_key.as_deref(), Some("row:1"));
+    assert!(session
+        .snapshot()
+        .unwrap()
+        .queue_playback_error
+        .contains("AUDIO_FILE_NOT_FOUND:"));
+    assert!(session
+        .audio
+        .database
+        .as_ref()
+        .unwrap()
+        .library_track_paths()
+        .unwrap()
+        .is_empty());
+}

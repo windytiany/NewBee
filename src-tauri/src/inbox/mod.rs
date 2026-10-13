@@ -34,7 +34,10 @@ fn refresh(database: &Database) -> Result<InboxRead, String> {
         match FileTrack::read(&path) {
             Ok(file) => tracks.push(InboxTrack { file, added_at }),
             Err(error) => {
-                database.remove_inbox_path(&path)?;
+                tracks.push(InboxTrack {
+                    file: FileTrack::unconfirmed(&path),
+                    added_at,
+                });
                 failures.push(FileResult {
                     path,
                     success: false,
@@ -65,7 +68,10 @@ fn register(database: &Database, paths: Vec<String>) -> Vec<FileResult> {
                 if existing.contains(&normalized) || !seen.insert(normalized.clone()) {
                     return Ok(true);
                 }
-                FileTrack::read(&normalized)?;
+                if !crate::tracks::discovery::has_supported_extension(&canonical) {
+                    return Err("不支持的音频文件".to_owned());
+                }
+                std::fs::File::open(&canonical).map_err(|error| error.to_string())?;
                 database
                     .register_inbox_path(&normalized)
                     .map(|added| !added)
@@ -112,7 +118,7 @@ fn collect_directory(path: &Path, files: &mut Vec<String>, failures: &mut Vec<Fi
         };
         if kind.is_dir() {
             collect_directory(&entry_path, files, failures);
-        } else if kind.is_file() && crate::library::import::has_supported_extension(&entry_path) {
+        } else if kind.is_file() && crate::tracks::discovery::has_supported_extension(&entry_path) {
             files.push(entry_path.to_string_lossy().into_owned());
         }
     }

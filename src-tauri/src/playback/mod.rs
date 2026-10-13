@@ -100,22 +100,14 @@ impl PlaybackError {
 fn target_info(
     track: &queue::QueueTrack,
     database: &Database,
-) -> Result<crate::library::model::TrackPlaybackInfo, String> {
-    match (track.track_id, &track.path) {
-        (Some(id), None) => database
-            .get_track_for_playback(id)?
-            .ok_or_else(|| format!("Track {id} was not found")),
-        (None, Some(path)) => {
-            let file = crate::metadata::files::read_track(Path::new(path))?
-                .ok_or_else(|| "Unsupported audio file".to_owned())?;
-            Ok(crate::library::model::TrackPlaybackInfo {
-                path: file.path,
-                title: file.title,
-                artist: file.artist,
-            })
-        }
-        _ => Err("Invalid playback target".into()),
+) -> Result<crate::tracks::model::TrackPlaybackInfo, String> {
+    let id = track.track_id.ok_or("Playback target must be registered")?;
+    if track.path.is_some() {
+        return Err("Playback target must use its registered ID".into());
     }
+    database
+        .get_track_for_playback(id)?
+        .ok_or_else(|| format!("Track {id} was not found"))
 }
 
 pub(crate) fn play_target(

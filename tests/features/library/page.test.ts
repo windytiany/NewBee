@@ -99,12 +99,15 @@ dependencies["@tauri-apps/api/core"] = {
       if (queueRemovalError) return { status: "queue-error", message: queueRemovalError.message };
       return queueRemovalResult;
     }
-    if (command === "add_track_to_playlist") {
-      const trackId = args?.trackId as number;
-      playlistAddCalls.push(trackId);
-      const error = playlistAddFailures.get(trackId);
-      if (error) throw error;
-      return undefined;
+    if (command === "append_playlist_tracks") {
+      const ids = args?.trackIds as number[];
+      return ids.map((trackId, index) => {
+        playlistAddCalls.push(trackId);
+        const error = playlistAddFailures.get(trackId);
+        return error
+          ? { index, trackId, status: "failed", error: error.message }
+          : { index, trackId, status: "added", playlistItemId: index + 1 };
+      });
     }
     return undefined;
   },

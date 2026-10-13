@@ -67,11 +67,11 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
             commands::list_artists,
             commands::list_albums,
             commands::list_album_tracks,
-            commands::get_track,
+            crate::tracks::commands::get_track,
             playlist::create_playlist,
             playlist::rename_playlist,
             playlist::delete_playlist,
-            playlist::add_track_to_playlist,
+            playlist::append_playlist_tracks,
             playlist::list_playlists,
             playlist::list_playlist_tracks,
             playlist::reorder_playlist_items,
@@ -161,8 +161,8 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
     let playlist = call("create_playlist", json!({"name":"Offline"}));
     for _ in 0..2 {
         call(
-            "add_track_to_playlist",
-            json!({"playlistId":playlist,"trackId":1}),
+            "append_playlist_tracks",
+            json!({"playlistId":playlist,"trackIds":[1]}),
         );
     }
     call(
@@ -236,23 +236,34 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         call("remove_track_from_library", json!({"trackId":1})),
         json!({"status":"removed"})
     );
-    // The database command itself cleans all queue occurrences. No frontend
-    // follow-up removeTrackFromQueue command participates in this operation.
+    // Library membership does not own the listening queue or playlist entries.
     let after_library_removal = call(
         "playback_session_command",
         json!({"command":{"action":"snapshot"}}),
     );
     assert_eq!(
         after_library_removal["snapshot"]["displayedTracks"],
-        json!([])
+        queue_rows
     );
     assert_eq!(
         after_library_removal["snapshot"]["currentTrack"],
-        Value::Null
+        after_playlist_removal["snapshot"]["currentTrack"]
     );
-    assert_eq!(call("get_track", json!({"trackId":1})), Value::Null);
     assert_eq!(
-        call("list_playlist_tracks", json!({"playlistId":playlist})),
+        after_library_removal["snapshot"]["currentPlaybackId"],
+        after_playlist_removal["snapshot"]["currentPlaybackId"]
+    );
+    assert_eq!(call("get_track", json!({"trackId":1}))["title"], "Song");
+    assert_eq!(
+        call("list_playlist_tracks", json!({"playlistId":playlist}))
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(call("list_skipped_track_ids", json!({})), json!([1]));
+    assert_eq!(
+        call("list_artists", json!({"grouping":"albumArtist"})),
         json!([])
     );
     call("delete_playlist", json!({"playlistId":playlist}));
@@ -261,7 +272,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
 }
 
 #[test]
-fn save_command_retains_each_file_and_database_outcome_when_database_is_locked() {
+fn save_command_retains_each_file_and_database_outcome_when_database_sync_fails() {
     use crate::metadata::{model::LyricsMarkAction, save_track_metadata};
     use lofty::{file::TaggedFileExt, prelude::*};
     let fixture = Fixture::new();
@@ -274,7 +285,7 @@ fn save_command_retains_each_file_and_database_outcome_when_database_is_locked()
     let app = tauri::test::mock_builder()
         .manage(Database::open(&database_path).unwrap())
         .manage(WriteState::default())
-        .invoke_handler(tauri::generate_handler![commands::get_track])
+        .invoke_handler(tauri::generate_handler![crate::tracks::commands::get_track])
         .build(tauri::generate_context!())
         .unwrap();
     tauri::async_runtime::block_on(crate::library::import::files::import_music_files(
@@ -291,7 +302,13 @@ fn save_command_retains_each_file_and_database_outcome_when_database_is_locked()
         .build()
         .unwrap();
     let blocker = rusqlite::Connection::open(&database_path).unwrap();
-    blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let blocking_path = database_path.clone();
+    *app.state::<Database>().after_file_write.lock().unwrap() = Some(Box::new(move || {
+        rusqlite::Connection::open(blocking_path)
+            .unwrap()
+            .execute_batch("CREATE TRIGGER fail_sync BEFORE UPDATE OF title ON tracks BEGIN SELECT RAISE(FAIL, 'database locked'); END;")
+            .unwrap();
+    }));
     let missing_bytes = std::fs::read(&paths[1]).unwrap();
     std::fs::remove_file(&paths[1]).unwrap();
     let save = |ids| {
@@ -338,7 +355,7 @@ fn save_command_retains_each_file_and_database_outcome_when_database_is_locked()
             "old"
         );
     }
-    blocker.execute_batch("ROLLBACK").unwrap();
+    blocker.execute_batch("DROP TRIGGER fail_sync").unwrap();
     std::fs::write(&paths[1], &missing_bytes).unwrap();
     let saved_bytes = std::fs::read(&paths[0]).unwrap();
     let results = save(vec![1, 2]);
@@ -473,6 +490,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     files::access::take(&fixture.0);
     let app = tauri::test::mock_builder()
         .manage(Database::open_with_cache(&database_path, &cache_path).unwrap())
+        .manage(WriteState::default())
         .invoke_handler(tauri::generate_handler![crate::artwork::get_track_artwork])
         .build(tauri::generate_context!())
         .unwrap();

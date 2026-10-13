@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { PlaylistSummary, PlaylistTrackSummary } from "@/features/playlist/types";
+import type {
+  PlaylistAppendResult,
+  PlaylistSummary,
+  PlaylistTrackSummary,
+} from "@/features/playlist/types";
 
 export function createPlaylistApi(invokeCommand: typeof invoke = invoke) {
   return {
@@ -10,8 +14,11 @@ export function createPlaylistApi(invokeCommand: typeof invoke = invoke) {
     rename: (playlistId: number, name: string) =>
       invokeCommand<void>("rename_playlist", { playlistId, name }),
     remove: (playlistId: number) => invokeCommand<void>("delete_playlist", { playlistId }),
-    addTrack: (trackId: number, playlistId: number) =>
-      invokeCommand<void>("add_track_to_playlist", { trackId, playlistId }),
+    appendTracks: (playlistId: number, trackIds: readonly number[]) =>
+      invokeCommand<PlaylistAppendResult[]>("append_playlist_tracks", {
+        playlistId,
+        trackIds: [...trackIds],
+      }),
     removeItems: (playlistId: number, playlistItemIds: readonly number[]) =>
       invokeCommand<void>("remove_playlist_items", {
         playlistId,

@@ -73,7 +73,7 @@ fn scanned_directory_cover_is_available_for_tracks_albums_and_playlists_offline(
         .create_playlist("Favorites")
         .unwrap();
     app.state::<Database>()
-        .add_track_to_playlist(playlist, 1)
+        .append_playlist_tracks(playlist, vec![1])
         .unwrap();
     for name in ["one.wav", "two.wav", "CoVeR.PNG"] {
         std::fs::remove_file(fixture.0.join(name)).unwrap();
@@ -378,7 +378,7 @@ fn invalid_directory_cover_reports_a_problem_and_retains_the_previous_snapshot()
     library
         .app
         .state::<Database>()
-        .add_track_to_playlist(playlist, 1)
+        .append_playlist_tracks(playlist, vec![1])
         .unwrap();
     // A lower-priority valid image does not hide failure of the chosen source.
     library.files.write(
@@ -579,7 +579,7 @@ fn cover_write_changes_only_target_embedded_tags_and_preserves_file_and_database
         "new title"
     );
     assert_eq!(artwork(&library.webview, 2), directory);
-    library.storage().execute_batch("CREATE TRIGGER fail_second_cover BEFORE UPDATE ON tracks WHEN NEW.id = 2 BEGIN SELECT RAISE(ABORT, 'test database failure'); END;").unwrap();
+    library.storage().execute_batch("CREATE TRIGGER fail_second_cover BEFORE UPDATE OF title ON tracks WHEN NEW.id = 2 BEGIN SELECT RAISE(ABORT, 'test database failure'); END;").unwrap();
     let partial = save(&[1, 2]);
     assert_eq!(partial.len(), 2);
     assert!(partial[0].file_written && partial[0].database_updated && partial[0].error.is_none());
@@ -803,7 +803,11 @@ fn association_removal_during_derivation_returns_no_artwork() {
     let database = Database::open(":memory:").unwrap();
     super::support::insert_track(&database, 1, None, None, 1, Some(b"original"));
     let result = artwork_during_update(&database, false, |database| {
-        database.remove_track_from_library(1).unwrap();
+        database
+            .connection()
+            .unwrap()
+            .execute("DELETE FROM track_artwork WHERE track_id = 1", [])
+            .unwrap();
     });
     assert!(result.unwrap().is_empty());
     assert!(database

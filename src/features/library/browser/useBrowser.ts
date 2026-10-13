@@ -4,6 +4,7 @@ import type { Ref } from "vue";
 import { useLibrarySelection } from "@/features/library/browser/useSelection";
 import { useLibraryActions } from "@/features/library/composables/useActions";
 import { createLibraryApi } from "@/features/library/api";
+import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type {
@@ -11,8 +12,8 @@ import type {
   AlbumSummary,
   LibraryAlbumSelection,
   LibraryGrouping,
-  TrackSummary,
 } from "@/features/library/types";
+import type { TrackSummary } from "@/features/tracks/types";
 
 export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   const artists = ref<ArtistSummary[]>([]);
@@ -259,6 +260,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   onMounted(() => {
     isMounted = true;
     globalThis.window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    globalThis.window.addEventListener(TRACKS_CHANGED_EVENT, onLibraryChanged);
     globalThis.window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
     if (active.value) activate();
   });
@@ -266,6 +268,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
   onUnmounted(() => {
     isMounted = false;
     globalThis.window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    globalThis.window.removeEventListener(TRACKS_CHANGED_EVENT, onLibraryChanged);
     globalThis.window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
     deactivate();
   });

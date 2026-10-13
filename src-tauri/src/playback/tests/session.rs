@@ -27,9 +27,57 @@ struct FakeAudio {
     skip_on_start: Option<i64>,
     volume: u8,
     volume_failure: bool,
+    database: Option<crate::database::Database>,
+    metadata_reads: std::sync::atomic::AtomicUsize,
+    metadata_failure: bool,
+    registrations: usize,
+    start_rows: Vec<String>,
+    row_failures: std::collections::HashMap<String, String>,
+    decoder_attempts: Vec<i64>,
+    scheduled: Vec<i64>,
 }
 
 impl SessionAudio for FakeAudio {
+    fn register(&mut self, tracks: &mut Vec<QueueTrack>) -> Result<Vec<String>, String> {
+        if !tracks.iter().any(|track| track.path.is_some()) {
+            return Ok(Vec::new());
+        }
+        self.registrations += 1;
+        if let Some(database) = &self.database {
+            let registration = super::identity::register(database, tracks)?;
+            self.scheduled.extend(registration.pending);
+            for track in tracks {
+                let id = track.track_id.unwrap();
+                self.library_paths
+                    .insert(id, database.get_track_for_playback(id)?.unwrap().path);
+            }
+            return Ok(registration.failures);
+        }
+        for track in tracks {
+            if !track.valid_target() {
+                return Err("Invalid playback target".into());
+            }
+            if let Some(path) = track.path.take() {
+                let id = self
+                    .library_paths
+                    .iter()
+                    .find_map(|(id, known)| (known == &path).then_some(*id))
+                    .unwrap_or(self.library_paths.len() as i64 + 1000);
+                self.library_paths.insert(id, path);
+                track.track_id = Some(id);
+            }
+        }
+        Ok(Vec::new())
+    }
+    fn metadata(&self, ids: &[i64]) -> Result<Vec<MetadataUpdate>, String> {
+        self.metadata_reads.fetch_add(1, Ordering::SeqCst);
+        if self.metadata_failure {
+            return Err("metadata unavailable".into());
+        }
+        self.database
+            .as_ref()
+            .map_or(Ok(Vec::new()), |db| super::metadata::read(db, ids))
+    }
     fn paths(&self, ids: &[i64]) -> Result<Vec<String>, String> {
         Ok(ids
             .iter()
@@ -45,6 +93,16 @@ impl SessionAudio for FakeAudio {
         let id = item.track_id.unwrap_or(0);
         let key = &item.row_key;
         self.starts.push(id);
+        self.start_rows.push(key.clone());
+        if let Some(error) = self.row_failures.get(key) {
+            return Err(error.clone());
+        }
+        if let Some(database) = &self.database {
+            let info = crate::playback::target_info(item, database)?;
+            self.decoder_attempts.push(id);
+            crate::playback::open_decoder(std::path::Path::new(&info.path))
+                .map_err(crate::playback::PlaybackError::into_play_command_message)?;
+        }
         if self.failed.contains(&id) {
             return Err("AUDIO_FILE_NOT_FOUND: missing file".into());
         }
@@ -95,6 +153,9 @@ impl SessionAudio for FakeAudio {
     ) -> Result<bool, String> {
         self.preparations
             .push((id, track.map(|track| track.row_key.clone())));
+        if let Some(error) = track.and_then(|track| self.row_failures.get(&track.row_key)) {
+            return Err(error.clone());
+        }
         if track.is_some_and(|track| track.track_id.is_some_and(|id| self.failed.contains(&id))) {
             return Err("AUDIO_FILE_NOT_FOUND: missing file".into());
         }
@@ -147,7 +208,11 @@ impl SessionAudio for FakeAudio {
         Ok(())
     }
     fn skipped(&self) -> HashSet<i64> {
-        self.skipped.clone()
+        let mut skipped = self.skipped.clone();
+        if let Some(database) = &self.database {
+            skipped.extend(database.list_skipped_track_ids().unwrap());
+        }
+        skipped
     }
 }
 
@@ -223,6 +288,10 @@ fn boundary(session: &mut Session<FakeAudio>, key: &str) {
     session.audio.playing = true;
 }
 
+#[path = "session/failures.rs"]
+mod failures;
+#[path = "session/identity.rs"]
+mod identity;
 #[path = "session/lifecycle.rs"]
 mod lifecycle;
 #[path = "session/persistence.rs"]
@@ -231,6 +300,12 @@ mod persistence;
 mod queue;
 
 impl SessionAudio for Arc<Mutex<FakeAudio>> {
+    fn register(&mut self, tracks: &mut Vec<QueueTrack>) -> Result<Vec<String>, String> {
+        self.lock().unwrap().register(tracks)
+    }
+    fn metadata(&self, ids: &[i64]) -> Result<Vec<MetadataUpdate>, String> {
+        self.lock().unwrap().metadata(ids)
+    }
     fn paths(&self, ids: &[i64]) -> Result<Vec<String>, String> {
         self.lock().unwrap().paths(ids)
     }
@@ -285,11 +360,17 @@ pub(crate) fn initialize_test_session<R: tauri::Runtime>(app: &AppHandle<R>, pat
             busy,
             receiver,
             |_| {},
+            |_| {},
         )
     });
 }
 
+#[path = "session/performance.rs"]
+mod performance;
 #[path = "session/volume.rs"]
 mod volume;
 #[path = "session/worker.rs"]
 mod worker;
+
+#[path = "session/metadata.rs"]
+mod metadata;

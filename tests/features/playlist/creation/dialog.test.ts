@@ -95,7 +95,18 @@ function createNode(type: string, text = ""): DialogNode {
 function mountDialog(
   backend: (command: string, args: unknown) => Promise<unknown> = async () => 73,
 ) {
-  const invoke = mock(backend);
+  const invoke = mock(async (command: string, args: unknown) => {
+    const result = await backend(command, args);
+    if (command !== "append_playlist_tracks" || Array.isArray(result)) return result;
+    if (!args || typeof args !== "object" || !("trackIds" in args) || !Array.isArray(args.trackIds))
+      throw new Error("Missing track IDs");
+    return args.trackIds.map((trackId: number, index: number) => ({
+      index,
+      trackId,
+      status: "added",
+      playlistItemId: index + 1,
+    }));
+  });
   const errors = mock(() => {});
   const component = evaluateSource<{ default: Vue.Component }>(dialogOutput, {
     vue: Vue,
@@ -196,9 +207,7 @@ describe("创建歌单对话框", () => {
     expect(loader).toHaveBeenCalledTimes(1);
     expect(dialog.invoke.mock.calls).toEqual([
       ["create_playlist", { name: "Album" }],
-      ["add_track_to_playlist", { trackId: 41, playlistId: 73 }],
-      ["add_track_to_playlist", { trackId: 12, playlistId: 73 }],
-      ["add_track_to_playlist", { trackId: 29, playlistId: 73 }],
+      ["append_playlist_tracks", { trackIds: [41, 12, 29], playlistId: 73 }],
     ]);
     expect(dialog.created).toEqual([73]);
     expect(dialog.dialog.open).toBe(false);
@@ -277,7 +286,7 @@ describe("创建歌单对话框", () => {
     expect(dialog.invoke.mock.calls).toEqual([
       ["create_playlist", { name: "Retry" }],
       ["create_playlist", { name: "Retry" }],
-      ["add_track_to_playlist", { trackId: 41, playlistId: 73 }],
+      ["append_playlist_tracks", { trackIds: [41], playlistId: 73 }],
     ]);
     expect(dialog.dialog.open).toBe(false);
     expect(dialog.created).toEqual([73]);
@@ -291,39 +300,39 @@ describe("创建歌单对话框", () => {
       if (
         !args ||
         typeof args !== "object" ||
-        !("trackId" in args) ||
-        typeof args.trackId !== "number"
-      ) {
-        throw new Error("Missing trackId");
-      }
-      if (args.trackId === 12 && !failed) {
-        failed = true;
-        throw new Error("Add failed");
-      }
-      tracks.push(args.trackId);
+        !("trackIds" in args) ||
+        !Array.isArray(args.trackIds)
+      )
+        throw new Error("Missing track IDs");
+      return args.trackIds.map((trackId: number, index: number) => {
+        if (trackId === 12 && !failed) {
+          failed = true;
+          return { index, trackId, status: "failed", error: "Add failed" };
+        }
+        tracks.push(trackId);
+        return { index, trackId, status: "added", playlistItemId: tracks.length };
+      });
     });
     const loader = mock(async () => [41, 12, 29]);
     dialog.show(loader);
     dialog.setName("Partial");
     await dialog.submit();
-    expect(tracks).toEqual([41]);
+    expect(tracks).toEqual([41, 29]);
     expect(dialog.created).toEqual([73]);
     expect(dialog.alert()).toBe("");
     expect(notifications.items.value).toHaveLength(1);
-    expect(notifications.items.value[0]?.message).toContain("歌单已创建，已添加 1 首");
+    expect(notifications.items.value[0]?.message).toContain("歌单已创建，已添加 2 首");
     expect(dialog.dialog.open).toBe(true);
     expect(dialog.input.value).toBe("Partial");
     expect(dialog.input.props.disabled).toBe(true);
     expect(dialog.confirm.props.disabled).toBe(false);
     await dialog.submit();
-    expect(tracks).toEqual([41, 12, 29]);
+    expect(tracks).toEqual([41, 29, 12]);
     expect(loader).toHaveBeenCalledTimes(1);
     expect(dialog.invoke.mock.calls).toEqual([
       ["create_playlist", { name: "Partial" }],
-      ["add_track_to_playlist", { trackId: 41, playlistId: 73 }],
-      ["add_track_to_playlist", { trackId: 12, playlistId: 73 }],
-      ["add_track_to_playlist", { trackId: 12, playlistId: 73 }],
-      ["add_track_to_playlist", { trackId: 29, playlistId: 73 }],
+      ["append_playlist_tracks", { trackIds: [41, 12, 29], playlistId: 73 }],
+      ["append_playlist_tracks", { trackIds: [12], playlistId: 73 }],
     ]);
     expect(dialog.created).toEqual([73, 73]);
     expect(dialog.dialog.open).toBe(false);

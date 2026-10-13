@@ -1,9 +1,8 @@
-pub(super) mod artwork;
-
-use super::{has_supported_extension, import_track, record_failure, ImportResult};
+use super::{import_track, record_failure, ImportResult};
 use crate::database::Database;
 use crate::library::model::MusicLibraryDirectory;
 use crate::locking::write::WriteState;
+use crate::tracks::discovery::has_supported_extension;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -47,7 +46,7 @@ pub(super) fn run_scan(database: &Database) -> Result<ImportResult, String> {
         );
     }
 
-    for path in database.track_paths()? {
+    for path in database.library_track_paths()? {
         let path = PathBuf::from(path);
         if directories.iter().any(|root| path.starts_with(&root.path))
             && !visited_files.contains(&path)

@@ -18,6 +18,7 @@ pub(crate) mod snapshot;
 mod statistics;
 #[cfg(test)]
 pub(crate) mod tests;
+pub(crate) mod tracks;
 
 pub(crate) async fn blocking<R, T, E>(
     app: tauri::AppHandle<R>,
@@ -41,6 +42,8 @@ pub struct Database {
     connection: Mutex<Connection>,
     pub(crate) artwork: crate::artwork::reading::State,
     skipped_tracks: Arc<RwLock<HashSet<i64>>>,
+    #[cfg(test)]
+    pub(crate) after_file_write: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
 impl Database {
@@ -74,6 +77,8 @@ impl Database {
             connection: Mutex::new(connection),
             artwork: crate::artwork::reading::State::new(artwork_cache),
             skipped_tracks: Arc::new(RwLock::new(skipped_tracks)),
+            #[cfg(test)]
+            after_file_write: Mutex::new(None),
         };
         database
             .clean_artwork_cache()

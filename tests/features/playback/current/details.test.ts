@@ -4,7 +4,8 @@ import { effectScope, nextTick, ref } from "vue";
 import type { EffectScope, MaybeRefOrGetter } from "vue";
 import { useTrackDetails } from "@/features/playback/current/useTrackDetails";
 import type { TrackDetailsInvoker } from "@/features/playback/current/useTrackDetails";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 import { notifications } from "@/shared/notifications/center";
 
 type Deferred<Value> = {
@@ -45,11 +46,8 @@ function createInvoker(
   handler: (trackId: number) => unknown | Promise<unknown>,
   calls: number[] = [],
 ): TrackDetailsInvoker {
-  return async <Result>(
-    _command: "get_track" | "read_audio_file",
-    args: { trackId: number } | { path: string },
-  ) => {
-    if (!("trackId" in args)) throw new Error("Expected library details target");
+  return async <Result>(command: "get_track", args: { trackId: number }) => {
+    expect(command).toBe("get_track");
     calls.push(args.trackId);
     return (await handler(args.trackId)) as Result;
   };

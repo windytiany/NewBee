@@ -88,6 +88,7 @@ const dependencies: Record<string, unknown> = {
     }),
   },
   "@/features/metadata/manual/components/EditMenuItem.vue": passiveComponent,
+  "@/features/tracks/presentation/RereadMenuItem.vue": passiveComponent,
   "@/features/lyrics/download/DownloadMenuItem.vue": passiveComponent,
   "@/features/playback/queue/components/SkipMenuItem.vue": passiveComponent,
   "@/features/library/browser/albums/AlbumContextMenu.vue": passiveComponent,

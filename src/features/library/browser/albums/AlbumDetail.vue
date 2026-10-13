@@ -181,6 +181,11 @@
           {{ playlist.name }}
         </button>
       </div>
+      <RereadMenuItem
+        :track-ids="contextMenu.payload.targetTrackIds"
+        :disabled="props.trackActionPending"
+        @close="closeTrackContextMenu(true)"
+      />
       <EditMenuItem
         :track-ids="contextMenu.payload.targetTrackIds"
         :disabled="props.trackActionPending"
@@ -223,11 +228,13 @@ import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
-import type { AlbumSummary, TrackSummary } from "@/features/library/types";
+import type { AlbumSummary } from "@/features/library/types";
+import type { TrackSummary } from "@/features/tracks/types";
 import type { AlbumBackground } from "@/features/artwork/background";
 import type { PlaylistSummary } from "@/features/playlist/types";
 import AlbumTrack from "@/features/library/browser/albums/AlbumTrack.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
 import { useTrackColumns } from "@/features/library/browser/albums/useTrackColumns";

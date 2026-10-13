@@ -19,6 +19,7 @@ for (const path of [
   const source = await Bun.file(new URL(`../../../src/${path}.ts`, import.meta.url)).text();
   outputs.set(path, transpileScript(source));
 }
+const readTracksEvents = await Bun.file("src/features/tracks/events.ts").text();
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
@@ -35,7 +36,8 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   const artist = { artist: "Artist", albumCount: 1 };
   const album = { albumArtist: "Artist", album: "Album", year: 2024 };
   const track = { id: 41, title: "Song", artist: "Artist", album: "Album", durationMs: 100 };
-  let tracks = [track, { ...track, id: 42 }];
+  const registeredTracks = [track, { ...track, id: 42 }];
+  let tracks = [...registeredTracks];
   const playlists = Vue.ref([{ id: 7, name: "List", trackCount: 2, coverTrackId: 41 }]);
   const selectedPlaylistId = Vue.ref<number | null>(7);
   const selectedGroup = Vue.ref<typeof artist | null>(artist);
@@ -56,6 +58,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
         if (command === "list_artists") return [artist];
         if (command === "list_albums") return [album];
         if (command === "list_album_tracks") return tracks;
+        if (command === "get_tracks") return registeredTracks;
         if (command === "remove_track_from_library") {
           if (args?.trackId === deleteFailureId) throw new Error("database busy");
           tracks = tracks.filter(({ id }) => id !== args?.trackId);
@@ -65,11 +68,16 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
         }
         if (command === "list_playlists") {
           return [
-            { id: 7, name: "List", trackCount: tracks.length, coverTrackId: tracks[0]?.id ?? null },
+            {
+              id: 7,
+              name: "List",
+              trackCount: registeredTracks.length,
+              coverTrackId: registeredTracks[0]?.id ?? null,
+            },
           ];
         }
         if (command === "list_playlist_tracks") {
-          return tracks.map(({ id, ...summary }) => ({
+          return registeredTracks.map(({ id, ...summary }) => ({
             ...summary,
             trackId: id,
             playlistItemId: id,
@@ -160,6 +168,30 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     effects,
     notices,
     activePage,
+    updateSnapshot: (title: string) => {
+      for (const entry of registeredTracks) entry.title = title;
+      const { reportTracksChanged } = evaluateSource<typeof import("@/features/tracks/events")>(
+        transpileScript(readTracksEvents),
+        modules,
+      );
+      reportTracksChanged(
+        [41, 42],
+        registeredTracks.map((track) => ({
+          ...track,
+          path: `${track.id}.flac`,
+          albumArtist: null,
+          releaseDate: null,
+          discNumber: null,
+          trackNumber: null,
+          discTotal: null,
+          trackTotal: null,
+          codec: null,
+          sampleRateHz: null,
+          bitrateKbps: null,
+          channels: null,
+        })),
+      );
+    },
     setScanResult: (result: typeof scanResult) => {
       scanResult = result;
     },
@@ -180,8 +212,25 @@ async function settle() {
 }
 
 describe("媒体库变更", () => {
+  it("通用曲目变化局部更新后台已加载歌单，保留条目身份", async () => {
+    const harness = createHarness("Playlist");
+    await settle();
+    const ids = harness.playlist.playlistTracks.value.map((track) => track.playlistItemId);
+    expect(ids).toEqual([41, 42]);
+    harness.activePage.value = "Playing";
+    harness.calls.length = 0;
+    harness.updateSnapshot("Updated snapshot");
+    await settle();
+    expect(harness.playlist.playlistTracks.value.map((track) => track.title)).toEqual([
+      "Updated snapshot",
+      "Updated snapshot",
+    ]);
+    expect(harness.playlist.playlistTracks.value.map((track) => track.playlistItemId)).toEqual(ids);
+    expect(harness.calls.filter((command) => command === "list_playlist_tracks")).toHaveLength(0);
+    expect(harness.effects).toEqual([[41, 42], "albums"]);
+  });
   for (const mode of ["Library", "Playlist", "Playing"] as const) {
-    it(`${mode} 活跃时扫描写入先失效封面，再刷新歌单和活跃媒体库`, async () => {
+    it(`${mode} 活跃时扫描写入失效封面并刷新活跃媒体库，不重读歌单目录`, async () => {
       const harness = createHarness(mode);
       await settle();
       harness.calls.length = 0;
@@ -189,8 +238,8 @@ describe("媒体库变更", () => {
       await harness.scan.scanMusicLibrary();
       await settle();
       expect(harness.effects).toEqual(["all", "albums", "refresh"]);
-      expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(1);
-      expect(harness.calls.filter((command) => command === "list_playlist_tracks")).toHaveLength(1);
+      expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(0);
+      expect(harness.calls.filter((command) => command === "list_playlist_tracks")).toHaveLength(0);
       expect(harness.calls.includes("list_artists")).toBe(mode === "Library");
       expect(harness.notices[0]?.type).toBe("warning");
     });
@@ -222,11 +271,13 @@ describe("媒体库变更", () => {
     await settle();
     expect(result.deletedCount).toBe(1);
     expect(result.completed).toBe(false);
-    expect(harness.effects).toEqual([[41], "albums", "refresh"]);
+    expect(harness.effects).toEqual(["albums", "refresh"]);
     expect(harness.calls.filter((command) => command === "list_artists")).toHaveLength(1);
-    expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(1);
-    expect(harness.playlist.playlists.value[0]?.trackCount).toBe(1);
-    expect(harness.playlist.playlistTracks.value.map(({ trackId }) => trackId)).toEqual([42]);
+    expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(0);
+    expect(harness.playlist.playlists.value[0]?.trackCount).toBe(2);
+    harness.activePage.value = "Playlist";
+    await settle();
+    expect(harness.playlist.playlistTracks.value.map(({ trackId }) => trackId)).toEqual([41, 42]);
   });
 
   it("单曲删除失败不传播，数据库成功但停止播放失败仍传播", async () => {
@@ -240,8 +291,8 @@ describe("媒体库变更", () => {
       "deleted-queue-sync-failed",
     );
     await settle();
-    expect(harness.effects).toEqual([[41], "albums", "refresh"]);
-    expect(harness.playlist.playlists.value[0]?.trackCount).toBe(1);
+    expect(harness.effects).toEqual(["albums", "refresh"]);
+    expect(harness.playlist.playlists.value[0]?.trackCount).toBe(2);
   });
 
   it("空删除批次不失效封面或查询", () => {

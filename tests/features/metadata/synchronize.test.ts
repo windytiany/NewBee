@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
-import type { LibraryInvoker } from "@/features/library/api";
+import type { TracksInvoker } from "@/features/tracks/api";
 import type { TrackMetadataUpdate } from "@/features/playback/types";
 
 const output = transpileScript(
@@ -21,17 +21,17 @@ function fixture() {
     configurable: true,
     value: { dispatchEvent: (event: Event) => events.push(event.type) },
   });
-  const invokeCommand: LibraryInvoker = async <Result>(command: string, args?: unknown) => {
-    const trackId = (args as { trackId: number }).trackId;
-    events.push(`${command}:${trackId}`);
+  const invokeCommand: TracksInvoker = async <Result>(command: string, args?: unknown) => {
+    const trackIds = (args as { trackIds: number[] }).trackIds;
+    events.push(`${command}:${trackIds.join(",")}`);
     if (failure) throw new Error("database unavailable");
-    return (trackId === 1 ? track : null) as Result;
+    return (trackIds.includes(1) ? [track] : []) as Result;
   };
   const { createTagSynchronization } = evaluateSource<
     typeof import("@/features/metadata/synchronize")
   >(output, {
     "@tauri-apps/api/core": { invoke: invokeCommand },
-    "@/features/library/events": { LIBRARY_CHANGED_EVENT: "catalog-changed" },
+
     "@/features/artwork/useTrackArtwork": {
       invalidateTrackArtworkCache: (ids: number[]) => events.push(`track-artwork:${ids.join(",")}`),
     },
@@ -59,27 +59,26 @@ function fixture() {
 }
 
 describe("tag save synchronization", () => {
-  it("publishes the catalog change before reloading tracks and updates only existing tracks", async () => {
+  it("publishes confirmed track details after a bulk read and updates only existing tracks", async () => {
     const harness = fixture();
     await harness.synchronize.tracks([1, 2]);
     expect(harness.events).toEqual([
+      "get_tracks:1,2",
       "track-artwork:1,2",
       "album-artwork",
-      "catalog-changed",
-      "get_track:1",
-      "get_track:2",
+      "newbee:tracks-changed",
     ]);
     expect(harness.updates).toEqual([[harness.track]]);
   });
 
-  it("invalidates both artwork caches first when a release edit changes embedded covers", async () => {
+  it("invalidates both artwork caches when a release edit changes embedded covers", async () => {
     const harness = fixture();
     await harness.synchronize.artwork([1]);
     expect(harness.events).toEqual([
+      "get_tracks:1",
       "track-artwork:1",
       "album-artwork",
-      "catalog-changed",
-      "get_track:1",
+      "newbee:tracks-changed",
     ]);
     expect(harness.updates).toEqual([[harness.track]]);
   });
@@ -89,10 +88,10 @@ describe("tag save synchronization", () => {
     harness.fail();
     await expect(harness.synchronize.tracks([1])).rejects.toThrow("database unavailable");
     expect(harness.events).toEqual([
+      "get_tracks:1",
       "track-artwork:1",
       "album-artwork",
-      "catalog-changed",
-      "get_track:1",
+      "newbee:tracks-changed",
     ]);
     expect(harness.updates).toEqual([]);
   });

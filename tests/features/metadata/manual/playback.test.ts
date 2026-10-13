@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { playbackFixture } from "../../../support/playback/session";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 
 const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
 beforeEach(() => {

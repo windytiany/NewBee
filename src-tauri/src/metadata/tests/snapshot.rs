@@ -87,7 +87,7 @@ fn scan_reports_missing_audio_without_erasing_the_snapshot_or_playlist() {
         .create_playlist("Favorites")
         .unwrap();
     app.state::<Database>()
-        .add_track_to_playlist(playlist, 1)
+        .append_playlist_tracks(playlist, vec![1])
         .unwrap();
     let before = serde_json::to_value(app.state::<Database>().get_track(1).unwrap()).unwrap();
     std::fs::remove_file(&path).unwrap();

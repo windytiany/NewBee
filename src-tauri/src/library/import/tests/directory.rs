@@ -41,8 +41,12 @@ fn rescanning_preserves_track_ids_and_playlist_items() {
         .unwrap();
     assert_eq!(run_scan(&database).unwrap().added, 1);
     let playlist_id = database.create_playlist("Favorites").unwrap();
-    database.add_track_to_playlist(playlist_id, 1).unwrap();
-    database.add_track_to_playlist(playlist_id, 1).unwrap();
+    database
+        .append_playlist_tracks(playlist_id, vec![1])
+        .unwrap();
+    database
+        .append_playlist_tracks(playlist_id, vec![1])
+        .unwrap();
     let original =
         serde_json::to_value(database.list_playlist_tracks(playlist_id).unwrap()).unwrap();
 
@@ -190,4 +194,83 @@ fn rejects_a_saved_root_replaced_by_a_link_and_continues_other_roots() {
             .to_string_lossy()
     );
     assert!(database.get_track(2).unwrap().is_none());
+}
+
+#[test]
+fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_tracks() {
+    let files = TestFiles::new();
+    let database = Database::open(":memory:").unwrap();
+    let mut ids = Vec::new();
+    for name in ["present.wav", "external.wav", "member.wav"] {
+        let path = fs::canonicalize(files.wav(name)).unwrap();
+        let track = crate::metadata::files::read_track(&path).unwrap().unwrap();
+        let id = {
+            let mut connection = database.connection().unwrap();
+            let transaction = connection.transaction().unwrap();
+            let id = crate::database::tracks::persist_track(
+                &transaction,
+                &track,
+                &crate::database::ArtworkUpdate::Embedded,
+            )
+            .unwrap();
+            transaction.commit().unwrap();
+            id
+        };
+        if name == "member.wav" {
+            database
+                .upsert_track(&track, crate::database::ArtworkUpdate::Embedded)
+                .unwrap();
+        }
+        if name != "present.wav" {
+            fs::remove_file(path).unwrap();
+        }
+        ids.push(id);
+    }
+    let playlist = database.create_playlist("Favorites").unwrap();
+    database
+        .append_playlist_tracks(playlist, vec![ids[0]])
+        .unwrap();
+    let item = serde_json::to_value(database.list_playlist_tracks(playlist).unwrap()).unwrap();
+    database.set_tracks_skipped(&[ids[0]], true).unwrap();
+    database.record_track_play(ids[0]).unwrap();
+    database
+        .add_music_library_directory(&fs::canonicalize(&files.0).unwrap().to_string_lossy())
+        .unwrap();
+    let first = run_scan(&database).unwrap();
+    assert_eq!((first.added, first.updated, first.failed), (1, 0, 1));
+    let second = run_scan(&database).unwrap();
+    assert_eq!((second.added, second.updated, second.failed), (0, 1, 1));
+    assert_eq!(
+        serde_json::to_value(database.list_playlist_tracks(playlist).unwrap()).unwrap(),
+        item
+    );
+    assert_eq!(database.list_skipped_track_ids().unwrap(), vec![ids[0]]);
+    assert_eq!(
+        database.list_playback_statistics().unwrap()[0].play_count,
+        1
+    );
+    let connection = database.connection().unwrap();
+    let external_issue: Option<String> = connection
+        .query_row(
+            "SELECT scan_issue FROM track_editing WHERE track_id = ?1",
+            [ids[1]],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let member_issue: Option<String> = connection
+        .query_row(
+            "SELECT scan_issue FROM track_editing WHERE track_id = ?1",
+            [ids[2]],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(external_issue.is_none());
+    assert!(member_issue.unwrap().contains("unavailable"));
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM tracks", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        3
+    );
 }

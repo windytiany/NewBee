@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS inbox (
 CREATE TABLE IF NOT EXISTS tracks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL UNIQUE,
+    in_library INTEGER NOT NULL DEFAULT 0 CHECK (in_library IN (0, 1)),
+    metadata_revision INTEGER NOT NULL DEFAULT 0,
     title TEXT,
     artist TEXT,
     album TEXT,
@@ -20,6 +22,10 @@ CREATE TABLE IF NOT EXISTS tracks (
     sample_rate_hz INTEGER,
     bitrate_kbps INTEGER,
     channels INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS track_artwork_pending (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS track_lyrics (

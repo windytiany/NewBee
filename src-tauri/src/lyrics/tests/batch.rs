@@ -472,10 +472,18 @@ fn cancellation_during_a_real_commit_does_not_interrupt_it_or_start_the_next_tra
     };
     let write = WriteState::default();
     let connection = rusqlite::Connection::open(fixture.0.join("library.sqlite3")).unwrap();
-    connection.execute_batch("BEGIN IMMEDIATE").unwrap();
     let (started_tx, started_rx) = mpsc::channel();
+    let (written_tx, written_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+    let resume_rx = std::sync::Arc::new(std::sync::Mutex::new(resume_rx));
     let summary = thread::scope(|scope| {
         let running = scope.spawn(|| {
+            let written_tx = written_tx.clone();
+            let resume_rx = resume_rx.clone();
+            *database.after_file_write.lock().unwrap() = Some(Box::new(move || {
+                written_tx.send(()).unwrap();
+                resume_rx.lock().unwrap().recv().unwrap();
+            }));
             state
                 .run(
                     &database,
@@ -501,17 +509,13 @@ fn cancellation_during_a_real_commit_does_not_interrupt_it_or_start_the_next_tra
                 .unwrap()
         });
         let batch_id = started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            if lofty::read_from_path(fixture.track(1))
-                .ok()
-                .is_some_and(|file| embedded_lyrics_text(&file) == Some("New lyrics"))
-            {
-                break;
-            }
-            assert!(Instant::now() < deadline, "file commit did not start");
-            thread::yield_now();
-        }
+        written_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(
+            embedded_lyrics_text(&lofty::read_from_path(fixture.track(1)).unwrap()),
+            Some("New lyrics")
+        );
+        connection.execute_batch("BEGIN IMMEDIATE").unwrap();
+        resume_tx.send(()).unwrap();
         state.cancel(batch_id).unwrap();
         // Hold the real database commit beyond the cooperation deadline: it must not time out.
         thread::sleep(Duration::from_millis(150));

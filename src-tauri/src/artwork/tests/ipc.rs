@@ -76,6 +76,7 @@ pub(super) fn invoke(
 fn webview(database: Database) -> tauri::WebviewWindow<tauri::test::MockRuntime> {
     let app = tauri::test::mock_builder()
         .manage(database)
+        .manage(crate::locking::write::WriteState::default())
         .invoke_handler(tauri::generate_handler![
             get_track_artwork,
             get_album_artwork

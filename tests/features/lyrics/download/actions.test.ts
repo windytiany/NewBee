@@ -5,7 +5,8 @@ import { compileSfc, evaluateSource } from "../../../support/module/loader";
 import { createLyricsSearch } from "@/features/lyrics/download/search";
 import { searchQuery } from "@/features/lyrics/download/query";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 import type { LyricsContent } from "@/features/lyrics/types";
 
 import { notifications, notify } from "@/shared/notifications/center";
@@ -99,7 +100,7 @@ function setup(
         throw new Error(`Unexpected command ${command}`);
       },
     },
-    "@/features/library/format": { formatTrackDuration: () => "0:01" },
+    "@/features/tracks/format": { formatTrackDuration: () => "0:01" },
     "@/features/lyrics/download/search": { createLyricsSearch },
     "@/features/lyrics/download/query": { searchQuery },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT },

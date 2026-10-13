@@ -377,19 +377,14 @@ fn editing_releases_playing_or_paused_target_and_retains_selection_without_autop
                 session.generation.load(Ordering::SeqCst)
             )
             .is_err());
-        execute(
-            &mut session,
-            SessionCommand::UpdateMetadata {
-                tracks: vec![MetadataUpdate {
-                    id: Some(1),
-                    path: None,
-                    title: Some("Updated".into()),
-                    artist: Some("Artist 2".into()),
-                    album: Some("Album 2".into()),
-                    duration_ms: Some(200),
-                }],
-            },
-        );
+        session.update_metadata(vec![MetadataUpdate {
+            id: Some(1),
+            path: None,
+            title: Some("Updated".into()),
+            artist: Some("Artist 2".into()),
+            album: Some("Album 2".into()),
+            duration_ms: Some(200),
+        }]);
         execute(&mut session, SessionCommand::EndEditing { token });
         session.tick().unwrap();
         assert_eq!(session.audio.starts, [1]);
@@ -508,7 +503,7 @@ fn stale_seek_never_cancels_a_newer_decode_intent() {
 }
 
 #[test]
-fn file_targets_share_editing_protection_but_not_library_identity() {
+fn file_targets_register_shared_identity_and_editing_protection() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory
         .path()
@@ -538,7 +533,9 @@ fn file_targets_share_editing_protection_but_not_library_identity() {
                 )
                 .0
             );
-            assert_eq!(session.current_track.as_ref().unwrap().track_id, None);
+            assert_eq!(session.current_track.as_ref().unwrap().track_id, Some(1));
+            assert_eq!(session.queue.current().unwrap().track_id, Some(1));
+            assert!(session.queue.current().unwrap().path.is_none());
         } else {
             play(&mut session, &[1], 0);
         }
@@ -592,7 +589,7 @@ fn file_targets_share_editing_protection_but_not_library_identity() {
 }
 
 #[test]
-fn file_metadata_updates_only_the_matching_file_source_without_touching_library_rows() {
+fn registered_file_metadata_updates_only_matching_id_without_touching_other_rows() {
     let mut session = fixture();
     let path = std::env::temp_dir()
         .join("audition.wav")
@@ -618,13 +615,9 @@ fn file_metadata_updates_only_the_matching_file_source_without_touching_library_
             allow_skipped: true,
         },
     );
+    let id = session.queue.displayed_tracks[1].track_id.unwrap();
     let update = serde_json::from_value(serde_json::json!({ "id": null, "path": path, "title": "File title", "artist": "File artist", "album": "File album", "durationMs": 500 })).unwrap();
-    execute(
-        &mut session,
-        SessionCommand::UpdateMetadata {
-            tracks: vec![update],
-        },
-    );
+    session.refresh_metadata(vec![update]).unwrap();
     assert_eq!(
         session.queue.displayed_tracks[0].title.as_deref(),
         Some("Track 1")
@@ -641,5 +634,10 @@ fn file_metadata_updates_only_the_matching_file_source_without_touching_library_
         session.current_track.as_ref().unwrap().title.as_deref(),
         Some("File title")
     );
-    assert_eq!(session.current_track.as_ref().unwrap().track_id, None);
+    assert_eq!(session.current_track.as_ref().unwrap().track_id, Some(id));
+    assert!(session
+        .queue
+        .displayed_tracks
+        .iter()
+        .all(|track| track.path.is_none()));
 }

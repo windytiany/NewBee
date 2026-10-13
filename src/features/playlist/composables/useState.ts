@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { computed, readonly, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { createPlaylistApi } from "@/features/playlist/api";
+import { createTracksApi } from "@/features/tracks/api";
+import type { TrackDetails } from "@/features/tracks/types";
+import type { TracksChange } from "@/features/tracks/events";
 import {
   usePlaylistActions,
   type PlaylistActionContext,
@@ -36,6 +39,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
   const isLoadingPlaylistTracks = ref(false);
   const playlistsError = ref("");
   const playlistTracksError = ref("");
+  const trackMetadataError = ref("");
   const playlistActionError = ref("");
   const pendingPlaylistActionIds = ref(new Set<number>());
   const pendingPlaylistIds = computed<readonly number[]>(() => [...pendingPlaylistActionIds.value]);
@@ -72,6 +76,100 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
   let playlistContextGeneration = 0;
   let deferredPlaylistRefresh: DeferredPlaylistRefresh | null = null;
   const activePlaylistDataMutations = new Set<number>();
+  const tracksApi = createTracksApi(invoke);
+  const metadataRows = new Map<number, PlaylistTrackSummary[]>();
+  const pendingMetadata = new Map<number, number>();
+  const loadingMetadata = new Map<number, TrackDetails>();
+  let metadataRevision = 0;
+  let metadataRequestPending = false;
+  let pendingAllMetadata = false;
+
+  watch(
+    () => playlistTracks.value.map((row) => [row.trackId, row] as const),
+    (rows) => {
+      metadataRows.clear();
+      for (const [id, row] of rows) {
+        const entries = metadataRows.get(id);
+        if (entries) entries.push(row);
+        else metadataRows.set(id, [row]);
+      }
+    },
+    { flush: "sync" },
+  );
+
+  function patchTrackMetadata(tracks: readonly TrackDetails[]) {
+    for (const track of tracks) {
+      for (const row of metadataRows.get(track.id) ?? []) {
+        Object.assign(row, {
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          durationMs: track.durationMs,
+        });
+      }
+      if (isLoadingPlaylistTracks.value) loadingMetadata.set(track.id, track);
+    }
+  }
+
+  async function refreshTrackMetadata() {
+    if (
+      availability.value !== "active" ||
+      isLoadingPlaylistTracks.value ||
+      metadataRequestPending ||
+      loadedPlaylistTracksId.value !== selectedPlaylistId.value
+    )
+      return;
+    const pending = new Map([...pendingMetadata].filter(([id]) => metadataRows.has(id)));
+    if (!pending.size) return;
+    const playlistId = loadedPlaylistTracksId.value;
+    metadataRequestPending = true;
+    try {
+      const tracks = await tracksApi.getTracks([...pending.keys()]);
+      if (!canQuery(true) || playlistId !== loadedPlaylistTracksId.value) return;
+      patchTrackMetadata(
+        tracks.filter(
+          (track) =>
+            pending.has(track.id) && pendingMetadata.get(track.id) === pending.get(track.id),
+        ),
+      );
+      for (const [id, revision] of pending) {
+        if (pendingMetadata.get(id) === revision) pendingMetadata.delete(id);
+      }
+      trackMetadataError.value = "";
+    } catch (error) {
+      if (
+        canQuery(true) &&
+        playlistId === loadedPlaylistTracksId.value &&
+        [...pending].some(([id, revision]) => pendingMetadata.get(id) === revision)
+      ) {
+        trackMetadataError.value = `读取歌单曲目信息失败：${errorMessage(error)}`;
+      }
+    } finally {
+      metadataRequestPending = false;
+      if (
+        [...pendingMetadata].some(
+          ([id, revision]) => metadataRows.has(id) && pending.get(id) !== revision,
+        )
+      ) {
+        void refreshTrackMetadata();
+      }
+    }
+  }
+
+  function updateTrackMetadata(change: TracksChange) {
+    const revision = ++metadataRevision;
+    const ids = change.trackIds ?? [...metadataRows.keys()];
+    if (change.trackIds === undefined && isLoadingPlaylistTracks.value) pendingAllMetadata = true;
+    for (const id of ids) {
+      if (metadataRows.has(id) || isLoadingPlaylistTracks.value) pendingMetadata.set(id, revision);
+    }
+    const affectedIds = new Set(ids);
+    const tracks = (change.tracks ?? []).filter((track) => affectedIds.has(track.id));
+    patchTrackMetadata(tracks);
+    if (tracks.length) trackMetadataError.value = "";
+    for (const track of tracks) pendingMetadata.delete(track.id);
+    void refreshTrackMetadata();
+  }
 
   function isPlaylistReorderError(error: unknown): error is PlaylistReorderError {
     return (
@@ -95,6 +193,10 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     ++playlistTracksRequestGeneration;
     playlistTracksPlaylistId.value = playlistId;
     loadedPlaylistTracksId.value = null;
+    pendingMetadata.clear();
+    pendingAllMetadata = false;
+    loadingMetadata.clear();
+    trackMetadataError.value = "";
     playlistTracks.value = [];
     playlistTracksError.value = "";
     isLoadingPlaylistTracks.value = false;
@@ -262,6 +364,9 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     }
 
     const generation = ++playlistTracksRequestGeneration;
+    pendingMetadata.clear();
+    pendingAllMetadata = false;
+    loadingMetadata.clear();
     playlistTracksError.value = "";
     isLoadingPlaylistTracks.value = true;
 
@@ -270,7 +375,14 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
       if (!isPlaylistTracksRequestCurrent(playlistId, generation, force)) return;
 
       playlistTracks.value = result;
+      if (pendingAllMetadata) {
+        for (const id of metadataRows.keys()) pendingMetadata.set(id, metadataRevision);
+        pendingAllMetadata = false;
+      }
+      patchTrackMetadata([...loadingMetadata.values()]);
+      loadingMetadata.clear();
       loadedPlaylistTracksId.value = playlistId;
+      trackMetadataError.value = "";
       syncPlaylistSummaryFromTracks(playlistId, result);
     } catch (error) {
       if (!isPlaylistTracksRequestCurrent(playlistId, generation, force)) return;
@@ -278,6 +390,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     } finally {
       if (isPlaylistTracksRequestCurrent(playlistId, generation, force)) {
         isLoadingPlaylistTracks.value = false;
+        void refreshTrackMetadata();
       }
     }
   }
@@ -395,6 +508,7 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     isLoadingPlaylistTracks: readonly(isLoadingPlaylistTracks),
     playlistsError: readonly(playlistsError),
     playlistTracksError: readonly(playlistTracksError),
+    trackMetadataError: readonly(trackMetadataError),
     pendingPlaylistIds,
     isPlaylistActionPending,
     playlistActionError: readonly(playlistActionError),
@@ -402,5 +516,6 @@ export function usePlaylistState(availability: Readonly<Ref<PlaylistAvailability
     isCoverPending,
     selectPlaylist,
     refreshPlaylists,
+    updateTrackMetadata,
   };
 }

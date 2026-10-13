@@ -9,7 +9,18 @@ use lofty::{
 use std::path::Path;
 
 pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String> {
-    let tagged_file = super::read_file(path)?;
+    read_snapshot(path, true)
+}
+
+pub(crate) fn read_track_metadata(path: &Path) -> Result<Option<TrackWriteInput>, String> {
+    read_snapshot(path, false)
+}
+
+fn read_snapshot(path: &Path, include_artwork: bool) -> Result<Option<TrackWriteInput>, String> {
+    let tagged_file = super::read_file_with_options(
+        path,
+        lofty::config::ParseOptions::default().read_cover_art(include_artwork),
+    )?;
     let readonly = super::file_metadata(path)
         .map_err(|error| error.to_string())?
         .permissions()
@@ -34,13 +45,17 @@ pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String>
                     .or_else(|| tag_text(tag, &ItemKey::ReleaseDate)),
                 tag_number(tag, &ItemKey::DiscNumber),
                 tag_number(tag, &ItemKey::TrackNumber),
-                read_artwork(tag)?,
+                if include_artwork {
+                    read_artwork(tag)?
+                } else {
+                    None
+                },
             ),
             None => (None, None, None, None, None, None, None, None),
         };
 
     let mut artwork = artwork;
-    if artwork.is_none() {
+    if include_artwork && artwork.is_none() {
         for other in tagged_file
             .tags()
             .iter()
@@ -101,7 +116,7 @@ fn tag_number(tag: &Tag, key: &ItemKey) -> Option<i64> {
     tag_text(tag, key)?.split('/').next()?.trim().parse().ok()
 }
 
-fn read_artwork(tag: &Tag) -> Result<Option<ArtworkContent>, String> {
+pub(super) fn read_artwork(tag: &Tag) -> Result<Option<ArtworkContent>, String> {
     let picture = if tag.tag_type() == TagType::Mp4Ilst {
         tag.pictures().first()
     } else {

@@ -28,7 +28,7 @@ fn deleted_cover_and_file_only_fields_sync_or_report_database_failure_and_retry(
         .unwrap();
     assert!(save_track(&database, 1, &[], LyricsMarkAction::Keep, Some(&cover)).database_updated);
     let connection = rusqlite::Connection::open(&database_path).unwrap();
-    connection.execute_batch("CREATE TRIGGER fail_delete_cover BEFORE UPDATE ON tracks BEGIN SELECT RAISE(FAIL, 'database unavailable'); END;").unwrap();
+    connection.execute_batch("CREATE TRIGGER fail_delete_cover BEFORE UPDATE OF title ON tracks BEGIN SELECT RAISE(FAIL, 'database unavailable'); END;").unwrap();
     let changes = [
         change(MetadataField::Label, Some("new label")),
         change(MetadataField::OriginalReleaseDate, Some("1998-03")),
@@ -191,7 +191,7 @@ fn reports_database_failure_after_file_write_and_allows_resaving() {
             [path.to_string_lossy().as_ref()],
         )
         .unwrap();
-    connection.execute_batch("CREATE TRIGGER fail_metadata_update BEFORE UPDATE ON tracks BEGIN SELECT RAISE(FAIL, 'database unavailable'); END;").unwrap();
+    connection.execute_batch("CREATE TRIGGER fail_metadata_update BEFORE UPDATE OF title ON tracks BEGIN SELECT RAISE(FAIL, 'database unavailable'); END;").unwrap();
     let changes = [change(MetadataField::Title, Some("new"))];
     let result = save_track(&database, 1, &changes, LyricsMarkAction::Keep, None);
     assert!(result.file_written);
@@ -259,7 +259,7 @@ fn saves_cover_only_and_preserves_it_when_later_changes_fail_and_retry() {
         "old"
     );
 
-    connection.execute_batch("CREATE TRIGGER fail_metadata_update BEFORE UPDATE ON tracks BEGIN SELECT RAISE(FAIL, 'unavailable'); END;").unwrap();
+    connection.execute_batch("CREATE TRIGGER fail_metadata_update BEFORE UPDATE OF title ON tracks BEGIN SELECT RAISE(FAIL, 'unavailable'); END;").unwrap();
     let changes = [change(MetadataField::Title, Some("new"))];
     let failed = save_track(&database, 1, &changes, LyricsMarkAction::Keep, None);
     assert!(failed.file_written && !failed.database_updated);

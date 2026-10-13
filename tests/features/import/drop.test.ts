@@ -4,6 +4,7 @@ import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import type { useDropImport } from "@/features/import/useDropImport";
 import type { NotificationInput } from "@/shared/notifications/center";
+import type { TrackRegistrationResult, TrackDetails } from "@/features/tracks/types";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 
 const output = transpileScript(await Bun.file("src/features/import/useDropImport.ts").text());
@@ -16,7 +17,6 @@ afterEach(() => {
     else Reflect.deleteProperty(globalThis, key);
   }
 });
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((finish) => {
@@ -24,35 +24,81 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-
+const track: TrackDetails = {
+  id: 7,
+  path: "song.wav",
+  title: "song.wav",
+  artist: null,
+  album: null,
+  albumArtist: null,
+  releaseDate: null,
+  discNumber: null,
+  trackNumber: null,
+  discTotal: null,
+  trackTotal: null,
+  durationMs: null,
+  codec: null,
+  sampleRateHz: null,
+  bitrateKbps: null,
+  channels: null,
+};
 function createDrop({
   desktop = true,
   validate = async () => ["song.wav"],
   subscription,
+  registration = async () =>
+    [{ status: "registered", track, needsMetadata: true }] as TrackRegistrationResult[],
+  append = async () => true,
+  playlistAppend = async (ids: readonly number[]) =>
+    ids.map((trackId, index) => ({
+      index,
+      trackId,
+      status: "added" as const,
+      playlistItemId: index + 1,
+    })),
 }: {
   desktop?: boolean;
   validate?: () => Promise<string[]>;
   subscription?: Promise<() => void>;
+  registration?: () => Promise<TrackRegistrationResult[]>;
+  append?: () => Promise<boolean>;
+  playlistAppend?: (
+    ids: readonly number[],
+  ) => Promise<import("@/features/playlist/types").PlaylistAppendResult[]>;
 } = {}) {
-  const activePage = Vue.ref("Library");
+  const region = Vue.ref<string | null>("Library");
+  const playlistId = Vue.ref(3);
   const importing = Vue.ref(false);
   const inboxPending = Vue.ref(false);
   const scanning = Vue.ref(false);
-  const calls: Array<[string, string[]]> = [];
+  const calls: Array<[string, unknown]> = [];
   const notices: NotificationInput[] = [];
   let modal = false;
   let mount: () => Promise<void> = async () => {};
   let unmount = () => {};
   let mutate = () => {};
   let listener: (event: { payload: DragDropEvent }) => void = () => {};
+  let scaleListener: (event: { payload: { scaleFactor: number } }) => void = () => {};
   let stops = 0;
   let disconnects = 0;
   let registrations = 0;
+  let scale = 2;
+  const coordinates: number[][] = [];
+  const bounds = Vue.ref({ left: 24, top: 12, width: 400, height: 600 });
+  const element = {
+    getAttribute: (name: string) =>
+      name === "data-local-drop" ? region.value : String(playlistId.value),
+    getBoundingClientRect: () => bounds.value,
+  };
   Object.defineProperty(globalThis, "document", {
     configurable: true,
     value: {
       body: {},
       querySelector: () => (modal ? {} : null),
+      elementsFromPoint: (x: number, y: number) => {
+        coordinates.push([x, y]);
+        return region.value ? [{ closest: () => element }] : [];
+      },
     },
   });
   Object.defineProperty(globalThis, "MutationObserver", {
@@ -77,7 +123,29 @@ function createDrop({
         unmount = callback;
       },
     },
-    "@tauri-apps/api/core": { isTauri: () => desktop, invoke: validate },
+    "@tauri-apps/api/core": {
+      isTauri: () => desktop,
+      invoke: async <T>(command: string, args?: Record<string, unknown>) => {
+        if (command === "readable_audio_files") return (await validate()) as T;
+        calls.push([command, args]);
+        if (command === "register_local_tracks") return (await registration()) as T;
+        if (command === "get_tracks") return [{ ...track, title: "Confirmed" }] as T;
+        if (command === "append_playlist_tracks")
+          return (await playlistAppend(args?.trackIds as number[])) as T;
+        return undefined as T;
+      },
+    },
+    "@tauri-apps/api/window": {
+      getCurrentWindow: () => ({
+        scaleFactor: async () => scale,
+        onScaleChanged: async (callback: typeof scaleListener) => {
+          scaleListener = callback;
+          return () => {
+            stops += 1;
+          };
+        },
+      }),
+    },
     "@tauri-apps/api/webview": {
       getCurrentWebview: () => ({
         onDragDropEvent: async (callback: typeof listener) => {
@@ -109,117 +177,212 @@ function createDrop({
       }),
     },
     "@/features/library/import/useScan": { useLibraryScan: () => ({ isScanning: scanning }) },
+    "@/features/playback/session": {
+      usePlaybackSession: () => ({
+        addTracksToQueueEnd: async (tracks: unknown) => {
+          calls.push(["queue", tracks]);
+          return append();
+        },
+        updateTrackMetadata: async (tracks: unknown) => {
+          calls.push(["metadata", tracks]);
+        },
+      }),
+    },
+    "@/features/tracks/events": {
+      reportTracksChanged: (ids: readonly number[]) => {
+        calls.push(["changed", ids]);
+      },
+    },
+    "@/features/playlist/events": {
+      reportPlaylistChanged: (playlistId: number) => calls.push(["playlistChanged", playlistId]),
+    },
     "@/shared/notifications/center": {
       notify: (notice: NotificationInput) => notices.push(notice),
     },
     "@/shared/logging/logger": { logger: { error: () => {} } },
   });
-  const controller = module.useDropImport(activePage);
+  const controller = module.useDropImport();
   return {
     ...controller,
     mount,
     unmount,
-    activePage,
+    region,
+    playlistId,
     importing,
     inboxPending,
     scanning,
     calls,
     notices,
+    coordinates,
+    bounds,
     counts: () => ({ stops, disconnects, registrations }),
     setModal: (value: boolean) => {
       modal = value;
       mutate();
     },
-    emit: async (type: "enter" | "drop" | "leave", paths = ["song.wav"]) => {
+    setScale: (value: number) => {
+      scale = value;
+      scaleListener({ payload: { scaleFactor: value } });
+    },
+    emit: async (type: "enter" | "over" | "drop" | "leave", paths = ["song.wav"]) => {
       listener({
         payload:
-          type === "leave" ? { type } : { type, paths, position: new PhysicalPosition(0, 0) },
+          type === "leave"
+            ? { type }
+            : type === "over"
+              ? { type, position: new PhysicalPosition(100, 60) }
+              : { type, paths, position: new PhysicalPosition(100, 60) },
       });
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let i = 0; i < 20; i++) await Promise.resolve();
     },
   };
 }
 
-it("uses the page at drop time and never imports on other pages", async () => {
+it("routes by hit region, converts physical coordinates and updates scale without guessing a page", async () => {
   const drop = createDrop();
   await drop.mount();
   await drop.emit("enter");
-  expect(drop.label.value).toBe("导入音乐库");
-  drop.activePage.value = "Inbox";
-  expect(drop.label.value).toBe("导入 Inbox");
+  expect(drop.highlight.value).toEqual({
+    left: "24px",
+    top: "12px",
+    width: "400px",
+    height: "600px",
+  });
+  expect(drop.coordinates[drop.coordinates.length - 1]).toEqual([50, 30]);
+  drop.region.value = "Inbox";
+  drop.bounds.value = { left: 20, top: 10, width: 250, height: 360 };
+  await drop.emit("over");
+  expect(drop.highlight.value).toEqual({
+    left: "20px",
+    top: "10px",
+    width: "250px",
+    height: "360px",
+  });
   await drop.emit("drop");
   expect(drop.calls).toEqual([["Inbox", ["song.wav"]]]);
-  expect(drop.label.value).toBe("");
+  drop.setScale(1.25);
+  await drop.emit("enter");
+  expect(drop.coordinates[drop.coordinates.length - 1]).toEqual([80, 48]);
+  drop.region.value = "Library";
   await drop.emit("drop");
-  drop.activePage.value = "Library";
-  await drop.emit("drop", ["other.wav"]);
-  for (const page of ["Playlist", "Playing"]) {
-    drop.activePage.value = page;
-    await drop.emit("enter");
-    expect(drop.label.value).toBe("");
-    await drop.emit("drop");
-  }
-  expect(drop.calls).toHaveLength(3);
-  expect(drop.calls[2]).toEqual(["Library", ["other.wav"]]);
+  drop.region.value = null;
+  await drop.emit("enter");
+  expect(drop.highlight.value).toBeNull();
+  drop.region.value = "playlist";
+  await drop.emit("over");
+  expect(drop.highlight.value).toEqual({
+    left: "20px",
+    top: "10px",
+    width: "250px",
+    height: "360px",
+  });
+  drop.region.value = null;
+  await drop.emit("over");
+  expect(drop.highlight.value).toBeNull();
+  await drop.emit("drop");
+  expect(drop.calls).toHaveLength(2);
   drop.unmount();
-  expect(drop.counts()).toMatchObject({ stops: 1, disconnects: 1 });
+  expect(drop.highlight.value).toBeNull();
+  expect(drop.counts()).toMatchObject({ stops: 2, disconnects: 1 });
 });
-
-it("hides feedback and disables drops whenever a dialog is open", async () => {
+it("blocks modal drops and reports busy import/scan without executing", async () => {
   const drop = createDrop();
   await drop.mount();
   await drop.emit("enter");
   drop.setModal(true);
-  expect(drop.label.value).toBe("");
+  expect(drop.highlight.value).toBeNull();
   await drop.emit("drop");
   expect(drop.calls).toEqual([]);
-  expect(drop.notices).toEqual([]);
   drop.setModal(false);
-  await drop.emit("drop");
-  expect(drop.calls).toHaveLength(1);
-  drop.unmount();
-});
-
-it("rejects new drops with a busy notice during either import or scanning", async () => {
-  const drop = createDrop();
-  await drop.mount();
   for (const pending of [drop.importing, drop.inboxPending, drop.scanning]) {
     await drop.emit("enter");
     pending.value = true;
-    expect(drop.label.value).toBe("");
+    expect(drop.highlight.value).toBeNull();
     await drop.emit("drop");
     pending.value = false;
   }
   expect(drop.calls).toEqual([]);
-  expect(drop.notices.map((notice) => notice.message)).toEqual(Array(3).fill("导入进行中"));
+  expect(drop.notices.map((notice) => notice.message)).toEqual(Array(3).fill("操作进行中"));
   drop.unmount();
 });
-
-it("does not highlight invalid files or restore stale feedback after leaving or dropping", async () => {
+it("captures playlist ID before registration and refreshes after appending even if confirmation was early", async () => {
+  const registered = deferred<TrackRegistrationResult[]>();
+  const drop = createDrop({ registration: () => registered.promise });
+  await drop.mount();
+  drop.region.value = "playlist";
+  await drop.emit("drop");
+  drop.playlistId.value = 99;
+  drop.region.value = "queue";
+  await drop.emit("drop");
+  expect(drop.notices[drop.notices.length - 1]?.message).toBe("操作进行中");
+  registered.resolve([
+    { status: "registered", track, needsMetadata: true },
+    { status: "failed", path: "bad", error: "unreadable" },
+  ]);
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  expect(drop.calls).toContainEqual(["append_playlist_tracks", { trackIds: [7], playlistId: 3 }]);
+  expect(drop.calls.findIndex(([name]) => name === "get_tracks")).toBeGreaterThan(
+    drop.calls.findIndex(([name]) => name === "append_playlist_tracks"),
+  );
+  expect(drop.notices[drop.notices.length - 1]?.message).toBe("1 个文件登记失败");
+  drop.unmount();
+});
+it("queue drop uses IDs only and refreshes the DB snapshot after append", async () => {
+  const drop = createDrop();
+  await drop.mount();
+  drop.region.value = "queue";
+  await drop.emit("drop");
+  expect(drop.calls).toContainEqual([
+    "queue",
+    [{ trackId: 7, title: "song.wav", album: null, durationMs: null }],
+  ]);
+  expect(drop.calls[drop.calls.length - 1]).toEqual([
+    "metadata",
+    [{ ...track, title: "Confirmed" }],
+  ]);
+  drop.unmount();
+});
+it("reports append failure separately from registration and leaves existing destinations untouched on all failure", async () => {
+  const drop = createDrop({ append: async () => false });
+  await drop.mount();
+  drop.region.value = "queue";
+  await drop.emit("drop");
+  expect(drop.notices.map((notice) => notice.message)).toEqual(["曲目已登记，目标追加失败"]);
+  drop.unmount();
+  const failed = createDrop({
+    registration: async () => [{ status: "failed", path: "bad", error: "bad" }],
+  });
+  await failed.mount();
+  failed.region.value = "playlist";
+  await failed.emit("drop");
+  expect(failed.calls.map(([name]) => name)).toEqual(["register_local_tracks"]);
+  failed.unmount();
+});
+it("cleans up invalid or stale feedback after leave/drop and ignores empty paths", async () => {
   const invalid = createDrop({ validate: async () => [] });
   await invalid.mount();
   await invalid.emit("enter");
-  expect(invalid.label.value).toBe("");
+  expect(invalid.highlight.value).toBeNull();
   invalid.unmount();
   for (const ending of ["leave", "drop"] as const) {
     const validation = deferred<string[]>();
     const drop = createDrop({ validate: () => validation.promise });
     await drop.mount();
     await drop.emit("enter");
-    await drop.emit(ending);
+    await drop.emit(ending, []);
     validation.resolve(["song.wav"]);
     await Promise.resolve();
-    expect(drop.label.value).toBe("");
+    expect(drop.highlight.value).toBeNull();
+    expect(drop.calls).toEqual([]);
     drop.unmount();
   }
 });
-
 it("releases subscriptions that finish registering after unmount", async () => {
   let stops = 0;
   const subscription = deferred<() => void>();
   const drop = createDrop({ subscription: subscription.promise });
   const mounted = drop.mount();
+  for (let i = 0; i < 8; i++) await Promise.resolve();
   drop.unmount();
   subscription.resolve(() => {
     stops += 1;
@@ -229,10 +392,33 @@ it("releases subscriptions that finish registering after unmount", async () => {
   expect(stops).toBe(1);
   expect(drop.calls).toEqual([]);
 });
-
 it("does not access native or DOM APIs in browser preview", async () => {
   const drop = createDrop({ desktop: false });
   await drop.mount();
   expect(drop.counts().registrations).toBe(0);
+  drop.unmount();
+});
+
+it("playlist partial append preserves successful registration and reports actual added and failed counts", async () => {
+  const drop = createDrop({
+    registration: async () => [
+      { status: "registered", track, needsMetadata: true },
+      { status: "registered", track: { ...track, id: 8 }, needsMetadata: true },
+    ],
+    playlistAppend: async () => [
+      { index: 0, trackId: 7, status: "added", playlistItemId: 20 },
+      { index: 1, trackId: 8, status: "failed", error: "missing track" },
+    ],
+  });
+  await drop.mount();
+  drop.region.value = "playlist";
+  await drop.emit("drop");
+  expect(drop.calls).toContainEqual(["playlistChanged", 3]);
+  expect(drop.calls).toContainEqual(["changed", [7, 8]]);
+  expect(drop.calls).toContainEqual(["get_tracks", { trackIds: [7, 8] }]);
+  expect(drop.notices.map((notice) => notice.message)).toEqual([
+    "曲目已登记，已添加 1 首，1 首追加失败",
+  ]);
+  expect(drop.calls.filter(([command]) => command === "append_playlist_tracks")).toHaveLength(1);
   drop.unmount();
 });

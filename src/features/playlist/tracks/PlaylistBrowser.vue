@@ -1,5 +1,7 @@
 <template>
   <section
+    :data-local-drop="props.playlist ? 'playlist' : undefined"
+    :data-playlist-id="props.playlist?.id"
     :aria-label="t('播放列表浏览')"
     class="sidebar-scrollbars bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-white"
   >
@@ -133,6 +135,11 @@
         >
           {{ t("添加到队尾") }}
         </button>
+        <RereadMenuItem
+          :track-ids="contextTargetTrackIds"
+          :disabled="props.isPlaylistActionPending"
+          @close="closeContextMenu(true)"
+        />
         <EditMenuItem
           :track-ids="contextTargetTrackIds"
           :disabled="props.isPlaylistActionPending"
@@ -206,6 +213,7 @@ import type { PlaylistSummary, PlaylistTrackSummary } from "@/features/playlist/
 import PlaylistTrack from "@/features/playlist/tracks/PlaylistTrack.vue";
 import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
 

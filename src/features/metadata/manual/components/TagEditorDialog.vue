@@ -300,7 +300,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useTagEditor } from "@/features/metadata/manual/useEditor";
 import type { DraftField, LyricsMarkAction, TagField } from "@/features/metadata/types";
 import TagCoverEditor from "@/features/metadata/manual/components/TagCoverEditor.vue";
-import { formatTrackDuration } from "@/features/library/format";
+import { formatTrackDuration } from "@/features/tracks/format";
 import { formatPathForDisplay } from "@/shared/filesystem/presentation";
 import LyricsEditor from "@/features/lyrics/components/LyricsEditor.vue";
 import { useLyricsBatch } from "@/features/lyrics/download/batch";

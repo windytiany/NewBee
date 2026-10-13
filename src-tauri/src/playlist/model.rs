@@ -32,3 +32,24 @@ impl From<String> for PlaylistReorderError {
         Self::Failed { message }
     }
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistAppendResult {
+    pub(crate) index: usize,
+    pub(crate) track_id: i64,
+    #[serde(flatten)]
+    pub(crate) outcome: PlaylistAppendOutcome,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum PlaylistAppendOutcome {
+    Added {
+        #[serde(rename = "playlistItemId")]
+        playlist_item_id: i64,
+    },
+    Failed {
+        error: String,
+    },
+}

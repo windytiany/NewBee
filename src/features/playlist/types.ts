@@ -27,3 +27,8 @@ export type PlaylistSummary = {
   trackCount: number;
   coverTrackId: number | null;
 };
+
+export type PlaylistAppendResult = {
+  index: number;
+  trackId: number;
+} & ({ status: "added"; playlistItemId: number } | { status: "failed"; error: string });

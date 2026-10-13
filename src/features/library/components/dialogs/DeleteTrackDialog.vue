@@ -46,7 +46,8 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { ref } from "vue";
-import type { TrackSummary } from "@/features/library/types";
+
+import type { TrackSummary } from "@/features/tracks/types";
 
 const props = defineProps<{
   track: TrackSummary;

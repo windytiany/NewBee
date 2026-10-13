@@ -6,6 +6,7 @@ use std::sync::Mutex;
 pub(crate) struct State {
     cache: Cache,
     derivation: Mutex<()>,
+    extraction: Mutex<()>,
     #[cfg(test)]
     decodes: std::sync::atomic::AtomicUsize,
 }
@@ -15,6 +16,7 @@ impl State {
         Self {
             cache,
             derivation: Mutex::new(()),
+            extraction: Mutex::new(()),
             #[cfg(test)]
             decodes: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -22,6 +24,59 @@ impl State {
 }
 
 impl Database {
+    pub(crate) fn complete_track_artwork(
+        &self,
+        track_id: i64,
+        write: &crate::locking::write::WriteState,
+    ) -> Result<(), String> {
+        use rusqlite::OptionalExtension;
+        let _extraction = self
+            .artwork
+            .extraction
+            .lock()
+            .map_err(|_| "Artwork extraction is unavailable".to_owned())?;
+        let path: Option<String> = self.connection()?.query_row(
+            "SELECT path FROM tracks JOIN track_artwork_pending ON track_id = tracks.id WHERE tracks.id = ?1",
+            [track_id], |row| row.get(0),
+        ).optional().map_err(|error| error.to_string())?;
+        let Some(path) = path else {
+            return Ok(());
+        };
+        let _guard = write.acquire()?;
+        let audio = std::path::Path::new(&path);
+        let outcome = (|| {
+            let embedded = crate::metadata::files::artwork::read_embedded_cover(audio)?;
+            if let Some(cover) = embedded {
+                return Ok((Some(cover), crate::database::ArtworkUpdate::Embedded));
+            }
+            match crate::metadata::files::artwork::read_directory_cover(audio)? {
+                Some((cover, source)) => Ok((
+                    Some(cover),
+                    crate::database::ArtworkUpdate::Directory(
+                        source.to_string_lossy().into_owned(),
+                    ),
+                )),
+                None => Ok((None, crate::database::ArtworkUpdate::Embedded)),
+            }
+        })();
+        match outcome {
+            Ok((content, source)) => {
+                self.confirm_track_artwork(track_id, &path, content.as_ref(), &source)
+            }
+            Err(error) => {
+                // A failed initial lookup is also terminal. Explicit reread/import
+                // can accept later file changes; browsing must not repeatedly probe.
+                self.confirm_track_artwork(
+                    track_id,
+                    &path,
+                    None,
+                    &crate::database::ArtworkUpdate::Embedded,
+                )?;
+                Err(error)
+            }
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn artwork_decode_count(&self) -> usize {
         self.artwork
@@ -68,7 +123,7 @@ impl Database {
                 .query_row(
                     "SELECT ta.image_id FROM tracks t
              INNER JOIN track_artwork ta ON ta.track_id = t.id
-             WHERE t.album_artist IS ?1 AND t.album IS ?2
+             WHERE t.in_library = 1 AND t.album_artist IS ?1 AND t.album IS ?2
              ORDER BY t.disc_number IS NULL, t.disc_number,
                       t.track_number IS NULL, t.track_number, t.id LIMIT 1",
                     params![album_artist, album],

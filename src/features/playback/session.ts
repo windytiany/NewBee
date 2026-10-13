@@ -17,6 +17,7 @@ export const PLAYBACK_STATUS_POLL_INTERVAL_MS = 500;
 
 export type PlaybackSessionSnapshot = {
   revision: number;
+  structuralRevision: number;
   displayedTracks: PlaybackDisplayTrack[];
   currentRowKey: string | null;
   currentTrack: PlaybackTrack | null;
@@ -54,11 +55,11 @@ type SessionCommand =
   | { action: "removeTrack"; trackId: number }
   | { action: "repeat" | "shuffle"; enabled: boolean }
   | { action: "beginEditing"; trackIds: readonly number[]; paths?: readonly string[] }
-  | { action: "endEditing"; token: number }
-  | { action: "updateMetadata"; tracks: readonly TrackMetadataUpdate[] };
+  | { action: "endEditing"; token: number };
 
 export type PlaybackSessionProgress = {
   revision: number;
+  structuralRevision: number;
   playbackStatus: PlaybackStatus & { playbackId: number | null };
 };
 
@@ -69,16 +70,25 @@ export type PlaybackSessionReply = {
   editToken: number | null;
 };
 
+export type PlaybackMetadataDelta = {
+  revision: number;
+  structuralRevision: number;
+  displayedTracks: PlaybackDisplayTrack[];
+  currentTrack: PlaybackTrack | null;
+};
+
 type SessionSubscriber = (
   receive: (snapshot: PlaybackSessionSnapshot) => void,
 ) => Promise<() => void>;
 export type PlaybackSessionOptions = {
   invokeCommand?: PlaybackCommandInvoker;
   subscribe?: SessionSubscriber;
+  subscribeMetadata?: (receive: (delta: PlaybackMetadataDelta) => void) => Promise<() => void>;
 };
 
 const emptySnapshot = (): PlaybackSessionSnapshot => ({
   revision: -1,
+  structuralRevision: -1,
   displayedTracks: [],
   currentRowKey: null,
   currentTrack: null,
@@ -114,6 +124,10 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   const sidecarLyrics = ref<TrackLyrics | null>(null);
   let disposed = false;
   let unlisten: (() => void) | null = null;
+  let unlistenMetadata: (() => void) | null = null;
+  let refreshing: Promise<void> | null = null;
+  const rows = new Map<string, { track: PlaybackDisplayTrack; revision: number }>();
+  let currentMetadataRevision = -1;
   let sidecarRequest = 0;
   let seekingVersion = 0;
   let seekPlaybackId: number | null = null;
@@ -126,7 +140,42 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       seekingVersion += 1;
     }
     snapshot.value = next;
+    rows.clear();
+    for (const row of snapshot.value.displayedTracks)
+      rows.set(row.rowKey, { track: row, revision: next.revision });
+    currentMetadataRevision = next.revision;
     adapterError.value = "";
+  }
+
+  async function refreshSnapshot() {
+    refreshing ??= request({ action: "snapshot" }, false)
+      .then(() => {})
+      .finally(() => {
+        refreshing = null;
+      });
+    await refreshing;
+  }
+
+  async function receiveMetadata(delta: PlaybackMetadataDelta) {
+    if (disposed) return;
+    if (delta.structuralRevision !== snapshot.value.structuralRevision) {
+      if (delta.structuralRevision > snapshot.value.structuralRevision) await refreshSnapshot();
+      return;
+    }
+    for (const update of delta.displayedTracks) {
+      const row = rows.get(update.rowKey);
+      if (row && delta.revision > row.revision && row.track.trackId === update.trackId) {
+        row.track.title = update.title;
+        row.track.album = update.album;
+        row.track.durationMs = update.durationMs;
+        row.revision = delta.revision;
+      }
+    }
+    if (delta.revision > currentMetadataRevision) {
+      snapshot.value.currentTrack = delta.currentTrack;
+      currentMetadataRevision = delta.revision;
+    }
+    snapshot.value.revision = Math.max(snapshot.value.revision, delta.revision);
   }
 
   async function request(command: SessionCommand, pending = true) {
@@ -164,12 +213,12 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     statusPending.value = true;
     try {
       const progress = await invokeCommand<PlaybackSessionProgress>("playback_session_progress");
-      if (disposed || progress.revision < snapshot.value.revision) return false;
+      if (disposed || progress.structuralRevision < snapshot.value.structuralRevision) return false;
       if (
-        progress.revision > snapshot.value.revision ||
+        progress.structuralRevision > snapshot.value.structuralRevision ||
         progress.playbackStatus.playbackId !== snapshot.value.currentPlaybackId
       ) {
-        await request({ action: "snapshot" }, false);
+        await refreshSnapshot();
       } else {
         snapshot.value = { ...snapshot.value, playbackStatus: progress.playbackStatus };
       }
@@ -196,11 +245,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
 
   const currentTrack = computed(() => snapshot.value.currentTrack);
   watch(
-    () =>
-      [
-        currentTrack.value?.trackId ?? currentTrack.value?.path ?? null,
-        snapshot.value.currentPlaybackId,
-      ] as const,
+    () => [currentTrack.value?.trackId ?? null, snapshot.value.currentPlaybackId] as const,
     ([trackId, playbackId], previous) => {
       if (trackId === previous?.[0] && playbackId === previous?.[1]) return;
       // Editing detaches the audio instance, but retains the listening lyrics.
@@ -208,10 +253,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       const generation = ++sidecarRequest;
       sidecarLyrics.value = null;
       if (trackId === null || playbackId === null) return;
-      const request =
-        typeof trackId === "string"
-          ? invokeCommand<TrackLyrics | null>("get_file_sidecar_lyrics", { path: trackId })
-          : invokeCommand<TrackLyrics | null>("get_playback_sidecar_lyrics", { trackId });
+      const request = invokeCommand<TrackLyrics | null>("get_playback_sidecar_lyrics", { trackId });
       void request
         .then((lyrics) => {
           if (!disposed && generation === sidecarRequest) sidecarLyrics.value = lyrics;
@@ -237,6 +279,27 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
         const stop = await subscribe(receive);
         if (disposed) stop();
         else unlisten = stop;
+      } catch (error) {
+        logger.warn("playback", "subscription_failed", error);
+      }
+    }
+    const subscribeMetadata =
+      options.subscribeMetadata ??
+      (options.invokeCommand
+        ? null
+        : (receive: (delta: PlaybackMetadataDelta) => void) =>
+            listen<PlaybackMetadataDelta>("playback-session-metadata", ({ payload }) =>
+              receive(payload),
+            ));
+    if (subscribeMetadata) {
+      try {
+        const stop = await subscribeMetadata((delta) => {
+          void receiveMetadata(delta).catch((error: unknown) =>
+            logger.warn("playback", "metadata_unavailable", error),
+          );
+        });
+        if (disposed) stop();
+        else unlistenMetadata = stop;
       } catch (error) {
         logger.warn("playback", "subscription_failed", error);
       }
@@ -355,6 +418,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       disposed = true;
       sidecarRequest += 1;
       unlisten?.();
+      unlistenMetadata?.();
     },
     refreshPlaybackStatus,
     playTracks: (
@@ -372,7 +436,10 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     seekTo,
     withMetadataEditing,
     updateTrackMetadata: async (tracks: readonly TrackMetadataUpdate[]) => {
-      await request({ action: "updateMetadata", tracks });
+      const delta = await invokeCommand<PlaybackMetadataDelta | null>("playback_session_metadata", {
+        tracks,
+      });
+      if (delta) await receiveMetadata(delta);
     },
     removeQueueItems: (rowKeys: readonly string[]) => remove({ action: "remove", rowKeys }),
     removeTrackFromQueue: (trackId: number) => remove({ action: "removeTrack", trackId }),

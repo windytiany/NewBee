@@ -14,6 +14,10 @@ pub(super) enum Request {
         generation: u64,
         reply: mpsc::Sender<Result<SessionReply, String>>,
     },
+    Metadata {
+        tracks: Vec<MetadataUpdate>,
+        reply: mpsc::Sender<Result<Option<MetadataDelta>, String>>,
+    },
     Progress {
         reply: mpsc::Sender<Result<SessionProgress, String>>,
     },
@@ -26,6 +30,7 @@ pub(super) enum Request {
 #[serde(rename_all = "camelCase")]
 pub struct SessionProgress {
     pub(super) revision: u64,
+    pub(super) structural_revision: u64,
     pub(super) playback_status: PlaybackStatus,
 }
 
@@ -52,6 +57,17 @@ impl PlaybackSession {
                 generation,
                 reply,
             })
+            .map_err(|_| "Playback session is unavailable".to_owned())?;
+        Ok(receiver)
+    }
+
+    pub(super) fn metadata(
+        &self,
+        tracks: Vec<MetadataUpdate>,
+    ) -> Result<mpsc::Receiver<Result<Option<MetadataDelta>, String>>, String> {
+        let (reply, receiver) = mpsc::channel();
+        self.requests
+            .send(Request::Metadata { tracks, reply })
             .map_err(|_| "Playback session is unavailable".to_owned())?;
         Ok(receiver)
     }
@@ -100,6 +116,11 @@ pub fn initialize(app: &AppHandle, path: PathBuf) {
                     log::warn!("Could not publish playback session: {error}");
                 }
             },
+            |delta| {
+                if let Err(error) = app.emit("playback-session-metadata", delta) {
+                    log::warn!("Could not publish playback metadata: {error}");
+                }
+            },
         )
     });
 }
@@ -110,6 +131,7 @@ fn publish_change<A: SessionAudio>(
     publish: &mut impl FnMut(&SessionSnapshot),
 ) {
     session.revision += 1;
+    session.structural_revision = session.revision;
     if let Err(error) = persistence.save(&session.saved()) {
         log::warn!("{error}");
         session.playback_error = error;
@@ -128,6 +150,7 @@ fn set_pending<A: SessionAudio>(
     busy.store(true, Ordering::SeqCst);
     session.command_pending = true;
     session.revision += 1;
+    session.structural_revision = session.revision;
     if let Ok(snapshot) = session.snapshot() {
         publish(&snapshot);
     }
@@ -140,6 +163,7 @@ pub(super) fn run_worker<A: SessionAudio>(
     busy: Arc<AtomicBool>,
     receiver: mpsc::Receiver<Request>,
     mut publish: impl FnMut(&SessionSnapshot),
+    mut publish_metadata: impl FnMut(&MetadataDelta),
 ) {
     let (mut persistence, saved) = SessionPersistence::load(path);
     let mut session = Session::new(audio, saved, generation);
@@ -193,6 +217,16 @@ pub(super) fn run_worker<A: SessionAudio>(
             }
         };
         match request {
+            Request::Metadata { tracks, reply } => {
+                if changed {
+                    publish_change(&mut session, &mut persistence, &mut publish);
+                }
+                let result = session.refresh_metadata(tracks);
+                if let Ok(Some(delta)) = &result {
+                    publish_metadata(delta);
+                }
+                let _ = reply.send(result);
+            }
             Request::Backup { reply } => {
                 if changed {
                     publish_change(&mut session, &mut persistence, &mut publish);
@@ -208,6 +242,7 @@ pub(super) fn run_worker<A: SessionAudio>(
                     .status()
                     .map(|playback_status| SessionProgress {
                         revision: session.revision,
+                        structural_revision: session.structural_revision,
                         playback_status,
                     });
                 let _ = reply.send(progress);
@@ -265,6 +300,21 @@ pub async fn playback_session_command(
 }
 
 #[tauri::command]
+pub async fn playback_session_metadata(
+    tracks: Vec<MetadataUpdate>,
+    state: State<'_, PlaybackSession>,
+) -> Result<Option<MetadataDelta>, String> {
+    let receiver = state.metadata(tracks)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        receiver
+            .recv()
+            .map_err(|_| "Playback session is unavailable".to_owned())?
+    })
+    .await
+    .map_err(|error| format!("Playback metadata request failed: {error}"))?
+}
+
+#[tauri::command]
 pub async fn playback_session_progress(
     state: State<'_, PlaybackSession>,
 ) -> Result<SessionProgress, String> {
@@ -276,26 +326,6 @@ pub async fn playback_session_progress(
     })
     .await
     .map_err(|error| format!("Playback progress request failed: {error}"))?
-}
-
-pub fn synchronize_removal<R: tauri::Runtime>(
-    app: &AppHandle<R>,
-    command: SessionCommand,
-) -> RemovalResult {
-    let result = app
-        .state::<PlaybackSession>()
-        .request(command)
-        .and_then(|receiver| {
-            receiver
-                .recv()
-                .map_err(|_| "Playback session is unavailable".to_owned())?
-        })
-        .and_then(|reply| {
-            reply
-                .removal
-                .ok_or_else(|| "Missing playback queue removal result".to_owned())
-        });
-    result.unwrap_or_else(|message| RemovalResult::QueueError { message })
 }
 
 pub(super) fn system_operation(action: &str) -> Option<SystemOperation> {

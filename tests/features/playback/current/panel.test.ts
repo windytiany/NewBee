@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import * as Vue from "vue";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 import { compileSfc, evaluateSource } from "../../../support/module/loader";
 import { createHostRenderer, visit } from "../../../support/host/renderer";
 import type { HostTree } from "../../../support/host/renderer";

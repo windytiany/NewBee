@@ -12,12 +12,14 @@ mod playback;
 mod playlist;
 mod settings;
 mod shortcuts;
+mod tracks;
 mod window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let result = tauri::Builder::default()
         .manage(playback::PlaybackState::default())
+        .manage(tracks::scheduling::SchedulingState::default())
         .manage(locking::write::WriteState::default())
         .manage(artwork::artist::LookupState::default())
         .manage(backup::BackupState::default())
@@ -49,6 +51,7 @@ pub fn run() {
                     database_path,
                     &cache_directory,
                 )?);
+                tracks::scheduling::initialize(app.handle());
                 stage = "settings";
                 app.manage(settings::SettingsState::load(
                     app_data_dir.join("settings.json"),
@@ -111,7 +114,7 @@ pub fn run() {
             library::commands::remove_music_library_directory,
             library::commands::migrate_library_paths,
             library::import::directory::scan_music_library,
-            library::import::supported_audio_extensions,
+            tracks::discovery::supported_audio_extensions,
             import::readable_audio_files,
             library::import::files::import_music_files,
             lyrics::embedded::get_track_lyrics,
@@ -135,14 +138,17 @@ pub fn run() {
             playlist::commands::create_playlist,
             playlist::commands::rename_playlist,
             playlist::commands::delete_playlist,
-            playlist::commands::add_track_to_playlist,
+            playlist::commands::append_playlist_tracks,
             playlist::commands::list_playlists,
             playlist::commands::list_playlist_tracks,
             playlist::commands::remove_playlist_items,
             playlist::commands::reorder_playlist_items,
             playback::queue::commands::list_skipped_track_ids,
             playback::queue::commands::set_tracks_skipped,
-            library::commands::get_track,
+            tracks::commands::get_track,
+            tracks::commands::get_tracks,
+            tracks::commands::register_local_tracks,
+            tracks::commands::reread_track_tags,
             artwork::get_track_artwork,
             artwork::files::get_file_artwork,
             artwork::artist::get_artist_photo,
@@ -168,13 +174,21 @@ pub fn run() {
             metadata::releases::save::save_album_tags,
             playback::session::runtime::playback_session_command,
             playback::session::runtime::playback_session_progress,
+            playback::session::runtime::playback_session_metadata,
             playback::playback_spectrum,
             playback::statistics::list_playback_statistics,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!());
     if let Err(error) = &result {
         log::error!("event=application_run_failed error={error}");
         log::logger().flush();
     }
-    result.expect("error while running tauri application");
+    result
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                use tauri::Manager;
+                app.state::<tracks::scheduling::SchedulingState>().stop();
+            }
+        });
 }

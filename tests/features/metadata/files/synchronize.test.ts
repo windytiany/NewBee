@@ -124,7 +124,7 @@ it("opens real file targets in the shared tag editor and synchronizes only file 
       trackIds: [],
       paths: [path],
     });
-    expect(commands.find((command) => command.action === "updateMetadata")?.tracks).toContainEqual(
+    expect(commands.find((command) => command.action === "metadata")?.tracks).toContainEqual(
       expect.objectContaining({ id: null, path, title: "Written" }),
     );
   } finally {

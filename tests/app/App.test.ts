@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { compileSfc, evaluateSource } from "../support/module/loader";
 
-import { createHostNode, createHostRenderer } from "../support/host/renderer";
+import { createHostNode, createHostRenderer, getTextContent } from "../support/host/renderer";
 import type { HostNode } from "../support/host/renderer";
 import type { PlaylistSummary } from "@/features/playlist/types";
 import { notifications, notify } from "@/shared/notifications/center";
@@ -50,7 +50,7 @@ const libraryTrackActionPending = Vue.ref(false);
 const playlistActionError = Vue.ref("");
 const artistsError = Vue.ref("");
 const activePage = Vue.ref("Library");
-const dropLabel = Vue.ref("");
+const dropHighlight = Vue.ref<Vue.CSSProperties | null>(null);
 
 async function createComponent(source: string) {
   const output = compileSfc(source, "src/app/App.vue", { id: "app-test" });
@@ -115,6 +115,7 @@ async function createComponent(source: string) {
       pendingPlaylistIds: Vue.ref([]),
       playlistsError: Vue.ref(""),
       playlistTracksError: Vue.ref(""),
+      trackMetadataError: Vue.ref(""),
       isPlaylistActionPending: Vue.ref(false),
       playlistActionError,
       coverTrackId: Vue.ref(playlist.coverTrackId),
@@ -196,10 +197,7 @@ async function createComponent(source: string) {
     "@/features/metadata/releases/components/ReleaseTagDialog.vue": defaultModule(passiveComponent),
     "@/shared/notifications/NotificationHost.vue": defaultModule(passiveComponent),
     "@/features/import/useDropImport": {
-      useDropImport: (page: Vue.Ref<string>) => {
-        expect(page).toBe(activePage);
-        return { label: dropLabel };
-      },
+      useDropImport: () => ({ highlight: dropHighlight }),
     },
     "@/app/pages": {
       usePersistentActivePage: () => ({ activePage }),
@@ -232,6 +230,7 @@ async function createComponent(source: string) {
     modules[name] = defaultModule(passiveComponent);
   }
   modules["@/features/settings/shortcuts/useShortcuts"] = { useShortcuts: () => {} };
+  modules["@/features/tracks/bridge"] = { useTrackBridge: () => {} };
   await loadLibraryModules(modules);
   await loadPlaylistModules(modules);
   return evaluateSource<{ default: Vue.Component }>(output, modules).default;
@@ -289,7 +288,7 @@ beforeEach(() => {
   playlistActionError.value = "";
   artistsError.value = "";
   activePage.value = "Library";
-  dropLabel.value = "";
+  dropHighlight.value = null;
   notifications.clear();
 });
 
@@ -299,17 +298,27 @@ afterEach(() => {
 });
 
 describe("App workspace lifecycle", () => {
-  it("shows the window-wide drop feedback only when imports are enabled", async () => {
+  it("outlines only the hovered drop region without text or a window-wide backdrop", async () => {
     const root = mountApp();
     function findDrop(node: HostNode): HostNode | undefined {
       if ("data-drop-import" in node.props) return node;
       return node.children.map(findDrop).find(Boolean);
     }
     expect(findDrop(root)).toBeUndefined();
-    dropLabel.value = "导入音乐库";
-    await Vue.nextTick();
-    expect(findDrop(root)?.props.role).toBe("status");
-    dropLabel.value = "";
+    for (const bounds of [
+      { left: "240px", top: "80px", width: "600px", height: "480px" },
+      { left: "860px", top: "80px", width: "240px", height: "480px" },
+    ]) {
+      dropHighlight.value = bounds;
+      await Vue.nextTick();
+      const outline = findDrop(root);
+      expect(outline?.props.style).toEqual(bounds);
+      expect(outline?.props["aria-hidden"]).toBe("true");
+      expect(getTextContent(outline!)).toBe("");
+      expect(String(outline?.props.class)).not.toContain("inset-");
+      expect(String(outline?.props.class)).not.toContain("bg-");
+    }
+    dropHighlight.value = null;
     await Vue.nextTick();
     expect(findDrop(root)).toBeUndefined();
   });

@@ -1,5 +1,8 @@
 use super::Database;
-use crate::playlist::model::{PlaylistReorderError, PlaylistSummary, PlaylistTrackSummary};
+use crate::playlist::model::{
+    PlaylistAppendOutcome, PlaylistAppendResult, PlaylistReorderError, PlaylistSummary,
+    PlaylistTrackSummary,
+};
 use rusqlite::{params, OptionalExtension};
 use std::collections::HashSet;
 
@@ -47,7 +50,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn add_track_to_playlist(&self, playlist_id: i64, track_id: i64) -> Result<(), String> {
+    pub fn append_playlist_tracks(
+        &self,
+        playlist_id: i64,
+        track_ids: Vec<i64>,
+    ) -> Result<Vec<PlaylistAppendResult>, String> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction()
@@ -63,39 +70,74 @@ impl Database {
         if playlist.is_none() {
             return Err(format!("Playlist {playlist_id} was not found"));
         }
-
-        let track = transaction
-            .query_row("SELECT id FROM tracks WHERE id = ?1", [track_id], |row| {
-                row.get::<_, i64>(0)
-            })
-            .optional()
-            .map_err(|error| format!("Failed to verify track {track_id}: {error}"))?;
-        if track.is_none() {
-            return Err(format!("Track {track_id} was not found"));
-        }
-
-        let position = transaction
+        let mut position = transaction
             .query_row(
-                "SELECT COALESCE(MAX(position), -1) + 1
-                 FROM playlist_items
-                 WHERE playlist_id = ?1",
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_items WHERE playlist_id = ?1",
                 [playlist_id],
                 |row| row.get::<_, i64>(0),
             )
             .map_err(|error| format!("Failed to find playlist {playlist_id} end: {error}"))?;
-        transaction
-            .execute(
-                "INSERT INTO playlist_items (playlist_id, track_id, position)
-                 VALUES (?1, ?2, ?3)",
-                params![playlist_id, track_id, position],
-            )
-            .map_err(|error| {
-                format!("Failed to add track {track_id} to playlist {playlist_id}: {error}")
-            })?;
+        let mut results = Vec::with_capacity(track_ids.len());
+        {
+            let mut verify = transaction
+                .prepare("SELECT EXISTS(SELECT 1 FROM tracks WHERE id = ?1)")
+                .map_err(|error| format!("Failed to prepare track verification: {error}"))?;
+            let mut insert = transaction.prepare(
+                "INSERT INTO playlist_items (playlist_id, track_id, position) VALUES (?1, ?2, ?3)"
+            ).map_err(|error| format!("Failed to prepare playlist append: {error}"))?;
+            for (index, track_id) in track_ids.into_iter().enumerate() {
+                transaction
+                    .execute_batch("SAVEPOINT playlist_append_item")
+                    .map_err(|error| format!("Failed to start playlist item update: {error}"))?;
+                let inserted = (|| {
+                    let exists = verify
+                        .query_row([track_id], |row| row.get::<_, bool>(0))
+                        .map_err(|error| format!("Failed to verify track {track_id}: {error}"))?;
+                    if !exists {
+                        return Err(format!("Track {track_id} was not found"));
+                    }
+                    let affected_rows = insert
+                        .execute(params![playlist_id, track_id, position])
+                        .map_err(|error| {
+                            format!(
+                                "Failed to add track {track_id} to playlist {playlist_id}: {error}"
+                            )
+                        })?;
+                    if affected_rows != 1 {
+                        return Err(format!(
+                            "Track {track_id} was not inserted into playlist {playlist_id}"
+                        ));
+                    }
+                    Ok(transaction.last_insert_rowid())
+                })();
+                let outcome = match inserted {
+                    Ok(playlist_item_id) => {
+                        position += 1;
+                        PlaylistAppendOutcome::Added { playlist_item_id }
+                    }
+                    Err(error) => {
+                        transaction
+                            .execute_batch("ROLLBACK TO playlist_append_item")
+                            .map_err(|error| {
+                                format!("Failed to roll back playlist item update: {error}")
+                            })?;
+                        PlaylistAppendOutcome::Failed { error }
+                    }
+                };
+                transaction
+                    .execute_batch("RELEASE playlist_append_item")
+                    .map_err(|error| format!("Failed to finish playlist item update: {error}"))?;
+                results.push(PlaylistAppendResult {
+                    index,
+                    track_id,
+                    outcome,
+                });
+            }
+        }
         transaction
             .commit()
             .map_err(|error| format!("Failed to finish playlist update: {error}"))?;
-        Ok(())
+        Ok(results)
     }
 
     pub fn list_playlists(&self) -> Result<Vec<PlaylistSummary>, String> {

@@ -2,7 +2,7 @@ import { expect, it } from "bun:test";
 import { effectScope } from "vue";
 import { playbackFixture } from "../../support/playback/session";
 import { useLyrics } from "@/features/lyrics/composables/useLyrics";
-import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
+import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import type { TrackLyrics } from "@/features/lyrics/types";
 
@@ -88,7 +88,7 @@ for (const validSidecar of [true, false]) {
       expect(reads).toEqual([1]);
       await session.withMetadataEditing([1], async () => {
         embedded = { kind: "plain", text: "saved embedded" };
-        window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
+        window.dispatchEvent(new Event(TRACKS_CHANGED_EVENT));
       });
       await settle();
       expect(lyrics.state.value).toEqual({

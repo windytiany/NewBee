@@ -180,6 +180,11 @@ function createComponent(source: string) {
     "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,
     }),
+    "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h("button", { "data-reread-targets": JSON.stringify(props.trackIds) }, "重新读取标签"),
+    }),
     "@/features/metadata/manual/components/EditMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
@@ -428,6 +433,11 @@ describe("歌单曲目上下文菜单", () => {
     expect(
       findNode(root, (node) => node.props["data-edit-targets"] !== undefined)?.props[
         "data-edit-targets"
+      ],
+    ).toBe("[1,3]");
+    expect(
+      findNode(root, (node) => node.props["data-reread-targets"] !== undefined)?.props[
+        "data-reread-targets"
       ],
     ).toBe("[1,3]");
     const addButton = findMenuItem(root, "添加为下一首");

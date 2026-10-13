@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { computed, onScopeDispose, ref, watch } from "vue";
 import type { EditorTrack } from "@/features/metadata/types";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
-import { formatTrackDuration } from "@/features/library/format";
+import { formatTrackDuration } from "@/features/tracks/format";
 import { createLyricsSearch } from "@/features/lyrics/download/search";
 import { searchQuery } from "@/features/lyrics/download/query";
 import { createLyricsApi } from "@/features/lyrics/api";

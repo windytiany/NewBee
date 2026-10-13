@@ -411,7 +411,7 @@ fn album_sorting_supports_names_years_and_both_directions() {
 }
 
 #[test]
-fn removing_track_cascades_playlist_items_without_deleting_the_file() {
+fn removing_track_preserves_playlist_items_snapshots_and_the_file() {
     let database = Database::open(":memory:").unwrap();
     let playlist_id = database.create_playlist("Favorites").unwrap();
     let path = std::env::temp_dir().join(format!(
@@ -428,7 +428,7 @@ fn removing_track_cascades_playlist_items_without_deleting_the_file() {
         .connection()
         .unwrap()
         .execute(
-            "INSERT INTO tracks (id, path, title) VALUES (1, ?1, 'Track')",
+            "INSERT INTO tracks (id, path, title, in_library) VALUES (1, ?1, 'Track', 1)",
             [&path_string],
         )
         .unwrap();
@@ -441,18 +441,23 @@ fn removing_track_cascades_playlist_items_without_deleting_the_file() {
         )
         .unwrap();
     database.connection().unwrap().execute("INSERT INTO track_artwork (track_id, image_id, source_kind, source_path) VALUES (1, 1, 'embedded', ?1)", [&path_string]).unwrap();
-    database.add_track_to_playlist(playlist_id, 1).unwrap();
-    database.add_track_to_playlist(playlist_id, 1).unwrap();
+    database
+        .append_playlist_tracks(playlist_id, vec![1])
+        .unwrap();
+    database
+        .append_playlist_tracks(playlist_id, vec![1])
+        .unwrap();
 
     database.remove_track_from_library(1).unwrap();
 
-    assert!(database.get_track(1).unwrap().is_none());
-    assert!(database.get_track_artwork(1).unwrap().is_none());
-    assert!(database
-        .list_playlist_tracks(playlist_id)
-        .unwrap()
-        .is_empty());
-    assert_eq!(database.list_playlists().unwrap()[0].track_count, 0);
+    assert!(database.get_track(1).unwrap().is_some());
+    assert!(matches!(
+        database.get_track_artwork(1).unwrap(),
+        Some(TrackArtwork::Available { .. })
+    ));
+    assert_eq!(database.list_playlist_tracks(playlist_id).unwrap().len(), 2);
+    assert_eq!(database.list_playlists().unwrap()[0].track_count, 2);
+    assert!(database.library_track_paths().unwrap().is_empty());
     assert_eq!(std::fs::read(&path).unwrap(), b"audio remains on disk");
     std::fs::remove_file(path).unwrap();
     assert_eq!(

@@ -7,8 +7,8 @@ import type {
   LibraryAlbumSelection,
   LibraryGroup,
   LibraryGrouping,
-  TrackSummary,
 } from "@/features/library/types";
+import type { TrackSummary } from "@/features/tracks/types";
 import { compileSfc, evaluateSource, transpileScript } from "../../../support/module/loader";
 import { createHostNode, createHostRenderer, findNode } from "../../../support/host/renderer";
 
@@ -114,9 +114,15 @@ function mountBrowser() {
             (group ? tracks.filter((track) => track.artist === group.artist) : tracks)
           );
         }
-        if (command === "add_track_to_playlist") {
-          playlist.push(args?.trackId as number);
-          return;
+        if (command === "append_playlist_tracks") {
+          const ids = args?.trackIds as number[];
+          playlist.push(...ids);
+          return ids.map((trackId, index) => ({
+            index,
+            trackId,
+            status: "added",
+            playlistItemId: index + 1,
+          }));
         }
         throw new Error(`Unexpected command: ${command}`);
       },

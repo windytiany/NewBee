@@ -40,6 +40,7 @@ export function usePlaylist(active: Readonly<Ref<boolean>>) {
   for (const [key, source] of [
     ["playlist-list", page.playlistsError],
     ["playlist-tracks", page.playlistTracksError],
+    ["playlist-metadata", page.trackMetadataError],
   ] as const) {
     useNotification(() => {
       const message = source.value;

@@ -6,8 +6,8 @@ pub(crate) mod save;
 mod tests;
 
 use crate::database::Database;
-use crate::library::model::TrackDetails;
 use crate::locking::write::WriteState;
+use crate::tracks::model::TrackDetails;
 use model::{normalize_changes, validate_track_ids, LyricsMarkAction, MetadataField};
 use serde::Serialize;
 use tauri::{ipc::Channel, Manager, State};

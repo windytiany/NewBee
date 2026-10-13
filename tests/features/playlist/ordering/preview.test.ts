@@ -29,6 +29,7 @@ type DragCallbacks = {
 };
 
 let dragCallbacks: DragCallbacks | null = null;
+let dragCancels = 0;
 const emittedReorders: number[][] = [];
 const mountedApps: Array<{ unmount: () => void }> = [];
 
@@ -55,6 +56,7 @@ function createPlaylistBrowserComponent(source: string) {
     vue: Vue,
     "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon, X: icon },
     "@/features/metadata/manual/components/EditMenuItem.vue": icon,
+    "@/features/tracks/presentation/RereadMenuItem.vue": icon,
     "@/features/lyrics/download/DownloadMenuItem.vue": icon,
     "@/features/playback/queue/components/SkipMenuItem.vue": icon,
     "@/shared/interaction/useContextMenu": {
@@ -69,7 +71,13 @@ function createPlaylistBrowserComponent(source: string) {
     "@/features/playlist/ordering/drag": {
       createPlaylistDragReorder: (callbacks: DragCallbacks) => {
         dragCallbacks = callbacks;
-        return { begin: () => {}, cancel: () => {}, dispose: () => {} };
+        return {
+          begin: () => {},
+          cancel: () => {
+            dragCancels++;
+          },
+          dispose: () => {},
+        };
       },
     },
     "@/features/playlist/tracks/PlaylistTrack.vue": {
@@ -108,6 +116,16 @@ const playlistBrowser = createPlaylistBrowserComponent(
 );
 
 function mountPlaylistBrowser() {
+  const tracks = Vue.reactive(
+    [101, 102, 103].map((id) => ({
+      playlistItemId: id,
+      trackId: id,
+      title: `Track ${id}`,
+      artist: "Artist",
+      album: "Album",
+      durationMs: 1000,
+    })),
+  );
   const renderer = createHostRenderer(createHostNode);
   const root = createHostNode("root");
   const app = renderer.createApp({
@@ -116,14 +134,7 @@ function mountPlaylistBrowser() {
         playlist: { id: 7, name: "Favorites", trackCount: 3, coverTrackId: null },
         coverTrackId: null,
         isCoverPending: false,
-        tracks: [101, 102, 103].map((id) => ({
-          playlistItemId: id,
-          trackId: id,
-          title: `Track ${id}`,
-          artist: "Artist",
-          album: "Album",
-          durationMs: 1000,
-        })),
+        tracks,
         currentRowKey: null,
         isLoadingPlaylists: false,
         playlistsError: "",
@@ -137,18 +148,19 @@ function mountPlaylistBrowser() {
   });
   app.mount(root);
   mountedApps.push(app);
-  return root;
+  return { root, tracks };
 }
 
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
   dragCallbacks = null;
   emittedReorders.length = 0;
+  dragCancels = 0;
 });
 
 describe("歌单拖拽预览", () => {
   it("拖动到首位时保持原顺序，只显示数量和落点线，松手后提交", async () => {
-    const root = mountPlaylistBrowser();
+    const { root, tracks } = mountPlaylistBrowser();
     const callbacks = dragCallbacks;
     if (!callbacks) throw new Error("Playlist drag callbacks were not initialized.");
 
@@ -184,6 +196,20 @@ describe("歌单拖拽预览", () => {
     );
     expect(preview).not.toBeNull();
     expect(getTextContent(preview!)).toContain("2");
+
+    Object.assign(tracks[1]!, {
+      title: "Confirmed title",
+      album: "Confirmed album",
+      durationMs: 9000,
+    });
+    await Vue.nextTick();
+    expect(dragCancels).toBe(0);
+    expect(findNode(root, (node) => node.props["data-playlist-drag-preview"] !== undefined)).toBe(
+      preview,
+    );
+    expect(
+      firstRow?.children.some((node) => node.props["data-test-drop-position"] === "before"),
+    ).toBe(true);
 
     callbacks.onDrop([102, 103, 101]);
     await Vue.nextTick();

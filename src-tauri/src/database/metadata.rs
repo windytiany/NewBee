@@ -62,7 +62,7 @@ impl Database {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
         if let Some(confirmed) = confirmed {
-            super::library::persist_track(
+            super::tracks::persist_track(
                 &transaction,
                 confirmed,
                 &super::ArtworkUpdate::PreserveDirectory,

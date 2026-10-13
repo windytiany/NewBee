@@ -52,9 +52,14 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
         }),
       },
       "@/shared/notifications/useNotification": { useNotification: () => {} },
-      "@/features/library/format": { formatTrackDuration: () => "1:00" },
+      "@/features/tracks/format": { formatTrackDuration: () => "1:00" },
       "@/features/playback/queue/components/QueueRow.vue": row,
       "@/features/metadata/manual/components/EditMenuItem.vue": menu,
+      "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
+        props: ["trackIds"],
+        setup: (props) => () =>
+          Vue.h("button", { "data-reread-targets": JSON.stringify(props.trackIds) }),
+      }),
       "@/features/playback/queue/components/SkipMenuItem.vue": menu,
     },
   ).default;
@@ -100,6 +105,11 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
   expect(
     findNode(root, (node) => node.props["data-skip-targets"] !== undefined)?.props[
       "data-skip-targets"
+    ],
+  ).toBe("[7,7,8]");
+  expect(
+    findNode(root, (node) => node.props["data-reread-targets"] !== undefined)?.props[
+      "data-reread-targets"
     ],
   ).toBe("[7,7,8]");
   skippedIds.value = [];

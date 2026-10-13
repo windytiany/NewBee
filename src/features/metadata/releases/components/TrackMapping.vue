@@ -7,7 +7,7 @@ import type { MappingDragPreview } from "@/features/metadata/releases/mapping/dr
 import type { createReleaseEditor } from "@/features/metadata/releases/useEditor";
 import type { AlbumField } from "@/features/metadata/releases/types";
 import { TAG_FIELDS } from "@/features/metadata/draft";
-import { formatTrackDuration } from "@/features/library/format";
+import { formatTrackDuration } from "@/features/tracks/format";
 const props = defineProps<{ editor: ReturnType<typeof createReleaseEditor>; disabled: boolean }>();
 const state = props.editor.state;
 const dragPreview = ref<MappingDragPreview | null>(null);

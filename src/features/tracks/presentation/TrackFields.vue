@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { formatTrackDuration } from "@/features/library/format";
+import { formatTrackDuration } from "@/features/tracks/format";
 defineProps<{
   track: {
     title: string | null;

@@ -1,4 +1,12 @@
 export const inboxMessages: Record<string, string> = {
+  添加到歌单: "Add to playlist",
+  添加到队尾失败: "Could not append to queue",
+  "{count} 个文件登记失败": "Failed to register {count} files",
+  "曲目已登记，目标追加失败": "Tracks registered, but destination append failed",
+  "曲目已登记，已添加 {count} 首，{failed} 首追加失败":
+    "Tracks registered, {count} added, {failed} failed to append",
+  操作进行中: "Operation in progress",
+  文件处理失败: "Could not process files",
   所有艺术家: "All artists",
   添加日期: "Date added",
   目标: "Destination",

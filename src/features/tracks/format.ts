@@ -1,5 +1,6 @@
 import { t } from "@/shared/i18n/locale";
-import type { TrackDetails } from "@/features/library/types";
+
+import type { TrackDetails } from "@/features/tracks/types";
 
 export function formatTrackDuration(durationMs: number | null): string | null {
   if (durationMs === null || !Number.isFinite(durationMs) || durationMs < 0) return null;

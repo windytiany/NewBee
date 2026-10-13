@@ -50,8 +50,9 @@ import { t } from "@/shared/i18n/locale";
 import { computed } from "vue";
 import { AudioLines } from "@lucide/vue";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
-import type { TrackSummary } from "@/features/library/types";
-import { formatTrackDuration } from "@/features/library/format";
+
+import type { TrackSummary } from "@/features/tracks/types";
+import { formatTrackDuration } from "@/features/tracks/format";
 
 const props = defineProps<{
   track: TrackSummary;

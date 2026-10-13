@@ -1,14 +1,16 @@
-use super::model::{PlaylistReorderError, PlaylistSummary, PlaylistTrackSummary};
+use super::model::{
+    PlaylistAppendResult, PlaylistReorderError, PlaylistSummary, PlaylistTrackSummary,
+};
 use crate::database::blocking;
 
 #[tauri::command]
-pub async fn add_track_to_playlist<R: tauri::Runtime>(
+pub async fn append_playlist_tracks<R: tauri::Runtime>(
     playlist_id: i64,
-    track_id: i64,
+    track_ids: Vec<i64>,
     app: tauri::AppHandle<R>,
-) -> Result<(), String> {
+) -> Result<Vec<PlaylistAppendResult>, String> {
     blocking(app, move |database| {
-        database.add_track_to_playlist(playlist_id, track_id)
+        database.append_playlist_tracks(playlist_id, track_ids)
     })
     .await
 }

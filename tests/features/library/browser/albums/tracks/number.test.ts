@@ -8,7 +8,7 @@ import {
   findNode,
   getTextContent,
 } from "../../../../../support/host/renderer";
-import { formatTrackDuration } from "@/features/library/format";
+import { formatTrackDuration } from "@/features/tracks/format";
 
 const source = await Bun.file(
   new URL("../../../../../../src/features/library/browser/albums/AlbumTrack.vue", import.meta.url),
@@ -20,7 +20,7 @@ const component = evaluateSource<{ default: Vue.Component }>(
   {
     vue: Vue,
     "@lucide/vue": { AudioLines: Vue.defineComponent({ setup: () => () => null }) },
-    "@/features/library/format": { formatTrackDuration },
+    "@/features/tracks/format": { formatTrackDuration },
   },
 ).default;
 

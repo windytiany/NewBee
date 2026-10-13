@@ -1,4 +1,10 @@
 export const metadataMessages: Record<string, string> = {
+  重新读取标签: "Reread tags",
+  "正在读取标签…": "Reading tags…",
+  已重新读取标签: "Tags reread",
+  "{count} 首曲目标签读取失败": "Failed to read tags for {count} tracks",
+  标签读取失败: "Could not read tags",
+  曲目信息刷新失败: "Could not refresh track information",
   无效的文件操作: "Invalid file operation",
   "MusicBrainz 发行版本链接或 ID": "MusicBrainz release link or ID",
   "{count} 首 · {fields}": "{count} tracks · {fields}",

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { loadSourceModules } from "../../../../support/module/loader";
 import { createHostNode, createHostRenderer, findNode } from "../../../../support/host/renderer";
-import type { LibraryAlbumSelection, TrackSummary } from "@/features/library/types";
+import type { LibraryAlbumSelection } from "@/features/library/types";
+import type { TrackSummary } from "@/features/tracks/types";
 
 const icon = Vue.defineComponent(() => () => null);
 const playbackIcon = (name: string) =>
@@ -58,6 +59,7 @@ const modules: Record<string, unknown> = {
   "@/features/library/browser/albums/useTrackColumns": { useTrackColumns: () => Vue.ref(2) },
   "@/features/library/browser/albums/AlbumTrack.vue": passive,
   "@/features/metadata/manual/components/EditMenuItem.vue": passive,
+  "@/features/tracks/presentation/RereadMenuItem.vue": passive,
   "@/features/lyrics/download/DownloadMenuItem.vue": passive,
   "@/features/playback/queue/components/SkipMenuItem.vue": passive,
   "@/features/library/browser/albums/AlbumContextMenu.vue": passive,

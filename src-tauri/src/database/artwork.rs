@@ -1,3 +1,5 @@
+mod confirmation;
+
 use crate::artwork::model::ArtworkContent;
 use rusqlite::{params, Transaction};
 

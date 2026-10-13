@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { Ref } from "vue";
-import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
+import { TRACKS_CHANGED_EVENT, type TracksChange } from "@/features/tracks/events";
+import { PLAYLIST_CHANGED_EVENT } from "@/features/playlist/events";
 import { usePlaylistState } from "@/features/playlist/composables/useState";
 import type { PlaylistAvailability } from "@/features/playlist/composables/useState";
 
@@ -9,8 +10,12 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   const availability = ref<PlaylistAvailability>("unavailable");
   const page = usePlaylistState(availability);
 
-  function onLibraryChanged() {
-    void page.refreshPlaylists(undefined, true);
+  function onTracksChanged(event: Event) {
+    page.updateTrackMetadata((event as CustomEvent<TracksChange>).detail);
+  }
+
+  function onPlaylistChanged() {
+    void page.refreshPlaylists();
   }
 
   watch(
@@ -23,13 +28,15 @@ export function usePlaylistPage(active: Readonly<Ref<boolean>>) {
   );
 
   onMounted(() => {
-    globalThis.window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    globalThis.window.addEventListener(TRACKS_CHANGED_EVENT, onTracksChanged);
+    globalThis.window.addEventListener(PLAYLIST_CHANGED_EVENT, onPlaylistChanged);
     availability.value = active.value ? "active" : "background";
   });
 
   onBeforeUnmount(() => {
     availability.value = "unavailable";
-    globalThis.window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    globalThis.window.removeEventListener(TRACKS_CHANGED_EVENT, onTracksChanged);
+    globalThis.window.removeEventListener(PLAYLIST_CHANGED_EVENT, onPlaylistChanged);
   });
 
   return page;

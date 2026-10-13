@@ -66,6 +66,7 @@ pub(crate) fn save_track(
             });
         }
         if !effective_changes.is_empty() || cover.is_some() {
+            database.begin_track_inspection(track_id)?;
             let path = Path::new(track.path());
             if let Some(cover) = cover {
                 files::write_file_with_cover(
@@ -80,6 +81,10 @@ pub(crate) fn save_track(
                 files::write_file(path, &effective_changes)?;
             }
             result.file_written = true;
+            #[cfg(test)]
+            if let Some(hook) = database.after_file_write.lock().unwrap().take() {
+                hook();
+            }
         }
         let synchronize = (|| {
             let confirmed = if result.file_written {

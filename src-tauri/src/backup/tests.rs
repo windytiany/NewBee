@@ -117,7 +117,7 @@ fn fixture(root: &Path) -> Database {
     let database = Database::open(&path).unwrap();
     let connection = Connection::open(path).unwrap();
     connection.execute_batch(
-        "INSERT INTO tracks (id, path, title, album) VALUES (1, 'C:\\Music\\missing.flac', 'song', 'album');
+        "INSERT INTO tracks (id, path, title, album, in_library) VALUES (1, 'C:\\Music\\missing.flac', 'song', 'album', 1);
          INSERT INTO music_library_directories (path) VALUES ('C:\\Music');
          INSERT INTO skipped_tracks (track_id) VALUES (1);
          INSERT INTO playlists (id, name) VALUES (1, 'favorites');
@@ -187,7 +187,7 @@ fn fixture_with_schema(root: &Path, rewrite: impl Fn(&str) -> String) -> Databas
     connection
         .pragma_update(None, "user_version", version)
         .unwrap();
-    connection.execute_batch("INSERT INTO tracks (id, path, title, album) VALUES (1, '/missing/album/song.flac', 'restored song', 'album'), (2, '/missing/other/song.flac', 'other song', 'other'); INSERT INTO track_play_statistics VALUES (1, 3);").unwrap();
+    connection.execute_batch("INSERT INTO tracks (id, path, title, album, in_library) VALUES (1, '/missing/album/song.flac', 'restored song', 'album', 1), (2, '/missing/other/song.flac', 'other song', 'other', 1); INSERT INTO track_play_statistics VALUES (1, 3);").unwrap();
     drop(connection);
     Database::open(path).unwrap()
 }
@@ -345,7 +345,12 @@ fn equivalent_schema_spelling_can_be_imported_and_restores_deleted_album() {
                     .replace('\n', ending)
             });
             database.remove_track_from_library(1).unwrap();
-            assert!(database.get_track(1).unwrap().is_none());
+            assert!(database.get_track(1).unwrap().is_some());
+            assert!(!database
+                .library_track_paths()
+                .unwrap()
+                .iter()
+                .any(|path| path == "/missing/album/song.flac"));
             archive::read(&exported).unwrap();
             restore::stage(&directory.0, &database, Some(&current), &exported).unwrap();
             database.close_test_connection();
