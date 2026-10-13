@@ -121,46 +121,48 @@ watch(keys, (keys) => {
       data-local-drop="Inbox"
       tabindex="-1"
       :aria-label="t('Inbox')"
-      class="sidebar-scrollbars bg-app-base col-start-1 row-start-1 h-full min-h-0 min-w-0 overflow-y-auto px-5 pb-6 text-white outline-none sm:px-8 md:col-start-3"
+      class="sidebar-scrollbars bg-app-base col-start-1 row-start-1 h-full min-h-0 min-w-0 overflow-auto px-5 pb-6 text-white outline-none sm:px-8 md:col-start-3"
       @contextmenu="emptyMenu"
       @keydown.f5.prevent="inbox.refresh()"
     >
-      <div
-        class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 px-4 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_9rem_3rem]"
-      >
-        <span class="text-right">#</span><span>{{ t("歌曲") }}</span
-        ><span class="hidden sm:block">{{ t("专辑") }}</span
-        ><span class="hidden sm:block">{{ t("添加日期") }}</span
-        ><span class="text-right">{{ t("时长") }}</span>
-      </div>
-      <p v-if="state.loading" role="status" class="text-app-muted py-4 text-sm">
-        {{ t("加载中…") }}
-      </p>
-      <p v-else-if="state.error" role="alert" class="py-4 text-sm">{{ state.error }}</p>
-      <p v-else-if="!tracks.length" class="text-app-muted py-4 text-sm">{{ t("无曲目") }}</p>
-      <ol v-else ref="list" @keydown="keyboard.onKeydown" @focusin="keyboard.onFocusin">
-        <TrackRow
-          v-for="(track, index) in tracks"
-          :key="track.path"
-          :item-key="track.path"
-          :track="track"
-          :number="index + 1"
-          :focused="selection.isFocused(track.path)"
-          :selected="selection.isSelected(track.path)"
-          :current="playback.activeQueueRowKey.value === `inbox:${track.path}`"
-          :menu-open="request?.payload.itemKey === track.path"
-          menu-id="inbox-context-menu"
-          @select="selection.selectItem(track.path, keys, $event)"
-          @play="inbox.play(track.path)"
-          @context-menu="open"
+      <div class="sm:min-w-[40rem]">
+        <div
+          class="bg-app-base/95 text-app-muted sticky top-0 z-10 grid grid-cols-[1.5rem_minmax(0,1fr)_3rem] items-center gap-3 border-b border-white/10 px-4 py-2 text-xs backdrop-blur-sm sm:grid-cols-[2rem_minmax(0,1.5fr)_minmax(0,1fr)_9rem_3rem]"
         >
-          <template #before-duration>
-            <span class="text-app-muted hidden text-xs tabular-nums sm:block">{{
-              formatAddedDate(track.addedAt)
-            }}</span>
-          </template>
-        </TrackRow>
-      </ol>
+          <span class="text-right">#</span><span>{{ t("歌曲") }}</span
+          ><span class="hidden sm:block">{{ t("专辑") }}</span
+          ><span class="hidden sm:block">{{ t("添加日期") }}</span
+          ><span class="text-right">{{ t("时长") }}</span>
+        </div>
+        <p v-if="state.loading" role="status" class="text-app-muted py-4 text-sm">
+          {{ t("加载中…") }}
+        </p>
+        <p v-else-if="state.error" role="alert" class="py-4 text-sm">{{ state.error }}</p>
+        <p v-else-if="!tracks.length" class="text-app-muted py-4 text-sm">{{ t("无曲目") }}</p>
+        <ol v-else ref="list" @keydown="keyboard.onKeydown" @focusin="keyboard.onFocusin">
+          <TrackRow
+            v-for="(track, index) in tracks"
+            :key="track.path"
+            :item-key="track.path"
+            :track="track"
+            :number="index + 1"
+            :focused="selection.isFocused(track.path)"
+            :selected="selection.isSelected(track.path)"
+            :current="playback.activeQueueRowKey.value === `inbox:${track.path}`"
+            :menu-open="request?.payload.itemKey === track.path"
+            menu-id="inbox-context-menu"
+            @select="selection.selectItem(track.path, keys, $event)"
+            @play="inbox.play(track.path)"
+            @context-menu="open"
+          >
+            <template #before-duration>
+              <span class="text-app-muted hidden text-xs tabular-nums sm:block">{{
+                formatAddedDate(track.addedAt)
+              }}</span>
+            </template>
+          </TrackRow>
+        </ol>
+      </div>
     </section>
     <div
       v-if="request"

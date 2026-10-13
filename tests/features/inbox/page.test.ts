@@ -224,6 +224,23 @@ describe("Inbox workspace", () => {
     expect(getTextContent(context.root)).not.toContain("无演出者");
   });
 
+  it("keeps full columns wide enough and scrollable between narrow side panes", async () => {
+    const context = await mount();
+    const pane = findNode(
+      context.root,
+      (node) => node.type === "section" && node.props["data-local-drop"] === "Inbox",
+    );
+    expect(String(pane?.props.class).split(/\s+/)).toContain("overflow-auto");
+    const table = findNode(context.root, (node) =>
+      String(node.props.class).split(/\s+/).includes("sm:min-w-[40rem]"),
+    );
+    expect(table).not.toBeNull();
+    expect(table && findNode(table, (node) => node.type === "ol")).not.toBeNull();
+    expect(
+      table && findNode(table, (node) => String(node.props.class).includes("sticky top-0")),
+    ).not.toBeNull();
+  });
+
   it("shows local added dates between album and duration without changing row order", async () => {
     const context = await mount();
     const rows = context.rows();
