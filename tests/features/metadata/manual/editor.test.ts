@@ -148,16 +148,29 @@ describe("metadata editing", () => {
     expect(createTagDraft([editable(1)], "album").some(({ key }) => key === "lyrics")).toBe(false);
   });
 
-  it("does not rewrite the cached snapshot without an edited field", async () => {
-    const { editor, saves, synchronized } = fixture();
-    await editor.openTracks([1]);
-    editor.prepareSave();
-    await settle();
-    expect(saves).toEqual([]);
-    expect(synchronized).toEqual([]);
-    expect(editor.state.error).toBe("没有可写入的字段。");
-    expect(editor.state.open).toBe(true);
-  });
+  it.each(["single", "batch", "album"])(
+    "closes the unchanged %s editor without writing or releasing playback",
+    async (mode) => {
+      const released: number[][] = [];
+      const { editor, saves, synchronized } = fixture({
+        editFiles: (ids, save) => {
+          released.push([...ids]);
+          return save();
+        },
+      });
+      if (mode === "album") await editor.openAlbum({ albumArtist: "Album Artist", album: "Album" });
+      else await editor.openTracks(mode === "single" ? [1] : [1, 2]);
+      editor.prepareSave();
+      await settle();
+      expect(saves).toEqual([]);
+      expect(synchronized).toEqual([]);
+      expect(released).toEqual([]);
+      expect(editor.state.error).toBe("");
+      expect(editor.state.open).toBe(false);
+      expect(editor.state.dirty).toBe(false);
+      expect(editor.state.confirmDiscard).toBe(false);
+    },
+  );
 
   it("deduplicates targets and leaves mixed batch values unapplied", async () => {
     const { editor, saves } = fixture();

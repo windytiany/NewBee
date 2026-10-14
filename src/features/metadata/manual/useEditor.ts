@@ -250,7 +250,7 @@ export function createTagEditor(options: TagEditorOptions) {
       const lyricsAction = state.lyricsAction;
       let changes = buildTagChanges(state.draft, state.tracks, {
         changedOnly: true,
-        allowEmpty: state.dirty || lyricsAction !== "keep" || artwork.length > 0,
+        allowEmpty: true,
       });
       if (!changes.length && lyricsAction === "keep" && !artwork.length) {
         state.dirty = false;
