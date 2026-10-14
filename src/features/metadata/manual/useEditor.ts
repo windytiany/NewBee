@@ -8,8 +8,8 @@ import type { LibraryAlbumSelection } from "@/features/library/types";
 import { createLibraryApi } from "@/features/library/api";
 import { createMetadataApi } from "@/features/metadata/api";
 import { createTagSynchronization } from "@/features/metadata/synchronize";
-import { createMetadataSave, metadataSaved } from "@/features/metadata/save";
-import type { MetadataFileEditor } from "@/features/metadata/save";
+import { createManualSave } from "@/features/metadata/manual/save";
+import type { ManualSaveOptions, ManualSaveRequest } from "@/features/metadata/manual/save";
 import { usePlaybackSession } from "@/features/playback/session";
 import { buildTagChanges, createTagDraft } from "@/features/metadata/draft";
 import type {
@@ -17,16 +17,13 @@ import type {
   EditableTrack,
   EditMode,
   LyricsMarkAction,
-  TagChange,
   MetadataSaveResult,
 } from "@/features/metadata/types";
 
-import { planCollectionWrites } from "@/features/artwork/collection/plan";
 import { createArtworkCollectionApi } from "@/features/artwork/collection/api";
 import { createTracksApi } from "@/features/tracks/api";
 import { createManualLoading } from "@/features/metadata/manual/loading";
 import {
-  acceptCollectionChanges,
   addPicture,
   changePictureType,
   commonPictures,
@@ -36,29 +33,12 @@ import {
   serializeCollections,
   setDisplayPicture,
 } from "@/features/artwork/collection/model";
-import type {
-  ArtworkCollection,
-  ArtworkDraft,
-  ArtworkWritePlan,
-  CollectionDraft,
-} from "@/features/artwork/collection/types";
+import type { CollectionDraft } from "@/features/artwork/collection/types";
 
-export type TagEditorOptions = {
+export type TagEditorOptions = ManualSaveOptions & {
   loadTracks: (trackIds: MetadataTarget[]) => Promise<EditableTrack[]>;
-  loadCollections: (trackIds: number[]) => Promise<ArtworkCollection[]>;
   readArtwork: (artworkId: number) => Promise<ArrayBuffer>;
-  planArtwork: (artworkDrafts: ArtworkDraft[]) => Promise<ArtworkWritePlan[]>;
   loadAlbum: (album: LibraryAlbumSelection) => Promise<MetadataTarget[]>;
-  save: (
-    trackIds: number[],
-    changes: TagChange[],
-    progress: (result: MetadataSaveResult) => void,
-    lyricsAction: LyricsMarkAction,
-    operationId: string | undefined,
-    artworkDrafts: ArtworkDraft[],
-  ) => Promise<MetadataSaveResult[]>;
-  editFiles: MetadataFileEditor;
-  synchronize: (trackIds: MetadataTarget[]) => Promise<void>;
 };
 
 function errorMessage(error: unknown) {
@@ -66,19 +46,7 @@ function errorMessage(error: unknown) {
 }
 
 export function createTagEditor(options: TagEditorOptions) {
-  const fileTargets = new Map<number, string>();
-  const saving = createMetadataSave({
-    ...options,
-    notifyResult: true,
-    synchronize: (ids) =>
-      options.synchronize([
-        ...ids,
-        ...ids.flatMap((id) => {
-          const path = typeof id === "number" ? fileTargets.get(id) : undefined;
-          return path === undefined ? [] : [path];
-        }),
-      ]),
-  });
+  const saving = createManualSave(options);
   const state = reactive({
     ...toRefs(saving.state),
     open: false,
@@ -102,24 +70,17 @@ export function createTagEditor(options: TagEditorOptions) {
     });
   }
   let loadGeneration = 0;
-  let pendingChanges: TagChange[] = [];
-  let pendingTrackIds: number[] = [];
-  let pendingArtwork: ArtworkDraft[] = [];
-  let pendingLyricsAction: LyricsMarkAction = "keep";
-  const pendingArtworkReload = new Set<number>();
+  let preparedSave: ManualSaveRequest | null = null;
 
   async function open(loadIds: () => Promise<MetadataTarget[]>, mode: EditMode) {
     if (state.open) return;
     const generation = ++loadGeneration;
     saving.reset();
-    fileTargets.clear();
-    pendingArtworkReload.clear();
-    pendingTrackIds = [];
+    preparedSave = null;
     Object.assign(state, {
       open: true,
       mode,
       loading: true,
-      saving: false,
       tracks: [],
       draft: [],
       error: "",
@@ -155,9 +116,12 @@ export function createTagEditor(options: TagEditorOptions) {
         throw new Error(t("返回的曲目与编辑目标不匹配。"));
       }
       state.tracks = tracks;
-      if (ids.every((id) => typeof id === "string"))
-        for (const { track } of tracks)
-          if (typeof track.id === "number") fileTargets.set(track.id, track.path);
+      saving.setTargets(
+        tracks.flatMap(({ track }) =>
+          typeof track.id === "number" ? [{ trackId: track.id, path: track.path }] : [],
+        ),
+        ids.every((id) => typeof id === "string"),
+      );
       state.draft = createTagDraft(tracks, mode);
       const trackIds = numericIds();
       try {
@@ -271,63 +235,36 @@ export function createTagEditor(options: TagEditorOptions) {
     }
   }
 
-  async function reloadSavedArtwork() {
-    const ids = [...pendingArtworkReload];
-    if (!ids.length) return;
-    state.saving = true;
-    try {
-      const reloaded = createCollectionDraft(ids, await options.loadCollections(ids));
-      for (const track of reloaded.tracks) {
-        const index = state.artwork.tracks.findIndex((entry) => entry.trackId === track.trackId);
-        state.artwork.tracks[index] = track;
-        if (track.error === null) pendingArtworkReload.delete(track.trackId);
-      }
-      const errors = reloaded.tracks.flatMap(({ error }) => (error === null ? [] : [error]));
-      if (errors.length) throw new Error(errors.join("\n"));
-    } catch (error) {
-      for (const track of state.artwork.tracks)
-        if (pendingArtworkReload.has(track.trackId)) track.error = errorMessage(error);
-      state.error = errorMessage(error);
-      logger.error("metadata", "editor_artwork_refresh_failed", error);
-    } finally {
-      state.saving = false;
-    }
-  }
-
   async function retrySynchronization() {
     if (state.loading || state.saving || state.importingArtwork) return;
-    state.error = "";
-    await reloadSavedArtwork();
-    await saving.retrySynchronization();
-    if (!state.dirty && !state.synchronizationError && !state.error) close();
+    const result = await saving.retrySynchronization(state.artwork);
+    if (!state.dirty && !result.hasError) close();
   }
 
   function prepareTargetSave(trackIds: number[]) {
     if (state.loading || state.saving || state.importingArtwork) return;
     state.error = "";
     try {
-      pendingTrackIds = trackIds.filter(
-        (id) => !state.results.some((result) => result.trackId === id && metadataSaved(result)),
-      );
+      const pendingTrackIds = saving.remainingIds(trackIds);
       if (!pendingTrackIds.length) {
         void retrySynchronization();
         return;
       }
-      pendingArtwork = serializeCollections(state.artwork).filter(({ trackId }) =>
+      const artwork = serializeCollections(state.artwork).filter(({ trackId }) =>
         pendingTrackIds.includes(trackId),
       );
-      pendingLyricsAction = state.lyricsAction;
-      pendingChanges = buildTagChanges(state.draft, state.tracks, {
+      const lyricsAction = state.lyricsAction;
+      let changes = buildTagChanges(state.draft, state.tracks, {
         changedOnly: true,
-        allowEmpty: state.dirty || pendingLyricsAction !== "keep" || pendingArtwork.length > 0,
+        allowEmpty: state.dirty || lyricsAction !== "keep" || artwork.length > 0,
       });
-      if (!pendingChanges.length && pendingLyricsAction === "keep" && !pendingArtwork.length) {
+      if (!changes.length && lyricsAction === "keep" && !artwork.length) {
         state.dirty = false;
         void retrySynchronization();
         return;
       }
-      if (pendingLyricsAction === "mark")
-        pendingChanges = pendingChanges.filter(({ field }) => field !== "lyrics");
+      if (lyricsAction === "mark") changes = changes.filter(({ field }) => field !== "lyrics");
+      preparedSave = { trackIds: pendingTrackIds, changes, lyricsAction, artwork: state.artwork };
       void save();
     } catch (error) {
       reportError("editor_validation_failed", error);
@@ -335,67 +272,10 @@ export function createTagEditor(options: TagEditorOptions) {
   }
 
   async function save() {
-    if (state.saving || pendingTrackIds.length === 0) return;
-    const ids = [...pendingTrackIds];
-    const changes = pendingChanges.map((change) => ({ ...change }));
-    const action = pendingLyricsAction;
-    const targets = state.tracks.flatMap(({ track }) =>
-      typeof track.id === "number" && ids.includes(track.id)
-        ? [{ trackId: track.id, path: track.path }]
-        : [],
-    );
-    let saveIds = ids;
-    await saving.run({
-      targets,
-      writeTrackIds: ids.filter(() => changes.length || action === "mark"),
-      prepareWriteTrackIds: pendingArtwork.length
-        ? async (progress) => {
-            const plan = await planCollectionWrites(pendingArtwork, options.planArtwork);
-            const failed = new Set<number>();
-            const artworkWrites = new Set<number>();
-            for (const entry of plan) {
-              if (entry.error !== null) {
-                failed.add(entry.trackId);
-                progress({
-                  trackId: entry.trackId,
-                  path: targets.find(({ trackId }) => trackId === entry.trackId)?.path ?? "",
-                  fileWritten: false,
-                  databaseUpdated: false,
-                  error: entry.error,
-                });
-              } else if (entry.fileWriteRequired) artworkWrites.add(entry.trackId);
-            }
-            saveIds = ids.filter((id) => !failed.has(id));
-            return saveIds.filter(
-              (id) => changes.length || action === "mark" || artworkWrites.has(id),
-            );
-          }
-        : undefined,
-      execute: (progress, operationId) =>
-        saveIds.length
-          ? options.save(
-              saveIds,
-              changes,
-              progress,
-              action,
-              operationId,
-              pendingArtwork.filter(({ trackId }) => saveIds.includes(trackId)),
-            )
-          : Promise.resolve([]),
-    });
-    const successfulIds = state.results.flatMap((result) =>
-      typeof result.trackId === "number" && ids.includes(result.trackId) && metadataSaved(result)
-        ? [result.trackId]
-        : [],
-    );
-    acceptCollectionChanges(state.artwork, successfulIds);
-    for (const { trackId } of pendingArtwork)
-      if (successfulIds.includes(trackId)) pendingArtworkReload.add(trackId);
-    await reloadSavedArtwork();
-    const failed = state.results.filter((result) => !metadataSaved(result)).length;
-    const error = [state.error, state.synchronizationError].filter(Boolean).join("\n");
-    state.dirty = failed > 0;
-    if (!state.dirty && !error) state.open = false;
+    if (state.loading || state.saving || state.importingArtwork || !preparedSave) return;
+    const result = await saving.run(preparedSave);
+    state.dirty = result.failed;
+    if (!state.dirty && !result.hasError) state.open = false;
   }
 
   return {
