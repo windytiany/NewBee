@@ -14,7 +14,7 @@ impl TestFiles {
             NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed),
         ));
         fs::create_dir(&directory).unwrap();
-        Self(directory)
+        Self(fs::canonicalize(directory).unwrap())
     }
 
     pub(crate) fn wav(&self, name: &str) -> String {

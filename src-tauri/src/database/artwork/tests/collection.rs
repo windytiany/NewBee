@@ -593,7 +593,7 @@ fn linked_scans_update_all_cover_readers_and_daily_reads_keep_offline_snapshots(
 fn directory_discovery_and_manual_association_share_only_the_same_path_identity() {
     let database = database();
     let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("cover.png");
+    let path = directory.path().canonicalize().unwrap().join("cover.png");
     let picture = picture(1, 3);
     std::fs::write(&path, &picture.content.image).unwrap();
     let snapshot = scan(vec![], vec![(path.to_str().unwrap(), picture.clone())]);

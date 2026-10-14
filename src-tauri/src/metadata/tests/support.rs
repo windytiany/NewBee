@@ -16,7 +16,7 @@ impl Fixture {
             NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(&path).unwrap();
-        Self(path)
+        Self(fs::canonicalize(path).unwrap())
     }
     pub(in crate::metadata) fn wav(&self) -> PathBuf {
         let path = self.0.join("track.wav");

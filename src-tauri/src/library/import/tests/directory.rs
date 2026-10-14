@@ -103,9 +103,13 @@ fn rejects_roots_that_no_longer_match_the_saved_canonical_path() {
     fs::create_dir(files.0.join("nested")).unwrap();
     files.wav("song.wav");
     let database = Database::open(":memory:").unwrap();
-    database
-        .add_music_library_directory(&files.0.join("nested/..").to_string_lossy())
-        .unwrap();
+    // PathBuf::join normalizes `..` for canonical Windows verbatim paths.
+    let root = format!(
+        "{}{separator}nested{separator}..",
+        files.0.display(),
+        separator = std::path::MAIN_SEPARATOR
+    );
+    database.add_music_library_directory(&root).unwrap();
 
     let result = run_scan(&database).unwrap();
 
