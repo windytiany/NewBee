@@ -13,6 +13,10 @@ export function reportLibraryImport(result: { added: number; updated: number }) 
 /** Revoking membership does not change the registered track snapshot. */
 export function reportLibraryRemoval(trackIds: readonly number[]) {
   if (trackIds.length === 0) return;
+  reportLibraryMembershipChanged();
+}
+
+export function reportLibraryMembershipChanged() {
   invalidateAlbumArtworkCache();
   globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT));
 }

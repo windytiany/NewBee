@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
 import { createInboxApi, INBOX_CHANGED_EVENT } from "@/features/inbox/api";
+import { reportLibraryMembershipChanged } from "@/features/library/events";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
@@ -29,6 +30,8 @@ export function useInboxImport() {
           message: t("导入完成，{count} 首失败（详情见日志）", { count: failed }),
           key: "inbox-import",
         });
+      if (results.some((result) => result.success && !result.skipped))
+        reportLibraryMembershipChanged();
       globalThis.window.dispatchEvent(new globalThis.Event(INBOX_CHANGED_EVENT));
     } catch (error) {
       logger.error("inbox", "register_failed", error);

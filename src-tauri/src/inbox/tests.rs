@@ -14,7 +14,7 @@ fn title(value: &str) -> MetadataChange {
 }
 
 #[test]
-fn paths_coexist_with_snapshots_and_only_scanning_updates_the_library() {
+fn registration_revokes_membership_and_only_ingesting_updates_the_snapshot() {
     let files = TestFiles::new();
     let path = std::fs::canonicalize(files.wav("track.wav"))
         .unwrap()
@@ -38,6 +38,7 @@ fn paths_coexist_with_snapshots_and_only_scanning_updates_the_library() {
         .iter()
         .all(|result| result.success));
     assert_eq!(database.inbox_paths().unwrap(), std::slice::from_ref(&path));
+    assert!(database.library_track_paths().unwrap().is_empty());
     files::write_file(Path::new(&path), &[title("Edited")]).unwrap();
     assert_eq!(
         files::read_track(Path::new(&path))
@@ -78,6 +79,45 @@ fn paths_coexist_with_snapshots_and_only_scanning_updates_the_library() {
             .unwrap(),
         1
     );
+}
+
+#[test]
+fn partial_registration_transfers_only_successful_paths() {
+    let files = TestFiles::new();
+    let paths: Vec<String> = ["good.wav", "blocked.wav"]
+        .into_iter()
+        .map(|name| {
+            std::fs::canonicalize(files.wav(name))
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    let contents: Vec<_> = paths
+        .iter()
+        .map(|path| std::fs::read(path).unwrap())
+        .collect();
+    let database = Database::open(":memory:").unwrap();
+    for path in &paths {
+        crate::library::import::import_track(&database, Path::new(path), &mut Default::default());
+    }
+    database.connection().unwrap().execute_batch(
+        "CREATE TRIGGER reject_membership_removal BEFORE UPDATE OF in_library ON tracks WHEN NEW.in_library = 0 AND OLD.path LIKE '%blocked.wav' BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+    ).unwrap();
+
+    let results = register(&database, paths.clone());
+    assert!(results[0].success);
+    assert!(!results[0].skipped);
+    assert!(!results[1].success);
+    assert!(results[1].error.as_deref().unwrap().contains("blocked"));
+    assert_eq!(database.inbox_paths().unwrap(), vec![paths[0].clone()]);
+    assert_eq!(
+        database.library_track_paths().unwrap(),
+        vec![paths[1].clone()]
+    );
+    for (path, content) in paths.iter().zip(contents) {
+        assert_eq!(std::fs::read(path).unwrap(), content);
+    }
 }
 
 #[test]

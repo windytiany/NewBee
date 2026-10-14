@@ -222,7 +222,8 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
     assert_eq!(register(&database, &track), id);
     assert_eq!(database.library_track_paths().unwrap(), vec![path.clone()]);
     assert!(database.inbox_paths().unwrap().is_empty());
-    database.remove_track_from_library(id).unwrap();
+    assert!(database.register_inbox_path(&path).unwrap());
+    assert_eq!(database.inbox_paths().unwrap(), vec![path.clone()]);
     assert!(database.library_track_paths().unwrap().is_empty());
     assert!(database
         .list_artists(LibraryGrouping::Artist)
@@ -317,6 +318,23 @@ fn library_import_rolls_back_snapshot_and_membership_if_inbox_removal_fails() {
     );
     assert!(database.library_track_paths().unwrap().is_empty());
     assert_eq!(database.inbox_paths().unwrap(), vec![track.path]);
+}
+
+#[test]
+fn inbox_registration_rolls_back_if_registration_or_membership_removal_fails() {
+    for trigger in [
+        "CREATE TRIGGER reject_inbox_registration BEFORE INSERT ON inbox BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+        "CREATE TRIGGER reject_membership_removal BEFORE UPDATE OF in_library ON tracks WHEN NEW.in_library = 0 BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+    ] {
+        let database = Database::open(":memory:").unwrap();
+        let track = snapshot("song.flac", None, None);
+        database.upsert_track(&track, None).unwrap();
+        database.connection().unwrap().execute_batch(trigger).unwrap();
+
+        assert!(database.register_inbox_path(&track.path).is_err());
+        assert!(database.inbox_paths().unwrap().is_empty());
+        assert_eq!(database.library_track_paths().unwrap(), vec![track.path]);
+    }
 }
 
 #[test]

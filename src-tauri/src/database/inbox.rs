@@ -26,13 +26,25 @@ impl Database {
     }
 
     pub(crate) fn register_inbox_path(&self, path: &str) -> Result<bool, String> {
-        self.connection()?
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(|error| error.to_string())?;
+        let added = transaction
             .execute(
                 "INSERT OR IGNORE INTO inbox(path, added_at) VALUES (?1, CAST(unixepoch('subsec') * 1000 AS INTEGER))",
                 [path],
             )
-            .map(|count| count != 0)
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?
+            != 0;
+        transaction
+            .execute(
+                "UPDATE tracks SET in_library = 0 WHERE path = ?1 AND in_library = 1",
+                [path],
+            )
+            .map_err(|error| format!("Failed to revoke library membership: {error}"))?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(added)
     }
 
     pub(crate) fn remove_inbox_path(&self, path: &str) -> Result<(), String> {

@@ -2,6 +2,7 @@ import { expect, it } from "bun:test";
 import * as Vue from "vue";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 import { INBOX_CHANGED_EVENT } from "@/features/inbox/api";
+import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import type { useInboxImport } from "@/features/inbox/import";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { InboxResult } from "@/features/inbox/api";
@@ -29,6 +30,11 @@ function createDropImporter(validate: () => Promise<string[]>, results: InboxRes
           return results;
         },
       }),
+    },
+    "@/features/library/events": {
+      reportLibraryMembershipChanged: () => {
+        globalThis.window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
+      },
     },
     "@/shared/notifications/center": {
       notify: (notice: NotificationInput) => notices.push(notice),
@@ -66,6 +72,22 @@ it("registers validated dropped files and refreshes Inbox without a success noti
     await importer.importPaths(["good.wav", "duplicate.wav", "bad.mp3"]);
     expect(importer.registrations).toEqual([[["good.wav", "duplicate.wav"], false]]);
     expect(importer.notices).toEqual([]);
+    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT, INBOX_CHANGED_EVENT]);
+  } finally {
+    importer.restore();
+  }
+});
+
+it("does not refresh the library when all registrations are skipped or failed", async () => {
+  const importer = createDropImporter(
+    async () => ["duplicate.wav", "failed.wav"],
+    [
+      { path: "duplicate.wav", success: true, skipped: true, error: null },
+      { path: "failed.wav", success: false, skipped: false, error: "database unavailable" },
+    ],
+  );
+  try {
+    await importer.importPaths(["duplicate.wav", "failed.wav"]);
     expect(importer.events).toEqual([INBOX_CHANGED_EVENT]);
   } finally {
     importer.restore();
@@ -98,7 +120,7 @@ it("retains partial failure warnings while refreshing successful dropped registr
     expect(importer.notices).toEqual([
       { type: "warning", message: "导入完成，1 首失败（详情见日志）", key: "inbox-import" },
     ]);
-    expect(importer.events).toEqual([INBOX_CHANGED_EVENT]);
+    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT, INBOX_CHANGED_EVENT]);
     expect(importer.pending.value).toBe(false);
   } finally {
     importer.restore();
@@ -142,6 +164,10 @@ it("registers picked files and folders and refreshes Inbox without success notic
   const warnings: unknown[] = [];
   const window = new EventTarget();
   let changes = 0;
+  let libraryChanges = 0;
+  window.addEventListener(LIBRARY_CHANGED_EVENT, () => {
+    libraryChanges += 1;
+  });
   window.addEventListener(INBOX_CHANGED_EVENT, () => {
     changes += 1;
   });
@@ -170,6 +196,11 @@ it("registers picked files and folders and refreshes Inbox without success notic
             return options.directory
               ? ["C:\\music"]
               : ["C:\\music\\new.wav", "C:\\music\\duplicate.wav"];
+          },
+        },
+        "@/features/library/events": {
+          reportLibraryMembershipChanged: () => {
+            globalThis.window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
           },
         },
         "@/shared/notifications/center": {
@@ -213,6 +244,7 @@ it("registers picked files and folders and refreshes Inbox without success notic
       "register_inbox",
     ]);
     expect(changes).toBe(2);
+    expect(libraryChanges).toBe(2);
     expect(notifications).toEqual([]);
     expect(controller.pending.value).toBe(false);
     expect(warnings).toEqual([]);
