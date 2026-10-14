@@ -85,6 +85,7 @@ dependencies["@tauri-apps/api/core"] = {
   invoke: (command: string, args?: { trackId: number; size: number | null }) => {
     if (!args) throw new Error("Track request is missing its track ID.");
     if (command === "get_track") return detailsRequest(args.trackId);
+    if (command === "is_track_metadata_pending") return Promise.resolve(false);
     invokedTrackIds.push(args.trackId);
     invokedArtworkRequests.push(args);
     return artworkRequest(args.trackId);
@@ -197,10 +198,10 @@ function mountArtwork(trackId: Ref<number | null> | number) {
 }
 
 async function settleArtwork() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await nextTick();
-  await Promise.resolve();
+  for (let index = 0; index < 8; index++) {
+    await Promise.resolve();
+    await nextTick();
+  }
 }
 
 function mountArtworkComponent(
@@ -757,8 +758,10 @@ describe("大队列封面调度", () => {
       mountedScopes.push(scope);
       scope.run(() => useTrackArtwork(trackId, 80));
     }
+    await settleArtwork();
     expect(invokedTrackIds).toEqual([800, 801]);
     const current = mountArtwork(900);
+    await settleArtwork();
     expect(invokedTrackIds).toEqual([800, 801, 900]);
     expect(invokedArtworkRequests).toEqual([
       { trackId: 800, size: 128 },

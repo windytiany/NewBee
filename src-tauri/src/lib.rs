@@ -149,6 +149,8 @@ pub fn run() {
             tracks::commands::get_tracks,
             tracks::commands::register_local_tracks,
             tracks::commands::reread_track_tags,
+            tracks::commands::is_track_metadata_pending,
+            tracks::commands::get_track_presentation,
             artwork::get_track_artwork,
             artwork::collection::commands::get_track_artwork_collections,
             artwork::collection::commands::get_artwork_picture,

@@ -3,11 +3,13 @@ import * as Vue from "vue";
 import { compileSfc, evaluateSource, loadSourceModules } from "../../support/module/loader";
 import { createHostNode, createHostRenderer, findNode } from "../../support/host/renderer";
 import type { HostNode } from "../../support/host/renderer";
+import type { TrackPresentation } from "@/features/tracks/types";
 
 const originals = (
   [
     [globalThis, "IntersectionObserver"],
     [globalThis, "Image"],
+    [globalThis, "window"],
     [URL, "createObjectURL"],
     [URL, "revokeObjectURL"],
   ] as const
@@ -38,7 +40,15 @@ async function settleArtwork() {
   }
 }
 
-async function createQueueArtworkFixture(decode: () => Promise<void> = async () => {}) {
+async function createQueueArtworkFixture(
+  decode: () => Promise<void> = async () => {},
+  load: () => Promise<ArrayBuffer> = async () => new Uint8Array([1, 2, 3]).buffer,
+  presentation: () => Promise<TrackPresentation> = async () => ({
+    title: "Confirmed title",
+    album: "Confirmed album",
+    durationMs: 125000,
+  }),
+) {
   const observers: TestObserver[] = [];
   class TestObserver {
     disconnected = false;
@@ -75,14 +85,22 @@ async function createQueueArtworkFixture(decode: () => Promise<void> = async () 
     Object.defineProperty(target, key, { configurable: true, value });
   }
   const requests: Array<{ trackId: number; size: number | null }> = [];
+  let metadataPending = false;
   const icon = Vue.defineComponent({ render: () => null });
+  const fallback = Vue.defineComponent({
+    render: () => Vue.h("span", { "data-test": "artwork-fallback" }),
+  });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: new EventTarget() });
   const dependencies: Record<string, unknown> = {
     vue: Vue,
-    "@lucide/vue": { AudioLines: icon, Disc3: icon, SkipForward: icon },
+    "@/features/tracks/events": { TRACKS_CHANGED_EVENT: "newbee:tracks-changed" },
+    "@lucide/vue": { AudioLines: icon, Disc3: fallback, SkipForward: icon },
     "@tauri-apps/api/core": {
-      invoke: async (_command: string, args: { trackId: number; size: number | null }) => {
+      invoke: async (command: string, args: { trackId: number; size: number | null }) => {
+        if (command === "is_track_metadata_pending") return metadataPending;
+        if (command === "get_track_presentation") return metadataPending ? null : presentation();
         requests.push(args);
-        return new Uint8Array([1, 2, 3]).buffer;
+        return load();
       },
     },
   };
@@ -104,6 +122,9 @@ async function createQueueArtworkFixture(decode: () => Promise<void> = async () 
     revokedUrls,
     decodeCount: () => decodeCount,
     invalidate: artworkModule.invalidateTrackArtworkCache,
+    setMetadataPending: (pending: boolean) => {
+      metadataPending = pending;
+    },
   };
 }
 
@@ -212,4 +233,133 @@ it("解码期间快速滚出再滚入不重新请求，解码完成后显示同�
   finishDecode();
   await settleArtwork();
   expect(findNode(root, (node) => node.type === "img")?.props.src).toBe("blob:queue-artwork-1");
+});
+
+it.each(["cover", "missing", "request-failure", "decode-failure"])(
+  "未登记曲目等待确认时保持透明，确认后处理 %s",
+  async (outcome) => {
+    let finishDecode!: () => void;
+    const decoding = new Promise<void>((resolve) => {
+      finishDecode = resolve;
+    });
+    const fixture = await createQueueArtworkFixture(
+      () => (outcome === "decode-failure" ? Promise.reject(new Error("Decode failed")) : decoding),
+      async () => {
+        if (outcome === "request-failure") throw new Error("Read failed");
+        return new Uint8Array(outcome === "missing" ? [] : [1, 2, 3]).buffer;
+      },
+    );
+    fixture.setMetadataPending(true);
+    const root = createHostNode("root");
+    const app = createHostRenderer(createHostNode).createApp({
+      setup: () => () =>
+        Vue.h(fixture.component, {
+          trackId: 100,
+          rowKey: "100",
+          title: "Track",
+          album: "Album",
+          duration: "1:00",
+          isFocused: false,
+        }),
+    });
+    apps.push(app);
+    app.mount(root);
+    const findFallback = () =>
+      findNode(root, (node) => node.props["data-test"] === "artwork-fallback");
+    expect(findFallback()).toBeNull();
+    expect(
+      findNode(root, (node) => node.props.class === "truncate text-sm font-medium text-white")
+        ?.text,
+    ).toBe("");
+    expect(
+      findNode(root, (node) => node.props.class === "text-app-muted truncate text-xs")?.text,
+    ).toBe("");
+    expect(
+      findNode(
+        root,
+        (node) => node.props.class === "text-app-muted shrink-0 pl-1 text-xs tabular-nums",
+      )?.text,
+    ).toBe("");
+    fixture.observers[0]!.show(true);
+    await settleArtwork();
+    expect(fixture.requests).toEqual([]);
+    expect(findFallback()).toBeNull();
+    expect(findNode(root, (node) => node.type === "img")).toBeNull();
+
+    fixture.setMetadataPending(false);
+    globalThis.window.dispatchEvent(
+      new CustomEvent("newbee:tracks-changed", { detail: { trackIds: [100] } }),
+    );
+    fixture.invalidate([100]);
+    await settleArtwork();
+    expect(fixture.requests).toEqual([{ trackId: 100, size: 128 }]);
+    expect(
+      findNode(root, (node) => node.props.class === "truncate text-sm font-medium text-white")
+        ?.text,
+    ).toBe("Confirmed title");
+    expect(
+      findNode(root, (node) => node.props.class === "text-app-muted truncate text-xs")?.text,
+    ).toBe("Confirmed album");
+    expect(
+      findNode(
+        root,
+        (node) => node.props.class === "text-app-muted shrink-0 pl-1 text-xs tabular-nums",
+      )?.text,
+    ).toBe("2:05");
+    if (outcome === "cover") {
+      expect(findFallback()).toBeNull();
+      expect(findNode(root, (node) => node.type === "img")).toBeNull();
+      finishDecode();
+      await settleArtwork();
+      expect(imageUrl(root)).toBe("blob:queue-artwork-1");
+      expect(findFallback()).toBeNull();
+    } else {
+      expect(findFallback()).not.toBeNull();
+      expect(findNode(root, (node) => node.type === "img")).toBeNull();
+    }
+  },
+);
+
+it.each(["missing", "failed"])("队列元数据 %s 后才显示缺失值回退", async (outcome) => {
+  const fixture = await createQueueArtworkFixture(
+    async () => {},
+    async () => new ArrayBuffer(0),
+    async () => {
+      if (outcome === "failed") throw new Error("Metadata read failed");
+      return { title: "filename", album: null, durationMs: null };
+    },
+  );
+  fixture.setMetadataPending(true);
+  const root = createHostNode("root");
+  const app = createHostRenderer(createHostNode).createApp({
+    setup: () => () =>
+      Vue.h(fixture.component, {
+        trackId: 100,
+        rowKey: "100",
+        title: "filename",
+        album: "未知专辑",
+        duration: "时长未知",
+        isFocused: false,
+      }),
+  });
+  apps.push(app);
+  app.mount(root);
+  const fields = () => ({
+    title: findNode(root, (node) => node.props.class === "truncate text-sm font-medium text-white")
+      ?.text,
+    album: findNode(root, (node) => node.props.class === "text-app-muted truncate text-xs")?.text,
+    duration: findNode(
+      root,
+      (node) => node.props.class === "text-app-muted shrink-0 pl-1 text-xs tabular-nums",
+    )?.text,
+  });
+  expect(fields()).toEqual({ title: "", album: "", duration: "" });
+  await settleArtwork();
+  expect(fields()).toEqual({ title: "", album: "", duration: "" });
+  fixture.setMetadataPending(false);
+  globalThis.window.dispatchEvent(
+    new CustomEvent("newbee:tracks-changed", { detail: { trackIds: [100] } }),
+  );
+  await settleArtwork();
+  expect(fields()).toEqual({ title: "filename", album: "未知专辑", duration: "时长未知" });
 });

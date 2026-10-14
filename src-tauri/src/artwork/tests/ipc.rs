@@ -50,6 +50,17 @@ pub(super) fn invoke(
     command: &str,
     args: serde_json::Value,
 ) -> Result<Vec<u8>, serde_json::Value> {
+    invoke_response(webview, command, args).map(|response| match response {
+        InvokeResponseBody::Raw(bytes) => bytes,
+        InvokeResponseBody::Json(_) => panic!("Artwork must not use JSON byte arrays"),
+    })
+}
+
+fn invoke_response(
+    webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+    command: &str,
+    args: serde_json::Value,
+) -> Result<InvokeResponseBody, serde_json::Value> {
     tauri::test::get_ipc_response(
         webview,
         tauri::webview::InvokeRequest {
@@ -62,10 +73,6 @@ pub(super) fn invoke(
             invoke_key: tauri::test::INVOKE_KEY.into(),
         },
     )
-    .map(|response| match response {
-        InvokeResponseBody::Raw(bytes) => bytes,
-        InvokeResponseBody::Json(_) => panic!("Artwork must not use JSON byte arrays"),
-    })
 }
 
 fn webview(database: Database) -> tauri::WebviewWindow<tauri::test::MockRuntime> {
@@ -74,6 +81,7 @@ fn webview(database: Database) -> tauri::WebviewWindow<tauri::test::MockRuntime>
         .manage(crate::locking::write::WriteState::default())
         .invoke_handler(tauri::generate_handler![
             get_track_artwork,
+            crate::tracks::commands::is_track_metadata_pending,
             get_album_artwork
         ])
         .build(tauri::generate_context!())
@@ -81,6 +89,66 @@ fn webview(database: Database) -> tauri::WebviewWindow<tauri::test::MockRuntime>
     tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap()
+}
+
+#[test]
+fn pending_artwork_is_distinct_from_confirmed_missing_or_failed_metadata() {
+    use crate::database::tracks::confirmation::Confirmation;
+
+    for failed in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("track.flac");
+        std::fs::write(&path, include_bytes!("../../../fixtures/silence.flac")).unwrap();
+        let database = Database::open(":memory:").unwrap();
+        let registered = crate::tracks::registration::register(
+            &database,
+            &[path.to_string_lossy().into_owned()],
+        )
+        .unwrap();
+        let crate::tracks::model::TrackRegistrationResult::Registered { track, .. } =
+            &registered[0]
+        else {
+            panic!("registration failed");
+        };
+        let id = track.id;
+        let view = webview(database);
+        let pending = || match invoke_response(
+            &view,
+            "is_track_metadata_pending",
+            serde_json::json!({"trackId": id}),
+        )
+        .unwrap()
+        {
+            InvokeResponseBody::Json(value) => serde_json::from_str::<bool>(&value).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("Expected a pending flag"),
+        };
+        assert!(pending());
+        let database = view.state::<Database>();
+        let (path, revision) = database.pending_track(id).unwrap().unwrap();
+        let snapshot = if failed {
+            Err("Scan failed".into())
+        } else {
+            crate::tracks::scanning::scan(&database, std::path::Path::new(&path))
+        };
+        let results = database
+            .confirm_tracks(vec![Confirmation {
+                id,
+                revision,
+                path,
+                snapshot,
+            }])
+            .unwrap();
+        assert!(results[0].database_updated);
+        assert_eq!(results[0].error.is_some(), failed);
+        assert!(!pending());
+        assert!(invoke(
+            &view,
+            "get_track_artwork",
+            serde_json::json!({"trackId": id, "size": 128}),
+        )
+        .unwrap()
+        .is_empty());
+    }
 }
 
 #[test]

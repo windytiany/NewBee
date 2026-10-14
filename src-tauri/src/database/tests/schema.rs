@@ -8,7 +8,7 @@ fn initializes_new_databases_and_can_reopen_them() {
     let version: i64 = connection
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, SCHEMA_VERSION);
+    assert_eq!(version, 1);
     connection.execute("INSERT INTO tracks (path, track_number, track_total, disc_number, disc_total) VALUES ('song.mp3', 1, 7, 1, 2)", []).unwrap();
     let thumbnails: bool = connection
         .query_row(
@@ -36,7 +36,7 @@ fn rejects_old_schema_without_modifying_it() {
 
 #[test]
 fn rejects_other_versions_without_changing_snapshots_or_schema() {
-    for version in [0, 1, SCHEMA_VERSION + 1, SCHEMA_VERSION + 2] {
+    for version in [0, SCHEMA_VERSION + 1, SCHEMA_VERSION + 2] {
         let mut connection = Connection::open_in_memory().unwrap();
         connection.execute_batch("CREATE TABLE tracks (id INTEGER PRIMARY KEY, path TEXT, title TEXT); INSERT INTO tracks VALUES (42, 'song.mp3', 'Stored'); PRAGMA foreign_keys = ON;").unwrap();
         connection

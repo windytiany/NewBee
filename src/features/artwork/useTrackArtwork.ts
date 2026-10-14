@@ -103,7 +103,10 @@ function subscribeToTrackArtwork(
       trackId,
       subscriptions: 0,
       resource: createArtworkResource(
-        () => invoke<TrackArtwork>("get_track_artwork", { trackId, size }),
+        async () => {
+          if (await invoke<boolean>("is_track_metadata_pending", { trackId })) return null;
+          return invoke<TrackArtwork>("get_track_artwork", { trackId, size });
+        },
         (error) => {
           const message = error instanceof Error ? error.message : String(error ?? "未知错误");
           logger.warn("artwork", "read_failed", error, { trackId });

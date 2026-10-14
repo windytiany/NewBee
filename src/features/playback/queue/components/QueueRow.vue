@@ -24,7 +24,10 @@
           class="size-full object-cover transition-opacity"
           :class="artworkStatus === 'ready' ? 'opacity-100' : 'opacity-0'"
         />
-        <Disc3 v-else-if="artworkStatus === 'fallback'" class="size-5 text-sky-200/80" />
+        <Disc3
+          v-else-if="artworkActivated && artworkStatus === 'fallback'"
+          class="size-5 text-sky-200/80"
+        />
       </span>
       <AudioLines
         v-if="isCurrentTrack"
@@ -36,9 +39,9 @@
           class="truncate text-sm font-medium"
           :class="isCurrentTrack ? 'text-app-accent' : 'text-white'"
         >
-          {{ title }}
+          {{ display.title }}
         </span>
-        <span class="text-app-muted truncate text-xs">{{ album }}</span>
+        <span class="text-app-muted truncate text-xs">{{ display.album }}</span>
       </span>
       <span
         v-if="props.isSkipped"
@@ -49,7 +52,7 @@
       >
         <SkipForward aria-hidden="true" class="size-3.5" />
       </span>
-      <span class="text-app-muted shrink-0 pl-1 text-xs tabular-nums">{{ duration }}</span>
+      <span class="text-app-muted shrink-0 pl-1 text-xs tabular-nums">{{ display.duration }}</span>
     </button>
   </li>
 </template>
@@ -57,9 +60,11 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { AudioLines, Disc3, SkipForward } from "@lucide/vue";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
+import { usePresentation } from "@/features/tracks/presentation/usePresentation";
+import { formatTrackDuration } from "@/features/tracks/format";
 
 const props = withDefaults(
   defineProps<{
@@ -140,6 +145,18 @@ function handleContextMenuKeydown(event: InstanceType<typeof globalThis.Keyboard
   });
 }
 
+const presentation = usePresentation(() => props.trackId);
+const display = computed(() => {
+  if (presentation.value.status === "loading") return { title: "", album: "", duration: "" };
+  if (presentation.value.status === "failed")
+    return { title: props.title, album: props.album, duration: props.duration };
+  const { track } = presentation.value;
+  return {
+    title: track.title ?? t("未知曲目"),
+    album: track.album ?? t("未知专辑"),
+    duration: formatTrackDuration(track.durationMs) ?? t("时长未知"),
+  };
+});
 const rowElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const artworkActivated = ref(false);
 const { url: artworkUrl, status: artworkStatus } = useTrackArtwork(

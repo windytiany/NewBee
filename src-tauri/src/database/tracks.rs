@@ -1,6 +1,6 @@
 use super::{model::TrackWriteInput, Database};
 use crate::artwork::model::TrackArtwork;
-use crate::tracks::model::{TrackDetails, TrackPlaybackInfo};
+use crate::tracks::model::{TrackDetails, TrackPlaybackInfo, TrackPresentation};
 use rusqlite::{params, OptionalExtension};
 
 pub(crate) mod confirmation;
@@ -63,6 +63,30 @@ impl Database {
             )
             .optional()
             .map_err(|error| format!("Failed to get track {track_id}: {error}"))
+    }
+
+    pub(crate) fn get_track_presentation(
+        &self,
+        track_id: i64,
+    ) -> Result<Option<TrackPresentation>, String> {
+        if self.pending_track(track_id)?.is_some() {
+            return Ok(None);
+        }
+        let track = self
+            .get_track(track_id)?
+            .ok_or_else(|| format!("曲目 {track_id} 已不在数据库中"))?;
+        Ok(Some(TrackPresentation {
+            title: track
+                .title
+                .filter(|title| !title.trim().is_empty())
+                .or_else(|| {
+                    std::path::Path::new(&track.path)
+                        .file_stem()
+                        .map(|name| name.to_string_lossy().into_owned())
+                }),
+            album: track.album.filter(|album| !album.trim().is_empty()),
+            duration_ms: track.duration_ms,
+        }))
     }
 
     pub(crate) fn get_tracks(&self, track_ids: &[i64]) -> Result<Vec<TrackDetails>, String> {

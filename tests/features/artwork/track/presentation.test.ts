@@ -85,6 +85,7 @@ async function createPresentationFixture({
     vue: Vue,
     "@tauri-apps/api/core": {
       invoke: (command: string, args: { trackId: number; size: number | null }) => {
+        if (command === "is_track_metadata_pending") return Promise.resolve(false);
         expect(command).toBe("get_track_artwork");
         requests.push(args);
         return load(args.trackId);

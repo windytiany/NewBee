@@ -11,6 +11,8 @@ use crate::{
 mod artwork;
 #[path = "tests/collection.rs"]
 mod collection;
+#[path = "tests/presentation.rs"]
+mod presentation;
 
 use serde_json::{json, Value};
 use std::path::Path;

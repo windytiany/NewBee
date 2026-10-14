@@ -27,6 +27,8 @@ export type TrackDetails = {
   channels: number | null;
 };
 
+export type TrackPresentation = Pick<TrackDetails, "title" | "album" | "durationMs">;
+
 export type TrackRegistrationResult =
   | { status: "registered"; track: TrackDetails; needsMetadata: boolean }
   | { status: "failed"; path: string; error: string };

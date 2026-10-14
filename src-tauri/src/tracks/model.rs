@@ -20,6 +20,14 @@ pub(crate) struct TrackPlaybackInfo {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TrackPresentation {
+    pub(crate) title: Option<String>,
+    pub(crate) album: Option<String>,
+    pub(crate) duration_ms: Option<i64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrackDetails {
     pub(crate) id: i64,
     pub(crate) path: String,

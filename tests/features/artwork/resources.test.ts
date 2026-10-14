@@ -148,6 +148,29 @@ describe("封面资源生命周期", () => {
     expect(revoked).toEqual(["blob:resource-1"]);
   });
 
+  it("待确认内容保持 loading，确认后重新读取才回退", async () => {
+    let confirmed = false;
+    const errors: unknown[] = [];
+    const resource = createArtworkResource(
+      async () => (confirmed ? new ArrayBuffer(0) : null),
+      (error) => {
+        errors.push(error);
+        return String(error);
+      },
+    );
+    releases.push(resource.subscribe(() => {}));
+    await settle();
+    expect(resource.snapshot).toEqual({ status: "loading", image: null, error: "" });
+    expect(images).toEqual([]);
+    expect(errors).toEqual([]);
+    confirmed = true;
+    resource.reload();
+    await settle();
+    expect(resource.snapshot).toEqual({ status: "fallback", image: null, error: "" });
+    expect(images).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
   it("空内容回退，不分配图片资源或报告错误", async () => {
     const { resource, request, subscribe, errors } = fixture();
     subscribe();

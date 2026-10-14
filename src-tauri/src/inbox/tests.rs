@@ -434,7 +434,9 @@ fn numeric_commands_register_read_ingest_and_remove_without_path_identity() {
     let track_id = added[0]["trackId"].as_i64().unwrap();
     files::write_file(Path::new(&path), &[title("Ingest")]).unwrap();
     files::access::take(&fixture.0);
+    let write_guard = app.state::<WriteState>().acquire().unwrap();
     let read = invoke("read_inbox", serde_json::json!({}));
+    drop(write_guard);
     assert_eq!(read["tracks"][0]["id"], track_id);
     assert_eq!(read["tracks"][0]["title"], "Inbox");
     assert!(read["tracks"][0]["addedAt"].is_i64());

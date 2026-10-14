@@ -160,14 +160,8 @@ fn ingest(database: &Database, track_ids: Vec<i64>) -> Vec<FileResult> {
 #[tauri::command]
 pub(crate) async fn read_inbox<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    write: State<'_, WriteState>,
 ) -> Result<InboxRead, String> {
-    let guard = write.acquire()?;
-    crate::database::blocking(app, move |database| {
-        let _guard = guard;
-        refresh(database)
-    })
-    .await
+    crate::database::blocking(app, refresh).await
 }
 
 #[tauri::command]

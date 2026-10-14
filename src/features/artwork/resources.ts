@@ -24,7 +24,7 @@ export type ArtworkResource = {
 
 /** Owns one active subscription group's decoding and URL lifetime, not its cache key. */
 export function createArtworkResource(
-  load: () => Promise<TrackArtwork>,
+  load: () => Promise<TrackArtwork | null>,
   reportError: (error: unknown) => string,
   schedule: (run: () => Promise<void>, isCurrent: () => boolean) => void = (run) => {
     void run();
@@ -57,7 +57,7 @@ export function createArtworkResource(
       if (!isCurrent()) return;
       try {
         const content = await load();
-        if (!isCurrent()) return;
+        if (!isCurrent() || content === null) return;
         if (content.byteLength === 0) {
           publish({ status: "fallback", image: null, error: "" });
           return;

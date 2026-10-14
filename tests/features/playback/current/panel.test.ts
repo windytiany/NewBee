@@ -83,6 +83,7 @@ test("renders backend listening track details when playback starts after mountin
       },
       "@tauri-apps/api/core": {
         invoke: async (command: string, args: { trackId: number }) => {
+          if (command === "is_track_metadata_pending") return false;
           if (command === "get_track_artwork") {
             artworkCalls.push(args.trackId);
             return new ArrayBuffer(0);

@@ -6,7 +6,7 @@ import type { InboxResult, InboxTrack } from "@/features/inbox/api";
 import type { ArtistSummary, LibraryGrouping } from "@/features/library/types";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import { useTrackReread } from "@/features/tracks/reread";
-import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
+import { TRACKS_CHANGED_EVENT, type TracksChange } from "@/features/tracks/events";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { notify } from "@/shared/notifications/center";
@@ -224,11 +224,16 @@ export function useInbox(active: Ref<boolean>) {
     },
     { immediate: true },
   );
+  function onTracksChanged(event: Event) {
+    const { trackIds } = (event as CustomEvent<TracksChange>).detail;
+    if (trackIds && !inbox.state.tracks.some((track) => trackIds.includes(track.id))) return;
+    refresh();
+  }
   globalThis.window.addEventListener(INBOX_CHANGED_EVENT, refresh);
-  globalThis.window.addEventListener(TRACKS_CHANGED_EVENT, refresh);
+  globalThis.window.addEventListener(TRACKS_CHANGED_EVENT, onTracksChanged);
   onScopeDispose(() => {
     globalThis.window.removeEventListener(INBOX_CHANGED_EVENT, refresh);
-    globalThis.window.removeEventListener(TRACKS_CHANGED_EVENT, refresh);
+    globalThis.window.removeEventListener(TRACKS_CHANGED_EVENT, onTracksChanged);
   });
   return inbox;
 }

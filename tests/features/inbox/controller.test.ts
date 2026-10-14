@@ -344,21 +344,32 @@ it("activation and ordinary events read snapshots without scanning offline origi
     const inbox = scope.run(() => module.useInbox(active));
     await Vue.nextTick();
     expect(inbox?.state.tracks[0]?.id).toBe(1);
-    for (const event of [INBOX_CHANGED_EVENT, TRACKS_CHANGED_EVENT]) {
-      window.dispatchEvent(new Event(event));
+    for (const trackIds of [[2], []]) {
+      window.dispatchEvent(new CustomEvent(TRACKS_CHANGED_EVENT, { detail: { trackIds } }));
       await Vue.nextTick();
     }
+    expect(calls).toEqual(["snapshot"]);
+    window.dispatchEvent(new Event(INBOX_CHANGED_EVENT));
+    await Vue.nextTick();
+    window.dispatchEvent(new CustomEvent(TRACKS_CHANGED_EVENT, { detail: { trackIds: [2, 1] } }));
+    await Vue.nextTick();
     expect(calls).toEqual(["snapshot", "snapshot", "snapshot"]);
+    window.dispatchEvent(
+      new CustomEvent(TRACKS_CHANGED_EVENT, { detail: { trackIds: undefined } }),
+    );
+    await Vue.nextTick();
+    expect(calls).toHaveLength(4);
     active.value = false;
     await Vue.nextTick();
     window.dispatchEvent(new Event(INBOX_CHANGED_EVENT));
-    expect(calls).toHaveLength(3);
+    window.dispatchEvent(new CustomEvent(TRACKS_CHANGED_EVENT, { detail: { trackIds: [1] } }));
+    expect(calls).toHaveLength(4);
     active.value = true;
     await Vue.nextTick();
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     scope.stop();
-    window.dispatchEvent(new Event(TRACKS_CHANGED_EVENT));
-    expect(calls).toHaveLength(4);
+    window.dispatchEvent(new CustomEvent(TRACKS_CHANGED_EVENT, { detail: { trackIds: [1] } }));
+    expect(calls).toHaveLength(5);
   } finally {
     scope.stop();
     if (previous) Object.defineProperty(globalThis, "window", previous);
