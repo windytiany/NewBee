@@ -1,11 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { TrackDetails } from "@/features/tracks/types";
-export type InboxTrack = Omit<TrackDetails, "id"> & { id: string; addedAt: number };
+export type InboxTrack = TrackDetails & { addedAt: number };
 export type InboxResult = {
+  trackId: number | null;
   path: string;
   success: boolean;
-  skipped?: boolean;
+  skipped: boolean;
   error: string | null;
 };
 export type InboxRead = { tracks: InboxTrack[]; failures: InboxResult[] };
@@ -14,8 +15,8 @@ export function createInboxApi(invokeCommand: typeof invoke = invoke) {
     read: () => invokeCommand<InboxRead>("read_inbox"),
     register: (paths: string[], directory: boolean) =>
       invokeCommand<InboxResult[]>("register_inbox", { paths, directory }),
-    remove: (paths: string[]) => invokeCommand<void>("remove_inbox", { paths }),
-    ingest: (paths: string[]) => invokeCommand<InboxResult[]>("ingest_inbox", { paths }),
+    remove: (trackIds: number[]) => invokeCommand<void>("remove_inbox", { trackIds }),
+    ingest: (trackIds: number[]) => invokeCommand<InboxResult[]>("ingest_inbox", { trackIds }),
   };
 }
 export const INBOX_CHANGED_EVENT = "newbee:inbox-changed";

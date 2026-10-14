@@ -47,7 +47,12 @@ fn path_batch_reuses_ids_without_clearing_inbox_membership_statistics_or_skip() 
     std::fs::write(&path, include_bytes!("../../../../fixtures/silence.flac")).unwrap();
     let path = path.canonicalize().unwrap().to_string_lossy().into_owned();
     let database = Database::open(":memory:").unwrap();
-    database.register_inbox_path(&path).unwrap();
+    assert_eq!(
+        serde_json::to_value(crate::inbox::register(&database, vec![path.clone()])).unwrap()[0]
+            ["success"],
+        true
+    );
+    files::access::take(directory.path());
     let mut registered = vec![target(&path, "existing")];
     super::super::identity::register(&database, &mut registered).unwrap();
     let id = registered[0].track_id.unwrap();
@@ -118,7 +123,6 @@ fn path_batch_reuses_ids_without_clearing_inbox_membership_statistics_or_skip() 
         &mut session,
         SessionCommand::BeginEditing {
             track_ids: vec![id],
-            paths: vec![],
         },
     )
     .2
@@ -145,7 +149,11 @@ fn broken_tags_are_not_a_decoder_prerequisite_and_decode_failure_retains_queue()
             .build(),
     );
     tag.save_to_path(&path, WriteOptions::default()).unwrap();
-    assert!(files::read_track(&path).is_err());
+    assert!(files::read_track_collection(&path)
+        .unwrap()
+        .unwrap()
+        .embedded
+        .is_err());
     files::access::take(directory.path());
     let audio = FakeAudio {
         database: Some(Database::open(":memory:").unwrap()),

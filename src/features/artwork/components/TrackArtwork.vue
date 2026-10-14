@@ -21,7 +21,7 @@ import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
 
 const props = withDefaults(
   defineProps<{
-    trackId: number | string | null;
+    trackId: number | null;
     pending?: boolean;
     alt?: string;
   }>(),

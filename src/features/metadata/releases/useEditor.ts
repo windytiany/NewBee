@@ -1,4 +1,3 @@
-import type { MetadataTarget } from "@/features/metadata/types";
 import { t } from "@/shared/i18n/locale";
 import { markRaw, reactive, toRefs } from "vue";
 import { notify } from "@/shared/notifications/center";
@@ -25,14 +24,14 @@ import type {
 } from "@/features/metadata/releases/types";
 import { createLibraryApi } from "@/features/library/api";
 import { createMetadataApi } from "@/features/metadata/api";
-import { createTagSynchronization } from "@/features/metadata/synchronize";
+import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { createMetadataSave, metadataSaved } from "@/features/metadata/save";
 import type { MetadataFileEditor } from "@/features/metadata/save";
 import { usePlaybackSession } from "@/features/playback/session";
 
 export type ReleaseEditorOptions = {
   loadAlbum: (album: LibraryAlbumSelection) => Promise<EditableTrack[]>;
-  loadFiles?: (paths: string[]) => Promise<EditableTrack[]>;
+  loadTracks: (trackIds: number[]) => Promise<EditableTrack[]>;
   search: (artist: string, album: string, offset: number) => Promise<SearchResults>;
   release: (id: string) => Promise<ReleaseDetails>;
   covers: (id: string) => Promise<CoverChoice[]>;
@@ -44,7 +43,7 @@ export type ReleaseEditorOptions = {
     operationId?: string,
   ) => Promise<MetadataSaveResult[]>;
   editFiles: MetadataFileEditor;
-  synchronize: (ids: MetadataTarget[]) => Promise<void>;
+  synchronize: (ids: number[]) => Promise<void>;
 };
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -70,7 +69,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     selected: null as ReleaseDetails | null,
     rows: [] as MatchRow[],
     fields: [] as AlbumField[],
-    included: [] as MetadataTarget[],
+    included: [] as number[],
     covers: [] as CoverChoice[],
     coverId: "",
     cover: null as CoverData | null,
@@ -106,7 +105,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     state.error = "";
     state.results = [];
   }
-  async function open(album: LibraryAlbumSelection, paths?: string[]) {
+  async function open(album: LibraryAlbumSelection, trackIds?: number[]) {
     if (state.open || state.saving) return;
     const generation = ++lifetime;
     saving.reset();
@@ -144,14 +143,23 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       total: 0,
     });
     try {
-      const tracks =
-        paths && options.loadFiles
-          ? await options.loadFiles(paths)
-          : await options.loadAlbum(album);
+      const tracks = trackIds
+        ? await options.loadTracks([...new Set(trackIds)])
+        : await options.loadAlbum(album);
       if (generation !== lifetime) return;
       if (!tracks.length) throw new Error(t("专辑没有可编辑的曲目。"));
+      const ids = trackIds ? [...new Set(trackIds)] : tracks.map(({ track }) => track.id);
+      if (
+        tracks.length !== ids.length ||
+        new Set(tracks.map(({ track }) => track.id)).size !== ids.length ||
+        tracks.some(
+          ({ track }) =>
+            !Number.isSafeInteger(track.id) || track.id <= 0 || !ids.includes(track.id),
+        )
+      )
+        throw new Error(t("返回的曲目与编辑目标不匹配。"));
       state.tracks = tracks;
-      if (paths) {
+      if (trackIds) {
         state.artist = tracks[0]?.track.albumArtist ?? tracks[0]?.track.artist ?? "";
         state.album = tracks[0]?.track.album ?? "";
       }
@@ -336,7 +344,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
         state.loadingCover = false;
     }
   }
-  function move(trackId: MetadataTarget, target: number | null) {
+  function move(trackId: number, target: number | null) {
     if (busy() || state.loadingRelease || !state.tracks.some(({ track }) => track.id === trackId))
       return;
     assignTrack(state.rows, trackId, target);
@@ -364,7 +372,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       : [...state.fields, field];
     edited();
   }
-  function toggleTrack(id: MetadataTarget) {
+  function toggleTrack(id: number) {
     if (busy()) return;
     state.included = state.included.includes(id)
       ? state.included.filter((key) => key !== id)
@@ -377,6 +385,10 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     edited();
   }
   function confirmPatches() {
+    if (!state.patches.length && state.synchronizationError) {
+      state.confirmSave = true;
+      return;
+    }
     if (!state.patches.length) {
       reportError("release_changes_empty", new Error(t("没有需要写入的改动。")));
       return;
@@ -395,6 +407,9 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
         state.fields,
         state.included,
         state.writeCover,
+      ).filter(
+        ({ trackId }) =>
+          !state.results.some((result) => result.trackId === trackId && metadataSaved(result)),
       );
       const unsupported = state.rows.filter((row) => {
         if (!row.source || row.trackId === null || !state.included.includes(row.trackId))
@@ -427,6 +442,11 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     if (!state.confirmSave || state.saving) return;
     const cover = savedCover;
     close();
+    if (!state.patches.length) {
+      await saving.retrySynchronization();
+      state.open = Boolean(state.synchronizationError);
+      return;
+    }
     const patches = state.patches.map((patch) => ({
       ...patch,
       changes: patch.changes.map((change) => ({ ...change })),
@@ -461,11 +481,16 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       }
     }
     state.dirty = state.results.some((result) => !metadataSaved(result));
+    if (state.dirty || state.error || state.synchronizationError) {
+      state.open = true;
+      state.cover = cover;
+      savedCover = cover;
+    }
   }
   return {
     state,
     open,
-    openFiles: (paths: string[]) => open({ albumArtist: null, album: null }, paths),
+    openTracks: (trackIds: number[]) => open({ albumArtist: null, album: null }, trackIds),
     close,
     requestClose,
     confirmDiscard,
@@ -490,13 +515,13 @@ export function useReleaseEditor() {
   const session = usePlaybackSession();
   const api = createMetadataApi(invoke);
   const library = createLibraryApi(invoke);
-  const synchronize = createTagSynchronization(session, invoke);
+  const synchronize = createTrackSynchronization(session, invoke);
   shared = createReleaseEditor({
     loadAlbum: async (album) => {
       const tracks = await library.listAlbumTracks(album);
       return api.editableTracks(tracks.map((track) => track.id));
     },
-    loadFiles: api.editableTracks,
+    loadTracks: api.editableTracks,
     search: api.searchReleases,
     release: api.release,
     covers: api.covers,
@@ -507,7 +532,7 @@ export function useReleaseEditor() {
       return api.saveRelease(patches, cover, onProgress, operationId);
     },
     editFiles: session.withMetadataEditing,
-    synchronize: synchronize.artwork,
+    synchronize: synchronize.refresh,
   });
   return shared;
 }

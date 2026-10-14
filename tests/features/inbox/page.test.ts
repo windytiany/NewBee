@@ -83,7 +83,7 @@ afterEach(() => {
 function track(index: number): InboxTrack {
   const path = `C:\\music\\${index}.wav`;
   return {
-    id: path,
+    id: index,
     path,
     addedAt: new Date(2026, 0, index, 9, 5).getTime(),
     title: `Song ${index}`,
@@ -102,41 +102,56 @@ function track(index: number): InboxTrack {
     channels: null,
   };
 }
-async function mount(
-  tracks: InboxTrack[] = [track(1), track(2), track(3)],
-  failedPaths: string[] = [],
-) {
+async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
   const registeredPaths: string[][] = [];
-  const ingestedPaths: string[][] = [];
+  const ingestedIds: number[][] = [];
   const messages: unknown[] = [];
-  const edited: Array<readonly (number | string)[]> = [];
-  const matched: string[][] = [];
+  const edited: Array<readonly number[]> = [];
+  const matched: number[][] = [];
   const played: string[] = [];
-  const playbackOrders: string[][] = [];
-  const addedNext: string[][] = [];
-  const addedEnd: string[][] = [];
+  const playbackOrders: Array<Array<number | null>> = [];
+  const addedNext: Array<Array<number | null>> = [];
+  const addedEnd: Array<Array<number | null>> = [];
+  const scans: number[][] = [];
+  const editorState = Vue.reactive({ open: false });
   const inbox = createInbox({
+    reread: {
+      pending: Vue.ref(false),
+      reread: async (ids) => {
+        scans.push([...ids]);
+        return {
+          results: ids.map((trackId) => ({ trackId, databaseUpdated: true, error: null })),
+          refreshError: null,
+        };
+      },
+    },
     api: {
       read: async () => ({ tracks, failures: [] }),
       register: async () => [],
       remove: async () => {},
-      ingest: async (paths) => {
-        ingestedPaths.push(paths);
-        return paths.map((path) => ({ path, success: true, error: null }));
+      ingest: async (trackIds) => {
+        ingestedIds.push(trackIds);
+        return trackIds.map((id) => ({
+          trackId: id,
+          path: track(id).path,
+          skipped: false,
+          success: true,
+          error: null,
+        }));
       },
     },
     session: {
       playTracks: async (tracks, key) => {
         played.push(key);
-        playbackOrders.push(tracks.map((track) => track.path ?? ""));
+        playbackOrders.push(tracks.map((track) => track.trackId));
         return true;
       },
       addTracksToNext: async (tracks) => {
-        addedNext.push(tracks.map((track) => track.path ?? ""));
+        addedNext.push(tracks.map((track) => track.trackId));
         return true;
       },
       addTracksToQueueEnd: async (tracks) => {
-        addedEnd.push(tracks.map((track) => track.path ?? ""));
+        addedEnd.push(tracks.map((track) => track.trackId));
         return true;
       },
     },
@@ -151,18 +166,9 @@ async function mount(
         createTracksApi: () => ({
           registerLocalFiles: async (paths: readonly string[]) => {
             registeredPaths.push([...paths]);
-            return paths.map((path) =>
-              failedPaths.includes(path)
-                ? { status: "failed", path, error: "unreadable file" }
-                : {
-                    status: "registered",
-                    track: {
-                      ...track(Number(path.match(/(\d+)\.wav$/)?.[1])),
-                      id: Number(path.match(/(\d+)\.wav$/)?.[1]),
-                    },
-                  },
-            );
+            throw new Error("Menu must not register or read original files");
           },
+          getTracks: async (ids: readonly number[]) => ids.map(track),
         }),
       },
       "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
@@ -172,15 +178,6 @@ async function mount(
             "button",
             { role: "menuitem", "data-lyrics-targets": JSON.stringify(props.trackIds) },
             "更新缺少的歌词",
-          ),
-      }),
-      "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
-        props: ["trackIds"],
-        setup: (props) => () =>
-          Vue.h(
-            "button",
-            { role: "menuitem", "data-reread-targets": JSON.stringify(props.trackIds) },
-            "重新读取标签",
           ),
       }),
       "@/features/playback/queue/components/SkipMenuItem.vue": Vue.defineComponent({
@@ -221,17 +218,17 @@ async function mount(
       },
       "@/features/metadata/manual/useEditor": {
         useTagEditor: () => ({
-          state: Vue.reactive({ open: false }),
-          openTracks: (targets: readonly (number | string)[]) => {
+          state: editorState,
+          openTracks: (targets: readonly number[]) => {
             edited.push(targets);
           },
         }),
       },
       "@/features/metadata/releases/useEditor": {
         useReleaseEditor: () => ({
-          state: Vue.reactive({ open: false }),
-          openFiles: (paths: string[]) => {
-            matched.push(paths);
+          state: editorState,
+          openTracks: (ids: number[]) => {
+            matched.push(ids);
           },
         }),
       },
@@ -261,7 +258,9 @@ async function mount(
     addedNext,
     addedEnd,
     registeredPaths,
-    ingestedPaths,
+    ingestedIds,
+    scans,
+    editorState,
     messages,
     rows: () => root.querySelectorAll("button[data-track-select]"),
   };
@@ -299,6 +298,60 @@ function clickRow(root: Scene, row: Scene, modifiers: Record<string, unknown> = 
   dispatch(row, "onClick", modifiers);
 }
 describe("Inbox workspace", () => {
+  it("F5 and the empty menu scan every Inbox ID, while selected reread uses only the selection", async () => {
+    const context = await mount();
+    context.inbox.state.artist = { artist: "Artist", albumCount: 1 };
+    context.inbox.state.tracks[2]!.artist = "Other";
+    context.inbox.state.tracks[2]!.albumArtist = "Other";
+    await settle();
+    expect(context.rows()).toHaveLength(2);
+    const pane = findNode(context.root, (node) => node.props["data-local-drop"] === "Inbox");
+    if (!pane) throw new Error("Missing Inbox pane");
+    dispatch(pane, "onKeydown", { key: "F5" });
+    await settle();
+    expect(context.scans).toEqual([[1, 2, 3]]);
+    dispatch(pane, "onContextmenu");
+    await settle();
+    dispatch(menuButton(context.root, "重新读取标签"), "onClick");
+    await settle();
+    expect(context.scans).toEqual([
+      [1, 2, 3],
+      [1, 2, 3],
+    ]);
+    clickRow(context.root, context.rows()[1]);
+    dispatch(context.rows()[1], "onContextmenu");
+    await settle();
+    dispatch(menuButton(context.root, "重新读取标签"), "onClick");
+    await settle();
+    expect(context.scans).toEqual([[1, 2, 3], [1, 2, 3], [2]]);
+    expect(context.registeredPaths).toEqual([]);
+    expect(context.messages).toEqual([]);
+  });
+  it("blocks explicit scans while an editor is open", async () => {
+    const context = await mount();
+    const pane = findNode(context.root, (node) => node.props["data-local-drop"] === "Inbox");
+    if (!pane) throw new Error("Missing Inbox pane");
+    context.editorState.open = true;
+    dispatch(pane, "onKeydown", { key: "F5" });
+    dispatch(pane, "onContextmenu");
+    await settle();
+    expect(menuButton(context.root, "重新读取标签").props.disabled).toBe(true);
+    dispatch(menuButton(context.root, "重新读取标签"), "onClick");
+    await settle();
+    expect(context.scans).toEqual([]);
+  });
+  it("ingests the selected numeric IDs without registering them again", async () => {
+    const context = await mount();
+    clickRow(context.root, context.rows()[1]);
+    dispatch(context.rows()[1], "onContextmenu");
+    await settle();
+    dispatch(menuButton(context.root, "添加到音乐库"), "onClick");
+    await settle();
+    expect(context.ingestedIds).toEqual([[2]]);
+    expect(context.inbox.state.tracks.map((track) => track.id)).toEqual([1, 3]);
+    expect(context.registeredPaths).toEqual([]);
+  });
+
   it("groups track actions and resolves identities without importing or removing Inbox files", async () => {
     const context = await mount();
     clickRow(context.root, context.rows()[0]);
@@ -327,28 +380,50 @@ describe("Inbox workspace", () => {
       "|",
       "从 Inbox 移除",
     ]);
-    for (const key of ["lyrics", "reread", "skip", "append"]) {
+    for (const key of ["lyrics", "skip", "append"]) {
       expect(
         findNode(context.root, (node) => `data-${key}-targets` in node.props)?.props[
           `data-${key}-targets`
         ],
       ).toBe("[1,2,3]");
     }
-    expect(context.registeredPaths).toEqual([[track(1).path, track(2).path, track(3).path]]);
-    expect(context.ingestedPaths).toEqual([]);
+    expect(context.registeredPaths).toEqual([]);
+    expect(context.ingestedIds).toEqual([]);
     expect(context.inbox.state.tracks).toHaveLength(3);
   });
-  it("keeps Inbox entries and limits ID-based actions to successfully registered targets", async () => {
-    const context = await mount(undefined, [track(2).path]);
+  it("uses all snapshot IDs even when original files are offline", async () => {
+    const context = await mount(
+      [track(1), track(2), track(3)].map((track) => ({
+        ...track,
+        path: `Z:\\offline\\${track.id}.wav`,
+      })),
+    );
     clickRow(context.root, context.rows()[0]);
     clickRow(context.root, context.rows()[2], { shiftKey: true });
     dispatch(context.rows()[1], "onContextmenu");
     await settle();
-    expect(menuButton(context.root, "添加到播放列表").props["data-append-targets"]).toBe("[1,3]");
-    expect(menuButton(context.root, "更新缺少的歌词").props["data-lyrics-targets"]).toBe("[1,3]");
+    expect(menuButton(context.root, "添加到播放列表").props["data-append-targets"]).toBe("[1,2,3]");
+    expect(menuButton(context.root, "更新缺少的歌词").props["data-lyrics-targets"]).toBe("[1,2,3]");
     expect(context.inbox.state.tracks).toHaveLength(3);
-    expect(context.ingestedPaths).toEqual([]);
-    expect(context.messages).toEqual([{ type: "warning", message: "1 个文件登记失败" }]);
+    expect(context.ingestedIds).toEqual([]);
+    expect(context.messages).toEqual([]);
+    expect(context.registeredPaths).toEqual([]);
+  });
+  it("keeps numeric selection and menu targets stable when snapshot paths change", async () => {
+    const context = await mount();
+    clickRow(context.root, context.rows()[1]);
+    dispatch(context.rows()[1], "onContextmenu");
+    await settle();
+    const row = context.rows()[1];
+    context.inbox.state.tracks[1]!.path = "Z:\\offline\\renamed.wav";
+    await settle();
+    expect(context.rows()[1]).toBe(row);
+    expect(context.rows()[1]!.props["aria-pressed"]).toBe(true);
+    expect(menuButton(context.root, "添加到播放列表").props["data-append-targets"]).toBe("[2]");
+    dispatch(menuButton(context.root, "编辑"), "onClick");
+    await settle();
+    expect(context.edited).toEqual([[2]]);
+    expect(context.registeredPaths).toEqual([]);
   });
   it("keeps all artists without an empty artist notice when Inbox is empty", async () => {
     const context = await mount([]);
@@ -443,8 +518,8 @@ describe("Inbox workspace", () => {
     await sortBy("title");
     expect(titles()).toEqual(["Song 1", "Song 2", "Song 3"]);
     dispatch(context.rows()[1], "onDblclick");
-    expect(context.playbackOrders).toEqual([[track(1).path, track(2).path, track(3).path]]);
-    expect(context.played).toEqual([`inbox:${track(2).path}`]);
+    expect(context.playbackOrders).toEqual([[1, 2, 3]]);
+    expect(context.played).toEqual(["inbox:2"]);
     clickRow(context.root, context.rows()[0]);
     clickRow(context.root, context.rows()[2], { shiftKey: true });
     await settle();
@@ -454,18 +529,18 @@ describe("Inbox workspace", () => {
     const list = findNode(context.root, (node) => node.type === "ol");
     if (!list) throw new Error("Missing track list");
     dispatch(list, "onKeydown", { target: context.rows()[0], key: "Enter" });
-    expect(context.playbackOrders[1]).toEqual([track(3).path, track(2).path, track(1).path]);
-    expect(context.played[1]).toBe(`inbox:${track(3).path}`);
+    expect(context.playbackOrders[1]).toEqual([3, 2, 1]);
+    expect(context.played[1]).toBe("inbox:3");
     dispatch(context.rows()[0], "onContextmenu", { clientX: 10, clientY: 20 });
     await settle();
     dispatch(menuButton(context.root, "添加为下一首"), "onClick");
     await settle();
-    expect(context.addedNext).toEqual([[track(3).path, track(2).path, track(1).path]]);
+    expect(context.addedNext).toEqual([[3, 2, 1]]);
     dispatch(context.rows()[0], "onContextmenu", { clientX: 10, clientY: 20 });
     await settle();
     dispatch(menuButton(context.root, "添加到队尾"), "onClick");
     await settle();
-    expect(context.addedEnd).toEqual([[track(3).path, track(2).path, track(1).path]]);
+    expect(context.addedEnd).toEqual([[3, 2, 1]]);
     await sortBy("addedAt");
     expect(titles()).toEqual(["Song 1", "Song 2", "Song 3"]);
     await sortBy("addedAt");
@@ -535,14 +610,14 @@ describe("Inbox workspace", () => {
     expect(focused).toBe(menuButton(context.root, "添加为下一首"));
     dispatch(menuButton(context.root, "编辑"), "onClick");
     await settle();
-    expect(context.edited).toEqual([[track(1).path, track(2).path, track(3).path]]);
+    expect(context.edited).toEqual([[1, 2, 3]]);
     expect(focused).toBe(context.rows()[1]);
     dispatch(context.rows()[1], "onClick");
     dispatch(context.rows()[1], "onKeydown", { key: "F10", shiftKey: true });
     await settle();
     dispatch(menuButton(context.root, "根据专辑更新标签"), "onClick");
     await settle();
-    expect(context.matched).toEqual([[track(2).path]]);
+    expect(context.matched).toEqual([[2]]);
     expect(getTextContent(context.root)).not.toContain("下载封面");
     expect(getTextContent(context.root)).not.toContain("下载歌词");
   });
@@ -555,7 +630,7 @@ describe("Inbox workspace", () => {
     await settle();
     expect(context.rows().map((row) => row.props["aria-pressed"])).toEqual([true, true, undefined]);
     dispatch(list, "onKeydown", { target: context.rows()[1], key: "Enter" });
-    expect(context.played).toEqual([`inbox:${track(2).path}`]);
+    expect(context.played).toEqual(["inbox:2"]);
     dispatch(context.rows()[0], "onContextmenu", { clientX: 0, clientY: 0 });
     await settle();
     dispatch(menuButton(context.root, "从 Inbox 移除"), "onClick");

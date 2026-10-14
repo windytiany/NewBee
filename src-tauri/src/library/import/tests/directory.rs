@@ -210,7 +210,7 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
             let id = crate::database::tracks::persist_track(
                 &transaction,
                 &track,
-                Some(&crate::database::tests::support::embedded(&track)),
+                Some(&crate::metadata::files::artwork::read_collection(&path)),
             )
             .unwrap();
             transaction.commit().unwrap();
@@ -220,7 +220,7 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
             database
                 .upsert_track(
                     &track,
-                    Some(&crate::database::tests::support::embedded(&track)),
+                    Some(&crate::metadata::files::artwork::read_collection(&path)),
                 )
                 .unwrap();
         }
@@ -239,6 +239,8 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
     database
         .add_music_library_directory(&fs::canonicalize(&files.0).unwrap().to_string_lossy())
         .unwrap();
+    let member_snapshot =
+        serde_json::to_value(database.get_editing_snapshot(ids[2]).unwrap()).unwrap();
     let first = run_scan(&database).unwrap();
     assert_eq!((first.added, first.updated, first.failed), (1, 0, 1));
     let second = run_scan(&database).unwrap();
@@ -268,12 +270,17 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
         )
         .unwrap();
     assert!(external_issue.is_none());
-    assert!(member_issue.unwrap().contains("unavailable"));
+    assert!(member_issue.is_none());
     assert_eq!(
         connection
             .query_row("SELECT COUNT(*) FROM tracks", [], |row| row
                 .get::<_, i64>(0))
             .unwrap(),
         3
+    );
+    drop(connection);
+    assert_eq!(
+        serde_json::to_value(database.get_editing_snapshot(ids[2]).unwrap()).unwrap(),
+        member_snapshot
     );
 }

@@ -291,8 +291,8 @@ watch(
 const sliderPositionMs = computed(() =>
   isSeeking.value ? selectedPositionMs.value : playbackStatus.value.positionMs,
 );
-useNotification(() => {
-  const message = [
+const playbackFailure = computed(() =>
+  [
     ...new Set(
       [
         playbackError.value,
@@ -301,9 +301,18 @@ useNotification(() => {
         volumeError.value,
       ].filter(Boolean),
     ),
-  ].join("\n");
-  if (!message) return null;
-  logger.info("playback", "failure_feedback_shown");
+  ].join("\n"),
+);
+watch(
+  playbackFailure,
+  (error) => {
+    if (error) logger.warn("playback", "failure_feedback_shown", error);
+  },
+  { immediate: true },
+);
+const hasPlaybackFailure = computed(() => Boolean(playbackFailure.value));
+useNotification(() => {
+  if (!hasPlaybackFailure.value) return null;
   return { type: "error", message: t("播放操作失败，请重试或查看日志"), key: "playback" };
 });
 const progressPercent = computed(() =>

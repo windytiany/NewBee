@@ -498,7 +498,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();
-    for (id, expected) in [(1, updated), (2, Vec::new())] {
+    for (id, expected) in [(1, updated), (2, shared.clone())] {
         let tauri::ipc::InvokeResponseBody::Raw(bytes) = invoke(
             &window,
             "get_track_artwork",
@@ -517,7 +517,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
         collection.images[0].path,
         crate::artwork::collection::linked::normalize(&directory_cover.to_string_lossy()).unwrap()
     );
-    assert!(collection.images[0].error.is_some());
+    assert!(collection.images[0].error.is_none());
     std::fs::write(&directory_cover, &red).unwrap();
     let tauri::ipc::InvokeResponseBody::Raw(restored) = invoke(
         &window,

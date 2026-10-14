@@ -16,8 +16,7 @@ pub(super) fn read(database: &Database, ids: &[i64]) -> Result<Vec<MetadataUpdat
         .get_tracks(ids)?
         .into_iter()
         .map(|track| MetadataUpdate {
-            id: Some(track.id),
-            path: None,
+            id: track.id,
             title: track.title,
             artist: track.artist,
             album: track.album,
@@ -35,7 +34,7 @@ fn patch(
 ) -> (Vec<QueueTrack>, bool) {
     let updates: HashMap<_, _> = updates
         .into_iter()
-        .filter_map(|update| update.id.map(|id| (id, update)))
+        .map(|update| (update.id, update))
         .collect();
     let mut rows = Vec::new();
     for track in &mut queue.displayed_tracks {
@@ -87,32 +86,14 @@ pub(super) fn hydrate<A: SessionAudio>(audio: &A, saved: &mut SavedSession) -> R
 }
 
 impl<A: SessionAudio> Session<A> {
-    // ID updates are read again at the worker boundary: a delayed frontend read
-    // cannot overwrite a more recently confirmed DB edit. Path-only file edits
-    // have no DB snapshot, and retain their confirmed reread display fields.
+    // Re-read IDs at the worker boundary so delayed frontend data cannot replace
+    // a more recently confirmed database snapshot.
     pub(super) fn refresh_metadata(
         &mut self,
-        mut tracks: Vec<MetadataUpdate>,
+        tracks: Vec<MetadataUpdate>,
     ) -> Result<Option<MetadataDelta>, String> {
-        let ids: Vec<_> = tracks.iter().filter_map(|track| track.id).collect();
-        let mut confirmed = self.audio.metadata(&ids)?;
-        tracks.retain(|track| track.id.is_none());
-        for mut update in tracks {
-            if let Some(path) = &update.path {
-                let ids: Vec<_> = self
-                    .queue
-                    .displayed_tracks
-                    .iter()
-                    .filter_map(|track| track.track_id)
-                    .collect();
-                let paths = self.audio.paths(&ids)?;
-                update.id = ids
-                    .into_iter()
-                    .zip(paths)
-                    .find_map(|(id, known)| (&known == path).then_some(id));
-                confirmed.push(update);
-            }
-        }
+        let ids: Vec<_> = tracks.iter().map(|track| track.id).collect();
+        let confirmed = self.audio.metadata(&ids)?;
         Ok(self.update_metadata(confirmed))
     }
 

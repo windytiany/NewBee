@@ -10,8 +10,8 @@ afterEach(() => {
 const source = await Bun.file(
   "src/features/metadata/releases/components/ReleaseMenuItem.vue",
 ).text();
-async function run(paths: string[]) {
-  const opened: string[][] = [];
+async function run(fail = false) {
+  const opened: number[][] = [];
   const ids: number[][] = [];
   const messages: unknown[] = [];
   const events: string[] = [];
@@ -19,20 +19,13 @@ async function run(paths: string[]) {
     compileSfc(source, "ReleaseMenuItem.vue"),
     {
       vue: Vue,
-      "@/features/tracks/api": {
-        createTracksApi: () => ({
-          getTracks: async (targets: number[]) => {
-            ids.push(targets);
-            return paths.map((path, index) => ({ id: index + 1, path }));
-          },
-        }),
-      },
       "@/features/metadata/releases/useEditor": {
         useReleaseEditor: () => ({
           state: Vue.reactive({ open: false }),
-          openFiles: async (paths: string[]) => {
+          openTracks: async (targets: number[]) => {
             events.push("open");
-            opened.push(paths);
+            if (fail) throw new Error("Unexpected menu error");
+            opened.push(targets);
           },
         }),
       },
@@ -52,15 +45,13 @@ async function run(paths: string[]) {
   await button.props.onClick({ stopPropagation() {} });
   return { opened, ids, messages, events };
 }
-it("loads files for selected library or playlist tracks without assuming one album", async () => {
-  const context = await run(["C:\\first.flac", "C:\\second.flac"]);
-  expect(context.ids).toEqual([[1, 2, 1]]);
-  expect(context.opened).toEqual([["C:\\first.flac", "C:\\second.flac"]]);
+it("opens numeric library or playlist selections without converting snapshots to paths", async () => {
+  const context = await run();
+  expect(context.ids).toEqual([]);
+  expect(context.opened).toEqual([[1, 2, 1]]);
   expect(context.events).toEqual(["close", "open"]);
   expect(context.messages).toEqual([]);
 });
-it("does not open an incomplete selection and reports missing targets", async () => {
-  const context = await run(["C:\\first.flac"]);
-  expect(context.opened).toEqual([]);
-  expect(context.messages).toEqual([{ type: "error", message: "读取本地标签失败，请查看日志" }]);
+it("does not hide unexpected editor failures in a second notification layer", async () => {
+  await expect(run(true)).rejects.toThrow("Unexpected menu error");
 });

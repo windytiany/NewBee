@@ -1,9 +1,8 @@
 mod paths;
+#[cfg(test)]
+use super::model::TrackWriteInput;
 
-use super::{
-    model::{TrackWriteInput, TrackWriteOutcome},
-    Database,
-};
+use super::{model::TrackWriteOutcome, Database};
 use crate::artwork::model::TrackArtwork;
 use crate::library::model::{
     AlbumSummary, ArtistSummary, LibraryGroup, LibraryGrouping, MusicLibraryDirectory,
@@ -87,6 +86,7 @@ impl Database {
     }
 
     /// Import a snapshot into the library and clear its Inbox registration atomically.
+    #[cfg(test)]
     pub(crate) fn upsert_track(
         &self,
         track: &TrackWriteInput,
@@ -108,7 +108,7 @@ impl Database {
             .execute("UPDATE tracks SET in_library = 1 WHERE id = ?1", [track_id])
             .map_err(|error| format!("Failed to grant library membership: {error}"))?;
         transaction
-            .execute("DELETE FROM inbox WHERE path = ?1", [&track.path])
+            .execute("DELETE FROM inbox WHERE track_id = ?1", [track_id])
             .map_err(|error| format!("Failed to remove imported path from inbox: {error}"))?;
         let outcome = if was_in_library {
             TrackWriteOutcome::Updated
@@ -117,6 +117,36 @@ impl Database {
         };
         transaction.commit().map_err(|error| error.to_string())?;
         Ok(outcome)
+    }
+
+    pub(crate) fn import_snapshot(
+        &self,
+        snapshot: &crate::tracks::scanning::Snapshot,
+    ) -> Result<TrackWriteOutcome, String> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(|error| error.to_string())?;
+        let existing: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM tracks WHERE path = ?1 AND in_library = 1)",
+                [&snapshot.track.path],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        let id = crate::tracks::scanning::persist(&transaction, snapshot)?;
+        transaction
+            .execute("UPDATE tracks SET in_library = 1 WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute("DELETE FROM inbox WHERE track_id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(if existing {
+            TrackWriteOutcome::Updated
+        } else {
+            TrackWriteOutcome::Added
+        })
     }
 
     pub fn list_artists(&self, grouping: LibraryGrouping) -> Result<Vec<ArtistSummary>, String> {

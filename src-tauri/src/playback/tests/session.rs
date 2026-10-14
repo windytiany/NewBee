@@ -78,17 +78,6 @@ impl SessionAudio for FakeAudio {
             .as_ref()
             .map_or(Ok(Vec::new()), |db| super::metadata::read(db, ids))
     }
-    fn paths(&self, ids: &[i64]) -> Result<Vec<String>, String> {
-        Ok(ids
-            .iter()
-            .map(|id| {
-                self.library_paths
-                    .get(id)
-                    .cloned()
-                    .unwrap_or_else(|| format!("/track/{id}.wav"))
-            })
-            .collect())
-    }
     fn start(&mut self, item: &QueueTrack) -> Result<NowPlayingTrack, String> {
         let id = item.track_id.unwrap_or(0);
         let key = &item.row_key;
@@ -306,9 +295,6 @@ impl SessionAudio for Arc<Mutex<FakeAudio>> {
     fn metadata(&self, ids: &[i64]) -> Result<Vec<MetadataUpdate>, String> {
         self.lock().unwrap().metadata(ids)
     }
-    fn paths(&self, ids: &[i64]) -> Result<Vec<String>, String> {
-        self.lock().unwrap().paths(ids)
-    }
     fn start(&mut self, item: &QueueTrack) -> Result<NowPlayingTrack, String> {
         self.lock().unwrap().start(item)
     }
@@ -360,7 +346,7 @@ pub(crate) fn initialize_test_session<R: tauri::Runtime>(app: &AppHandle<R>, pat
             busy,
             receiver,
             |_| {},
-            |_| {},
+            (|_| {}, |_| {}),
         )
     });
 }
@@ -374,3 +360,5 @@ mod worker;
 
 #[path = "session/metadata.rs"]
 mod metadata;
+#[path = "session/startup.rs"]
+mod startup;

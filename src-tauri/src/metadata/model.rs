@@ -2,7 +2,7 @@ use lofty::tag::{ItemKey, TagType};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EditingSnapshot {
     pub(crate) file_type: String,
@@ -248,22 +248,6 @@ pub(crate) struct MetadataSaveRequest {
     pub(crate) artwork_drafts: Vec<crate::artwork::collection::editing::TrackDraft>,
 }
 
-#[derive(Deserialize)]
-#[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) enum CoverRequest {
-    Replace { data: Vec<u8> },
-    Delete,
-}
-impl CoverRequest {
-    pub(crate) fn prepare(self) -> Result<super::save::CoverUpdate, String> {
-        match self {
-            Self::Replace { data } => {
-                super::files::cover_picture(&data).map(super::save::CoverUpdate::new)
-            }
-            Self::Delete => Ok(super::save::CoverUpdate::delete()),
-        }
-    }
-}
 pub(crate) fn validate_track_ids(track_ids: &[i64]) -> Result<Vec<i64>, String> {
     if track_ids.is_empty() || track_ids.iter().any(|id| *id <= 0) {
         return Err("请选择有效的曲目".to_owned());

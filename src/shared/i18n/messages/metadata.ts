@@ -1,4 +1,10 @@
 export const metadataMessages: Record<string, string> = {
+  "{count} 首曲目保存失败。无法完成写入或同步。":
+    "Failed to save {count} tracks. Could not complete the write or synchronization.",
+  "元数据已保存，但界面刷新失败。": "Metadata saved, but the interface could not be refreshed.",
+  "{count} 首曲目读取失败。无法完成扫描。":
+    "Failed to read {count} tracks. Could not complete the scan.",
+  "标签读取失败。无法完成扫描。": "Could not read tags. Could not complete the scan.",
   删除: "Delete",
   添加图片: "Add picture",
   添加: "Add",

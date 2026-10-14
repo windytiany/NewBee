@@ -152,25 +152,17 @@ fn preserves_confirmed_snapshots_statistics_skip_lyrics_artwork_and_inbox_withou
     let mut confirmed = files::read_track(&path).unwrap().unwrap();
     confirmed.title = Some("Confirmed title".into());
     confirmed.lyrics = Some("Confirmed lyrics".into());
-    confirmed.artwork = Some(crate::artwork::model::ArtworkContent {
-        mime_type: "image/png".into(),
-        image: include_bytes!("../../../fixtures/cover.png").to_vec(),
-    });
+    let scan = crate::database::tests::support::embedded(Some(include_bytes!(
+        "../../../fixtures/cover.png"
+    )));
     let id = {
         let mut connection = database.connection().unwrap();
         let transaction = connection.transaction().unwrap();
-        let id = persist_track(
-            &transaction,
-            &confirmed,
-            Some(&crate::database::tests::support::embedded(&confirmed)),
-        )
-        .unwrap();
+        let id = persist_track(&transaction, &confirmed, Some(&scan)).unwrap();
         transaction.commit().unwrap();
         id
     };
-    database
-        .register_inbox_path(&path.to_string_lossy())
-        .unwrap();
+    crate::database::tests::support::inbox(&database, &confirmed, scan).unwrap();
     database.record_track_play(id).unwrap();
     database.set_tracks_skipped(&[id], true).unwrap();
     let playlist = database.create_playlist("Outside library").unwrap();
@@ -389,6 +381,6 @@ fn large_embedded_cover_is_not_loaded_or_decoded_during_registration() {
             .query_row("SELECT COUNT(*) FROM artwork_images", [], |row| row
                 .get::<_, i64>(0))
             .unwrap(),
-        0
+        1
     );
 }

@@ -17,23 +17,20 @@ export function useTrackReread() {
     try {
       const outcome = await synchronization.reread(ids);
       const failed = outcome.results.filter((result) => !result.databaseUpdated || result.error);
-      if (failed.length) {
-        logger.error("tracks", "reread_failed", failed);
+      for (const result of failed)
+        logger.error("tracks", "reread_failed", result.error, { trackId: result.trackId });
+      if (outcome.refreshError) logger.error("tracks", "refresh_failed", outcome.refreshError);
+      if (failed.length || outcome.refreshError)
         notify({
           type: "warning",
-          message: t("{count} 首曲目标签读取失败", { count: failed.length }),
+          message: failed.length
+            ? t("{count} 首曲目读取失败。无法完成扫描。", { count: failed.length })
+            : t("曲目信息刷新失败"),
         });
-      } else {
-        notify({ type: "success", message: t("已重新读取标签") });
-      }
-      if (outcome.refreshError) {
-        logger.error("tracks", "refresh_failed", outcome.refreshError);
-        notify({ type: "warning", message: t("曲目信息刷新失败") });
-      }
       return outcome;
     } catch (error) {
       logger.error("tracks", "reread_failed", error);
-      notify({ type: "error", message: t("标签读取失败") });
+      notify({ type: "error", message: t("标签读取失败。无法完成扫描。") });
     } finally {
       pending.value = false;
     }

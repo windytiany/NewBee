@@ -112,7 +112,7 @@ fn collection_keeps_storage_type_and_path_identities_and_shared_content() {
     assert_eq!(descriptions[0].pictures.len(), 5);
     assert_eq!(descriptions[0].pictures[0].source, "embedded");
     assert_eq!(descriptions[0].pictures[3].source, "directory");
-    assert!(descriptions[0].pictures[3].error.is_some());
+    assert!(descriptions[0].pictures[3].error.is_none());
     assert_eq!(count(&database, "track_artwork_sources"), 5);
     assert_eq!(count(&database, "artwork_images"), 2);
     sync(&database, &snapshot);
@@ -130,9 +130,9 @@ fn collection_keeps_storage_type_and_path_identities_and_shared_content() {
     );
     sync(&database, &scan(vec![picture(1, 4)], vec![]));
     let remaining = database.get_artwork_collection(1).unwrap();
-    assert_eq!(remaining.images.len(), 3);
-    assert_eq!(remaining.display_index, Some(1));
-    assert_eq!(remaining.images[1].source, "directory");
+    assert_eq!(remaining.images.len(), 1);
+    assert_eq!(remaining.display_index, Some(0));
+    assert_eq!(remaining.images[0].source, "embedded");
     assert_eq!(count(&database, "artwork_images"), 2);
 }
 
@@ -196,7 +196,7 @@ fn scan_tracks_confirmed_embedded_types_without_new_images_stealing_display() {
 }
 
 #[test]
-fn source_failures_preserve_associations_and_confirmed_absence_removes_only_embedded() {
+fn source_failures_preserve_associations_and_confirmed_absence_preserves_manual() {
     let database = database();
     sync(
         &database,
@@ -208,6 +208,18 @@ fn source_failures_preserve_associations_and_confirmed_absence_removes_only_embe
             ],
         ),
     );
+    let mut draft = Draft::from(database.get_artwork_collection(1).unwrap());
+    let directory = tempfile::tempdir().unwrap();
+    draft.pictures.push(DraftPicture::Linked {
+        path: directory
+            .path()
+            .join("manual.png")
+            .to_string_lossy()
+            .into_owned(),
+        picture: picture(3, 4),
+    });
+    draft.display_index = Some(3);
+    database.save_artwork_drafts(&[(1, draft)]).unwrap();
     let original = database.get_artwork_collection(1).unwrap();
     let partial = Scan {
         embedded: Err("audio unreadable".into()),
@@ -224,11 +236,14 @@ fn source_failures_preserve_associations_and_confirmed_absence_removes_only_embe
     );
     sync(&database, &scan(vec![], vec![]));
     let remaining = database.get_artwork_collection(1).unwrap();
-    assert_eq!(remaining.images.len(), 2);
-    assert!(remaining
-        .images
-        .iter()
-        .all(|image| image.source == "directory" && image.error.is_some()));
+    assert_eq!(remaining.images.len(), 1);
+    assert_eq!(
+        remaining.images[0].artwork_id,
+        original.images[3].artwork_id
+    );
+    assert_eq!(remaining.images[0].source, "manual");
+    assert!(remaining.images[0].error.is_none());
+    assert_eq!(remaining.display_index, Some(0));
     database
         .save_artwork_drafts(&[(1, Draft::default())])
         .unwrap();
@@ -435,19 +450,23 @@ fn path_migration_updates_each_distinct_source_without_changing_content_types_or
 }
 
 #[test]
-fn linked_refresh_updates_content_identity_all_cover_readers_and_retains_unavailable_paths() {
-    let database = database();
-    database
-        .connection()
-        .unwrap()
-        .execute("UPDATE tracks SET in_library=1 WHERE id=1", [])
-        .unwrap();
+fn linked_scans_update_all_cover_readers_and_daily_reads_keep_offline_snapshots() {
+    let database = Database::open(":memory:").unwrap();
     let directory = tempfile::tempdir().unwrap();
+    let audio = directory.path().join("song.flac");
+    std::fs::write(&audio, include_bytes!("../../../../fixtures/silence.flac")).unwrap();
     let path = directory.path().join("external.png");
     let first = picture(1, 3);
     let second = picture(2, 3);
     std::fs::write(&path, &first.content.image).unwrap();
-    sync(&database, &scan(vec![first.clone()], vec![]));
+    crate::metadata::files::write_file_with_pictures(
+        &audio,
+        &[],
+        Some(std::slice::from_ref(&first)),
+    )
+    .unwrap();
+    let snapshot = crate::tracks::scanning::scan(&database, &audio).unwrap();
+    database.import_snapshot(&snapshot).unwrap();
     let mut draft = Draft::from(database.get_artwork_collection(1).unwrap());
     draft.pictures.push(DraftPicture::Linked {
         path: path.to_string_lossy().into_owned(),
@@ -456,10 +475,40 @@ fn linked_refresh_updates_content_identity_all_cover_readers_and_retains_unavail
     draft.display_index = Some(1);
     database.save_artwork_drafts(&[(1, draft)]).unwrap();
     let original = database.get_artwork_collection(1).unwrap();
-    let linked = &original.images[1];
-    assert_eq!(original.images[0].content_id, linked.content_id);
-    assert_ne!(original.images[0].artwork_id, linked.artwork_id);
-    let id = linked.artwork_id;
+    let id = original.images[1].artwork_id;
+    assert_eq!(original.images[0].content_id, original.images[1].content_id);
+    assert_ne!(original.images[0].artwork_id, id);
+    let readers = |expected: &Picture| {
+        assert_eq!(
+            database
+                .track_artwork_bytes(1, None, |_, _| unreachable!())
+                .unwrap(),
+            expected.content.image
+        );
+        assert_eq!(
+            database
+                .album_artwork_bytes(None, None, None, |_, _| unreachable!())
+                .unwrap(),
+            expected.content.image
+        );
+        assert_eq!(
+            database
+                .artwork_picture_bytes(id, None, |_, _| unreachable!())
+                .unwrap(),
+            expected.content.image
+        );
+        let crate::artwork::model::TrackArtwork::Available { data, .. } =
+            database.get_track_artwork(1).unwrap().unwrap()
+        else {
+            panic!("media cover missing")
+        };
+        assert_eq!(data, expected.content.image);
+        assert!(
+            database.describe_artwork_collections(&[1]).unwrap()[0].pictures[1]
+                .error
+                .is_none()
+        );
+    };
     assert_eq!(
         database
             .track_artwork_bytes(1, Some(128), |_, _| Ok(b"old thumbnail".to_vec()))
@@ -467,12 +516,19 @@ fn linked_refresh_updates_content_identity_all_cover_readers_and_retains_unavail
         b"old thumbnail"
     );
     std::fs::write(&path, &second.content.image).unwrap();
+    readers(&first);
+    assert_eq!(
+        signature(&database.get_artwork_collection(1).unwrap()),
+        signature(&original)
+    );
     assert_eq!(
         database
-            .track_artwork_bytes(1, None, |_, _| unreachable!())
+            .track_artwork_bytes(1, Some(128), |_, _| unreachable!())
             .unwrap(),
-        second.content.image
+        b"old thumbnail"
     );
+    crate::tracks::reading::reread(&database, 1).unwrap();
+    readers(&second);
     assert_eq!(
         database
             .track_artwork_bytes(1, Some(128), |data, _| {
@@ -482,63 +538,54 @@ fn linked_refresh_updates_content_identity_all_cover_readers_and_retains_unavail
             .unwrap(),
         b"new thumbnail"
     );
-    assert_eq!(
-        database
-            .album_artwork_bytes(None, None, None, |_, _| unreachable!())
-            .unwrap(),
-        second.content.image
-    );
-    assert_eq!(
-        database
-            .artwork_picture_bytes(id, None, |_, _| unreachable!())
-            .unwrap(),
-        second.content.image
-    );
     let current = database.get_artwork_collection(1).unwrap();
     assert_eq!(current.images[1].artwork_id, id);
-    assert_ne!(current.images[1].content_id, linked.content_id);
+    assert_ne!(current.images[1].content_id, original.images[1].content_id);
     assert_eq!(current.images[0].content_id, original.images[0].content_id);
     assert_eq!(current.images[0].picture.content.image, first.content.image);
-    let crate::artwork::model::TrackArtwork::Available { data, .. } =
-        database.get_track_artwork(1).unwrap().unwrap()
-    else {
-        panic!("media cover missing")
-    };
-    assert_eq!(data, second.content.image);
-    std::fs::remove_file(&path).unwrap();
-    let unavailable = database.get_artwork_collection(1).unwrap();
-    assert_eq!(unavailable.images.len(), 2);
-    assert!(unavailable.images[1].error.is_some());
-    assert_eq!(unavailable.display_index, Some(1));
-    assert!(database
-        .track_artwork_bytes(1, Some(128), |_, _| unreachable!())
-        .unwrap()
-        .is_empty());
-    assert!(database
-        .album_artwork_bytes(None, None, None, |_, _| unreachable!())
-        .unwrap()
-        .is_empty());
-    assert!(database
-        .artwork_picture_bytes(id, None, |_, _| unreachable!())
-        .is_err());
-    assert!(matches!(
-        database.get_track_artwork(1).unwrap().unwrap(),
-        crate::artwork::model::TrackArtwork::NoArtwork
-    ));
-    std::fs::write(&path, b"invalid image").unwrap();
-    assert!(database.get_artwork_collection(1).unwrap().images[1]
-        .error
-        .is_some());
+    let editing = serde_json::to_value(database.get_editing_snapshot(1).unwrap()).unwrap();
+    for unavailable in [None, Some(b"invalid image".as_slice())] {
+        if let Some(bytes) = unavailable {
+            std::fs::write(&path, bytes).unwrap();
+        } else {
+            std::fs::remove_file(&path).unwrap();
+        }
+        readers(&second);
+        assert!(crate::tracks::reading::reread(&database, 1).is_err());
+        assert_eq!(
+            signature(&database.get_artwork_collection(1).unwrap()),
+            signature(&current)
+        );
+        assert_eq!(
+            serde_json::to_value(database.get_editing_snapshot(1).unwrap()).unwrap(),
+            editing
+        );
+        assert_eq!(
+            database
+                .track_artwork_bytes(1, Some(128), |_, _| unreachable!())
+                .unwrap(),
+            b"new thumbnail"
+        );
+    }
     std::fs::write(&path, &first.content.image).unwrap();
+    readers(&second);
+    crate::tracks::reading::reread(&database, 1).unwrap();
+    readers(&first);
     let restored = database.get_artwork_collection(1).unwrap();
     assert_eq!(restored.images[1].artwork_id, id);
-    assert!(restored.images[1].error.is_none());
     assert_eq!(restored.images[1].content_id, original.images[0].content_id);
+    std::fs::remove_file(&audio).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    readers(&first);
+    assert!(crate::tracks::reading::reread(&database, 1).is_err());
+    assert_eq!(
+        signature(&database.get_artwork_collection(1).unwrap()),
+        signature(&restored)
+    );
     let mut draft = Draft::from(restored);
     draft.pictures.remove(1);
     draft.display_index = Some(0);
     database.save_artwork_drafts(&[(1, draft)]).unwrap();
-    assert_eq!(std::fs::read(path).unwrap(), first.content.image);
     assert_eq!(database.get_artwork_collection(1).unwrap().images.len(), 1);
 }
 

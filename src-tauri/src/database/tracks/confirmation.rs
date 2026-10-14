@@ -1,4 +1,4 @@
-use crate::database::{model::TrackWriteInput, Database};
+use crate::database::Database;
 use crate::metadata::model::EditingSnapshot;
 use crate::tracks::model::TrackReadResult;
 use rusqlite::params;
@@ -7,7 +7,7 @@ pub(crate) struct Confirmation {
     pub(crate) id: i64,
     pub(crate) revision: i64,
     pub(crate) path: String,
-    pub(crate) snapshot: Result<TrackWriteInput, String>,
+    pub(crate) snapshot: Result<crate::tracks::scanning::Snapshot, String>,
 }
 
 impl Database {
@@ -56,36 +56,55 @@ impl Database {
             .map_err(|error| error.to_string())?;
         let mut results = Vec::new();
         for item in batch {
-            let savepoint = &transaction;
-            let pending: bool = savepoint.query_row(
+            let pending: bool = transaction.query_row(
                 "SELECT EXISTS (SELECT 1 FROM tracks WHERE id = ?1 AND path = ?2 AND metadata_revision = ?3 AND NOT EXISTS (SELECT 1 FROM track_editing WHERE track_id = ?1))",
                 params![item.id, item.path, item.revision], |row| row.get(0),
             ).map_err(|error| error.to_string())?;
             if !pending {
                 continue;
             }
-            let error = match item.snapshot {
-                Ok(snapshot) => {
-                    super::persist_track(savepoint, &snapshot, None)?;
-                    None
-                }
-                Err(error) => {
-                    let snapshot = EditingSnapshot {
-                        file_type: String::new(),
-                        tag_types: Vec::new(),
-                        writable_fields: Vec::new(),
-                        issue: Some(error.clone()),
-                        values: Default::default(),
-                    };
-                    savepoint.execute("INSERT INTO track_editing (track_id, snapshot, scan_issue) VALUES (?1, ?2, ?3)",
+            transaction
+                .execute_batch("SAVEPOINT confirm_target")
+                .map_err(|error| error.to_string())?;
+            let publication = (|| -> Result<Option<String>, String> {
+                let savepoint = &transaction;
+                let error = match item.snapshot {
+                    Ok(snapshot) => {
+                        crate::tracks::scanning::persist(savepoint, &snapshot)?;
+                        None
+                    }
+                    Err(error) => {
+                        let snapshot = EditingSnapshot {
+                            file_type: String::new(),
+                            tag_types: Vec::new(),
+                            writable_fields: Vec::new(),
+                            issue: Some(error.clone()),
+                            values: Default::default(),
+                        };
+                        savepoint.execute("INSERT INTO track_editing (track_id, snapshot, scan_issue) VALUES (?1, ?2, ?3)",
                         params![item.id, serde_json::to_string(&snapshot).map_err(|error| error.to_string())?, error])
                         .map_err(|error| error.to_string())?;
-                    Some(error)
+                        Some(error)
+                    }
+                };
+                Ok(error)
+            })();
+            let (database_updated, error) = match publication {
+                Ok(error) => (true, error),
+                Err(error) => {
+                    transaction
+                        .execute_batch("ROLLBACK TO confirm_target")
+                        .map_err(|error| error.to_string())?;
+                    log::warn!("Could not confirm track {}: {error}", item.id);
+                    (false, Some(error))
                 }
             };
+            transaction
+                .execute_batch("RELEASE confirm_target")
+                .map_err(|error| error.to_string())?;
             results.push(TrackReadResult {
                 track_id: item.id,
-                database_updated: true,
+                database_updated,
                 error,
             });
         }

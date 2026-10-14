@@ -390,6 +390,29 @@ describe("playback bar button", () => {
     expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
   });
 
+  it("reports a playback failure once across pending, event and reply snapshots", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    mountBar(fixture.session);
+    fixture.emit({ queuePlaybackError: "Invalid playback target" });
+    await settle();
+    expect(notifications.items.value[0]?.count).toBe(1);
+    fixture.emit({
+      isCommandPending: true,
+      playbackError: "播放操作失败，请重试或查看日志",
+    });
+    await settle();
+    fixture.emit({ isCommandPending: false, playbackError: "" });
+    await settle();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]?.count).toBe(1);
+    fixture.emit({ queuePlaybackError: "" });
+    await settle();
+    fixture.emit({ queuePlaybackError: "Decode failed" });
+    await settle();
+    expect(notifications.items.value[0]?.count).toBe(2);
+  });
+
   it("still dims when no song or restored queue can be played", () => {
     const { session } = setupPlayback();
     const button = playButton(mountBar(session));

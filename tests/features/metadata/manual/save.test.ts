@@ -7,7 +7,7 @@ import {
   changePictureType,
   createCollectionDraft,
 } from "@/features/artwork/collection/model";
-import type { MetadataSaveResult, MetadataTarget, TagChange } from "@/features/metadata/types";
+import type { MetadataSaveResult, TagChange } from "@/features/metadata/types";
 
 function result(trackId: number, success = true): MetadataSaveResult {
   return {
@@ -49,8 +49,8 @@ function collections(ids: number[]): ArtworkCollection[] {
 }
 function fixture(overrides: Partial<ManualSaveOptions> = {}, ids = [1, 2]) {
   const saves: Array<{ ids: number[]; changes: TagChange[]; artwork: ArtworkDraft[] }> = [];
-  const synchronized: MetadataTarget[][] = [];
-  const editing: MetadataTarget[][] = [];
+  const synchronized: number[][] = [];
+  const editing: number[][] = [];
   const save = createManualSave({
     loadCollections: async (ids) => collections(ids),
     planArtwork: async (drafts) =>
@@ -70,10 +70,7 @@ function fixture(overrides: Partial<ManualSaveOptions> = {}, ids = [1, 2]) {
     },
     ...overrides,
   });
-  save.setTargets(
-    ids.map((trackId) => ({ trackId, path: `/music/${trackId}.mp3` })),
-    false,
-  );
+  save.setTargets(ids.map((trackId) => ({ trackId, path: `/music/${trackId}.mp3` })));
   const artwork = createCollectionDraft(
     ids,
     ids.map((trackId) => ({ trackId, pictures: [], displayIndex: null, error: null })),
@@ -127,10 +124,7 @@ describe("manual metadata save", () => {
     expect(editing).toEqual([[1, 2]]);
     expect(saves[0]?.changes).toEqual([]);
     save.reset();
-    save.setTargets(
-      [1, 2].map((trackId) => ({ trackId, path: `/music/${trackId}.mp3` })),
-      false,
-    );
+    save.setTargets([1, 2].map((trackId) => ({ trackId, path: `/music/${trackId}.mp3` })));
     await save.run({ ...request, lyricsAction: "unmark" });
     expect(editing).toEqual([[1, 2]]);
   });
@@ -271,7 +265,7 @@ describe("manual metadata save", () => {
   it("reads the plan before acquiring a lease and guards only the real write IDs", async () => {
     let leased = false;
     let planned = false;
-    const editing: MetadataTarget[][] = [];
+    const editing: number[][] = [];
     const { save, request, add } = fixture({
       planArtwork: async (drafts) => {
         expect(leased).toBe(false);
@@ -468,7 +462,7 @@ describe("manual metadata save", () => {
   it("clears saved outcomes and both refresh retries before switching editing targets", async () => {
     let fail = true;
     const reads: number[][] = [];
-    const refreshed: MetadataTarget[][] = [];
+    const refreshed: number[][] = [];
     const { save, request, saves, add } = fixture(
       {
         loadCollections: async (ids) => {
@@ -483,7 +477,7 @@ describe("manual metadata save", () => {
       },
       [1],
     );
-    save.setTargets([{ trackId: 1, path: "/music/1.mp3" }], true);
+    save.setTargets([{ trackId: 1, path: "/music/1.mp3" }]);
     await add();
     expect(await save.run(request)).toEqual({ failed: false, hasError: true });
     expect(save.state.results[0]?.databaseUpdated).toBe(true);
@@ -491,14 +485,14 @@ describe("manual metadata save", () => {
     expect(save.state.synchronizationError).toContain("refresh failed");
 
     save.reset();
-    save.setTargets([{ trackId: 2, path: "/music/2.mp3" }], false);
+    save.setTargets([{ trackId: 2, path: "/music/2.mp3" }]);
     const artwork = createCollectionDraft([2], collections([2]));
     fail = false;
     expect(save.state.results).toEqual([]);
     expect(save.remainingIds([1, 2])).toEqual([1, 2]);
     expect(await save.retrySynchronization(artwork)).toEqual({ failed: false, hasError: false });
     expect(reads).toEqual([[1]]);
-    expect(refreshed).toEqual([[1, "/music/1.mp3"]]);
+    expect(refreshed).toEqual([[1]]);
     expect(artwork).toEqual(createCollectionDraft([2], collections([2])));
 
     await save.run({
@@ -513,12 +507,12 @@ describe("manual metadata save", () => {
       save.state.results.map(({ trackId, databaseUpdated }) => ({ trackId, databaseUpdated })),
     ).toEqual([{ trackId: 2, databaseUpdated: true }]);
     expect(reads).toEqual([[1]]);
-    expect(refreshed).toEqual([[1, "/music/1.mp3"], [2]]);
+    expect(refreshed).toEqual([[1], [2]]);
   });
 
-  it("synchronizes file target paths during save and refresh retry", async () => {
+  it("synchronizes numeric targets once during save and refresh retry", async () => {
     let fail = true;
-    const refreshed: MetadataTarget[][] = [];
+    const refreshed: number[][] = [];
     const { save, request, saves } = fixture(
       {
         synchronize: async (ids) => {
@@ -528,16 +522,13 @@ describe("manual metadata save", () => {
       },
       [1],
     );
-    save.setTargets([{ trackId: 1, path: "/music/1.mp3" }], true);
+    save.setTargets([{ trackId: 1, path: "/music/1.mp3" }]);
     request.changes = [{ field: "title", value: "new" }];
     await save.run(request);
     expect(save.state.results[0]?.databaseUpdated).toBe(true);
     fail = false;
     await save.retrySynchronization(request.artwork);
-    expect(refreshed).toEqual([
-      [1, "/music/1.mp3"],
-      [1, "/music/1.mp3"],
-    ]);
+    expect(refreshed).toEqual([[1], [1]]);
     expect(saves).toHaveLength(1);
   });
 });

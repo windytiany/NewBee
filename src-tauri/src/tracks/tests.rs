@@ -1,5 +1,5 @@
 use crate::{
-    database::{tracks::persist_track, Database},
+    database::Database,
     locking::write::WriteState,
     metadata::{
         files,
@@ -25,15 +25,10 @@ fn change(field: MetadataField, value: &str) -> MetadataChange {
 }
 
 fn register(database: &Database, path: &Path) -> i64 {
-    let track = files::read_track(path).unwrap().unwrap();
+    let snapshot = super::scanning::scan(database, path).unwrap();
     let mut connection = database.connection().unwrap();
     let transaction = connection.transaction().unwrap();
-    let id = persist_track(
-        &transaction,
-        &track,
-        Some(&crate::database::tests::support::embedded(&track)),
-    )
-    .unwrap();
+    let id = super::scanning::persist(&transaction, &snapshot).unwrap();
     transaction.commit().unwrap();
     id
 }
@@ -83,6 +78,8 @@ fn external_track_capabilities_use_snapshots_and_file_writes_do_not_grant_member
             crate::metadata::get_editable_tracks,
             crate::lyrics::embedded::get_track_lyrics,
             crate::artwork::get_track_artwork,
+            crate::artwork::collection::commands::get_track_artwork_collections,
+            super::commands::reread_track_tags,
         ])
         .build(tauri::generate_context!())
         .unwrap();
@@ -103,6 +100,19 @@ fn external_track_capabilities_use_snapshots_and_file_writes_do_not_grant_member
     );
     assert!(saved.file_written && saved.database_updated);
     assert!(saved.error.is_none());
+    let embedded = files::artwork::read_embedded_pictures(&path).unwrap();
+    assert_eq!(embedded.len(), 1);
+    assert_eq!(
+        embedded[0].content.image,
+        include_bytes!("../../fixtures/cover.png")
+    );
+    assert_eq!(
+        database.get_artwork_collection(id).unwrap().images[0]
+            .picture
+            .content
+            .image,
+        embedded[0].content.image
+    );
     assert_eq!(
         files::read_track(&path).unwrap().unwrap().title.as_deref(),
         Some("Written")
@@ -128,6 +138,7 @@ fn external_track_capabilities_use_snapshots_and_file_writes_do_not_grant_member
         ("get_track", json!({"trackId":id})),
         ("get_editable_tracks", json!({"trackIds":[id]})),
         ("get_track_lyrics", json!({"trackId":id})),
+        ("get_track_artwork_collections", json!({"trackIds":[id]})),
     ];
     let snapshots: Vec<Value> = queries
         .iter()
@@ -150,12 +161,12 @@ fn external_track_capabilities_use_snapshots_and_file_writes_do_not_grant_member
     assert!(!cover.is_empty());
     std::fs::remove_file(&path).unwrap();
     files::access::take(directory.path());
-    for ((cmd, args), expected) in queries.iter().zip(snapshots) {
+    for ((cmd, args), expected) in queries.iter().zip(&snapshots) {
         assert_eq!(
             invoke(&window, cmd, args.clone())
                 .deserialize::<Value>()
                 .unwrap(),
-            expected
+            *expected
         );
     }
     let tauri::ipc::InvokeResponseBody::Raw(offline_cover) = invoke(
@@ -166,6 +177,35 @@ fn external_track_capabilities_use_snapshots_and_file_writes_do_not_grant_member
         panic!("Expected cover")
     };
     assert_eq!(offline_cover, cover);
+    assert_eq!(
+        database.get_artwork_collection(id).unwrap().images[0]
+            .picture
+            .content
+            .image,
+        embedded[0].content.image
+    );
+    assert!(files::access::take(directory.path()).is_empty());
+    let failed: Value = invoke(&window, "reread_track_tags", json!({"trackIds":[id]}))
+        .deserialize()
+        .unwrap();
+    assert_eq!(failed[0]["databaseUpdated"], false);
+    assert!(failed[0]["error"].is_string());
+    files::access::take(directory.path());
+    for ((cmd, args), expected) in queries.iter().zip(&snapshots) {
+        assert_eq!(
+            invoke(&window, cmd, args.clone())
+                .deserialize::<Value>()
+                .unwrap(),
+            *expected
+        );
+    }
+    assert_eq!(
+        database.get_artwork_collection(id).unwrap().images[0]
+            .picture
+            .content
+            .image,
+        embedded[0].content.image
+    );
     assert!(files::access::take(directory.path()).is_empty());
 }
 

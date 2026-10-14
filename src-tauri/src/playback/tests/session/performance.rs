@@ -37,19 +37,22 @@ fn measures_large_queue_metadata_publication_persistence_and_preparation() {
             generation,
             busy,
             receiver,
-            |snapshot| {
-                let bytes = serde_json::to_vec(snapshot).unwrap().len();
-                let mut observed = worker_observed.lock().unwrap();
-                observed.0 += 1;
-                observed.1 += bytes;
-            },
-            |delta| {
-                let bytes = serde_json::to_vec(delta).unwrap().len();
-                let mut observed = worker_deltas.lock().unwrap();
-                observed.0 += 1;
-                observed.1 += bytes;
-                observed.2 = observed.2.max(delta.displayed_tracks.len());
-            },
+            |_| {},
+            (
+                |snapshot| {
+                    let bytes = serde_json::to_vec(snapshot).unwrap().len();
+                    let mut observed = worker_observed.lock().unwrap();
+                    observed.0 += 1;
+                    observed.1 += bytes;
+                },
+                |delta| {
+                    let bytes = serde_json::to_vec(delta).unwrap().len();
+                    let mut observed = worker_deltas.lock().unwrap();
+                    observed.0 += 1;
+                    observed.1 += bytes;
+                    observed.2 = observed.2.max(delta.displayed_tracks.len());
+                },
+            ),
         );
     });
     let start = Instant::now();
@@ -80,8 +83,7 @@ fn measures_large_queue_metadata_publication_persistence_and_preparation() {
                 batch
                     .iter()
                     .map(|id| MetadataUpdate {
-                        id: Some(*id),
-                        path: None,
+                        id: *id,
                         title: Some(format!("Stale {id}")),
                         artist: Some("Artist".into()),
                         album: Some("Album".into()),

@@ -4,7 +4,7 @@ import { reactive, toRef } from "vue";
 import { createLyricsApi } from "@/features/lyrics/api";
 import { createLyricsBatchCooperation } from "@/features/lyrics/download/cooperation";
 import type { LyricsBatchCooperationOptions } from "@/features/lyrics/download/cooperation";
-import { createTagSynchronization } from "@/features/metadata/synchronize";
+import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { createMetadataSave } from "@/features/metadata/save";
 import { notifications } from "@/shared/notifications/center";
 import { usePlaybackSession } from "@/features/playback/session";
@@ -14,7 +14,7 @@ import { logger, operationId } from "@/shared/logging/logger";
 
 const TASK_KEY = "lyrics-download";
 export type LyricsBatchOptions = LyricsBatchCooperationOptions & {
-  synchronize: (ids: Array<number | string>) => void | Promise<void>;
+  synchronize: (ids: number[]) => void | Promise<void>;
   notifications: Pick<typeof notifications, "notify" | "updateTask" | "removeTask">;
 };
 
@@ -221,7 +221,7 @@ export function useLyricsBatch() {
     completeStep: api.completeStep,
     editFiles: session.withMetadataEditing,
     cancel: api.cancel,
-    synchronize: createTagSynchronization(session, invoke).tracks,
+    synchronize: createTrackSynchronization(session, invoke).refresh,
     notifications,
   });
   return sharedBatch;

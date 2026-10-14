@@ -39,15 +39,15 @@ pub(crate) fn insert_track(
     }
 }
 
-pub(crate) fn embedded(
-    track: &crate::database::model::TrackWriteInput,
-) -> crate::artwork::collection::Scan {
+pub(crate) fn embedded(image: Option<&[u8]>) -> crate::artwork::collection::Scan {
     crate::artwork::collection::Scan {
-        embedded: Ok(track
-            .artwork
+        embedded: Ok(image
             .iter()
             .map(|content| crate::artwork::collection::Picture {
-                content: content.clone(),
+                content: crate::artwork::model::ArtworkContent {
+                    mime_type: "image/png".into(),
+                    image: content.to_vec(),
+                },
                 picture_type: 3,
             })
             .collect()),
@@ -55,19 +55,31 @@ pub(crate) fn embedded(
     }
 }
 
-pub(crate) fn directory(
-    track: &crate::database::model::TrackWriteInput,
-    path: &str,
-) -> crate::artwork::collection::Scan {
+pub(crate) fn directory(image: Option<&[u8]>, path: &str) -> crate::artwork::collection::Scan {
     crate::artwork::collection::Scan {
         embedded: Ok(Vec::new()),
-        directory: Ok(track
-            .artwork
+        directory: Ok(image
             .iter()
             .map(|content| crate::artwork::collection::DirectoryPicture {
                 path: path.into(),
-                content: Ok(content.clone()),
+                content: Ok(crate::artwork::model::ArtworkContent {
+                    mime_type: "image/png".into(),
+                    image: content.to_vec(),
+                }),
             })
             .collect()),
     }
+}
+
+/// Publish a supplied fixture snapshot and Inbox membership through the database interface.
+pub(crate) fn inbox(
+    database: &Database,
+    track: &crate::database::model::TrackWriteInput,
+    scan: crate::artwork::collection::Scan,
+) -> Result<i64, String> {
+    database.save_inbox_snapshot(&crate::tracks::scanning::Snapshot {
+        track: track.clone(),
+        artwork: scan,
+        linked: Vec::new(),
+    })
 }

@@ -1,4 +1,4 @@
-use crate::{database::Database, locking::write::WriteState};
+use crate::database::Database;
 use serde::Serialize;
 use tauri::{ipc::Response, Manager};
 
@@ -32,26 +32,7 @@ pub(crate) async fn get_track_artwork_collections<R: tauri::Runtime>(
     let track_ids = crate::metadata::model::validate_track_ids(&track_ids)?;
     tauri::async_runtime::spawn_blocking(move || {
         let database = app.state::<Database>();
-        let errors: Vec<_> = track_ids
-            .iter()
-            .map(|id| {
-                (
-                    *id,
-                    database
-                        .complete_track_artwork(*id, &app.state::<WriteState>())
-                        .err(),
-                )
-            })
-            .collect();
-        let mut descriptions = database.describe_artwork_collections(&track_ids)?;
-        for description in &mut descriptions {
-            if let Some((_, Some(error))) =
-                errors.iter().find(|(id, _)| *id == description.track_id)
-            {
-                description.error = Some(error.clone());
-            }
-        }
-        Ok(descriptions)
+        database.describe_artwork_collections(&track_ids)
     })
     .await
     .map_err(|error| format!("读取图片集合失败：{error}"))?

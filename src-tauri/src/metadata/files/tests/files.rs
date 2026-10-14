@@ -702,3 +702,27 @@ fn read_only_files_are_not_modified() {
         .primary_tag()
         .is_none());
 }
+
+#[test]
+fn adapter_write_preserves_database_snapshot_and_prior_success_after_a_missing_target() {
+    let fixture = Fixture::new();
+    let path = fixture.wav();
+    let database = crate::database::Database::open(":memory:").unwrap();
+    let snapshot = files::read_track(&path).unwrap().unwrap();
+    database.upsert_track(&snapshot, None).unwrap();
+    let changes = [change(MetadataField::Title, Some("Written title"))];
+    let results = [
+        files::write_file(&path, &changes),
+        files::write_file(&fixture.0.join("missing.wav"), &changes),
+    ];
+    assert!(results[0].is_ok());
+    assert!(results[1].is_err());
+    assert_eq!(
+        files::read_track(&path).unwrap().unwrap().title.as_deref(),
+        Some("Written title")
+    );
+    assert_eq!(
+        database.get_track(1).unwrap().unwrap().title,
+        snapshot.title
+    );
+}

@@ -1,11 +1,12 @@
-use crate::{database::Database, locking::write::WriteState, metadata::files::FileTrack};
+use crate::{database::Database, locking::write::WriteState, tracks::model::TrackDetails};
 use serde::Serialize;
-use std::{collections::HashSet, path::Path};
+use std::path::Path;
 use tauri::{Manager, State};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct FileResult {
+    track_id: Option<i64>,
     path: String,
     success: bool,
     skipped: bool,
@@ -23,63 +24,47 @@ pub(crate) struct InboxRead {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct InboxTrack {
     #[serde(flatten)]
-    file: FileTrack,
+    track: TrackDetails,
     added_at: i64,
 }
 
 fn refresh(database: &Database) -> Result<InboxRead, String> {
     let mut tracks = Vec::new();
-    let mut failures = Vec::new();
-    for (path, added_at) in database.inbox_entries()? {
-        match FileTrack::read(&path) {
-            Ok(file) => tracks.push(InboxTrack { file, added_at }),
-            Err(error) => {
-                tracks.push(InboxTrack {
-                    file: FileTrack::unconfirmed(&path),
-                    added_at,
-                });
-                failures.push(FileResult {
-                    path,
-                    success: false,
-                    skipped: false,
-                    error: Some(error),
-                });
-            }
-        }
+    for (id, added_at) in database.inbox_entries()? {
+        let track = database
+            .get_track(id)?
+            .ok_or_else(|| format!("曲目 {id} 已不在数据库中"))?;
+        tracks.push(InboxTrack { track, added_at });
     }
-    Ok(InboxRead { tracks, failures })
+    Ok(InboxRead {
+        tracks,
+        failures: Vec::new(),
+    })
 }
 
-fn register(database: &Database, paths: Vec<String>) -> Vec<FileResult> {
-    let mut seen = HashSet::new();
-    let existing = database
-        .inbox_paths()
-        .map(|paths| paths.into_iter().collect::<HashSet<_>>());
+pub(crate) fn register(database: &Database, paths: Vec<String>) -> Vec<FileResult> {
     paths
         .into_iter()
         .map(|path| {
             let outcome = (|| {
                 let canonical = std::fs::canonicalize(&path).map_err(|error| error.to_string())?;
-                if !canonical.is_file() {
-                    return Err("不是音频文件".to_owned());
-                }
-                let normalized = canonical.to_string_lossy().into_owned();
-                let existing = existing.as_ref().map_err(Clone::clone)?;
-                if existing.contains(&normalized) || !seen.insert(normalized.clone()) {
-                    return Ok(true);
-                }
                 if !crate::tracks::discovery::has_supported_extension(&canonical) {
                     return Err("不支持的音频文件".to_owned());
                 }
-                std::fs::File::open(&canonical).map_err(|error| error.to_string())?;
-                database
-                    .register_inbox_path(&normalized)
-                    .map(|added| !added)
+                let snapshot = crate::tracks::scanning::scan(database, &canonical)?;
+                database.save_inbox_snapshot(&snapshot)
             })();
+            if let Err(error) = &outcome {
+                log::warn!(
+                    "Inbox registration '{}' failed during scan/publication: {error}",
+                    path
+                );
+            }
             FileResult {
+                track_id: outcome.as_ref().ok().copied(),
                 path,
                 success: outcome.is_ok(),
-                skipped: outcome.as_ref().copied().unwrap_or(false),
+                skipped: false,
                 error: outcome.err(),
             }
         })
@@ -88,6 +73,7 @@ fn register(database: &Database, paths: Vec<String>) -> Vec<FileResult> {
 
 fn collect_directory(path: &Path, files: &mut Vec<String>, failures: &mut Vec<FileResult>) {
     let failure = |path: &Path, error: std::io::Error| FileResult {
+        track_id: None,
         path: path.to_string_lossy().into_owned(),
         success: false,
         skipped: false,
@@ -134,20 +120,34 @@ fn register_directories(database: &Database, paths: Vec<String>) -> Vec<FileResu
     results
 }
 
-fn ingest(database: &Database, paths: Vec<String>) -> Vec<FileResult> {
-    paths
+fn ingest(database: &Database, track_ids: Vec<i64>) -> Vec<FileResult> {
+    track_ids
         .into_iter()
-        .map(|path| {
+        .map(|id| {
+            let mut path = String::new();
             let outcome = (|| {
-                FileTrack::read(&path)?;
-                let mut result = crate::library::import::ImportResult::default();
-                crate::library::import::import_track(database, Path::new(&path), &mut result);
-                if result.failed != 0 {
-                    return Err("扫描失败".to_owned());
+                if !database
+                    .inbox_entries()?
+                    .iter()
+                    .any(|(candidate, _)| *candidate == id)
+                {
+                    return Err("曲目不在 Inbox 中".to_owned());
                 }
-                database.remove_inbox_path(&path)
+                let track = database
+                    .get_track(id)?
+                    .ok_or_else(|| format!("曲目 {id} 已不在数据库中"))?;
+                path = track.path;
+                let snapshot = crate::tracks::scanning::scan(database, Path::new(&path))?;
+                database.import_snapshot(&snapshot).map(|_| ())
             })();
+            if let Err(error) = &outcome {
+                log::warn!(
+                    "Inbox ingest {id} '{}' failed during scan/publication: {error}",
+                    path
+                );
+            }
             FileResult {
+                track_id: Some(id),
                 path,
                 success: outcome.is_ok(),
                 skipped: false,
@@ -193,15 +193,15 @@ pub(crate) async fn register_inbox<R: tauri::Runtime>(
 
 #[tauri::command]
 pub(crate) async fn remove_inbox<R: tauri::Runtime>(
-    paths: Vec<String>,
+    track_ids: Vec<i64>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<(), String> {
     let guard = write.acquire()?;
     crate::database::blocking(app, move |database| {
         let _guard = guard;
-        for path in paths {
-            database.remove_inbox_path(&path)?;
+        for id in track_ids {
+            database.remove_inbox_track(id)?;
         }
         Ok(())
     })
@@ -210,14 +210,14 @@ pub(crate) async fn remove_inbox<R: tauri::Runtime>(
 
 #[tauri::command]
 pub(crate) async fn ingest_inbox<R: tauri::Runtime>(
-    paths: Vec<String>,
+    track_ids: Vec<i64>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<Vec<FileResult>, String> {
     let guard = write.acquire()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
-        ingest(&app.state::<Database>(), paths)
+        ingest(&app.state::<Database>(), track_ids)
     })
     .await
     .map_err(|error| format!("Inbox 入库失败：{error}"))

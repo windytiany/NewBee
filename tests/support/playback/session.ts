@@ -164,11 +164,8 @@ export function playbackFixture(
       const ids = command.trackIds as number[];
       if (
         snapshot.currentTrack &&
-        ((snapshot.currentTrack.trackId !== null && ids.includes(snapshot.currentTrack.trackId)) ||
-          (snapshot.currentTrack.path !== undefined &&
-            ((command.paths as string[] | undefined) ?? []).includes(
-              snapshot.currentTrack.path,
-            ))) &&
+        snapshot.currentTrack.trackId !== null &&
+        ids.includes(snapshot.currentTrack.trackId) &&
         snapshot.currentPlaybackId !== null
       ) {
         if (options.canStop === false) throw new Error("未能确认播放文件已释放，请重试。");

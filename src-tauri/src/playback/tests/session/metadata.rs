@@ -2,8 +2,7 @@ use super::*;
 
 fn update(id: i64) -> MetadataUpdate {
     MetadataUpdate {
-        id: Some(id),
-        path: None,
+        id,
         title: Some("Confirmed".into()),
         artist: Some("Confirmed artist".into()),
         album: Some("Confirmed album".into()),
@@ -121,12 +120,15 @@ fn worker_metadata_failure_and_no_matches_do_not_publish_persist_or_hide_errors(
             generation,
             busy,
             receiver,
-            |_| {
-                full.send("full").unwrap();
-            },
-            |_| {
-                published.send("delta").unwrap();
-            },
+            |_| {},
+            (
+                |_| {
+                    full.send("full").unwrap();
+                },
+                |_| {
+                    published.send("delta").unwrap();
+                },
+            ),
         )
     });
     handle

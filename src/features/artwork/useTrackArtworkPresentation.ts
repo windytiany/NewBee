@@ -13,7 +13,7 @@ export type TrackArtworkPresentation = {
 
 /** Owns displayed artwork until its consumer finishes the leave animation. */
 export function useTrackArtworkPresentation(
-  trackId: MaybeRefOrGetter<number | string | null>,
+  trackId: MaybeRefOrGetter<number | null>,
   size: MaybeRefOrGetter<number | null> = null,
 ) {
   const artwork = useTrackArtwork(trackId, size);

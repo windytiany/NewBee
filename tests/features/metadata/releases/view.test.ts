@@ -39,6 +39,7 @@ const settle = async () => {
 };
 function fixture(synchronize: () => Promise<void> = async () => {}) {
   return createReleaseEditor({
+    loadTracks: async (ids) => ids.map((id) => local(id)),
     loadAlbum: async () => [local(1), local(2)],
     search: async () => ({ count: 0, offset: 0, releases: [] }),
     release: async () => release(),
@@ -191,6 +192,12 @@ describe("album tag views", () => {
     expect(refreshes).toBe(1);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.synchronizationError).toContain("reload failed");
+    expect(editor.state.open).toBe(true);
+    editor.prepareSave();
+    await editor.save();
+    await settle();
+    expect(refreshes).toBe(2);
+    expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.open).toBe(false);
   });
 

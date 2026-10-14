@@ -4,7 +4,7 @@ import type { TracksInvoker } from "@/features/tracks/api";
 import type { TrackMetadataUpdate } from "@/features/playback/types";
 
 const output = transpileScript(
-  await Bun.file(new URL("../../../src/features/metadata/synchronize.ts", import.meta.url)).text(),
+  await Bun.file(new URL("../../../src/features/tracks/synchronize.ts", import.meta.url)).text(),
 );
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 afterEach(() => {
@@ -27,8 +27,8 @@ function fixture() {
     if (failure) throw new Error("database unavailable");
     return (trackIds.includes(1) ? [track] : []) as Result;
   };
-  const { createTagSynchronization } = evaluateSource<
-    typeof import("@/features/metadata/synchronize")
+  const { createTrackSynchronization } = evaluateSource<
+    typeof import("@/features/tracks/synchronize")
   >(output, {
     "@tauri-apps/api/core": { invoke: invokeCommand },
 
@@ -39,7 +39,7 @@ function fixture() {
       invalidateAlbumArtworkCache: () => events.push("album-artwork"),
     },
   });
-  const synchronize = createTagSynchronization(
+  const synchronize = createTrackSynchronization(
     {
       updateTrackMetadata: async (tracks) => {
         updates.push(tracks);
@@ -61,7 +61,7 @@ function fixture() {
 describe("tag save synchronization", () => {
   it("publishes confirmed track details after a bulk read and updates only existing tracks", async () => {
     const harness = fixture();
-    await harness.synchronize.tracks([1, 2]);
+    await harness.synchronize.refresh([1, 2]);
     expect(harness.events).toEqual([
       "get_tracks:1,2",
       "track-artwork:1,2",
@@ -73,7 +73,7 @@ describe("tag save synchronization", () => {
 
   it("invalidates both artwork caches when a release edit changes embedded covers", async () => {
     const harness = fixture();
-    await harness.synchronize.artwork([1]);
+    await harness.synchronize.refresh([1]);
     expect(harness.events).toEqual([
       "get_tracks:1",
       "track-artwork:1",
@@ -86,7 +86,7 @@ describe("tag save synchronization", () => {
   it("preserves the published change but rejects a failed reload without partially updating playback", async () => {
     const harness = fixture();
     harness.fail();
-    await expect(harness.synchronize.tracks([1])).rejects.toThrow("database unavailable");
+    await expect(harness.synchronize.refresh([1])).rejects.toThrow("database unavailable");
     expect(harness.events).toEqual([
       "get_tracks:1",
       "track-artwork:1",

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { MetadataTarget } from "@/features/metadata/types";
 import { t } from "@/shared/i18n/locale";
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { createMappingDrag } from "@/features/metadata/releases/mapping/drag";
@@ -44,7 +43,7 @@ const mappedIds = computed(() =>
 const allIncluded = computed(
   () => mappedIds.value.length > 0 && mappedIds.value.every((id) => state.included.includes(id)),
 );
-const local = (id: MetadataTarget | null) => state.tracks.find(({ track }) => track.id === id);
+const local = (id: number | null) => state.tracks.find(({ track }) => track.id === id);
 const filename = (path: string) => path.split(/[\\/]/).pop() ?? path;
 function toggleAll() {
   const include = !allIncluded.value;
@@ -68,10 +67,7 @@ function detachSelected() {
   selectedIndex.value = state.rows.findIndex((row) => row.trackId === id);
   expanded.value = null;
 }
-function startRowDrag(
-  trackId: MetadataTarget | null,
-  event: InstanceType<typeof globalThis.PointerEvent>,
-) {
+function startRowDrag(trackId: number | null, event: InstanceType<typeof globalThis.PointerEvent>) {
   if (
     trackId === null ||
     (event.target as InstanceType<typeof globalThis.HTMLElement>).closest(

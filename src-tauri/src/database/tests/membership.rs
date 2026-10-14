@@ -1,5 +1,5 @@
 use super::super::{model::TrackWriteInput, model::TrackWriteOutcome, Database};
-use crate::artwork::model::{ArtworkContent, TrackArtwork};
+use crate::artwork::model::TrackArtwork;
 use crate::library::model::{LibraryGroup, LibraryGrouping};
 use crate::metadata::model::LyricsMarkAction;
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
@@ -21,10 +21,6 @@ fn snapshot(path: &str, artist: Option<&str>, album: Option<&str>) -> TrackWrite
         sample_rate_hz: None,
         bitrate_kbps: None,
         channels: None,
-        artwork: Some(ArtworkContent {
-            mime_type: "image/png".into(),
-            image: b"cover snapshot".to_vec(),
-        }),
         editing: None,
         lyrics: Some("embedded lyrics".into()),
     }
@@ -36,7 +32,9 @@ fn register(database: &Database, track: &TrackWriteInput) -> i64 {
     let id = super::super::tracks::persist_track(
         &transaction,
         track,
-        Some(&crate::database::tests::support::embedded(track)),
+        Some(&crate::database::tests::support::embedded(Some(
+            b"cover snapshot",
+        ))),
     )
     .unwrap();
     transaction.commit().unwrap();
@@ -69,7 +67,9 @@ fn external_targets_exclude_members_missing_ids_and_duplicates() {
     database
         .upsert_track(
             &member,
-            Some(&crate::database::tests::support::embedded(&member)),
+            Some(&crate::database::tests::support::embedded(Some(
+                b"cover snapshot",
+            ))),
         )
         .unwrap();
     let member_id = register(&database, &member);
@@ -82,7 +82,9 @@ fn external_targets_exclude_members_missing_ids_and_duplicates() {
     database
         .upsert_track(
             &external,
-            Some(&crate::database::tests::support::embedded(&external)),
+            Some(&crate::database::tests::support::embedded(Some(
+                b"cover snapshot",
+            ))),
         )
         .unwrap();
     assert!(database
@@ -128,11 +130,10 @@ fn external_snapshots_do_not_contribute_to_library_queries_or_album_aggregates()
 
     let mut member = snapshot("member.flac", Some("Artist"), Some("Album"));
     member.release_date = Some("2020".into());
-    member.artwork = None;
     database
         .upsert_track(
             &member,
-            Some(&crate::database::tests::support::embedded(&member)),
+            Some(&crate::database::tests::support::embedded(None)),
         )
         .unwrap();
     register(
@@ -183,13 +184,14 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
     let file = std::fs::canonicalize(file).unwrap();
     let path = file.to_string_lossy().into_owned();
     let mut track = crate::metadata::files::read_track(&file).unwrap().unwrap();
-    track.artwork = Some(ArtworkContent {
-        mime_type: "image/png".into(),
-        image: b"cover snapshot".to_vec(),
-    });
     track.lyrics = Some("embedded lyrics".into());
     let database = Database::open(directory.path().join("tracks.sqlite3")).unwrap();
-    database.register_inbox_path(&path).unwrap();
+    super::support::inbox(
+        &database,
+        &track,
+        super::support::embedded(Some(b"cover snapshot")),
+    )
+    .unwrap();
     let id = register(&database, &track);
     assert_eq!(register(&database, &track), id);
     let playlist = database.create_playlist("Favorites").unwrap();
@@ -205,7 +207,9 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
         database
             .upsert_track(
                 &track,
-                Some(&crate::database::tests::support::embedded(&track))
+                Some(&crate::database::tests::support::embedded(Some(
+                    b"cover snapshot"
+                )))
             )
             .unwrap(),
         TrackWriteOutcome::Added
@@ -214,7 +218,9 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
         database
             .upsert_track(
                 &track,
-                Some(&crate::database::tests::support::embedded(&track))
+                Some(&crate::database::tests::support::embedded(Some(
+                    b"cover snapshot"
+                )))
             )
             .unwrap(),
         TrackWriteOutcome::Updated
@@ -222,7 +228,15 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
     assert_eq!(register(&database, &track), id);
     assert_eq!(database.library_track_paths().unwrap(), vec![path.clone()]);
     assert!(database.inbox_paths().unwrap().is_empty());
-    assert!(database.register_inbox_path(&path).unwrap());
+    assert_eq!(
+        super::support::inbox(
+            &database,
+            &track,
+            super::support::embedded(Some(b"cover snapshot"))
+        )
+        .unwrap(),
+        id
+    );
     assert_eq!(database.inbox_paths().unwrap(), vec![path.clone()]);
     assert!(database.library_track_paths().unwrap().is_empty());
     assert!(database
@@ -255,7 +269,12 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
         include_bytes!("../../../fixtures/silence.flac")
     );
 
-    database.register_inbox_path(&path).unwrap();
+    super::support::inbox(
+        &database,
+        &track,
+        super::support::embedded(Some(b"cover snapshot")),
+    )
+    .unwrap();
     track.title = Some("Confirmed".into());
     database
         .update_metadata_cover_and_lyrics(id, &[], None, None, LyricsMarkAction::Keep, Some(&track))
@@ -270,7 +289,9 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
         database
             .upsert_track(
                 &track,
-                Some(&crate::database::tests::support::embedded(&track))
+                Some(&crate::database::tests::support::embedded(Some(
+                    b"cover snapshot"
+                )))
             )
             .unwrap(),
         TrackWriteOutcome::Added
@@ -303,13 +324,20 @@ fn library_import_rolls_back_snapshot_and_membership_if_inbox_removal_fails() {
     let database = Database::open(":memory:").unwrap();
     let mut track = snapshot("song.flac", None, None);
     let id = register(&database, &track);
-    database.register_inbox_path(&track.path).unwrap();
+    super::support::inbox(
+        &database,
+        &track,
+        super::support::embedded(Some(b"cover snapshot")),
+    )
+    .unwrap();
     database.connection().unwrap().execute_batch("CREATE TRIGGER reject_inbox_removal BEFORE DELETE ON inbox BEGIN SELECT RAISE(ABORT, 'blocked'); END;").unwrap();
     track.title = Some("New snapshot".into());
     assert!(database
         .upsert_track(
             &track,
-            Some(&crate::database::tests::support::embedded(&track))
+            Some(&crate::database::tests::support::embedded(Some(
+                b"cover snapshot"
+            )))
         )
         .is_err());
     assert_eq!(
@@ -331,7 +359,7 @@ fn inbox_registration_rolls_back_if_registration_or_membership_removal_fails() {
         database.upsert_track(&track, None).unwrap();
         database.connection().unwrap().execute_batch(trigger).unwrap();
 
-        assert!(database.register_inbox_path(&track.path).is_err());
+        assert!(super::support::inbox(&database, &track, super::support::embedded(Some(b"cover snapshot"))).is_err());
         assert!(database.inbox_paths().unwrap().is_empty());
         assert_eq!(database.library_track_paths().unwrap(), vec![track.path]);
     }
@@ -362,7 +390,9 @@ fn directory_relocation_updates_external_tracks_without_granting_membership() {
     database
         .upsert_track(
             &member,
-            Some(&crate::database::tests::support::embedded(&member)),
+            Some(&crate::database::tests::support::embedded(Some(
+                b"cover snapshot",
+            ))),
         )
         .unwrap();
     let external = register(&database, &snapshot("/old/external.flac", None, None));

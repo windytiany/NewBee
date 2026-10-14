@@ -1,11 +1,11 @@
-import { computed, onScopeDispose, reactive, watch } from "vue";
+import { computed, onScopeDispose, reactive, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { createInboxApi, INBOX_CHANGED_EVENT } from "@/features/inbox/api";
 import type { InboxResult, InboxTrack } from "@/features/inbox/api";
 import type { ArtistSummary, LibraryGrouping } from "@/features/library/types";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
-import { FILES_CHANGED_EVENT } from "@/features/metadata/events";
+import { useTrackReread } from "@/features/tracks/reread";
 import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
@@ -20,12 +20,14 @@ type InboxOptions = {
     "playTracks" | "addTracksToNext" | "addTracksToQueueEnd"
   >;
   changed: () => void;
+  reread: ReturnType<typeof useTrackReread>;
 };
 export function createInbox(options: InboxOptions) {
+  const pending = ref(false);
   const state = reactive({
     tracks: [] as InboxTrack[],
     loading: false,
-    pending: false,
+    pending: computed(() => pending.value || options.reread.pending.value),
     error: "",
     results: [] as InboxResult[],
     grouping: "albumArtist" as LibraryGrouping,
@@ -35,11 +37,14 @@ export function createInbox(options: InboxOptions) {
   function report(results: InboxResult[]) {
     const failed = results.filter((result) => !result.success);
     for (const result of failed)
-      logger.warn("inbox", "file_failed", result.error, { path: result.path });
+      logger.warn("inbox", "file_failed", result.error, {
+        path: result.path,
+        trackId: result.trackId,
+      });
     if (failed.length)
       notify({
         type: "warning",
-        message: t("{count} 个文件处理失败", { count: failed.length }),
+        message: t("{count} 首处理失败。无法完成操作。", { count: failed.length }),
         key: "inbox-files",
       });
   }
@@ -80,65 +85,107 @@ export function createInbox(options: InboxOptions) {
   );
   function playback(track: InboxTrack): PlaybackDisplayTrack {
     return {
-      trackId: null,
-      path: track.path,
-      rowKey: `inbox:${track.path}`,
+      trackId: track.id,
+      rowKey: `inbox:${track.id}`,
       title: track.title,
       album: track.album,
       durationMs: track.durationMs,
     };
   }
-  function play(path: string, orderedPaths: readonly string[]) {
+  function play(id: number, orderedIds: readonly number[]) {
     const visible = visibleTracks.value;
-    const availablePaths = new Set(visible.map((track) => track.path));
+    const availableIds = new Set(visible.map((track) => track.id));
     if (
       state.loading ||
-      !orderedPaths.includes(path) ||
-      orderedPaths.length !== availablePaths.size ||
-      new Set(orderedPaths).size !== availablePaths.size ||
-      orderedPaths.some((path) => !availablePaths.has(path))
+      state.pending ||
+      !orderedIds.includes(id) ||
+      orderedIds.length !== availableIds.size ||
+      new Set(orderedIds).size !== availableIds.size ||
+      orderedIds.some((id) => !availableIds.has(id))
     )
       return false;
-    return options.session.playTracks(targets(orderedPaths, visible), `inbox:${path}`);
+    return options.session.playTracks(targets(orderedIds, visible), `inbox:${id}`);
   }
-  function targets(paths: readonly string[], source: readonly InboxTrack[]) {
-    const tracks = new Map(source.map((track) => [track.path, track]));
-    return [...new Set(paths)].flatMap((path) => {
-      const track = tracks.get(path);
+  function targets(ids: readonly number[], source: readonly InboxTrack[]) {
+    const tracks = new Map(source.map((track) => [track.id, track]));
+    return [...new Set(ids)].flatMap((id) => {
+      const track = tracks.get(id);
       return track ? [playback(track)] : [];
     });
   }
-  async function remove(paths: string[]) {
-    if (state.pending) return;
-    state.pending = true;
+  async function reread(trackIds: readonly number[] = state.tracks.map((track) => track.id)) {
+    if (state.pending || state.loading) return;
+    pending.value = true;
     try {
-      await options.api.remove(paths);
-      state.tracks = state.tracks.filter((track) => !paths.includes(track.path));
-    } catch (error) {
-      logger.error("inbox", "remove_failed", error);
-      notify({ type: "error", message: t("移除失败"), key: "inbox-remove" });
+      const outcome = await options.reread.reread(trackIds);
+      if (!outcome) return;
+      for (const result of outcome.results) {
+        if (!result.databaseUpdated || result.error)
+          logger.warn("inbox", "reread_failed", result.error, {
+            trackId: result.trackId,
+            kind: "scan",
+            path: state.tracks.find((track) => track.id === result.trackId)?.path ?? null,
+          });
+      }
+      const succeeded = new Set(
+        outcome.results.filter((result) => result.databaseUpdated).map((result) => result.trackId),
+      );
+      if (!succeeded.size) return outcome;
+      try {
+        const read = await options.api.read();
+        const snapshots = new Map(read.tracks.map((track) => [track.id, track]));
+        state.tracks = state.tracks.map((track) =>
+          succeeded.has(track.id) ? (snapshots.get(track.id) ?? track) : track,
+        );
+      } catch (error) {
+        logger.error("inbox", "reread_refresh_failed", error, { count: trackIds.length });
+        if (
+          !outcome.refreshError &&
+          outcome.results.every((result) => result.databaseUpdated && !result.error)
+        )
+          notify({ type: "warning", message: t("曲目信息刷新失败"), key: "inbox-read" });
+        return { ...outcome, refreshError: error instanceof Error ? error.message : String(error) };
+      }
+      return outcome;
     } finally {
-      state.pending = false;
+      pending.value = false;
     }
   }
-  async function ingest(paths: string[]) {
+  async function remove(trackIds: number[]) {
     if (state.pending) return;
-    state.pending = true;
+    pending.value = true;
+    try {
+      await options.api.remove(trackIds);
+      state.tracks = state.tracks.filter((track) => !trackIds.includes(track.id));
+    } catch (error) {
+      logger.error("inbox", "remove_failed", error);
+      notify({ type: "error", message: t("移除失败。无法更新 Inbox。"), key: "inbox-remove" });
+    } finally {
+      pending.value = false;
+    }
+  }
+  async function ingest(trackIds: number[]) {
+    if (state.pending) return;
+    pending.value = true;
     state.results = [];
     try {
-      const results = await options.api.ingest(paths);
+      const results = await options.api.ingest(trackIds);
       state.results = results;
       const succeeded = new Set(
-        results.filter((result) => result.success).map((result) => result.path),
+        results.filter((result) => result.success).map((result) => result.trackId),
       );
-      state.tracks = state.tracks.filter((track) => !succeeded.has(track.path));
+      state.tracks = state.tracks.filter((track) => !succeeded.has(track.id));
       report(results);
       if (succeeded.size) options.changed();
     } catch (error) {
       logger.error("inbox", "ingest_failed", error);
-      notify({ type: "error", message: t("添加到音乐库失败"), key: "inbox-ingest" });
+      notify({
+        type: "error",
+        message: t("添加到音乐库失败。无法完成扫描。"),
+        key: "inbox-ingest",
+      });
     } finally {
-      state.pending = false;
+      pending.value = false;
     }
   }
   return {
@@ -147,10 +194,13 @@ export function createInbox(options: InboxOptions) {
     visibleTracks,
     refresh,
     play,
+    reread,
     remove,
     ingest,
-    addNext: (paths: string[]) => options.session.addTracksToNext(targets(paths, state.tracks)),
-    addEnd: (paths: string[]) => options.session.addTracksToQueueEnd(targets(paths, state.tracks)),
+    addNext: (ids: number[]) =>
+      state.pending ? false : options.session.addTracksToNext(targets(ids, state.tracks)),
+    addEnd: (ids: number[]) =>
+      state.pending ? false : options.session.addTracksToQueueEnd(targets(ids, state.tracks)),
     selectGrouping: (grouping: LibraryGrouping) => {
       state.grouping = grouping;
       state.artist = null;
@@ -160,6 +210,7 @@ export function createInbox(options: InboxOptions) {
 export function useInbox(active: Ref<boolean>) {
   const inbox = createInbox({
     api: createInboxApi(),
+    reread: useTrackReread(),
     session: usePlaybackSession(),
     changed: () => globalThis.window.dispatchEvent(new globalThis.Event(LIBRARY_CHANGED_EVENT)),
   });
@@ -174,11 +225,9 @@ export function useInbox(active: Ref<boolean>) {
     { immediate: true },
   );
   globalThis.window.addEventListener(INBOX_CHANGED_EVENT, refresh);
-  globalThis.window.addEventListener(FILES_CHANGED_EVENT, refresh);
   globalThis.window.addEventListener(TRACKS_CHANGED_EVENT, refresh);
   onScopeDispose(() => {
     globalThis.window.removeEventListener(INBOX_CHANGED_EVENT, refresh);
-    globalThis.window.removeEventListener(FILES_CHANGED_EVENT, refresh);
     globalThis.window.removeEventListener(TRACKS_CHANGED_EVENT, refresh);
   });
   return inbox;

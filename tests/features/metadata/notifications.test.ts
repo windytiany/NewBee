@@ -1,4 +1,3 @@
-import type { MetadataTarget } from "@/features/metadata/types";
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { notifications } from "@/shared/notifications/center";
 import { setLocale } from "@/shared/i18n/locale";
@@ -18,7 +17,7 @@ afterEach(() => {
   notifications.clear();
 });
 
-function result(trackId: MetadataTarget, databaseUpdated = true): MetadataSaveResult {
+function result(trackId: number, databaseUpdated = true): MetadataSaveResult {
   return {
     trackId,
     path: `/music/${trackId}.flac`,
@@ -29,6 +28,7 @@ function result(trackId: MetadataTarget, databaseUpdated = true): MetadataSaveRe
 }
 function releaseEditor(overrides: Partial<ReleaseEditorOptions> = {}) {
   return createReleaseEditor({
+    loadTracks: async (ids) => ids.map((id) => local(id)),
     loadAlbum: async () => [local(1), local(2)],
     search: async () => ({ count: 0, offset: 0, releases: [] }),
     release: async () => release(),
@@ -56,7 +56,9 @@ describe("tag business notifications", () => {
       writeTrackIds: [1, 2],
       execute: async () => [result(1), result(2, false)],
     });
-    expect(notifications.items.value[0]?.message).toBe("1 succeeded, 1 failed");
+    expect(notifications.items.value[0]?.message).toBe(
+      "Failed to save 1 tracks. Could not complete the write or synchronization.",
+    );
     expect(save.state.synchronizationError).toBe(
       "Metadata saved, but the interface could not be refreshed: refresh failed",
     );
@@ -65,7 +67,7 @@ describe("tag business notifications", () => {
     expect(saved[1]?.error).toBe("database failed for /music/private.flac");
   });
   for (const outcome of ["success", "failure", "interrupted"] as const) {
-    it(`notifies exactly one summary for ${outcome}, retaining results and logging details`, async () => {
+    it(`reports only failures for ${outcome}, retaining results and logging details`, async () => {
       notifications.clear();
       const log = spyOn(logger, "write");
       try {
@@ -90,22 +92,19 @@ describe("tag business notifications", () => {
         expect(save.state.results).toEqual(saved);
         expect(saved[0]).toEqual(first);
         expect(saved[1]?.databaseUpdated).toBe(outcome === "success");
-        expect(notifications.items.value).toHaveLength(1);
-        const notification = notifications.items.value[0];
-        expect(notification?.message).toContain(
-          outcome === "success"
-            ? "2 首成功，0 首失败"
-            : outcome === "failure"
-              ? "0 首成功，2 首失败"
-              : "1 首成功，1 首失败",
-        );
-        expect(notification?.type).toBe(
-          outcome === "success" ? "success" : outcome === "failure" ? "error" : "warning",
-        );
-        expect(notification?.message).not.toContain("/music/");
-        expect(notification?.message).not.toContain("request failed");
+        expect(notifications.items.value).toHaveLength(outcome === "success" ? 0 : 1);
+        if (outcome !== "success") {
+          const notification = notifications.items.value[0];
+          expect(notification?.message).toBe(
+            outcome === "failure"
+              ? "2 首曲目保存失败。无法完成写入或同步。"
+              : "1 首曲目保存失败。无法完成写入或同步。",
+          );
+          expect(notification?.type).toBe(outcome === "failure" ? "error" : "warning");
+          expect(notification?.message).not.toContain("/music/");
+          expect(notification?.message).not.toContain("request failed");
+        }
         if (outcome === "interrupted") {
-          expect(notification?.message).toBe("1 首成功，1 首失败");
           expect(saved[1]?.error).toBe("request failed");
           expect(save.state.synchronizationError).toContain("refresh failed");
         }
@@ -189,8 +188,7 @@ describe("tag business notifications", () => {
     editor.prepareSave();
     expect(editor.state.confirmSave).toBe(true);
     await editor.save();
-    expect(notifications.items.value).toHaveLength(1);
-    expect(notifications.items.value[0]?.message).toContain("2 首成功，0 首失败");
+    expect(notifications.items.value).toHaveLength(0);
   });
 
   it("does not notify missing covers when the empty cover state provides feedback", async () => {
@@ -205,6 +203,7 @@ describe("tag business notifications", () => {
   it("aggregates unavailable tracks and unsupported selected fields without changing patches", async () => {
     notifications.clear();
     const editor = releaseEditor({
+      loadTracks: async (ids) => ids.map((id) => local(id)),
       loadAlbum: async () => [
         { ...local(1), issue: "read failed" },
         { ...local(2), writableFields: [] },

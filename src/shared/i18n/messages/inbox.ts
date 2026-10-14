@@ -1,4 +1,10 @@
 export const inboxMessages: Record<string, string> = {
+  "{count} 首导入失败。无法完成扫描。":
+    "{count} tracks failed to import. Could not complete the scan.",
+  "导入失败。无法完成扫描。": "Import failed. Could not complete the scan.",
+  "{count} 首处理失败。无法完成操作。": "{count} tracks failed. Could not complete the operation.",
+  "移除失败。无法更新 Inbox。": "Removal failed. Could not update Inbox.",
+  "添加到音乐库失败。无法完成扫描。": "Could not add to library. Could not complete the scan.",
   添加到歌单: "Add to playlist",
   添加到队尾失败: "Could not append to queue",
   "{count} 个文件登记失败": "Failed to register {count} files",

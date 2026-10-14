@@ -189,9 +189,9 @@ fn confirmation_cannot_overwrite_foreground_edit_or_reread_and_preserves_externa
             Confirmation {
                 revision: 0,
                 id: *id,
-                snapshot: Ok(files::read_track_metadata(std::path::Path::new(&path))
-                    .unwrap()
-                    .unwrap()),
+                snapshot: Ok(
+                    crate::tracks::scanning::scan(&database, std::path::Path::new(&path)).unwrap(),
+                ),
                 path,
             }
         })
@@ -361,9 +361,9 @@ fn stale_background_read_cannot_publish_after_file_write_with_failed_database_sy
         id,
         revision,
         path: path.clone(),
-        snapshot: Ok(files::read_track_metadata(std::path::Path::new(&path))
-            .unwrap()
-            .unwrap()),
+        snapshot: Ok(
+            crate::tracks::scanning::scan(&database, std::path::Path::new(&path)).unwrap(),
+        ),
     };
     database.connection().unwrap().execute_batch("CREATE TRIGGER fail_snapshot BEFORE INSERT ON track_editing BEGIN SELECT RAISE(FAIL, 'snapshot failure'); END;").unwrap();
     let result = save_track(
@@ -390,4 +390,121 @@ fn stale_background_read_cannot_publish_after_file_write_with_failed_database_sy
     assert!(database.confirm_tracks(vec![stale]).unwrap().is_empty());
     assert_eq!(database.get_track(id).unwrap().unwrap().title(), Some("0"));
     assert!(database.pending_track(id).unwrap().is_some());
+}
+
+#[test]
+fn target_database_failure_rolls_back_side_effects_and_confirms_later_targets() {
+    use crate::metadata::model::{MetadataChange, MetadataField};
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(":memory:").unwrap();
+    let ids = placeholders(&database, directory.path(), 3);
+    let cover = files::cover_picture(include_bytes!("../../../fixtures/cover.png")).unwrap();
+    for id in &ids {
+        let path = database.get_track(*id).unwrap().unwrap().path;
+        files::write_file_with_cover(
+            std::path::Path::new(&path),
+            &[
+                MetadataChange {
+                    field: MetadataField::Title,
+                    value: Some(format!("Confirmed {id}")),
+                    values: Vec::new(),
+                },
+                MetadataChange {
+                    field: MetadataField::Lyrics,
+                    value: Some("Embedded".into()),
+                    values: Vec::new(),
+                },
+            ],
+            Some(files::CoverAction::Replace(&cover)),
+        )
+        .unwrap();
+    }
+    let before = serde_json::to_value(database.get_track(ids[1]).unwrap()).unwrap();
+    database
+        .connection()
+        .unwrap()
+        .execute_batch(&format!(
+            "CREATE TRIGGER fail_one BEFORE INSERT ON track_lyrics WHEN NEW.track_id = {} BEGIN
+         UPDATE tracks SET title = 'trigger side effect' WHERE id = {};
+         SELECT RAISE(FAIL, 'target failure'); END;",
+            ids[1], ids[0]
+        ))
+        .unwrap();
+    let app = tauri::test::mock_builder()
+        .manage(database)
+        .manage(crate::locking::write::WriteState::default())
+        .manage(SchedulingState::default())
+        .build(tauri::generate_context!())
+        .unwrap();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let observed = events.clone();
+    app.listen("tracks-confirmed", move |event| {
+        observed
+            .lock()
+            .unwrap()
+            .push(serde_json::from_str::<serde_json::Value>(event.payload()).unwrap());
+    });
+    schedule(app.handle(), ids.clone());
+    wait(&app.state::<SchedulingState>());
+    let events = events.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    let results = events[0].as_array().unwrap();
+    assert_eq!(results.len(), 3);
+    for (index, id) in ids.iter().enumerate() {
+        assert_eq!(results[index]["trackId"], *id);
+        assert_eq!(results[index]["databaseUpdated"], index != 1);
+        if index == 1 {
+            assert!(results[index]["error"]
+                .as_str()
+                .unwrap()
+                .contains("target failure"));
+        } else {
+            assert!(results[index]["error"].is_null());
+        }
+    }
+    let database = app.state::<Database>();
+    assert_eq!(
+        serde_json::to_value(database.get_track(ids[1]).unwrap()).unwrap(),
+        before
+    );
+    assert!(database.get_editing_snapshot(ids[1]).is_err());
+    assert!(database
+        .get_artwork_collection(ids[1])
+        .unwrap()
+        .images
+        .is_empty());
+    assert!(database.get_lyrics(ids[1]).unwrap().text.is_none());
+    assert_eq!(database.pending_track_ids().unwrap(), [ids[1]]);
+    for id in [ids[0], ids[2]] {
+        assert_eq!(
+            database.get_track(id).unwrap().unwrap().title,
+            Some(format!("Confirmed {id}"))
+        );
+        assert_eq!(
+            database.get_lyrics(id).unwrap().text.as_deref(),
+            Some("Embedded")
+        );
+        assert_eq!(
+            database.get_artwork_collection(id).unwrap().images[0]
+                .picture
+                .content
+                .image,
+            cover.data()
+        );
+        assert!(database
+            .get_editing_snapshot(id)
+            .unwrap()
+            .writable_fields
+            .contains(&MetadataField::Title));
+    }
+    files::access::take(directory.path());
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(files::access::take(directory.path()).is_empty());
+    database
+        .connection()
+        .unwrap()
+        .execute_batch("DROP TRIGGER fail_one")
+        .unwrap();
+    super::super::reading::reread(&database, ids[1]).unwrap();
+    assert!(database.pending_track_ids().unwrap().is_empty());
 }

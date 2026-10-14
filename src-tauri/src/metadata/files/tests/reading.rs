@@ -64,14 +64,13 @@ fn lightweight_mode_keeps_tags_capabilities_and_lyrics_without_materializing_pic
         let light = read_track_metadata(&path).unwrap().unwrap();
         assert_eq!(light.title.as_deref(), Some("Confirmed title"));
         assert_eq!(light.lyrics.as_deref(), Some("Embedded words"));
-        assert!(light.artwork.is_none());
         assert!(light.duration_ms.is_some());
         assert!(light
             .editing
             .unwrap()
             .writable_fields
             .contains(&MetadataField::Lyrics));
-        let full = read_track(&path).unwrap().unwrap();
-        assert_eq!(full.artwork.unwrap().image, cover.data());
+        let full = read_track_collection(&path).unwrap().unwrap();
+        assert_eq!(full.embedded.unwrap()[0].content.image, cover.data());
     }
 }

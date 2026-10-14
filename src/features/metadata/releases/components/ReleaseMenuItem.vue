@@ -2,12 +2,8 @@
 import { t } from "@/shared/i18n/locale";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import { useReleaseEditor } from "@/features/metadata/releases/useEditor";
-import { createTracksApi } from "@/features/tracks/api";
-import { logger } from "@/shared/logging/logger";
-import { notify } from "@/shared/notifications/center";
 const props = defineProps<{
   album?: LibraryAlbumSelection;
-  paths?: readonly string[];
   trackIds?: readonly number[];
   disabled?: boolean;
 }>();
@@ -16,23 +12,10 @@ const editor = useReleaseEditor();
 async function open() {
   if (props.disabled || editor.state.open) return;
   const album = props.album;
-  const paths = [...(props.paths ?? [])];
   const ids = [...(props.trackIds ?? [])];
   emit("close");
-  try {
-    if (album) await editor.open({ ...album });
-    else {
-      if (ids.length) {
-        const tracks = await createTracksApi().getTracks(ids);
-        if (tracks.length !== new Set(ids).size) throw new Error("Missing release targets");
-        paths.push(...tracks.map((track) => track.path));
-      }
-      await editor.openFiles([...new Set(paths)]);
-    }
-  } catch (error) {
-    logger.error("metadata", "release_targets_failed", error);
-    notify({ type: "error", message: t("读取本地标签失败，请查看日志") });
-  }
+  if (album) await editor.open({ ...album });
+  else await editor.openTracks(ids);
 }
 </script>
 

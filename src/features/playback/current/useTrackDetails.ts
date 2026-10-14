@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import type { EditorTrack } from "@/features/metadata/types";
-import { FILES_CHANGED_EVENT } from "@/features/metadata/events";
 import { logger } from "@/shared/logging/logger";
 import { notifications, notify } from "@/shared/notifications/center";
 import { TRACKS_CHANGED_EVENT, type TracksChange } from "@/features/tracks/events";
@@ -100,11 +99,9 @@ export function useTrackDetails(
     isLoading.value = false;
   }
   globalThis.window?.addEventListener(TRACKS_CHANGED_EVENT, onTracksChanged);
-  globalThis.window?.addEventListener(FILES_CHANGED_EVENT, reloadCurrentTrack);
 
   onScopeDispose(() => {
     globalThis.window?.removeEventListener(TRACKS_CHANGED_EVENT, onTracksChanged);
-    globalThis.window?.removeEventListener(FILES_CHANGED_EVENT, reloadCurrentTrack);
     currentTrackId = null;
     ++detailsRequestGeneration;
     stopWatching();

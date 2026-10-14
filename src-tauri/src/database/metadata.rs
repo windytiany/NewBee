@@ -19,6 +19,7 @@ fn track_column(field: MetadataField) -> Option<&'static str> {
 }
 
 impl Database {
+    #[cfg(test)]
     pub(crate) fn record_scan_issue(&self, path: &str, issue: &str) -> Result<(), String> {
         self.connection()?.execute(
             "UPDATE track_editing SET scan_issue = ?2 WHERE track_id = (SELECT id FROM tracks WHERE path = ?1)",

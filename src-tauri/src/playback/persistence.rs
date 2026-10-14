@@ -62,6 +62,7 @@ impl SavedSession {
 pub struct SessionPersistence {
     path: PathBuf,
     last_saved: Option<String>,
+    pub(super) restored: bool,
 }
 
 impl SessionPersistence {
@@ -77,8 +78,9 @@ impl SessionPersistence {
                 Ok(SavedSession::default())
             }
             Err(error) => Err(error.to_string()),
-        }
-        .unwrap_or_else(|error| {
+        };
+        let restored = saved.is_ok();
+        let saved = saved.unwrap_or_else(|error| {
             log::warn!("Could not restore playback session: {error}");
             SavedSession::default()
         });
@@ -86,6 +88,7 @@ impl SessionPersistence {
             Self {
                 path,
                 last_saved: None,
+                restored,
             },
             saved,
         )

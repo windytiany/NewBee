@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use tauri::Manager;
 
-mod artwork;
+pub(crate) mod artwork;
 mod inbox;
 mod library;
 mod lyrics;

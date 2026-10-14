@@ -87,7 +87,6 @@ impl Database {
     }
 
     pub fn get_track_artwork(&self, track_id: i64) -> Result<Option<TrackArtwork>, String> {
-        self.refresh_artwork_paths(Some(track_id))?;
         let connection = self.connection()?;
         let artwork = connection
             .query_row(

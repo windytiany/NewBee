@@ -63,7 +63,7 @@ import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
 
 const props = withDefaults(
   defineProps<{
-    trackId: number | string | null;
+    trackId: number | null;
     rowKey: string;
     title: string;
     album: string;

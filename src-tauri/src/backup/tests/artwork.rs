@@ -252,15 +252,10 @@ fn backup_round_trip_preserves_collection_sources_types_and_display_selection() 
         )
         .unwrap();
     let remaining = restored.get_artwork_collection(1).unwrap();
-    assert_eq!(
-        remaining.images.len(),
-        2,
-        "external associations survive confirmed file source absence"
+    assert!(
+        remaining.images.is_empty(),
+        "confirmed absence removes scanned artwork"
     );
-    assert!(remaining
-        .images
-        .iter()
-        .all(|image| image.source == "directory" && image.error.is_some()));
     assert!(restored
         .track_artwork_bytes(1, None, |_, _| panic!("unavailable association derived"))
         .unwrap()

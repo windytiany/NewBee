@@ -8,7 +8,6 @@ import type { usePlaylistPage } from "@/features/playlist/composables/usePage";
 import { reportTracksChanged, TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { reportPlaylistChanged } from "@/features/playlist/events";
 import { createTrackSynchronization } from "@/features/tracks/synchronize";
-import { createTagSynchronization } from "@/features/metadata/synchronize";
 import { createMetadataSave } from "@/features/metadata/save";
 import { evaluateSource, transpileScript } from "../../../support/module/loader";
 import { createHostNode, createHostRenderer } from "../../../support/host/renderer";
@@ -252,10 +251,10 @@ it("reread and manual save retain individual file/DB outcomes when refresh fails
     { trackId: 7, path: "7.flac", fileWritten: true, databaseUpdated: true, error: null },
     { trackId: 8, path: "8.flac", fileWritten: true, databaseUpdated: false, error: "DB failed" },
   ];
-  const synchronization = createTagSynchronization(test.session, test.invokeCommand);
+  const synchronization = createTrackSynchronization(test.session, test.invokeCommand);
   const save = createMetadataSave({
     editFiles: async (_ids, execute) => execute(),
-    synchronize: synchronization.tracks,
+    synchronize: synchronization.refresh,
   });
   expect(
     await save.run({ targets: results, writeTrackIds: [7, 8], execute: async () => results }),

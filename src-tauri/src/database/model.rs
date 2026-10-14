@@ -1,6 +1,4 @@
-use crate::artwork::model::ArtworkContent;
-
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackWriteInput {
     pub path: String,
@@ -18,8 +16,6 @@ pub struct TrackWriteInput {
     pub sample_rate_hz: Option<i64>,
     pub bitrate_kbps: Option<i64>,
     pub channels: Option<i64>,
-    #[serde(skip)]
-    pub artwork: Option<ArtworkContent>,
     #[serde(skip)]
     pub(crate) editing: Option<crate::metadata::model::EditingSnapshot>,
     pub lyrics: Option<String>,

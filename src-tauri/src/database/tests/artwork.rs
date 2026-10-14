@@ -35,7 +35,7 @@ fn artwork(webview: &tauri::WebviewWindow<tauri::test::MockRuntime>, id: i64) ->
 }
 
 #[test]
-fn scanned_directory_cover_requires_external_path_but_not_audio_files() {
+fn scanned_directory_cover_survives_missing_external_and_audio_files() {
     let fixture = TestFiles::new();
     fixture.wav("one.wav");
     fixture.wav("two.wav");
@@ -108,15 +108,15 @@ fn scanned_directory_cover_requires_external_path_but_not_audio_files() {
     let source = fixture.0.join("CoVeR.PNG");
     assert_eq!(std::fs::read(&source).unwrap(), cover);
     std::fs::remove_file(&source).unwrap();
-    assert!(artwork(&webview, 1).is_empty());
-    assert!(artwork(&webview, 2).is_empty());
+    assert_eq!(artwork(&webview, 1), cover);
+    assert_eq!(artwork(&webview, 2), cover);
     assert!(
-        matches!(invoke(&webview, "get_album_artwork", serde_json::json!({"albumArtist":null,"album":null})), tauri::ipc::InvokeResponseBody::Raw(bytes) if bytes.is_empty())
+        matches!(invoke(&webview, "get_album_artwork", serde_json::json!({"albumArtist":null,"album":null})), tauri::ipc::InvokeResponseBody::Raw(bytes) if bytes == cover)
     );
     let collection = app.state::<Database>().get_artwork_collection(1).unwrap();
     assert_eq!(collection.images.len(), 1);
     assert!(collection.images[0].path.ends_with("cover.png"));
-    assert!(collection.images[0].error.is_some());
+    assert!(collection.images[0].error.is_none());
     std::fs::write(source, cover).unwrap();
     assert_eq!(artwork(&webview, 1), cover);
 }
@@ -226,29 +226,28 @@ fn repeated_scans_share_content_and_missing_paths_retain_associations() {
     std::fs::remove_file(&source).unwrap();
     assert_eq!(library.scan()["updated"], 2);
     assert!(artwork(&library.webview, 1).is_empty());
-    assert_eq!(rows(), (2, 1, Some(1)));
-    let collection = library
+    assert_eq!(rows(), (0, 0, None));
+    assert!(library
         .app
         .state::<Database>()
         .get_artwork_collection(1)
-        .unwrap();
-    assert_eq!(collection.images.len(), 1);
+        .unwrap()
+        .images
+        .is_empty());
     assert_eq!(
-        collection.images[0].path,
-        crate::artwork::collection::linked::normalize(&source).unwrap()
+        storage
+            .query_row("SELECT COUNT(*) FROM artwork_images", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        0
     );
-    assert!(collection.images[0].error.is_some());
-    let contents: i64 = storage
-        .query_row("SELECT COUNT(*) FROM artwork_images", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(contents, 1);
     library.files.write("cover.png", cover);
     library.scan();
     assert_eq!(artwork(&library.webview, 1), cover);
     let (_, shared, identity) = rows();
     assert_eq!(shared, 1);
-    assert_eq!(identity, Some(1));
-    assert_eq!(rows(), (2, 1, Some(1)));
+    assert!(identity.is_some());
+    assert_eq!(rows().0, 2);
     assert_eq!(std::fs::read(source).unwrap(), cover);
 }
 
@@ -343,21 +342,21 @@ fn each_scan_rechecks_sources_and_retains_unavailable_display_path() {
     assert_eq!(artwork(&library.webview, 1), replacement);
     let embedded = include_bytes!("../../../fixtures/cover.png");
     write_embedded_cover(&path, embedded);
-    // A failed directory read retains the selected path, not cached readable bytes.
+    // A failed directory read leaves the previous complete snapshot untouched.
     // Adding embedded art does not silently change the display choice.
     std::fs::write(&cover_path, b"broken fallback").unwrap();
     crate::metadata::files::access::take(&library.files.0);
     assert_eq!(library.scan()["failed"], 1);
-    assert!(artwork(&library.webview, 1).is_empty());
+    assert_eq!(artwork(&library.webview, 1), replacement);
     let collection = library
         .app
         .state::<Database>()
         .get_artwork_collection(1)
         .unwrap();
-    assert_eq!(collection.images.len(), 2);
+    assert_eq!(collection.images.len(), 1);
     let selected = &collection.images[collection.display_index.unwrap()];
     assert!(selected.path.ends_with("cover.png"));
-    assert!(selected.error.is_some());
+    assert!(selected.error.is_none());
     assert_eq!(std::fs::read(&cover_path).unwrap(), b"broken fallback");
     assert!(crate::metadata::files::access::take(&library.files.0)
         .iter()
@@ -368,7 +367,7 @@ fn each_scan_rechecks_sources_and_retains_unavailable_display_path() {
             row.get(0)
         })
         .unwrap();
-    assert_eq!(sources, 2);
+    assert_eq!(sources, 1);
     write_embedded_cover(&path, &[]);
     std::fs::write(&cover_path, &replacement).unwrap();
     assert_eq!(library.scan()["failed"], 0);
@@ -428,31 +427,28 @@ fn invalid_directory_cover_reports_a_problem_and_retains_the_path() {
     );
     std::fs::write(&path, b"not an image").unwrap();
     assert_eq!(library.scan()["failed"], 1);
-    assert!(artwork(&library.webview, 1).is_empty());
+    assert_eq!(artwork(&library.webview, 1), cover);
     let collection = library
         .app
         .state::<Database>()
         .get_artwork_collection(1)
         .unwrap();
-    assert_eq!(collection.images.len(), 2);
+    assert_eq!(collection.images.len(), 1);
     assert_eq!(collection.display_index, Some(0));
     assert_eq!(
         collection.images[0].path,
         crate::artwork::collection::linked::normalize(&path).unwrap()
     );
-    assert!(collection.images[0].error.is_some());
-    assert!(collection.images[1].error.is_none());
-    assert!(collection.images[1].path.ends_with("folder.png"));
+    assert!(collection.images[0].error.is_none());
     assert!(library
         .app
         .state::<Database>()
         .get_editing_snapshot(1)
         .unwrap()
         .issue
-        .unwrap()
-        .contains("Directory artwork"));
+        .is_none());
     library.reopen();
-    assert!(artwork(&library.webview, 1).is_empty());
+    assert_eq!(artwork(&library.webview, 1), cover);
     assert_eq!(std::fs::read(&path).unwrap(), b"not an image");
     std::fs::write(&path, cover).unwrap();
     assert_eq!(library.scan()["failed"], 0);
@@ -505,7 +501,7 @@ fn unreadable_directory_cover_is_not_treated_as_removal() {
         .open(&path)
         .unwrap();
     assert_eq!(library.scan()["failed"], 1);
-    assert!(artwork(&library.webview, 1).is_empty());
+    assert_eq!(artwork(&library.webview, 1), cover);
     let collection = library
         .app
         .state::<Database>()
@@ -516,15 +512,14 @@ fn unreadable_directory_cover_is_not_treated_as_removal() {
         collection.images[0].path,
         crate::artwork::collection::linked::normalize(&path).unwrap()
     );
-    assert!(collection.images[0].error.is_some());
+    assert!(collection.images[0].error.is_none());
     assert!(library
         .app
         .state::<Database>()
         .get_editing_snapshot(1)
         .unwrap()
         .issue
-        .unwrap()
-        .contains("Directory artwork"));
+        .is_none());
     drop(lock);
     assert_eq!(std::fs::read(&path).unwrap(), cover);
     assert_eq!(artwork(&library.webview, 1), cover);

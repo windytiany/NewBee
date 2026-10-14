@@ -52,13 +52,8 @@ fn cover_operations_replace_or_delete_all_images_and_keep_unedited_images() {
         back.set_pic_type(PictureType::CoverBack);
         tag.push_picture(back);
         tag.save_to_path(&path, WriteOptions::default()).unwrap();
-        let snapshot = files::read_track(&path).unwrap().unwrap();
-        assert_eq!(
-            snapshot.artwork.is_some(),
-            primary == TagType::Mp4Ilst,
-            "{}",
-            path.display()
-        );
+        let pictures = files::artwork::read_embedded_pictures(&path).unwrap();
+        assert_eq!(pictures.len(), 1, "{}", path.display());
         let mut old_front = first_front.clone();
         old_front.set_description(Some("old".into()));
         tag.push_picture(old_front);
@@ -66,18 +61,18 @@ fn cover_operations_replace_or_delete_all_images_and_keep_unedited_images() {
         another_front.set_description(Some("another".into()));
         tag.push_picture(another_front);
         tag.save_to_path(&path, WriteOptions::default()).unwrap();
+        let pictures = files::artwork::read_embedded_pictures(&path).unwrap();
+        assert_eq!(pictures.len(), 3, "{}", path.display());
+        assert_eq!(pictures[0].content.image, cover.data());
+        assert_eq!(pictures[1].content.image, first_front.data());
+        assert_eq!(pictures[2].content.image, cover.data());
         assert_eq!(
-            files::read_track(&path)
-                .unwrap()
-                .unwrap()
-                .artwork
-                .unwrap()
-                .image,
-            if primary == TagType::Mp4Ilst {
-                cover.data()
-            } else {
-                first_front.data()
-            }
+            pictures[0].picture_type,
+            if primary == TagType::Mp4Ilst { 0 } else { 4 }
+        );
+        assert_eq!(
+            pictures[1].picture_type,
+            if primary == TagType::Mp4Ilst { 0 } else { 3 }
         );
         let before = lofty::read_from_path(&path)
             .unwrap()
@@ -111,12 +106,14 @@ fn cover_operations_replace_or_delete_all_images_and_keep_unedited_images() {
             .tags()
             .iter()
             .all(|tag| tag.pictures().is_empty()));
-        assert!(files::read_track(&path).unwrap().unwrap().artwork.is_none());
+        assert!(files::artwork::read_embedded_pictures(&path)
+            .unwrap()
+            .is_empty());
     }
 }
 
 #[test]
-fn secondary_front_cover_is_read_without_falling_back_to_primary_back_cover() {
+fn secondary_front_and_primary_back_cover_are_read_as_collection() {
     let fixture = Fixture::new();
     let path = fixture.0.join("mixed.flac");
     fs::write(&path, include_bytes!("../../../../fixtures/silence.flac")).unwrap();
@@ -128,7 +125,9 @@ fn secondary_front_cover_is_read_without_falling_back_to_primary_back_cover() {
     primary
         .save_to_path(&path, WriteOptions::default())
         .unwrap();
-    assert!(files::read_track(&path).unwrap().unwrap().artwork.is_none());
+    let pictures = files::artwork::read_embedded_pictures(&path).unwrap();
+    assert_eq!(pictures.len(), 1);
+    assert_eq!(pictures[0].picture_type, 4);
     let mut secondary = Tag::new(TagType::Id3v2);
     secondary.insert_text(ItemKey::Comment, "keep prefix".into());
     secondary.push_picture(cover.clone());
@@ -157,22 +156,23 @@ fn secondary_front_cover_is_read_without_falling_back_to_primary_back_cover() {
         before.tag(TagType::Id3v2).unwrap().pictures()
     );
     assert!(fs::read(&path).unwrap().starts_with(&original_prefix));
-    assert_eq!(
-        files::read_track(&path)
-            .unwrap()
-            .unwrap()
-            .artwork
-            .unwrap()
-            .image,
-        cover.data()
-    );
+    let pictures = files::artwork::read_embedded_pictures(&path).unwrap();
+    assert_eq!(pictures.len(), 2);
+    assert!(pictures
+        .iter()
+        .any(|picture| picture.picture_type == 3 && picture.content.image == cover.data()));
+    assert!(pictures
+        .iter()
+        .any(|picture| picture.picture_type == 4 && picture.content.image == cover.data()));
     files::write_file_with_cover(&path, &[], Some(files::CoverAction::Delete)).unwrap();
     assert!(lofty::read_from_path(&path)
         .unwrap()
         .tags()
         .iter()
         .all(|tag| tag.pictures().is_empty()));
-    assert!(files::read_track(&path).unwrap().unwrap().artwork.is_none());
+    assert!(files::artwork::read_embedded_pictures(&path)
+        .unwrap()
+        .is_empty());
 }
 
 #[test]

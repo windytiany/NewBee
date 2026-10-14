@@ -150,7 +150,24 @@ fn linked_edits_and_selection_keep_audio_snapshot_revision_and_work_offline() {
     assert!(result[0].database_updated && !result[0].file_written);
     let collection = database.get_artwork_collection(1).unwrap();
     assert_eq!(collection.display_index, Some(1));
-    assert!(collection.images[0].error.is_some());
+    assert!(collection.images[0].error.is_none());
+    assert_eq!(collection.images[0].picture.content.image, image(10));
+    assert_eq!(
+        database
+            .artwork_picture_bytes(collection.images[0].artwork_id, None, |_, _| unreachable!())
+            .unwrap(),
+        image(10)
+    );
+    let offline = serde_json::to_value(database.get_editing_snapshot(1).unwrap()).unwrap();
+    assert!(crate::tracks::reading::reread(&database, 1).is_err());
+    assert_eq!(
+        serde_json::to_value(database.get_editing_snapshot(1).unwrap()).unwrap(),
+        offline
+    );
+    assert_eq!(
+        database.get_artwork_collection(1).unwrap().images[0].content_id,
+        collection.images[0].content_id
+    );
     assert_eq!(collection.images[0].picture.picture_type, 18);
     assert_eq!(fs::read(&second).unwrap(), image(20));
     let request = TrackDraft {
@@ -452,7 +469,7 @@ fn preparation_failures_are_per_track_and_request_shape_errors_precede_writes() 
 }
 
 #[test]
-fn descriptions_lazy_extract_all_targets_without_blobs_and_content_ipc_returns_raw() {
+fn descriptions_use_confirmed_snapshots_without_file_io_and_content_ipc_returns_raw() {
     let fixture = Fixture::new();
     let app = app(&fixture, 2);
     let database = app.state::<Database>();
@@ -472,6 +489,38 @@ fn descriptions_lazy_extract_all_targets_without_blobs_and_content_ipc_returns_r
             [],
         )
         .unwrap();
+    database
+        .connection()
+        .unwrap()
+        .execute("DELETE FROM track_editing", [])
+        .unwrap();
+    files::access::take(&fixture.0);
+    let pending = tauri::async_runtime::block_on(commands::get_track_artwork_collections(
+        vec![1, 2, 1, 99],
+        app.handle().clone(),
+    ))
+    .unwrap();
+    assert!(pending[0].pictures.is_empty() && pending[0].error.is_none());
+    assert!(pending[1].pictures.is_empty() && pending[1].error.is_none());
+    assert!(pending[2].error.is_some());
+    assert!(files::access::take(&fixture.0).is_empty());
+    let batch = [1, 2]
+        .into_iter()
+        .map(|id| {
+            let (path, revision) = database.pending_track(id).unwrap().unwrap();
+            crate::database::tracks::confirmation::Confirmation {
+                id,
+                revision,
+                snapshot: crate::tracks::scanning::scan(&database, std::path::Path::new(&path)),
+                path,
+            }
+        })
+        .collect();
+    let results = database.confirm_tracks(batch).unwrap();
+    assert!(results
+        .iter()
+        .all(|result| result.database_updated && result.error.is_none()));
+    files::access::take(&fixture.0);
     let descriptions = tauri::async_runtime::block_on(commands::get_track_artwork_collections(
         vec![1, 2, 1, 99],
         app.handle().clone(),
@@ -487,6 +536,7 @@ fn descriptions_lazy_extract_all_targets_without_blobs_and_content_ipc_returns_r
     assert_eq!(descriptions[0].pictures.len(), 1);
     assert!(descriptions[1].pictures.is_empty() && descriptions[1].error.is_none());
     assert!(descriptions[2].error.is_some());
+    assert!(files::access::take(&fixture.0).is_empty());
     let json = serde_json::to_value(&descriptions).unwrap();
     assert_eq!(json[0]["pictures"][0]["mimeType"], "image/png");
     assert!(json[0]["pictures"][0].get("data").is_none());

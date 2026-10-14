@@ -49,19 +49,6 @@ impl SessionAudio for DesktopAudio {
     fn metadata(&self, ids: &[i64]) -> Result<Vec<super::MetadataUpdate>, String> {
         super::metadata::read(&self.0.state::<Database>(), ids)
     }
-    fn paths(&self, track_ids: &[i64]) -> Result<Vec<String>, String> {
-        track_ids
-            .iter()
-            .map(|id| {
-                self.0
-                    .state::<Database>()
-                    .get_track_for_playback(*id)?
-                    .map(|track| track.path)
-                    .ok_or_else(|| format!("Track {id} not found"))
-            })
-            .collect()
-    }
-
     fn status(&self) -> Result<PlaybackStatus, String> {
         playback::playback_status(&self.0.state::<PlaybackState>())
     }

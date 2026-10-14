@@ -1,5 +1,4 @@
 use super::super::{get_album_artwork, get_track_artwork};
-use crate::artwork::model::ArtworkContent;
 use crate::database::{model::TrackWriteInput, Database};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::io::Cursor;
@@ -16,7 +15,7 @@ pub(super) fn assert_color(actual: [u8; 4], expected: [u8; 4]) {
     assert_eq!(actual[3], expected[3]);
 }
 
-fn track(path: &str, image: Vec<u8>) -> TrackWriteInput {
+fn track(path: &str) -> TrackWriteInput {
     TrackWriteInput {
         path: path.into(),
         title: None,
@@ -33,10 +32,6 @@ fn track(path: &str, image: Vec<u8>) -> TrackWriteInput {
         sample_rate_hz: None,
         bitrate_kbps: None,
         channels: None,
-        artwork: Some(ArtworkContent {
-            mime_type: "image/png".into(),
-            image,
-        }),
         editing: None,
         lyrics: None,
     }
@@ -95,37 +90,27 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     let blue = fixture(Rgba([0, 0, 255, 255]));
     database
         .upsert_track(
-            &track("/fixture/one.mp3", red.clone()),
-            Some(&crate::database::tests::support::embedded(&track(
-                "/fixture/one.mp3",
-                red.clone(),
-            ))),
+            &track("/fixture/one.mp3"),
+            Some(&crate::database::tests::support::embedded(Some(&red))),
         )
         .unwrap();
     database
         .upsert_track(
-            &track("/fixture/two.mp3", blue.clone()),
-            Some(&crate::database::tests::support::embedded(&track(
-                "/fixture/two.mp3",
-                blue,
-            ))),
+            &track("/fixture/two.mp3"),
+            Some(&crate::database::tests::support::embedded(Some(&blue))),
         )
         .unwrap();
-    let mut missing = track("/fixture/missing.mp3", Vec::new());
-    missing.artwork = None;
+    let missing = track("/fixture/missing.mp3");
     database
         .upsert_track(
             &missing,
-            Some(&crate::database::tests::support::embedded(&missing)),
+            Some(&crate::database::tests::support::embedded(None)),
         )
         .unwrap();
     database
         .upsert_track(
-            &track("/fixture/corrupt.mp3", vec![1, 2, 3]),
-            Some(&crate::database::tests::support::embedded(&track(
-                "/fixture/corrupt.mp3",
-                vec![1, 2, 3],
-            ))),
+            &track("/fixture/corrupt.mp3"),
+            Some(&crate::database::tests::support::embedded(Some(&[1, 2, 3]))),
         )
         .unwrap();
     let webview = webview(database);
@@ -179,11 +164,10 @@ fn ipc_returns_small_track_specific_thumbnails_and_unchanged_binary_originals() 
     webview
         .state::<Database>()
         .upsert_track(
-            &track("/fixture/one.mp3", fixture(Rgba([0, 255, 0, 255]))),
-            Some(&crate::database::tests::support::embedded(&track(
-                "/fixture/one.mp3",
-                fixture(Rgba([0, 255, 0, 255])),
-            ))),
+            &track("/fixture/one.mp3"),
+            Some(&crate::database::tests::support::embedded(Some(&fixture(
+                Rgba([0, 255, 0, 255]),
+            )))),
         )
         .unwrap();
     let updated = invoke(
@@ -232,11 +216,8 @@ fn forty_large_covers_cross_ipc_as_thumbnails_not_full_json_images() {
     for index in 0..40 {
         database
             .upsert_track(
-                &track(&format!("/fixture/{index}.mp3"), original.clone()),
-                Some(&crate::database::tests::support::embedded(&track(
-                    &format!("/fixture/{index}.mp3"),
-                    original.clone(),
-                ))),
+                &track(&format!("/fixture/{index}.mp3")),
+                Some(&crate::database::tests::support::embedded(Some(&original))),
             )
             .unwrap();
     }
@@ -277,11 +258,11 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
     let cover = directory.path().join("cover.png");
     std::fs::write(&cover, &red).unwrap();
     for name in ["one", "two"] {
-        let track = track(&format!("/offline/{name}.mp3"), red.clone());
+        let track = track(&format!("/offline/{name}.mp3"));
         let scan = if name == "one" {
-            crate::database::tests::support::embedded(&track)
+            crate::database::tests::support::embedded(Some(&red))
         } else {
-            crate::database::tests::support::directory(&track, cover.to_str().unwrap())
+            crate::database::tests::support::directory(Some(&red), cover.to_str().unwrap())
         };
         database.upsert_track(&track, Some(&scan)).unwrap();
     }

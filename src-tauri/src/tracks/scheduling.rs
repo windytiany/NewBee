@@ -75,7 +75,7 @@ pub(crate) fn schedule<R: Runtime>(app: &AppHandle<R>, ids: impl IntoIterator<It
     tauri::async_runtime::spawn_blocking(move || drain(&app));
 }
 
-pub(crate) fn initialize<R: Runtime>(app: &AppHandle<R>) {
+pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         match app.state::<Database>().pending_track_ids() {
@@ -98,11 +98,7 @@ fn drain<R: Runtime>(app: &AppHandle<R>) {
             ids.push(id);
             match database.pending_track(id) {
                 Ok(Some((path, revision))) => {
-                    let snapshot =
-                        crate::metadata::files::read_track_metadata(std::path::Path::new(&path))
-                            .and_then(|snapshot| {
-                                snapshot.ok_or_else(|| "文件格式不支持快照".to_owned())
-                            });
+                    let snapshot = super::scanning::scan(&database, std::path::Path::new(&path));
                     batch.push(Confirmation {
                         id,
                         revision,

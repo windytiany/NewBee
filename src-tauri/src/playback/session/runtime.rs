@@ -94,8 +94,9 @@ pub(crate) fn backup_snapshot(app: &AppHandle) -> Result<SavedSession, String> {
         .map_err(|error| format!("Could not back up playback session: {error}"))
 }
 
-pub fn initialize(app: &AppHandle, path: PathBuf) {
+pub fn initialize(app: &AppHandle, path: PathBuf) -> Result<(), String> {
     let (requests, receiver) = mpsc::channel();
+    let (ready, restored) = mpsc::channel();
     let generation = Arc::new(AtomicU64::new(0));
     let busy = Arc::new(AtomicBool::new(false));
     app.manage(PlaybackSession {
@@ -111,18 +112,29 @@ pub fn initialize(app: &AppHandle, path: PathBuf) {
             generation,
             busy,
             receiver,
-            |snapshot| {
-                if let Err(error) = app.emit("playback-session-changed", snapshot) {
-                    log::warn!("Could not publish playback session: {error}");
-                }
+            |references| {
+                crate::tracks::lifecycle::resume(&app, references);
+                let _ = ready.send(());
             },
-            |delta| {
-                if let Err(error) = app.emit("playback-session-metadata", delta) {
-                    log::warn!("Could not publish playback metadata: {error}");
-                }
-            },
+            (
+                |snapshot| {
+                    if let Err(error) = app.emit("playback-session-changed", snapshot) {
+                        log::warn!("Could not publish playback session: {error}");
+                    }
+                },
+                |delta| {
+                    if let Err(error) = app.emit("playback-session-metadata", delta) {
+                        log::warn!("Could not publish playback metadata: {error}");
+                    }
+                },
+            ),
         )
     });
+    // Do not expose foreground registration/editing until startup collection
+    // finishes. Full metadata scans remain asynchronous and do not delay this.
+    restored
+        .recv()
+        .map_err(|_| "Playback session initialization failed".to_owned())
 }
 
 fn publish_change<A: SessionAudio>(
@@ -162,11 +174,34 @@ pub(super) fn run_worker<A: SessionAudio>(
     generation: Arc<AtomicU64>,
     busy: Arc<AtomicBool>,
     receiver: mpsc::Receiver<Request>,
-    mut publish: impl FnMut(&SessionSnapshot),
-    mut publish_metadata: impl FnMut(&MetadataDelta),
+    restored: impl FnOnce(Result<crate::tracks::lifecycle::References, &str>),
+    publications: (impl FnMut(&SessionSnapshot), impl FnMut(&MetadataDelta)),
 ) {
+    let (mut publish, mut publish_metadata) = publications;
     let (mut persistence, saved) = SessionPersistence::load(path);
     let mut session = Session::new(audio, saved, generation);
+    restored(if !persistence.restored {
+        Err("session_load_failed")
+    } else if !session.playback_error.is_empty() {
+        Err("session_restore_incomplete")
+    } else {
+        let mut references = crate::tracks::lifecycle::References::default();
+        references.ids.extend(
+            session
+                .queue
+                .displayed_tracks
+                .iter()
+                .filter_map(|track| track.track_id),
+        );
+        if let Some(current) = &session.current_track {
+            if let Some(id) = current.track_id {
+                references.ids.push(id);
+            } else if let Some(path) = &current.path {
+                references.paths.push(path.clone());
+            }
+        }
+        Ok(references)
+    });
     let mut next_tick = Instant::now() + SESSION_TICK_INTERVAL;
     let mut diagnostics = crate::logging::RepeatedFailure::default();
     loop {

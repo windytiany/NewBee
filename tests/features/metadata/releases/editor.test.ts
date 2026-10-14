@@ -1,4 +1,3 @@
-import type { MetadataTarget } from "@/features/metadata/types";
 import { describe, expect, it } from "bun:test";
 import { createReleaseEditor } from "@/features/metadata/releases/useEditor";
 import type { ReleaseEditorOptions } from "@/features/metadata/releases/useEditor";
@@ -15,7 +14,7 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-const result = (trackId: MetadataTarget, success = true): MetadataSaveResult => ({
+const result = (trackId: number, success = true): MetadataSaveResult => ({
   trackId,
   path: `/music/${trackId}.flac`,
   fileWritten: success,
@@ -25,8 +24,9 @@ const result = (trackId: MetadataTarget, success = true): MetadataSaveResult => 
 function fixture(overrides: Partial<ReleaseEditorOptions> = {}) {
   const saves: TrackPatch[][] = [];
   const searches: Array<{ artist: string; album: string; offset: number }> = [];
-  const synchronized: MetadataTarget[][] = [];
+  const synchronized: number[][] = [];
   const editor = createReleaseEditor({
+    loadTracks: async (ids) => ids.map((id) => local(id)),
     loadAlbum: async () => [local(1), local(2)],
     search: async (artist, album, offset) => {
       searches.push({ artist, album, offset });
@@ -83,6 +83,7 @@ describe("album tag editing", () => {
   });
   it("preserves local tracks with a blank source through shared edits and cover saving", async () => {
     const { editor, saves } = await ready({
+      loadTracks: async (ids) => ids.map((id) => local(id)),
       loadAlbum: async () => [local(1), local(2), local(3), local(4), local(5)],
       covers: async () => [{ id: "cover", comment: "" }],
     });
@@ -205,7 +206,7 @@ describe("album tag editing", () => {
     });
     editor.prepareSave();
     await editor.save();
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.open).toBe(true);
     expect(editor.state.results.length).toBe(2);
     expect(calls).toHaveLength(1);
     expect(editor.state.patches.map((patch) => patch.trackId)).toEqual([1, 2]);
@@ -215,6 +216,14 @@ describe("album tag editing", () => {
     ]);
     expect(synchronized).toEqual([[1]]);
     expect("retryFailed" in editor).toBe(false);
+    editor.prepareSave();
+    await editor.save();
+    expect(calls.map((patches) => patches.map(({ trackId }) => trackId))).toEqual([[1, 2], [2]]);
+    expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([
+      true,
+      true,
+    ]);
+    expect(editor.state.open).toBe(false);
   });
   it("retains saved results after synchronization failure without a retry entry", async () => {
     let attempts = 0;
@@ -226,13 +235,18 @@ describe("album tag editing", () => {
     });
     editor.prepareSave();
     await editor.save();
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.open).toBe(true);
     expect(editor.state.dirty).toBe(false);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.synchronizationError).toContain("reload failed");
     expect("retrySynchronization" in editor).toBe(false);
     expect(attempts).toBe(1);
     expect(saves).toHaveLength(1);
+    editor.prepareSave();
+    await editor.save();
+    expect(attempts).toBe(2);
+    expect(saves).toHaveLength(1);
+    expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.open).toBe(false);
   });
   it("closes on confirmation and prevents reopening or saving twice during a write", async () => {
@@ -252,4 +266,55 @@ describe("album tag editing", () => {
     await saving;
     expect(editor.state.open).toBe(false);
   });
+});
+
+it("loads numeric release targets from snapshots, deduplicates IDs and rejects incomplete selections", async () => {
+  const loads: number[][] = [];
+  const { editor } = fixture({
+    loadTracks: async (ids) => {
+      loads.push(ids);
+      return ids.map((id) => local(id));
+    },
+  });
+  await editor.openTracks([1, 2, 1]);
+  expect(loads).toEqual([[1, 2]]);
+  expect(editor.state.tracks.map(({ track }) => track.id)).toEqual([1, 2]);
+  expect(editor.state.artist).toBe(local(1).track.albumArtist ?? local(1).track.artist ?? "");
+  const missing = fixture({ loadTracks: async () => [local(1)] }).editor;
+  await missing.openTracks([1, 2]);
+  expect(missing.state.error).toContain("不匹配");
+  expect(missing.state.tracks).toEqual([]);
+});
+
+it("retains file success and DB failure, accepting only confirmed local patches and retrying the failed ID", async () => {
+  let attempt = 0;
+  const writes: number[][] = [];
+  const { editor, synchronized } = await ready({
+    save: async (patches) => {
+      writes.push(patches.map(({ trackId }) => trackId));
+      attempt++;
+      return patches.map(({ trackId }) =>
+        attempt === 1 && trackId === 2
+          ? { ...result(trackId), databaseUpdated: false, error: "database failed" }
+          : result(trackId),
+      );
+    },
+  });
+  const original = editor.state.tracks.find(({ track }) => track.id === 2)?.track.title;
+  editor.prepareSave();
+  await editor.save();
+  expect(
+    editor.state.results.map(({ fileWritten, databaseUpdated }) => [fileWritten, databaseUpdated]),
+  ).toEqual([
+    [true, true],
+    [true, false],
+  ]);
+  expect(editor.state.tracks.find(({ track }) => track.id === 2)?.track.title).toBe(original);
+  expect(editor.state.dirty).toBe(true);
+  expect(synchronized).toEqual([[1]]);
+  editor.prepareSave();
+  await editor.save();
+  expect(writes).toEqual([[1, 2], [2]]);
+  expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([true, true]);
+  expect(editor.state.open).toBe(false);
 });

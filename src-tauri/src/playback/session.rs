@@ -12,7 +12,6 @@ pub trait SessionAudio {
     fn register(&mut self, tracks: &mut Vec<QueueTrack>) -> Result<Vec<String>, String>;
     fn start(&mut self, track: &QueueTrack) -> Result<NowPlayingTrack, String>;
     fn metadata(&self, track_ids: &[i64]) -> Result<Vec<MetadataUpdate>, String>;
-    fn paths(&self, track_ids: &[i64]) -> Result<Vec<String>, String>;
     fn status(&self) -> Result<PlaybackStatus, String>;
     fn prepare(
         &mut self,
@@ -102,8 +101,6 @@ pub enum SessionCommand {
     },
     BeginEditing {
         track_ids: Vec<i64>,
-        #[serde(default)]
-        paths: Vec<String>,
     },
     EndEditing {
         token: u64,
@@ -111,11 +108,9 @@ pub enum SessionCommand {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MetadataUpdate {
-    id: Option<i64>,
-    #[serde(default)]
-    path: Option<String>,
+    id: i64,
     title: Option<String>,
     artist: Option<String>,
     album: Option<String>,
@@ -819,20 +814,10 @@ impl<A: SessionAudio> Session<A> {
             SessionCommand::Shuffle { enabled } => {
                 self.queue.set_shuffle(enabled);
             }
-            SessionCommand::BeginEditing {
-                track_ids,
-                mut paths,
-            } => {
+            SessionCommand::BeginEditing { track_ids } => {
                 if track_ids.iter().any(|id| *id <= 0) {
                     return Err("Invalid editing track IDs".into());
                 }
-                if paths
-                    .iter()
-                    .any(|path| !std::path::Path::new(path).is_absolute())
-                {
-                    return Err("Invalid editing file paths".into());
-                }
-                paths.extend(self.audio.paths(&track_ids)?);
                 self.cancel_preparation()?;
                 {
                     // Reconcile once more after cancelling the prepared decoder, since the
@@ -840,7 +825,6 @@ impl<A: SessionAudio> Session<A> {
                     self.reconcile()?;
                     if self.current_track.as_ref().is_some_and(|track| {
                         track.track_id.is_some_and(|id| track_ids.contains(&id))
-                            || track.path.as_ref().is_some_and(|path| paths.contains(path))
                     }) {
                         if let Some(id) = self.playback_id {
                             if !self.audio.stop(id)? {

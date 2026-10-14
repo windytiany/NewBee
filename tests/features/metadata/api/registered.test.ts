@@ -6,12 +6,18 @@ import type { Channel, InvokeArgs } from "@tauri-apps/api/core";
 import { notifications } from "@/shared/notifications/center";
 import { playbackFixture } from "../../../support/playback/session";
 const path = "C:\\music\\track.wav";
-function result(target = path): MetadataSaveResult {
-  return { trackId: target, path: target, fileWritten: true, databaseUpdated: false, error: null };
+function result(target = 7): MetadataSaveResult {
+  return {
+    trackId: target,
+    path: target === 7 ? path : "C:\\music\\second.wav",
+    fileWritten: true,
+    databaseUpdated: true,
+    error: null,
+  };
 }
 afterEach(() => notifications.clear());
-describe("file metadata save", () => {
-  it("retains file snapshot loading and release file writes while manual saves use registered IDs", async () => {
+describe("registered metadata save", () => {
+  it("loads snapshots and writes manual and release metadata with numeric IDs", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const api = createMetadataApi(async <T>(command: string, args?: InvokeArgs) => {
       if (Array.isArray(args) || args instanceof ArrayBuffer || ArrayBuffer.isView(args))
@@ -20,17 +26,17 @@ describe("file metadata save", () => {
       return [] as T;
     });
     const channel = {} as Channel<MetadataSaveResult>;
-    await api.editableTracks([path]);
+    await api.editableTracks([7]);
     await api.saveMetadata([7], [{ field: "lyrics", value: "words" }], channel, "keep");
     await api.saveRelease(
-      [{ trackId: path, changes: [{ field: "title", value: "New" }], writeCover: true }],
+      [{ trackId: 7, changes: [{ field: "title", value: "New" }], writeCover: true }],
       { mimeType: "image/png", data: [1, 2] },
       channel,
     );
     expect(calls.map((call) => call.command)).toEqual([
-      "get_editable_files",
+      "get_editable_tracks",
       "save_track_metadata",
-      "save_file_metadata",
+      "save_album_tags",
     ]);
     expect(calls[1].args?.request).toEqual({
       trackIds: [7],
@@ -39,31 +45,31 @@ describe("file metadata save", () => {
       artworkDrafts: [],
     });
     expect(calls[2].args?.patches).toEqual([
-      { path, changes: [{ field: "title", value: "New" }], writeCover: true },
+      { trackId: 7, changes: [{ field: "title", value: "New" }], writeCover: true },
     ]);
-    expect(calls[2].args?.cover).toEqual({ action: "replace", data: [1, 2] });
+    expect(calls[2].args?.cover).toEqual({ mimeType: "image/png", data: [1, 2] });
   });
-  it("holds the shared playback editing lease for exact paths and retains partial writes after exceptions and refresh failure", async () => {
+  it("holds the shared playback editing lease for exact IDs and retains partial writes after exceptions and refresh failure", async () => {
     const second = "C:\\music\\second.wav";
     const { session, commands } = playbackFixture();
     await session.playTracks(
-      [{ trackId: null, path, rowKey: "file", title: "Song", album: null, durationMs: 1000 }],
+      [{ trackId: 7, path, rowKey: "file", title: "Song", album: null, durationMs: 1000 }],
       "file",
     );
     const save = createMetadataSave({
       editFiles: session.withMetadataEditing,
       synchronize: async (targets) => {
-        expect(targets).toEqual([path]);
+        expect(targets).toEqual([7]);
         throw new Error("refresh failed");
       },
       notifyResult: true,
     });
     const results = await save.run({
       targets: [
-        { trackId: path, path },
-        { trackId: second, path: second },
+        { trackId: 7, path },
+        { trackId: 8, path: second },
       ],
-      writeTrackIds: [path, second],
+      writeTrackIds: [7, 8],
       execute: async (progress) => {
         expect(session.state.currentPlaybackId.value).toBeNull();
         expect(session.state.isPlaybackCommandPending.value).toBe(true);
@@ -73,12 +79,11 @@ describe("file metadata save", () => {
     });
     expect(commands.find((command) => command.action === "beginEditing")).toEqual({
       action: "beginEditing",
-      trackIds: [],
-      paths: [path, second],
+      trackIds: [7, 8],
     });
     expect(results[0]).toEqual(result());
     expect(results[1]).toMatchObject({
-      trackId: second,
+      trackId: 8,
       fileWritten: false,
       databaseUpdated: false,
     });

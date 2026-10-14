@@ -23,7 +23,6 @@ fn track() -> TrackDetails {
                 sample_rate_hz: None,
                 bitrate_kbps: None,
                 channels: None,
-                artwork: None,
                 editing: None,
                 lyrics: None,
             },

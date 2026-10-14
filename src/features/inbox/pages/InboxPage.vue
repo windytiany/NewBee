@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, toRef, watch } from "vue";
+import { useTagEditor } from "@/features/metadata/manual/useEditor";
+import { useReleaseEditor } from "@/features/metadata/releases/useEditor";
 import { useInbox } from "@/features/inbox/useInbox";
 import { formatAddedDate } from "@/features/inbox/format";
 import { usePlaybackSession } from "@/features/playback/session";
@@ -9,14 +11,10 @@ import TrackRow from "@/features/tracks/presentation/TrackRow.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
-import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
 import AppendMenuItem from "@/features/playlist/tracks/AppendMenuItem.vue";
 import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDialog.vue";
 import { reportPlaylistChanged } from "@/features/playlist/events";
-import { createTracksApi } from "@/features/tracks/api";
-import { logger } from "@/shared/logging/logger";
-import { notify } from "@/shared/notifications/center";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
@@ -28,6 +26,14 @@ import { trackColumns, trackColumnValue } from "@/features/tracks/table/columns"
 const props = defineProps<{ active: boolean }>();
 const inbox = useInbox(toRef(props, "active"));
 const state = inbox.state;
+const tagEditor = useTagEditor();
+const releaseEditor = useReleaseEditor();
+const scanBlocked = computed(
+  () => state.pending || state.loading || tagEditor.state.open || releaseEditor.state.open,
+);
+function scan(trackIds?: readonly number[]) {
+  if (!scanBlocked.value) return inbox.reread(trackIds);
+}
 const columns = computed(() =>
   trackColumns([
     { key: "addedAt", label: t("添加日期"), width: "minmax(0,1fr)", desktopOnly: true },
@@ -42,29 +48,26 @@ const table = useTable({
 const tracks = table.rows;
 const tableStyle = table.style;
 const trackNumbers = computed(
-  () => new Map(inbox.visibleTracks.value.map((track, index) => [track.path, index + 1])),
+  () => new Map(inbox.visibleTracks.value.map((track, index) => [track.id, index + 1])),
 );
 const artists = inbox.artists;
 const playback = usePlaybackSession().state;
 const scope = computed(() => JSON.stringify(["inbox", state.grouping, state.artist]));
 const selection = useItemSelection(scope);
-const keys = computed(() => tracks.value.map((track) => track.path));
+const keys = computed(() => tracks.value.map((track) => String(track.id)));
 watch(keys, (keys) => selection.syncVisibleItems(keys), { immediate: true });
 const root = ref<globalThis.HTMLElement | null>(null);
 const list = ref<globalThis.HTMLOListElement | null>(null);
 const menuElement = ref<globalThis.HTMLElement | null>(null);
 const firstMenuItemElement = ref<globalThis.HTMLElement | null>(null);
 const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
-const registration = createTracksApi();
-let menuGeneration = 0;
-const menu = useContextMenu<{ itemKey: string | null; paths: string[]; trackIds: number[] }>({
+const menu = useContextMenu<{ itemKey: string | null; trackIds: number[] }>({
   menuElement,
   firstMenuItemElement,
   fallbackFocusElement: root,
 });
 const request = menu.request;
 const position = menu.position;
-const paths = computed(() => request.value?.payload.paths ?? []);
 const trackIds = computed(() => request.value?.payload.trackIds ?? []);
 function createPlaylist(ids: number[]) {
   createPlaylistDialog.value?.show(async () => ids);
@@ -77,55 +80,34 @@ const keyboard = createItemKeyboard({
   },
   onMove: (key, event) => selection.selectItem(key, keys.value, event),
   onActivate: (key) => {
-    void inbox.play(key, keys.value);
+    void inbox.play(Number(key), keys.value.map(Number));
   },
 });
-async function open(request: {
+function open(request: {
   itemKey: string;
   x: number;
   y: number;
   trigger: globalThis.HTMLButtonElement;
 }) {
-  const paths = selection.contextMenuTargets(request.itemKey, keys.value);
-  if (!paths.length) return;
-  const generation = ++menuGeneration;
-  try {
-    const results = await registration.registerLocalFiles(paths);
-    if (
-      generation !== menuGeneration ||
-      !props.active ||
-      paths.some((path) => !keys.value.includes(path))
-    )
-      return;
-    const trackIds = results.flatMap((result) =>
-      result.status === "registered" ? [result.track.id] : [],
-    );
-    const failures = results.filter((result) => result.status === "failed");
-    if (failures.length) {
-      logger.warn("inbox", "menu_registration_failed", failures);
-      notify({ type: "warning", message: t("{count} 个文件登记失败", { count: failures.length }) });
-    }
-    menu.open({ ...request, payload: { itemKey: request.itemKey, paths, trackIds } });
-  } catch (error) {
-    logger.error("inbox", "menu_registration_failed", error);
-    notify({ type: "error", message: t("文件处理失败") });
-  }
+  if (state.pending || state.loading) return;
+  const trackIds = selection.contextMenuTargets(request.itemKey, keys.value).map(Number);
+  if (!trackIds.length) return;
+  menu.open({ ...request, payload: { itemKey: request.itemKey, trackIds } });
 }
 function emptyMenu(event: globalThis.MouseEvent) {
   event.preventDefault();
-  ++menuGeneration;
   menu.open({
     x: event.clientX,
     y: event.clientY,
     trigger: event.currentTarget as globalThis.HTMLElement,
-    payload: { itemKey: null, paths: [], trackIds: [] },
+    payload: { itemKey: null, trackIds: [] },
   });
 }
-async function action(kind: "next" | "end" | "ingest" | "remove" | "refresh") {
-  const targets = [...paths.value];
+async function action(kind: "next" | "end" | "ingest" | "remove" | "refresh" | "reread") {
+  const targets = [...trackIds.value];
   const index = Math.max(
     0,
-    keys.value.findIndex((key) => targets.includes(key)),
+    keys.value.findIndex((key) => targets.includes(Number(key))),
   );
   const removing = kind === "remove" || kind === "ingest";
   menu.close(!removing);
@@ -133,7 +115,7 @@ async function action(kind: "next" | "end" | "ingest" | "remove" | "refresh") {
   else if (kind === "end") await inbox.addEnd(targets);
   else if (kind === "ingest") await inbox.ingest(targets);
   else if (kind === "remove") await inbox.remove(targets);
-  else await inbox.refresh();
+  else await scan(kind === "reread" ? targets : undefined);
   if (removing) {
     await nextTick();
     const buttons = list.value?.querySelectorAll<globalThis.HTMLButtonElement>(
@@ -147,13 +129,12 @@ watch(
   () => props.active,
   (active) => {
     if (!active) {
-      ++menuGeneration;
       menu.close();
     }
   },
 );
 watch(keys, (keys) => {
-  if (paths.value.some((path) => !keys.includes(path))) menu.close(true);
+  if (trackIds.value.some((id) => !keys.includes(String(id)))) menu.close(true);
 });
 </script>
 
@@ -182,7 +163,7 @@ watch(keys, (keys) => {
       :aria-label="t('Inbox')"
       class="sidebar-scrollbars bg-app-base col-start-1 row-start-1 h-full min-h-0 min-w-0 overflow-y-auto px-5 pb-6 text-white outline-none sm:px-8 md:col-start-3"
       @contextmenu="emptyMenu"
-      @keydown.f5.prevent="inbox.refresh()"
+      @keydown.f5.prevent="scan()"
     >
       <div class="min-w-0" :style="tableStyle">
         <TableHeader
@@ -200,17 +181,17 @@ watch(keys, (keys) => {
         <ol v-else ref="list" @keydown="keyboard.onKeydown" @focusin="keyboard.onFocusin">
           <TrackRow
             v-for="track in tracks"
-            :key="track.path"
-            :item-key="track.path"
+            :key="track.id"
+            :item-key="String(track.id)"
             :track="track"
-            :number="trackNumbers.get(track.path) ?? 0"
-            :focused="selection.isFocused(track.path)"
-            :selected="selection.isSelected(track.path)"
-            :current="playback.activeQueueRowKey.value === `inbox:${track.path}`"
-            :menu-open="request?.payload.itemKey === track.path"
+            :number="trackNumbers.get(track.id) ?? 0"
+            :focused="selection.isFocused(String(track.id))"
+            :selected="selection.isSelected(String(track.id))"
+            :current="playback.activeQueueRowKey.value === `inbox:${track.id}`"
+            :menu-open="request?.payload.itemKey === String(track.id)"
             menu-id="inbox-context-menu"
-            @select="selection.selectItem(track.path, keys, $event)"
-            @play="inbox.play(track.path, keys)"
+            @select="selection.selectItem(String(track.id), keys, $event)"
+            @play="inbox.play(track.id, keys.map(Number))"
             @context-menu="open"
           >
             <template #before-duration>
@@ -237,7 +218,7 @@ watch(keys, (keys) => {
         ref="firstMenuItemElement"
         role="menuitem"
         type="button"
-        :disabled="!paths.length || state.pending"
+        :disabled="!trackIds.length || state.pending"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
         @click="action('next')"
       >
@@ -246,7 +227,7 @@ watch(keys, (keys) => {
       <button
         role="menuitem"
         type="button"
-        :disabled="!paths.length || state.pending"
+        :disabled="!trackIds.length || state.pending"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
         @click="action('end')"
       >
@@ -263,7 +244,7 @@ watch(keys, (keys) => {
       <button
         role="menuitem"
         type="button"
-        :disabled="!paths.length || state.pending"
+        :disabled="!trackIds.length || state.pending"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
         @click="action('ingest')"
       >
@@ -271,13 +252,13 @@ watch(keys, (keys) => {
       </button>
       <div class="my-1 border-t border-white/10" role="separator" />
       <EditMenuItem
-        :track-ids="paths"
-        :disabled="!paths.length || state.pending"
+        :track-ids="trackIds"
+        :disabled="!trackIds.length || state.pending"
         @close="menu.close(true)"
       />
       <ReleaseMenuItem
-        :paths="paths"
-        :disabled="!paths.length || state.pending"
+        :track-ids="trackIds"
+        :disabled="!trackIds.length || state.pending"
         @close="menu.close(true)"
       />
       <DownloadMenuItem
@@ -285,19 +266,12 @@ watch(keys, (keys) => {
         :disabled="!trackIds.length || state.pending"
         @close="menu.close(true)"
       />
-      <RereadMenuItem
-        v-if="paths.length"
-        :track-ids="trackIds"
-        :disabled="state.pending"
-        @close="menu.close(true)"
-      />
       <button
-        v-else
         role="menuitem"
         type="button"
-        :disabled="state.loading || state.pending"
+        :disabled="scanBlocked"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        @click="action('refresh')"
+        @click="action(trackIds.length ? 'reread' : 'refresh')"
       >
         {{ t("重新读取标签") }}
       </button>
@@ -305,7 +279,7 @@ watch(keys, (keys) => {
       <button
         role="menuitem"
         type="button"
-        :disabled="!paths.length || state.pending"
+        :disabled="!trackIds.length || state.pending"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
         @click="action('remove')"
       >

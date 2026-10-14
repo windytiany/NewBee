@@ -2,7 +2,47 @@ import { expect, it } from "bun:test";
 import { createPlaybackSession } from "@/features/playback/session";
 import type { PlaybackMetadataDelta, PlaybackSessionSnapshot } from "@/features/playback/session";
 import type { PlaybackCommandInvoker } from "@/features/playback/types";
+import type { TrackDetails } from "@/features/tracks/types";
 import { playbackReply, playbackSnapshot } from "../../../support/playback/session";
+
+it("metadata IPC projects full track details onto the strict playback contract", async () => {
+  const calls: Record<string, unknown>[] = [];
+  const invokeCommand: PlaybackCommandInvoker = async <T>(
+    command: string,
+    args?: Record<string, unknown>,
+  ) => {
+    if (command === "playback_session_metadata" && args) {
+      calls.push(args);
+      return null as T;
+    }
+    return playbackReply(playbackSnapshot()) as T;
+  };
+  const session = createPlaybackSession({ invokeCommand, subscribe: async () => () => {} });
+  await session.ready;
+  const track: TrackDetails = {
+    id: 1,
+    path: "C:/music/song.mp3",
+    title: "Song",
+    artist: "Artist",
+    album: "Album",
+    albumArtist: "Album Artist",
+    releaseDate: null,
+    discNumber: null,
+    trackNumber: null,
+    discTotal: null,
+    trackTotal: null,
+    durationMs: 1000,
+    codec: "MP3",
+    sampleRateHz: 44100,
+    bitrateKbps: 320,
+    channels: 2,
+  };
+  await session.updateTrackMetadata([track]);
+  expect(calls).toEqual([
+    { tracks: [{ id: 1, title: "Song", artist: "Artist", album: "Album", durationMs: 1000 }] },
+  ]);
+  session.dispose();
+});
 
 function fixture(count = 5000) {
   let snapshot = playbackSnapshot({

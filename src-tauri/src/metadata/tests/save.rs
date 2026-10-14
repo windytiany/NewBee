@@ -23,9 +23,7 @@ fn deleted_cover_and_file_only_fields_sync_or_report_database_failure_and_retry(
     database
         .upsert_track(
             &files::read_track(&path).unwrap().unwrap(),
-            Some(&crate::database::tests::support::embedded(
-                &files::read_track(&path).unwrap().unwrap(),
-            )),
+            Some(&files::artwork::read_collection(&path)),
         )
         .unwrap();
     assert!(save_track(&database, 1, &[], LyricsMarkAction::Keep, Some(&cover)).database_updated);
@@ -46,7 +44,9 @@ fn deleted_cover_and_file_only_fields_sync_or_report_database_failure_and_retry(
     assert!(failed.file_written && !failed.database_updated);
     assert!(failed.error.unwrap().contains("数据库同步失败"));
     let file = files::read_track(&path).unwrap().unwrap();
-    assert!(file.artwork.is_none());
+    assert!(files::artwork::read_embedded_pictures(&path)
+        .unwrap()
+        .is_empty());
     assert_eq!(
         file.editing.unwrap().values[&MetadataField::Label],
         "new label"
@@ -126,7 +126,6 @@ fn writes_selected_fields_and_updates_the_confirmed_database_snapshot() {
                 sample_rate_hz: Some(8000),
                 bitrate_kbps: None,
                 channels: Some(1),
-                artwork: None,
                 editing: None,
                 lyrics: None,
             },

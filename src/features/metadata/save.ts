@@ -1,4 +1,3 @@
-import type { MetadataTarget } from "@/features/metadata/types";
 import { t } from "@/shared/i18n/locale";
 import { reactive } from "vue";
 import { notify } from "@/shared/notifications/center";
@@ -6,24 +5,22 @@ import { logger, operationId } from "@/shared/logging/logger";
 import type { MetadataSaveResult } from "@/features/metadata/types";
 
 export function metadataSaved(result: MetadataSaveResult): boolean {
-  return typeof result.trackId === "string"
-    ? result.fileWritten && !result.error
-    : result.databaseUpdated;
+  return result.databaseUpdated;
 }
 
 export type MetadataFileEditor = <Result>(
-  trackIds: readonly MetadataTarget[],
+  trackIds: readonly number[],
   save: () => Promise<Result>,
 ) => Promise<Result>;
 
-type SaveTarget = { trackId: MetadataTarget; path: string };
+type SaveTarget = { trackId: number; path: string };
 type SaveRequest = {
   operationId?: string;
   targets: readonly SaveTarget[];
-  writeTrackIds: readonly MetadataTarget[];
+  writeTrackIds: readonly number[];
   prepareWriteTrackIds?: (
     progress: (result: MetadataSaveResult) => void,
-  ) => Promise<readonly MetadataTarget[]>;
+  ) => Promise<readonly number[]>;
   execute: (
     progress: (result: MetadataSaveResult) => void,
     operationId: string,
@@ -32,7 +29,7 @@ type SaveRequest = {
 };
 type MetadataSaveOptions = {
   editFiles: MetadataFileEditor;
-  synchronize: (trackIds: MetadataTarget[]) => void | Promise<void>;
+  synchronize: (trackIds: number[]) => void | Promise<void>;
   refreshWrittenFiles?: boolean;
   notifyResult?: boolean;
 };
@@ -46,7 +43,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     error: "",
     synchronizationError: "",
   });
-  const pendingSynchronization = new Set<MetadataTarget>();
+  const pendingSynchronization = new Set<number>();
 
   function reset() {
     if (state.saving) return;
@@ -83,7 +80,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     logger.info("metadata", "save_started", { operationId: id, count: request.targets.length });
     const targets = new Map(request.targets.map((target) => [target.trackId, target]));
     const results = new Map(state.results.map((result) => [result.trackId, result]));
-    const reported = new Map<MetadataTarget, MetadataSaveResult>();
+    const reported = new Map<number, MetadataSaveResult>();
 
     state.saving = true;
     state.error = "";
@@ -149,16 +146,12 @@ export function createMetadataSave(options: MetadataSaveOptions) {
       });
       const succeeded = [...reported.values()].filter((result) => metadataSaved(result)).length;
       const failed = reported.size - succeeded;
-      if (options.notifyResult)
+      if (options.notifyResult && (failed || state.synchronizationError))
         notify({
-          type: failed
-            ? succeeded
-              ? "warning"
-              : "error"
-            : state.synchronizationError
-              ? "warning"
-              : "success",
-          message: t("{count} 首成功，{failed} 首失败", { count: succeeded, failed }),
+          type: succeeded ? "warning" : "error",
+          message: failed
+            ? t("{count} 首曲目保存失败。无法完成写入或同步。", { count: failed })
+            : t("元数据已保存，但界面刷新失败。"),
         });
       state.saving = false;
     }

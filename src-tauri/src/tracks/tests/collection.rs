@@ -38,7 +38,7 @@ fn placeholder(database: &Database, path: &Path) -> i64 {
 }
 
 #[test]
-fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidates_with_identical_selection(
+fn confirmation_import_and_reread_collect_all_embedded_types_and_all_directory_candidates_with_identical_selection(
 ) {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("track.flac");
@@ -52,8 +52,7 @@ fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidate
     let lazy = Database::open(":memory:").unwrap();
     let id = placeholder(&lazy, &path);
     files::access::take(directory.path());
-    lazy.complete_track_artwork(id, &WriteState::default())
-        .unwrap();
+    super::super::reading::reread(&lazy, id).unwrap();
     let reads = files::access::take(directory.path());
     assert_eq!(
         reads
@@ -111,8 +110,7 @@ fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidate
     std::fs::remove_file(directory.path().join("COVER.PNG")).unwrap();
     std::fs::remove_file(directory.path().join("folder.png")).unwrap();
     files::access::take(directory.path());
-    lazy.complete_track_artwork(id, &WriteState::default())
-        .unwrap();
+    lazy.get_artwork_collection(id).unwrap();
     assert_eq!(
         lazy.track_artwork_bytes(id, None, |_, _| panic!("original derived"))
             .unwrap(),
@@ -122,7 +120,7 @@ fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidate
 }
 
 #[test]
-fn reread_partial_directory_failure_preserves_external_selection_and_confirms_embedded_types() {
+fn reread_directory_failure_preserves_entire_snapshot_until_success() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("track.flac");
     std::fs::write(&path, include_bytes!("../../../fixtures/silence.flac")).unwrap();
@@ -134,9 +132,7 @@ fn reread_partial_directory_failure_preserves_external_selection_and_confirms_em
     std::fs::write(&source, &folder).unwrap();
     let database = Database::open(":memory:").unwrap();
     let id = placeholder(&database, &path);
-    database
-        .complete_track_artwork(id, &WriteState::default())
-        .unwrap();
+    super::super::reading::reread(&database, id).unwrap();
     let mut draft = Draft::from(database.get_artwork_collection(id).unwrap());
     let DraftPicture::Existing { picture_type, .. } = &mut draft.pictures[1] else {
         panic!("existing back")
@@ -147,24 +143,12 @@ fn reread_partial_directory_failure_preserves_external_selection_and_confirms_em
     write_pictures(&path, &[(3, &back)]);
     files::write_file(&path, &[change(MetadataField::Title, "Reread")]).unwrap();
     std::fs::write(&source, b"corrupt image").unwrap();
-    let result = super::super::reading::reread(&database, id).unwrap();
-    assert!(result.database_updated);
-    assert!(result.error.as_ref().unwrap().contains("Directory artwork"));
-    assert_eq!(
-        database.get_track(id).unwrap().unwrap().title(),
-        Some("Reread")
-    );
-    assert!(database
-        .get_editing_snapshot(id)
-        .unwrap()
-        .issue
-        .unwrap()
-        .contains("Directory artwork"));
+    assert!(super::super::reading::reread(&database, id).is_err());
+    assert_eq!(database.get_track(id).unwrap().unwrap().title(), None);
+    assert!(database.get_editing_snapshot(id).unwrap().issue.is_none());
     let collection = database.get_artwork_collection(id).unwrap();
-    assert_eq!(collection.images.len(), 2);
-    assert_eq!(collection.images[0].source, "directory");
-    assert!(collection.images[0].error.is_some());
-    assert_eq!(collection.images[1].picture.picture_type, 3);
+    assert_eq!(collection.images.len(), 3);
+    assert_eq!(collection.images[1].picture.picture_type, 18);
     assert_eq!(
         collection.images[collection.display_index.unwrap()]
             .picture
@@ -172,14 +156,17 @@ fn reread_partial_directory_failure_preserves_external_selection_and_confirms_em
             .image,
         folder
     );
+    assert!(collection.images.iter().all(|image| image.error.is_none()));
     std::fs::remove_file(&source).unwrap();
     let result = super::super::reading::reread(&database, id).unwrap();
     assert!(result.database_updated && result.error.is_none());
-    assert!(database.get_editing_snapshot(id).unwrap().issue.is_none());
-    assert_eq!(database.get_artwork_collection(id).unwrap().images.len(), 2);
-    assert!(database.get_artwork_collection(id).unwrap().images[0]
-        .error
-        .is_some());
+    assert_eq!(
+        database.get_track(id).unwrap().unwrap().title(),
+        Some("Reread")
+    );
+    let collection = database.get_artwork_collection(id).unwrap();
+    assert_eq!(collection.images.len(), 1);
+    assert_eq!(collection.images[0].picture.content.image, back);
 }
 
 #[test]
@@ -197,9 +184,7 @@ fn ordinary_tag_save_preserves_linked_deletion_addition_type_and_display_choice(
     std::fs::write(&linked, &manual).unwrap();
     let database = Database::open(":memory:").unwrap();
     let id = placeholder(&database, &path);
-    database
-        .complete_track_artwork(id, &WriteState::default())
-        .unwrap();
+    super::super::reading::reread(&database, id).unwrap();
     let mut draft = Draft::from(database.get_artwork_collection(id).unwrap());
     draft.pictures.remove(2);
     draft.pictures.push(DraftPicture::Linked {
@@ -260,9 +245,7 @@ fn deleting_directory_picture_from_database_leaves_file_and_next_scan_reimports_
     std::fs::write(&source, &cover).unwrap();
     let database = Database::open(":memory:").unwrap();
     let id = placeholder(&database, &path);
-    database
-        .complete_track_artwork(id, &WriteState::default())
-        .unwrap();
+    super::super::reading::reread(&database, id).unwrap();
     files::access::take(directory.path());
     database
         .save_artwork_drafts(&[(id, Draft::default())])

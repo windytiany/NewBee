@@ -1,4 +1,3 @@
-import type { MetadataTarget } from "@/features/metadata/types";
 import { describe, expect, it } from "bun:test";
 import { createMappingDrag } from "@/features/metadata/releases/mapping/drag";
 import type { MappingDragPreview } from "@/features/metadata/releases/mapping/drag";
@@ -38,7 +37,7 @@ function fixture() {
     },
   });
   const previews: Array<MappingDragPreview | null> = [];
-  const drops: Array<{ id: MetadataTarget; target: number | null }> = [];
+  const drops: Array<{ id: number; target: number | null }> = [];
   const drag = createMappingDrag({
     canStart: () => allowed,
     preview: (preview) => previews.push(preview),

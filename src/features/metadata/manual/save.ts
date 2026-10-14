@@ -2,12 +2,7 @@ import { computed, reactive, toRefs } from "vue";
 import { logger } from "@/shared/logging/logger";
 import { createMetadataSave, metadataSaved } from "@/features/metadata/save";
 import type { MetadataFileEditor } from "@/features/metadata/save";
-import type {
-  LyricsMarkAction,
-  MetadataSaveResult,
-  MetadataTarget,
-  TagChange,
-} from "@/features/metadata/types";
+import type { LyricsMarkAction, MetadataSaveResult, TagChange } from "@/features/metadata/types";
 import { planCollectionWrites } from "@/features/artwork/collection/plan";
 import {
   acceptCollectionChanges,
@@ -33,7 +28,7 @@ export type ManualSaveOptions = {
     artworkDrafts: ArtworkDraft[],
   ) => Promise<MetadataSaveResult[]>;
   editFiles: MetadataFileEditor;
-  synchronize: (trackIds: MetadataTarget[]) => Promise<void>;
+  synchronize: (trackIds: number[]) => Promise<void>;
 };
 export type ManualSaveRequest = {
   trackIds: number[];
@@ -44,20 +39,11 @@ export type ManualSaveRequest = {
 
 export function createManualSave(options: ManualSaveOptions) {
   const targets = new Map<number, string>();
-  let synchronizePaths = false;
   const pendingArtworkReload = new Set<number>();
   const lifecycle = reactive({ busy: false });
   const saving = createMetadataSave({
     ...options,
     notifyResult: true,
-    synchronize: (ids) =>
-      options.synchronize([
-        ...ids,
-        ...ids.flatMap((id) => {
-          const path = synchronizePaths && typeof id === "number" ? targets.get(id) : undefined;
-          return path === undefined ? [] : [path];
-        }),
-      ]),
   });
   const state = reactive({
     ...toRefs(saving.state),
@@ -68,14 +54,12 @@ export function createManualSave(options: ManualSaveOptions) {
     if (state.saving) return;
     saving.reset();
     targets.clear();
-    synchronizePaths = false;
     pendingArtworkReload.clear();
   }
-  function setTargets(entries: { trackId: number; path: string }[], fileOnly: boolean) {
+  function setTargets(entries: { trackId: number; path: string }[]) {
     if (state.saving) return;
     targets.clear();
     for (const entry of entries) targets.set(entry.trackId, entry.path);
-    synchronizePaths = fileOnly;
   }
   function remainingIds(ids: number[]) {
     return ids.filter(

@@ -29,7 +29,7 @@
         <QueueRow
           v-for="track in props.tracks"
           :key="getTrackRowKey(track)"
-          :track-id="track.trackId ?? track.path ?? null"
+          :track-id="track.trackId"
           :is-skipped="track.trackId !== null && props.skippedTrackIds.includes(track.trackId)"
           :row-key="getTrackRowKey(track)"
           :can-remove-from-queue="props.canRemoveFromQueue"
@@ -67,20 +67,28 @@
         {{ t("立刻播放") }}
       </button>
       <SkipMenuItem
-        v-if="contextRegisteredTrackIds.length === contextTargetTrackIds.length"
+        v-if="contextRegisteredTrackIds.length === contextMenu.payload.targetRowKeys.length"
         :track-ids="contextRegisteredTrackIds"
         @close="closeQueueContextMenu(true)"
       />
       <div
         v-if="
           contextMenu.payload.targetRowKeys.length === 1 ||
-          contextRegisteredTrackIds.length === contextTargetTrackIds.length
+          contextRegisteredTrackIds.length === contextMenu.payload.targetRowKeys.length
         "
         class="my-1 border-t border-white/10"
         role="separator"
       />
-      <EditMenuItem :track-ids="contextTargetTrackIds" @close="closeQueueContextMenu(true)" />
-      <RereadMenuItem :track-ids="contextRegisteredTrackIds" @close="closeQueueContextMenu(true)" />
+      <EditMenuItem
+        v-if="contextTargetTrackIds.length"
+        :track-ids="contextTargetTrackIds"
+        @close="closeQueueContextMenu(true)"
+      />
+      <RereadMenuItem
+        v-if="contextRegisteredTrackIds.length"
+        :track-ids="contextRegisteredTrackIds"
+        @close="closeQueueContextMenu(true)"
+      />
       <div class="my-1 border-t border-white/10" role="separator" />
       <button
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
@@ -168,9 +176,7 @@ const contextTargetTrackIds = computed(() => {
   const rowKeys = new Set(contextMenu.value?.payload.targetRowKeys ?? []);
   return props.tracks
     .filter((track) => rowKeys.has(track.rowKey))
-    .flatMap<number | string>((track) =>
-      track.trackId !== null ? [track.trackId] : track.path ? [track.path] : [],
-    );
+    .flatMap((track) => (track.trackId !== null ? [track.trackId] : []));
 });
 const contextRegisteredTrackIds = computed(() =>
   contextTargetTrackIds.value.filter((target): target is number => typeof target === "number"),

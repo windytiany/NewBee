@@ -1,12 +1,12 @@
 import type { ArtworkCollection, ArtworkDraft } from "@/features/artwork/collection/types";
-import type { MetadataTarget } from "@/features/metadata/types";
 import { describe, expect, it } from "bun:test";
+import { createMetadataApi } from "@/features/metadata/api";
 import { createTagEditor } from "@/features/metadata/manual/useEditor";
 import type { TagEditorOptions } from "@/features/metadata/manual/useEditor";
 import { buildTagChanges, createTagDraft, TAG_FIELDS } from "@/features/metadata/draft";
 import type { EditableTrack, TagChange, MetadataSaveResult } from "@/features/metadata/types";
 
-function editable(id: MetadataTarget, title = `Track ${id}`): EditableTrack {
+function editable(id: number, title = `Track ${id}`): EditableTrack {
   return {
     track: {
       id,
@@ -32,7 +32,7 @@ function editable(id: MetadataTarget, title = `Track ${id}`): EditableTrack {
     issue: null,
   };
 }
-function result(trackId: MetadataTarget, success = true): MetadataSaveResult {
+function result(trackId: number, success = true): MetadataSaveResult {
   return {
     trackId,
     path: `/music/${trackId}.mp3`,
@@ -42,8 +42,8 @@ function result(trackId: MetadataTarget, success = true): MetadataSaveResult {
   };
 }
 function fixture(overrides: Partial<TagEditorOptions> = {}) {
-  const saves: Array<{ ids: MetadataTarget[]; changes: TagChange[] }> = [];
-  const synchronized: MetadataTarget[][] = [];
+  const saves: Array<{ ids: number[]; changes: TagChange[] }> = [];
+  const synchronized: number[][] = [];
   const editor = createTagEditor({
     loadTracks: async (ids) => ids.map((id) => editable(id)),
     loadCollections: async (ids) =>
@@ -259,7 +259,7 @@ describe("metadata editing", () => {
   });
 
   it("preserves per-track results after partial failure without a retry entry", async () => {
-    const calls: MetadataTarget[][] = [];
+    const calls: number[][] = [];
     const { editor, synchronized } = fixture({
       save: async (ids, _changes, progress) => {
         calls.push(ids);
@@ -335,7 +335,7 @@ describe("metadata editing", () => {
   });
 
   it("preserves mark outcomes and the selected action after partial failure", async () => {
-    const calls: Array<{ ids: MetadataTarget[]; action: string }> = [];
+    const calls: Array<{ ids: number[]; action: string }> = [];
     const { editor } = fixture({
       save: async (ids, _changes, _progress, action) => {
         calls.push({ ids, action });
@@ -426,7 +426,7 @@ describe("metadata editing", () => {
   });
 
   it("releases every mark target even without cached lyrics, but not for unmarking", async () => {
-    const editing: MetadataTarget[][] = [];
+    const editing: number[][] = [];
     const { editor } = fixture({
       loadTracks: async (ids) =>
         ids.map((id) => ({ ...editable(id), lyrics: id === 1 ? "Old lyrics" : null })),
@@ -502,7 +502,7 @@ function collections(ids: number[]): ArtworkCollection[] {
 
 describe("manual artwork collections", () => {
   it("edits only common pictures and saves full DB-only collections without releasing playback", async () => {
-    const editing: MetadataTarget[][] = [];
+    const editing: number[][] = [];
     const requests: ArtworkDraft[][] = [];
     const { editor } = fixture({
       planArtwork: async (drafts) =>
@@ -545,7 +545,7 @@ describe("manual artwork collections", () => {
   });
 
   it("embedded type edits write audio and saved drafts reset on each open", async () => {
-    const editing: MetadataTarget[][] = [];
+    const editing: number[][] = [];
     const requests: ArtworkDraft[][] = [];
     const { editor } = fixture({
       loadCollections: async (ids) => collections(ids),
@@ -779,4 +779,43 @@ describe("artwork file write planning", () => {
     expect(saves).toHaveLength(1);
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
   });
+});
+
+describe("registered snapshot loading", () => {
+  it("opens stored editing capabilities and values without registering or reading an absent original file", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const snapshot = { ...editable(11), values: { label: "Stored label" } };
+    const api = createMetadataApi(async <T>(command: string, args?: unknown) => {
+      calls.push({ command, args });
+      expect(command).toBe("get_editable_tracks");
+      return [snapshot] as T;
+    });
+    const { editor } = fixture({ loadTracks: api.editableTracks });
+    await editor.openTracks([11, 11]);
+    expect(calls).toEqual([{ command: "get_editable_tracks", args: { trackIds: [11] } }]);
+    expect(editor.state.error).toBe("");
+    expect(editor.state.tracks).toEqual([snapshot]);
+    expect(editor.state.draft.find(({ key }) => key === "label")?.value).toBe("Stored label");
+    expect(editor.state.tracks[0]?.lyrics).toBe(snapshot.lyrics);
+    expect(editor.state.tracks[0]?.writableFields).toEqual(snapshot.writableFields);
+  });
+  for (const snapshots of [
+    [],
+    [editable(0)],
+    [editable(1.5)],
+    [editable(13)],
+    [editable(11), editable(11)],
+    [
+      editable(11),
+      { ...editable(12), track: { ...editable(12).track, path: editable(11).track.path } },
+    ],
+  ]) {
+    it(`rejects mismatched snapshot identities ${snapshots.map(({ track }) => track.id)}`, async () => {
+      const { editor } = fixture({ loadTracks: async () => snapshots });
+      await editor.openTracks(snapshots.length === 2 ? [11, 12] : [11]);
+      expect(editor.state.error).toContain("不匹配");
+      expect(editor.state.tracks).toEqual([]);
+      expect(editor.state.artwork.tracks).toEqual([]);
+    });
+  }
 });

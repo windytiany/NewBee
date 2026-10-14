@@ -51,7 +51,6 @@ pub fn run() {
                     database_path,
                     &cache_directory,
                 )?);
-                tracks::scheduling::initialize(app.handle());
                 stage = "settings";
                 app.manage(settings::SettingsState::load(
                     app_data_dir.join("settings.json"),
@@ -62,7 +61,7 @@ pub fn run() {
                 playback::session::initialize(
                     app.handle(),
                     app_data_dir.join("playback-session.json"),
-                );
+                )?;
                 stage = "window";
                 window::initialize(app.handle());
                 window::tray::initialize(app.handle())?;
@@ -155,7 +154,6 @@ pub fn run() {
             artwork::collection::commands::get_artwork_picture,
             artwork::collection::linked::read_artwork_file,
             artwork::collection::plan::get_artwork_write_plan,
-            artwork::files::get_file_artwork,
             artwork::artist::get_artist_photo,
             artwork::artist::find_artist_photo,
             artwork::artist::save_artist_photo,
@@ -167,9 +165,6 @@ pub fn run() {
             inbox::register_inbox,
             inbox::remove_inbox,
             inbox::ingest_inbox,
-            metadata::files::commands::read_audio_file,
-            metadata::files::commands::get_editable_files,
-            metadata::files::commands::save_file_metadata,
             metadata::get_editable_tracks,
             metadata::save_track_metadata,
             metadata::releases::search_album_releases,

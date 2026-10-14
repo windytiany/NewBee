@@ -50,8 +50,12 @@ pub(in crate::database) fn sync(
             .map_err(|error| error.to_string())?
     };
     for (id, kind) in previous {
-        // Missing external paths remain associations. Directory discovery may restore a removed association.
-        if kind == "embedded" && scan.embedded.is_ok() && !retained.contains(&id) {
+        // Complete scans remove absent scanned sources, but preserve manual associations.
+        if kind != "manual"
+            && scan.embedded.is_ok()
+            && scan.directory.is_ok()
+            && !retained.contains(&id)
+        {
             transaction
                 .execute("DELETE FROM track_artwork WHERE id = ?1", [id])
                 .map_err(|error| error.to_string())?;

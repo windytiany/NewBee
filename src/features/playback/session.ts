@@ -54,7 +54,7 @@ type SessionCommand =
   | { action: "remove"; rowKeys: readonly string[] }
   | { action: "removeTrack"; trackId: number }
   | { action: "repeat" | "shuffle"; enabled: boolean }
-  | { action: "beginEditing"; trackIds: readonly number[]; paths?: readonly string[] }
+  | { action: "beginEditing"; trackIds: readonly number[] }
   | { action: "endEditing"; token: number };
 
 export type PlaybackSessionProgress = {
@@ -346,18 +346,13 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   }
 
   async function withMetadataEditing<T>(
-    targets: readonly (number | string)[],
+    trackIds: readonly number[],
     save: () => Promise<T>,
   ): Promise<T> {
     requestsPending.value += 1;
     let token: number | null = null;
     try {
-      const trackIds = targets.filter((target): target is number => typeof target === "number");
-      const paths = targets.filter((target): target is string => typeof target === "string");
-      const reply = await request(
-        { action: "beginEditing", trackIds, ...(paths.length ? { paths } : {}) },
-        false,
-      );
+      const reply = await request({ action: "beginEditing", trackIds }, false);
       token = reply.editToken;
       if (token === null) throw new Error(t("未能确认播放文件已释放，请重试。"));
       return await save();
@@ -437,7 +432,13 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     withMetadataEditing,
     updateTrackMetadata: async (tracks: readonly TrackMetadataUpdate[]) => {
       const delta = await invokeCommand<PlaybackMetadataDelta | null>("playback_session_metadata", {
-        tracks,
+        tracks: tracks.map(({ id, title, artist, album, durationMs }) => ({
+          id,
+          title,
+          artist,
+          album,
+          durationMs,
+        })),
       });
       if (delta) await receiveMetadata(delta);
     },

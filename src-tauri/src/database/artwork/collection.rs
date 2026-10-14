@@ -19,7 +19,6 @@ impl Database {
             .iter()
             .map(|id| {
                 let result = (|| {
-                    self.refresh_artwork_paths(Some(*id))?;
                     let connection = self.connection()?;
                     require_track(&connection, *id)?;
                     let mut statement = connection.prepare(
@@ -72,7 +71,6 @@ impl Database {
     }
 
     pub fn get_artwork_collection(&self, track_id: i64) -> Result<Collection, String> {
-        self.refresh_artwork_paths(Some(track_id))?;
         let connection = self.connection()?;
         require_track(&connection, track_id)?;
         let mut statement = connection.prepare(

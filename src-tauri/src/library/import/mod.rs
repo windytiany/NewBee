@@ -17,34 +17,16 @@ pub struct ImportResult {
 }
 
 pub(crate) fn import_track(database: &Database, path: &Path, result: &mut ImportResult) {
-    match crate::metadata::files::read_track_collection(path) {
-        Ok(Some(snapshot)) => {
-            let track = snapshot.track;
-            let scan = crate::artwork::collection::Scan {
-                embedded: snapshot.embedded,
-                directory: crate::metadata::files::artwork::read_directory_pictures(path),
-            };
-            match database.upsert_track(&track, Some(&scan)) {
-                Ok(TrackWriteOutcome::Added) => result.added += 1,
-                Ok(TrackWriteOutcome::Updated) => result.updated += 1,
-                Err(error) => record_failure(database, result, path, &error),
-            }
-            for issue in scan.issues() {
-                record_failure(database, result, path, issue);
-            }
-        }
-        Ok(None) => result.skipped += 1,
+    match crate::tracks::scanning::scan(database, path)
+        .and_then(|snapshot| database.import_snapshot(&snapshot))
+    {
+        Ok(TrackWriteOutcome::Added) => result.added += 1,
+        Ok(TrackWriteOutcome::Updated) => result.updated += 1,
         Err(error) => record_failure(database, result, path, &error),
     }
 }
 
-fn record_failure(database: &Database, result: &mut ImportResult, path: &Path, error: &str) {
+fn record_failure(_database: &Database, result: &mut ImportResult, path: &Path, error: &str) {
     result.failed += 1;
-    if let Err(error) = database.record_scan_issue(&path.to_string_lossy(), error) {
-        log::warn!(
-            "Could not persist scan issue for '{}': {error}",
-            path.display()
-        );
-    }
     log::warn!("Failed to scan '{}': {error}", path.display());
 }

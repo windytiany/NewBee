@@ -6,7 +6,6 @@ use std::sync::Mutex;
 pub(crate) struct State {
     cache: Cache,
     derivation: Mutex<()>,
-    extraction: Mutex<()>,
     #[cfg(test)]
     decodes: std::sync::atomic::AtomicUsize,
 }
@@ -16,7 +15,6 @@ impl State {
         Self {
             cache,
             derivation: Mutex::new(()),
-            extraction: Mutex::new(()),
             #[cfg(test)]
             decodes: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -24,36 +22,6 @@ impl State {
 }
 
 impl Database {
-    pub(crate) fn complete_track_artwork(
-        &self,
-        track_id: i64,
-        write: &crate::locking::write::WriteState,
-    ) -> Result<(), String> {
-        use rusqlite::OptionalExtension;
-        let _extraction = self
-            .artwork
-            .extraction
-            .lock()
-            .map_err(|_| "Artwork extraction is unavailable".to_owned())?;
-        let path: Option<String> = self.connection()?.query_row(
-            "SELECT path FROM tracks JOIN track_artwork_pending ON track_id = tracks.id WHERE tracks.id = ?1",
-            [track_id], |row| row.get(0),
-        ).optional().map_err(|error| error.to_string())?;
-        let Some(path) = path else {
-            return Ok(());
-        };
-        let _guard = write.acquire()?;
-        let audio = std::path::Path::new(&path);
-        let scan = crate::metadata::files::artwork::read_collection(audio);
-        self.confirm_track_artwork(track_id, &path, &scan)?;
-        let issues = scan.issues();
-        if issues.is_empty() {
-            Ok(())
-        } else {
-            Err(issues.join("; "))
-        }
-    }
-
     #[cfg(test)]
     pub(crate) fn artwork_decode_count(&self) -> usize {
         self.artwork
@@ -75,7 +43,6 @@ impl Database {
         derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
     ) -> Result<Vec<u8>, String> {
         use rusqlite::OptionalExtension;
-        self.refresh_artwork_paths(Some(track_id))?;
         self.artwork_bytes(size, derive, |connection| {
             connection
                 .query_row(
@@ -116,15 +83,6 @@ impl Database {
         derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
     ) -> Result<Vec<u8>, String> {
         use rusqlite::OptionalExtension;
-        let track_id: Option<i64> = self.connection()?.query_row(
-            "SELECT t.id FROM tracks t INNER JOIN track_artwork a ON a.track_id = t.id AND a.is_display = 1
-             WHERE t.in_library = 1 AND t.album_artist IS ?1 AND t.album IS ?2
-             ORDER BY t.disc_number IS NULL, t.disc_number, t.track_number IS NULL, t.track_number, t.id LIMIT 1",
-            params![album_artist, album], |row| row.get(0),
-        ).optional().map_err(|error| error.to_string())?;
-        if let Some(track_id) = track_id {
-            self.refresh_artwork_paths(Some(track_id))?;
-        }
         self.artwork_bytes(size, derive, |connection| {
             connection
                 .query_row(
@@ -148,15 +106,6 @@ impl Database {
         size: Option<u32>,
         derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
     ) -> Result<Vec<u8>, String> {
-        let track_id: i64 = self
-            .connection()?
-            .query_row(
-                "SELECT track_id FROM track_artwork WHERE id = ?1",
-                [artwork_id],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        self.refresh_artwork_paths(Some(track_id))?;
         self.artwork_bytes(size, derive, |connection| {
             let (image_id, error): (i64, Option<String>) = connection
                 .query_row(

@@ -22,20 +22,23 @@ export function useInboxImport() {
       );
       for (const result of results)
         if (result.error)
-          logger.warn("inbox", "register_failed", result.error, { path: result.path });
+          logger.warn("inbox", "register_failed", result.error, {
+            path: result.path,
+            trackId: result.trackId,
+            kind: "scan",
+          });
       const failed = results.filter((result) => !result.success).length;
       if (failed)
         notify({
           type: "warning",
-          message: t("导入完成，{count} 首失败（详情见日志）", { count: failed }),
+          message: t("{count} 首导入失败。无法完成扫描。", { count: failed }),
           key: "inbox-import",
         });
-      if (results.some((result) => result.success && !result.skipped))
-        reportLibraryMembershipChanged();
+      if (results.some((result) => result.success)) reportLibraryMembershipChanged();
       globalThis.window.dispatchEvent(new globalThis.Event(INBOX_CHANGED_EVENT));
     } catch (error) {
       logger.error("inbox", "register_failed", error);
-      notify({ type: "error", message: t("导入失败，请查看日志"), key: "inbox-import" });
+      notify({ type: "error", message: t("导入失败。无法完成扫描。"), key: "inbox-import" });
     } finally {
       pending.value = false;
     }

@@ -1,6 +1,6 @@
 pub(super) mod collection;
-mod confirmation;
 mod linked;
+pub(crate) use linked::update_linked_snapshot;
 pub(super) mod synchronization;
 
 use crate::artwork::model::ArtworkContent;

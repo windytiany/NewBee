@@ -136,15 +136,18 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     );
     assert_eq!(app.state::<Database>().artwork_decode_count(), 3);
 
-    // Failed external reads retain the association, not a readable cached snapshot.
+    // Failed scans preserve both previously confirmed cover snapshots.
     std::fs::write(&cover, b"broken image").unwrap();
-    scan();
-    assert!(read(1).is_empty());
-    assert!(read(2).is_empty());
+    let failed =
+        tauri::async_runtime::block_on(scan_music_library(None, app.handle().clone(), app.state()))
+            .unwrap();
+    assert_eq!(serde_json::to_value(failed).unwrap()["failed"], 2);
+    assert_eq!(read(1), shared_green);
+    assert_eq!(read(2), shared_green);
     for id in [1, 2] {
         let collection = app.state::<Database>().get_artwork_collection(id).unwrap();
         assert_eq!(collection.images.len(), 1);
-        assert!(collection.images[0].error.is_some());
+        assert!(collection.images[0].error.is_none());
         assert!(collection.images[0].path.ends_with("cover.png"));
     }
     assert_eq!(std::fs::read(&cover).unwrap(), b"broken image");
@@ -161,7 +164,10 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     .is_empty());
     assert_eq!(app.state::<Database>().artwork_decode_count(), 3);
     std::fs::write(&cover, &green).unwrap();
-    assert_eq!(read(1), shared_green);
-    assert_eq!(read(2), shared_green);
+    assert!(read(1).is_empty());
+    assert!(read(2).is_empty());
+    scan();
+    assert_color(color(&read(1)), [0, 255, 0, 255]);
+    assert_eq!(read(1), read(2));
     assert_eq!(std::fs::read(&cover).unwrap(), green);
 }

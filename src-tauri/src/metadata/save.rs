@@ -27,6 +27,7 @@ impl CoverUpdate {
             artwork: Some(artwork),
         }
     }
+    #[cfg(test)]
     pub(crate) fn delete() -> Self {
         Self {
             picture: None,

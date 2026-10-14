@@ -64,8 +64,8 @@ it("registers validated dropped files and refreshes Inbox without a success noti
   const importer = createDropImporter(
     async () => ["good.wav", "duplicate.wav"],
     [
-      { path: "good.wav", success: true, skipped: false, error: null },
-      { path: "duplicate.wav", success: true, skipped: true, error: null },
+      { trackId: 1, path: "good.wav", success: true, skipped: false, error: null },
+      { trackId: 1, path: "duplicate.wav", success: true, skipped: false, error: null },
     ],
   );
   try {
@@ -78,17 +78,23 @@ it("registers validated dropped files and refreshes Inbox without a success noti
   }
 });
 
-it("does not refresh the library when all registrations are skipped or failed", async () => {
+it("refreshes the library after rescanning an existing registration", async () => {
   const importer = createDropImporter(
     async () => ["duplicate.wav", "failed.wav"],
     [
-      { path: "duplicate.wav", success: true, skipped: true, error: null },
-      { path: "failed.wav", success: false, skipped: false, error: "database unavailable" },
+      { trackId: 1, path: "duplicate.wav", success: true, skipped: false, error: null },
+      {
+        trackId: null,
+        path: "failed.wav",
+        success: false,
+        skipped: false,
+        error: "database unavailable",
+      },
     ],
   );
   try {
     await importer.importPaths(["duplicate.wav", "failed.wav"]);
-    expect(importer.events).toEqual([INBOX_CHANGED_EVENT]);
+    expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT, INBOX_CHANGED_EVENT]);
   } finally {
     importer.restore();
   }
@@ -111,14 +117,20 @@ it("retains partial failure warnings while refreshing successful dropped registr
   const importer = createDropImporter(
     async () => ["good.wav", "failed.wav"],
     [
-      { path: "good.wav", success: true, error: null },
-      { path: "failed.wav", success: false, error: "database unavailable" },
+      { trackId: 1, skipped: false, path: "good.wav", success: true, error: null },
+      {
+        trackId: null,
+        skipped: false,
+        path: "failed.wav",
+        success: false,
+        error: "database unavailable",
+      },
     ],
   );
   try {
     await importer.importPaths(["good.wav", "failed.wav"]);
     expect(importer.notices).toEqual([
-      { type: "warning", message: "导入完成，1 首失败（详情见日志）", key: "inbox-import" },
+      { type: "warning", message: "1 首导入失败。无法完成扫描。", key: "inbox-import" },
     ]);
     expect(importer.events).toEqual([LIBRARY_CHANGED_EVENT, INBOX_CHANGED_EVENT]);
     expect(importer.pending.value).toBe(false);
@@ -134,7 +146,7 @@ it("reports unexpected drop errors and releases the pending state", async () => 
   try {
     await importer.importPaths(["good.wav"]);
     expect(importer.notices).toEqual([
-      { type: "error", message: "导入失败，请查看日志", key: "inbox-import" },
+      { type: "error", message: "导入失败。无法完成扫描。", key: "inbox-import" },
     ]);
     expect(importer.events).toEqual([]);
     expect(importer.pending.value).toBe(false);
@@ -146,7 +158,15 @@ it("reports unexpected drop errors and releases the pending state", async () => 
 it("reports system failures rather than suppressing them for drops", async () => {
   const importer = createDropImporter(
     async () => ["good.wav"],
-    [{ path: "good.wav", success: false, error: "database unavailable" }],
+    [
+      {
+        trackId: null,
+        skipped: false,
+        path: "good.wav",
+        success: false,
+        error: "database unavailable",
+      },
+    ],
   );
   try {
     await importer.importPaths(["good.wav"]);
@@ -185,8 +205,20 @@ it("registers picked files and folders and refreshes Inbox without success notic
             return command === "supported_audio_extensions"
               ? ["wav"]
               : [
-                  { path: "C:\\music\\new.wav", success: true, skipped: false, error: null },
-                  { path: "C:\\music\\duplicate.wav", success: true, skipped: true, error: null },
+                  {
+                    trackId: 1,
+                    path: "C:\\music\\new.wav",
+                    success: true,
+                    skipped: false,
+                    error: null,
+                  },
+                  {
+                    trackId: 1,
+                    path: "C:\\music\\duplicate.wav",
+                    success: true,
+                    skipped: false,
+                    error: null,
+                  },
                 ];
           },
         },

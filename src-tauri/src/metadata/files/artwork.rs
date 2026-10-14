@@ -1,5 +1,7 @@
+#[cfg(test)]
+use crate::artwork::collection::Scan;
 use crate::artwork::{
-    collection::{DirectoryPicture, Picture, Scan},
+    collection::{DirectoryPicture, Picture},
     model::ArtworkContent,
 };
 use lofty::{
@@ -9,6 +11,7 @@ use lofty::{
 };
 use std::{fs, path::Path};
 
+#[cfg(test)]
 pub(crate) fn read_collection(audio: &Path) -> Scan {
     Scan {
         embedded: read_embedded_pictures(audio),

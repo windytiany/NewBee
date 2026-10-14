@@ -3,7 +3,6 @@ import { effectScope, ref } from "vue";
 import { createTracksApi } from "@/features/tracks/api";
 import type { TracksInvoker } from "@/features/tracks/api";
 import { createTrackSynchronization } from "@/features/tracks/synchronize";
-import { createTagSynchronization } from "@/features/metadata/synchronize";
 import { createMetadataSave } from "@/features/metadata/save";
 import { useTrackDetails } from "@/features/playback/current/useTrackDetails";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
@@ -86,10 +85,10 @@ it("registered external edits release the actual ID and refresh every queue refe
   try {
     await Bun.sleep(0);
     expect(details?.currentTrackDetails.value?.title).toBe("Original");
-    const synchronize = createTagSynchronization(session, invokeCommand);
+    const synchronize = createTrackSynchronization(session, invokeCommand);
     const save = createMetadataSave({
       editFiles: session.withMetadataEditing,
-      synchronize: synchronize.tracks,
+      synchronize: synchronize.refresh,
     });
     await save.run({
       targets: [{ trackId: 7, path: snapshot.path }],

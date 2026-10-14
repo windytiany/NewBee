@@ -127,9 +127,7 @@ fn saving_one_field_preserves_external_fields_and_refreshes_the_confirmed_snapsh
     database
         .upsert_track(
             &files::read_track(&path).unwrap().unwrap(),
-            Some(&crate::database::tests::support::embedded(
-                &files::read_track(&path).unwrap().unwrap(),
-            )),
+            Some(&files::artwork::read_collection(&path)),
         )
         .unwrap();
     files::write_file(&path, &[change(MetadataField::Artist, Some("external"))]).unwrap();
@@ -553,7 +551,7 @@ fn typed_editing_capabilities_survive_database_reopen_and_confirmed_rescan_clear
         database
             .upsert_track(
                 &input,
-                Some(&crate::database::tests::support::embedded(&input)),
+                Some(&crate::metadata::files::artwork::read_collection(&path)),
             )
             .unwrap();
         database
@@ -569,7 +567,7 @@ fn typed_editing_capabilities_survive_database_reopen_and_confirmed_rescan_clear
     database
         .upsert_track(
             &input,
-            Some(&crate::database::tests::support::embedded(&input)),
+            Some(&crate::metadata::files::artwork::read_collection(&path)),
         )
         .unwrap();
     assert_eq!(

@@ -281,7 +281,9 @@ fn replacing_or_deleting_cover_also_cleans_secondary_flac_id3_images() {
         .tags()
         .iter()
         .all(|tag| tag.pictures().is_empty()));
-    assert!(files::read_track(&path).unwrap().unwrap().artwork.is_none());
+    assert!(files::artwork::read_embedded_pictures(&path)
+        .unwrap()
+        .is_empty());
     let native = lofty::flac::FlacFile::read_from(
         &mut fs::File::open(&path).unwrap(),
         lofty::config::ParseOptions::default(),

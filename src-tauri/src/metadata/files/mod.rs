@@ -1,10 +1,7 @@
 mod aac;
 mod flac;
 pub(crate) mod lyrics;
-mod model;
 mod snapshot;
-pub(crate) use model::FileTrack;
-pub(crate) mod commands;
 use super::model::{EditingSnapshot, MetadataChange, MetadataField};
 use lofty::config::{ParseOptions, WriteOptions};
 use lofty::file::{FileType, TaggedFile, TaggedFileExt};

@@ -36,7 +36,7 @@ fn rejects_old_schema_without_modifying_it() {
 
 #[test]
 fn rejects_other_versions_without_changing_snapshots_or_schema() {
-    for version in [0, SCHEMA_VERSION + 1, SCHEMA_VERSION + 2] {
+    for version in [0, 1, SCHEMA_VERSION + 1, SCHEMA_VERSION + 2] {
         let mut connection = Connection::open_in_memory().unwrap();
         connection.execute_batch("CREATE TABLE tracks (id INTEGER PRIMARY KEY, path TEXT, title TEXT); INSERT INTO tracks VALUES (42, 'song.mp3', 'Stored'); PRAGMA foreign_keys = ON;").unwrap();
         connection
@@ -104,4 +104,47 @@ fn library_membership_defaults_to_false_and_rejects_invalid_values() {
             .execute(&format!("UPDATE tracks SET in_library = {invalid}"), [])
             .is_err());
     }
+}
+
+#[test]
+fn inbox_schema_uses_track_identity_and_cascades_deleted_tracks() {
+    let mut connection = Connection::open_in_memory().unwrap();
+    connection.execute_batch("PRAGMA foreign_keys=ON").unwrap();
+    initialize_schema(&mut connection).unwrap();
+    let columns: Vec<String> = connection
+        .prepare("PRAGMA table_info(inbox)")
+        .unwrap()
+        .query_map([], |row| row.get(1))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(columns, ["track_id", "added_at"]);
+    assert!(connection
+        .execute("INSERT INTO inbox(track_id,added_at) VALUES (42,123)", [])
+        .is_err());
+    connection
+        .execute("INSERT INTO tracks(id,path) VALUES (42,'song.flac')", [])
+        .unwrap();
+    connection
+        .execute("INSERT INTO inbox(track_id,added_at) VALUES (42,123)", [])
+        .unwrap();
+    initialize_schema(&mut connection).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT track_id,added_at FROM inbox", [], |row| Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?
+            )))
+            .unwrap(),
+        (42, 123)
+    );
+    connection
+        .execute("DELETE FROM tracks WHERE id=42", [])
+        .unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM inbox", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
 }

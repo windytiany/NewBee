@@ -361,10 +361,7 @@ fn editing_releases_playing_or_paused_target_and_retains_selection_without_autop
         }
         let token = execute(
             &mut session,
-            SessionCommand::BeginEditing {
-                paths: Vec::new(),
-                track_ids: vec![1],
-            },
+            SessionCommand::BeginEditing { track_ids: vec![1] },
         )
         .2
         .unwrap();
@@ -378,8 +375,7 @@ fn editing_releases_playing_or_paused_target_and_retains_selection_without_autop
             )
             .is_err());
         session.update_metadata(vec![MetadataUpdate {
-            id: Some(1),
-            path: None,
+            id: 1,
             title: Some("Updated".into()),
             artist: Some("Artist 2".into()),
             album: Some("Album 2".into()),
@@ -410,10 +406,7 @@ fn editing_other_file_cancels_prepared_decoder_without_stopping_current_audio() 
     play(&mut session, &[1, 2], 0);
     let token = execute(
         &mut session,
-        SessionCommand::BeginEditing {
-            paths: Vec::new(),
-            track_ids: vec![2],
-        },
+        SessionCommand::BeginEditing { track_ids: vec![2] },
     )
     .2
     .unwrap();
@@ -436,10 +429,7 @@ fn editing_requires_confirmed_release_and_rejects_stale_unlock_token() {
     let generation = session.generation.load(Ordering::SeqCst);
     assert!(session
         .execute(
-            SessionCommand::BeginEditing {
-                paths: Vec::new(),
-                track_ids: vec![1]
-            },
+            SessionCommand::BeginEditing { track_ids: vec![1] },
             generation
         )
         .is_err());
@@ -448,10 +438,7 @@ fn editing_requires_confirmed_release_and_rejects_stale_unlock_token() {
     session.audio.stop_result = None;
     let token = execute(
         &mut session,
-        SessionCommand::BeginEditing {
-            paths: Vec::new(),
-            track_ids: vec![1],
-        },
+        SessionCommand::BeginEditing { track_ids: vec![1] },
     )
     .2
     .unwrap();
@@ -503,6 +490,31 @@ fn stale_seek_never_cancels_a_newer_decode_intent() {
 }
 
 #[test]
+fn editing_protocol_rejects_paths_and_invalid_ids_without_releasing_audio() {
+    assert!(serde_json::from_value::<SessionCommand>(serde_json::json!({
+        "action": "beginEditing", "trackIds": [1], "paths": ["/track/1.wav"]
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<MetadataUpdate>(serde_json::json!({
+        "id": 1, "path": "/track/1.wav", "title": null, "artist": null,
+        "album": null, "durationMs": null
+    }))
+    .is_err());
+    let mut session = fixture();
+    play(&mut session, &[1], 0);
+    let playback_id = session.playback_id;
+    assert!(session
+        .execute(
+            SessionCommand::BeginEditing { track_ids: vec![0] },
+            session.generation.load(Ordering::SeqCst)
+        )
+        .is_err());
+    assert_eq!(session.playback_id, playback_id);
+    assert!(session.audio.stops.is_empty());
+    assert!(session.editing.is_none());
+}
+
+#[test]
 fn file_targets_register_shared_identity_and_editing_protection() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory
@@ -540,17 +552,9 @@ fn file_targets_register_shared_identity_and_editing_protection() {
             play(&mut session, &[1], 0);
         }
         let before = session.playback_id;
-        let unrelated = directory
-            .path()
-            .join("other.wav")
-            .to_string_lossy()
-            .into_owned();
         let token = execute(
             &mut session,
-            SessionCommand::BeginEditing {
-                track_ids: vec![],
-                paths: vec![unrelated],
-            },
+            SessionCommand::BeginEditing { track_ids: vec![2] },
         )
         .2
         .unwrap();
@@ -559,10 +563,7 @@ fn file_targets_register_shared_identity_and_editing_protection() {
         // A library edit must also release an Inbox audition of the same file.
         let token = execute(
             &mut session,
-            SessionCommand::BeginEditing {
-                track_ids: vec![1],
-                paths: vec![],
-            },
+            SessionCommand::BeginEditing { track_ids: vec![1] },
         )
         .2
         .unwrap();
@@ -576,10 +577,7 @@ fn file_targets_register_shared_identity_and_editing_protection() {
     play(&mut session, &[1], 0);
     let token = execute(
         &mut session,
-        SessionCommand::BeginEditing {
-            track_ids: vec![],
-            paths: vec![path],
-        },
+        SessionCommand::BeginEditing { track_ids: vec![1] },
     )
     .2
     .unwrap();
@@ -616,7 +614,13 @@ fn registered_file_metadata_updates_only_matching_id_without_touching_other_rows
         },
     );
     let id = session.queue.displayed_tracks[1].track_id.unwrap();
-    let update = serde_json::from_value(serde_json::json!({ "id": null, "path": path, "title": "File title", "artist": "File artist", "album": "File album", "durationMs": 500 })).unwrap();
+    let database = crate::database::Database::open(":memory:").unwrap();
+    database.connection().unwrap().execute(
+        "INSERT INTO tracks (id, path, title, artist, album, duration_ms) VALUES (?1, ?2, 'File title', 'File artist', 'File album', 500)",
+        rusqlite::params![id, path],
+    ).unwrap();
+    session.audio.database = Some(database);
+    let update = serde_json::from_value(serde_json::json!({ "id": id, "title": "Stale title", "artist": null, "album": null, "durationMs": null })).unwrap();
     session.refresh_metadata(vec![update]).unwrap();
     assert_eq!(
         session.queue.displayed_tracks[0].title.as_deref(),

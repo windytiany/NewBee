@@ -1,4 +1,3 @@
-import type { MetadataTarget } from "@/features/metadata/types";
 import { t } from "@/shared/i18n/locale";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { computed, reactive, toRefs } from "vue";
@@ -7,7 +6,7 @@ import { logger } from "@/shared/logging/logger";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import { createLibraryApi } from "@/features/library/api";
 import { createMetadataApi } from "@/features/metadata/api";
-import { createTagSynchronization } from "@/features/metadata/synchronize";
+import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { createManualSave } from "@/features/metadata/manual/save";
 import type { ManualSaveOptions, ManualSaveRequest } from "@/features/metadata/manual/save";
 import { usePlaybackSession } from "@/features/playback/session";
@@ -21,8 +20,6 @@ import type {
 } from "@/features/metadata/types";
 
 import { createArtworkCollectionApi } from "@/features/artwork/collection/api";
-import { createTracksApi } from "@/features/tracks/api";
-import { createManualLoading } from "@/features/metadata/manual/loading";
 import {
   addPicture,
   changePictureType,
@@ -36,9 +33,9 @@ import {
 import type { CollectionDraft } from "@/features/artwork/collection/types";
 
 export type TagEditorOptions = ManualSaveOptions & {
-  loadTracks: (trackIds: MetadataTarget[]) => Promise<EditableTrack[]>;
+  loadTracks: (trackIds: number[]) => Promise<EditableTrack[]>;
   readArtwork: (artworkId: number) => Promise<ArrayBuffer>;
-  loadAlbum: (album: LibraryAlbumSelection) => Promise<MetadataTarget[]>;
+  loadAlbum: (album: LibraryAlbumSelection) => Promise<number[]>;
 };
 
 function errorMessage(error: unknown) {
@@ -72,7 +69,7 @@ export function createTagEditor(options: TagEditorOptions) {
   let loadGeneration = 0;
   let preparedSave: ManualSaveRequest | null = null;
 
-  async function open(loadIds: () => Promise<MetadataTarget[]>, mode: EditMode) {
+  async function open(loadIds: () => Promise<number[]>, mode: EditMode) {
     if (state.open) return;
     const generation = ++loadGeneration;
     saving.reset();
@@ -107,9 +104,7 @@ export function createTagEditor(options: TagEditorOptions) {
             typeof track.id !== "number" ||
             !Number.isSafeInteger(track.id) ||
             track.id <= 0 ||
-            (ids.every((id) => typeof id === "number")
-              ? !ids.includes(track.id)
-              : !ids.every((id) => typeof id === "string") || !ids.includes(track.path)),
+            !ids.includes(track.id),
         ) ||
         new Set(tracks.map(({ track }) => track.path)).size !== ids.length
       ) {
@@ -120,7 +115,6 @@ export function createTagEditor(options: TagEditorOptions) {
         tracks.flatMap(({ track }) =>
           typeof track.id === "number" ? [{ trackId: track.id, path: track.path }] : [],
         ),
-        ids.every((id) => typeof id === "string"),
       );
       state.draft = createTagDraft(tracks, mode);
       const trackIds = numericIds();
@@ -280,7 +274,7 @@ export function createTagEditor(options: TagEditorOptions) {
 
   return {
     state,
-    openTracks: (ids: readonly MetadataTarget[]) => open(() => Promise.resolve([...ids]), "tracks"),
+    openTracks: (ids: readonly number[]) => open(() => Promise.resolve([...ids]), "tracks"),
     openAlbum: (album: LibraryAlbumSelection) => open(() => options.loadAlbum(album), "album"),
     requestClose,
     close,
@@ -309,9 +303,9 @@ export function useTagEditor() {
   const api = createMetadataApi(invoke);
   const library = createLibraryApi(invoke);
   const artwork = createArtworkCollectionApi(invoke);
-  const synchronize = createTagSynchronization(session, invoke);
+  const synchronize = createTrackSynchronization(session, invoke);
   sharedEditor = createTagEditor({
-    loadTracks: createManualLoading(api, createTracksApi(invoke)),
+    loadTracks: api.editableTracks,
     loadCollections: artwork.collections,
     readArtwork: artwork.picture,
     planArtwork: artwork.writePlan,
@@ -329,7 +323,7 @@ export function useTagEditor() {
       );
     },
     editFiles: session.withMetadataEditing,
-    synchronize: synchronize.tracks,
+    synchronize: synchronize.refresh,
   });
   return sharedEditor;
 }

@@ -19,6 +19,7 @@ const menuOutput = compileSfc(
 function action(results: TrackReadResult[], refreshError = false, readError = false) {
   const commands: Array<[string, unknown]> = [];
   const notices: NotificationInput[] = [];
+  const logs: unknown[][] = [];
   const module = evaluateSource<{ useTrackReread: typeof useTrackReread }>(output, {
     vue: Vue,
     "@tauri-apps/api/core": {
@@ -50,9 +51,9 @@ function action(results: TrackReadResult[], refreshError = false, readError = fa
         notices.push(notice);
       },
     },
-    "@/shared/logging/logger": { logger: { error() {} } },
+    "@/shared/logging/logger": { logger: { error: (...args: unknown[]) => logs.push(args) } },
   });
-  return { module, commands, notices };
+  return { module, commands, notices, logs };
 }
 it("reread preserves individual successes/failures and refresh errors without invoking playback editing", async () => {
   const results = [
@@ -69,24 +70,27 @@ it("reread preserves individual successes/failures and refresh errors without in
     ["changed", [7]],
   ]);
   expect(test.notices.map((notice) => notice.message)).toEqual([
-    "1 首曲目标签读取失败",
-    "曲目信息刷新失败",
+    "1 首曲目读取失败。无法完成扫描。",
+  ]);
+  expect(test.logs).toEqual([
+    ["tracks", "reread_failed", "unreadable", { trackId: 9 }],
+    ["tracks", "refresh_failed", "refresh unavailable"],
   ]);
   expect(reread.pending.value).toBe(false);
 });
-it("reread reports success, rejects empty targets, and resets pending on command failure", async () => {
+it("reread stays silent on success, rejects empty targets, and resets pending on command failure", async () => {
   const results = [{ trackId: 7, databaseUpdated: true, error: null }];
   const success = action(results);
   const reread = success.module.useTrackReread();
   await reread.reread([]);
   expect(success.commands).toEqual([]);
   expect(await reread.reread([7])).toEqual({ results, refreshError: null });
-  expect(success.notices.map((notice) => notice.message)).toEqual(["已重新读取标签"]);
+  expect(success.notices.map((notice) => notice.message)).toEqual([]);
   const failed = action([], false, true);
   const reader = failed.module.useTrackReread();
   expect(await reader.reread([7])).toBeUndefined();
   expect(reader.pending.value).toBe(false);
-  expect(failed.notices.map((notice) => notice.message)).toEqual(["标签读取失败"]);
+  expect(failed.notices.map((notice) => notice.message)).toEqual(["标签读取失败。无法完成扫描。"]);
 });
 it("menu captures multi-selection before close, shows reading state and blocks duplicate clicks", async () => {
   const test = action([
@@ -126,7 +130,7 @@ it("menu captures multi-selection before close, shows reading state and blocks d
     expect(button.props.disabled).toBe(true);
     for (let index = 0; index < 15; index++) await Promise.resolve();
     expect(test.commands[0]).toEqual(["reread_track_tags", { trackIds: [7, 9] }]);
-    expect(test.notices.map((notice) => notice.message)).toEqual(["已重新读取标签"]);
+    expect(test.notices.map((notice) => notice.message)).toEqual([]);
   } finally {
     app.unmount();
   }

@@ -26,10 +26,13 @@ fn background_worker_advances_and_persists_without_any_webview_or_status_request
             generation,
             busy,
             receiver,
-            |snapshot| {
-                observed.send(snapshot.clone()).unwrap();
-            },
             |_| {},
+            (
+                |snapshot| {
+                    observed.send(snapshot.clone()).unwrap();
+                },
+                |_| {},
+            ),
         )
     });
     let reply = handle
@@ -118,10 +121,7 @@ fn tray_and_windows_media_actions_map_to_one_backend_session_entry() {
     );
     let token = execute(
         &mut session,
-        SessionCommand::BeginEditing {
-            paths: Vec::new(),
-            track_ids: vec![1],
-        },
+        SessionCommand::BeginEditing { track_ids: vec![1] },
     )
     .2
     .unwrap();
@@ -175,10 +175,13 @@ fn large_queue_progress_reads_and_unchanged_snapshot_neither_save_nor_broadcast(
             generation,
             busy,
             receiver,
-            |snapshot| {
-                observed.send(snapshot.clone()).unwrap();
-            },
             |_| {},
+            (
+                |snapshot| {
+                    observed.send(snapshot.clone()).unwrap();
+                },
+                |_| {},
+            ),
         )
     });
     let snapshot = handle

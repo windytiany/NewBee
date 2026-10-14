@@ -28,8 +28,7 @@ export type PlaybackDisplayTrack = {
 };
 
 export type TrackMetadataUpdate = {
-  id: number | null;
-  path?: string;
+  id: number;
   title: string | null;
   artist: string | null;
   album: string | null;

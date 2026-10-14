@@ -1,9 +1,8 @@
-import type { MetadataTarget } from "@/features/metadata/types";
 import { TAG_FIELDS } from "@/features/metadata/draft";
 import type { EditableTrack } from "@/features/metadata/types";
 import type { ReleaseDetails } from "@/features/metadata/releases/types";
 export const album = { albumArtist: "Artist", album: "Album" };
-export function local(id: MetadataTarget, title = `Song ${id}`, discNumber = 1): EditableTrack {
+export function local(id: number, title = `Song ${id}`, discNumber = 1): EditableTrack {
   return {
     track: {
       id,
