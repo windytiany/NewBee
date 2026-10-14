@@ -6,10 +6,7 @@ import type { MaybeRefOrGetter } from "vue";
 import type { TrackArtwork } from "@/features/artwork/types";
 import { createArtworkResource } from "@/features/artwork/resources";
 import type { ArtworkResource, ArtworkResourceSnapshot } from "@/features/artwork/resources";
-import {
-  ALBUM_BACKGROUND_SAMPLE_SIZE,
-  createAlbumBackgroundPixels,
-} from "@/features/artwork/background";
+import { createArtworkBackground } from "@/features/artwork/background";
 import type { AlbumBackground } from "@/features/artwork/background";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
@@ -151,20 +148,9 @@ function generateBackground(entry: SharedArtwork) {
     return;
   entry.backgroundAttempted = true;
   try {
-    const size = ALBUM_BACKGROUND_SAMPLE_SIZE;
-    const canvas = globalThis.document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) throw new Error("Canvas 2D 不可用");
-    context.drawImage(image.decoder, 0, 0, size, size);
-    const pixels = context.getImageData(0, 0, size, size);
-    const background = createAlbumBackgroundPixels(pixels.data, size, size);
-    pixels.data.set(background.pixels);
-    context.putImageData(pixels, 0, 0);
     publish(entry, {
       ...entry.snapshot,
-      background: { imageUrl: canvas.toDataURL("image/png"), color: background.color },
+      background: createArtworkBackground(image.decoder),
     });
   } catch (error) {
     logger.warn("artwork", "background_generation_failed", error);

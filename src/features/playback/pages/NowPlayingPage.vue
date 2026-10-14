@@ -80,10 +80,9 @@ import { t } from "@/shared/i18n/locale";
 import { computed, shallowRef, watch } from "vue";
 import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
-import { useTrackDetails } from "@/features/playback/current/useTrackDetails";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import type { AlbumBackground } from "@/features/artwork/background";
-import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
+import { useTrackArtwork } from "@/features/artwork/useTrackArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LyricsView from "@/features/lyrics/components/LyricsView.vue";
 import TrackPresentation from "@/features/playback/current/TrackPresentation.vue";
@@ -98,35 +97,21 @@ const { presentation } = useDisplayMode();
 const session = usePlaybackSession();
 const { currentTrack, playbackStatus, isSeeking } = session.state;
 const playingCoverBackground = useCoverBackground("playingCoverBackground");
-const { currentTrackDetails, isLoading: backgroundDetailsLoading } = useTrackDetails(() =>
-  playingCoverBackground.value ? (currentTrack.value?.trackId ?? null) : null,
-);
-const { background, status: backgroundStatus } = useAlbumArtwork(
-  () => {
-    const details = currentTrackDetails.value;
-    if (!playingCoverBackground.value || !details || details.id !== currentTrack.value?.trackId)
-      return null;
-    return { albumArtist: details.albumArtist, album: details.album };
-  },
-  "background",
+const { background, status: backgroundStatus } = useTrackArtwork(
+  () => (playingCoverBackground.value ? (currentTrack.value?.trackId ?? null) : null),
   ALBUM_BACKGROUND_SAMPLE_SIZE,
+  "background",
 );
 const displayedBackground = shallowRef<AlbumBackground | null>(null);
 watch(
-  [
-    background,
-    backgroundDetailsLoading,
-    backgroundStatus,
-    playingCoverBackground,
-    () => currentTrack.value?.trackId ?? null,
-  ],
-  ([nextBackground, detailsLoading, artworkStatus, enabled, trackId]) => {
+  [background, backgroundStatus, playingCoverBackground, () => currentTrack.value?.trackId ?? null],
+  ([nextBackground, artworkStatus, enabled, trackId]) => {
     if (!enabled || trackId === null) {
       displayedBackground.value = null;
       return;
     }
-    // Keep the previous layer until both the next selection and its background are ready.
-    if (detailsLoading || artworkStatus === "loading") return;
+    // Keep the previous layer until the next track's background is ready.
+    if (artworkStatus === "loading") return;
     displayedBackground.value = nextBackground;
   },
   { immediate: true },

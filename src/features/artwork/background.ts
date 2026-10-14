@@ -5,6 +5,21 @@ export type AlbumBackground = {
   color: string;
 };
 
+export function createArtworkBackground(image: HTMLImageElement): AlbumBackground {
+  const size = ALBUM_BACKGROUND_SAMPLE_SIZE;
+  const canvas = globalThis.document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Canvas 2D 不可用");
+  context.drawImage(image, 0, 0, size, size);
+  const pixels = context.getImageData(0, 0, size, size);
+  const background = createAlbumBackgroundPixels(pixels.data, size, size);
+  pixels.data.set(background.pixels);
+  context.putImageData(pixels, 0, 0);
+  return { imageUrl: canvas.toDataURL("image/png"), color: background.color };
+}
+
 const BLUR_RADIUS = 3;
 const BLUR_PASSES = 3;
 const SATURATION = 0.85;

@@ -10,6 +10,8 @@ import type {
   ArtworkResourceSnapshot,
   DecodedArtwork,
 } from "@/features/artwork/resources";
+import { createArtworkBackground } from "@/features/artwork/background";
+import type { AlbumBackground } from "@/features/artwork/background";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 
@@ -29,11 +31,13 @@ let activeThumbnailLoads = 0;
 export function useTrackArtwork(
   trackId: MaybeRefOrGetter<number | null>,
   size: MaybeRefOrGetter<number | null> = null,
+  purpose: "cover" | "background" = "cover",
 ): {
   status: Readonly<Ref<TrackArtworkStatus>>;
   url: Readonly<Ref<string | null>>;
   content: Readonly<Ref<TrackArtwork | null>>;
   error: Readonly<Ref<string>>;
+  background: Readonly<Ref<AlbumBackground | null>>;
   /** Pins the current decoded URL without adding a loading subscription. */
   retain(): () => void;
 } {
@@ -41,6 +45,7 @@ export function useTrackArtwork(
   const url = ref<string | null>(null);
   const content = ref<TrackArtwork | null>(null);
   const error = ref("");
+  const background = ref<AlbumBackground | null>(null);
   let image: DecodedArtwork | null = null;
   let unsubscribe: (() => void) | null = null;
   const stop = watch(
@@ -52,6 +57,7 @@ export function useTrackArtwork(
       url.value = null;
       content.value = null;
       error.value = "";
+      background.value = null;
       if (nextTrackId === null) {
         status.value = "fallback";
         return;
@@ -60,10 +66,24 @@ export function useTrackArtwork(
       if (nextSize === 0) return;
       unsubscribe = subscribeToTrackArtwork(nextTrackId, nextSize, (snapshot) => {
         image = snapshot.image;
-        status.value = snapshot.status;
         url.value = image?.url ?? null;
         content.value = image?.content ?? null;
         error.value = snapshot.error;
+        background.value = null;
+        if (purpose === "background" && image) {
+          try {
+            background.value = createArtworkBackground(image.decoder);
+          } catch (cause) {
+            logger.warn("artwork", "background_generation_failed", cause, { trackId: nextTrackId });
+            notify({
+              type: "warning",
+              message: t("生成专辑背景失败，请查看日志"),
+              key: "artwork-background",
+            });
+            error.value = `生成背景失败：${cause instanceof Error ? cause.message : String(cause)}`;
+          }
+        }
+        status.value = snapshot.status;
       });
     },
     { immediate: true, flush: "sync" },
@@ -79,6 +99,7 @@ export function useTrackArtwork(
     url: readonly(url),
     content: readonly(content),
     error: readonly(error),
+    background: readonly(background),
     retain: () => image?.retain() ?? (() => {}),
   };
 }
