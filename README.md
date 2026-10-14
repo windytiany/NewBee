@@ -34,8 +34,10 @@ Windows 开发环境需要：
 git clone https://github.com/windytiany/NewBee.git
 cd NewBee
 bun install --frozen-lockfile
-bun run tauri dev
+bun run desktop:dev
 ```
+
+开发版使用独立数据目录，不与安装版共享应用数据；导入同一音乐文件时，对文件的修改仍会相互影响。
 
 ## 构建
 

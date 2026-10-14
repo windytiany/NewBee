@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "desktop:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build": "vue-tsc --noEmit && vite build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
