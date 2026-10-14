@@ -59,11 +59,9 @@ watch(keys, (keys) => selection.syncVisibleItems(keys), { immediate: true });
 const root = ref<globalThis.HTMLElement | null>(null);
 const list = ref<globalThis.HTMLOListElement | null>(null);
 const menuElement = ref<globalThis.HTMLElement | null>(null);
-const firstMenuItemElement = ref<globalThis.HTMLElement | null>(null);
 const createPlaylistDialog = ref<InstanceType<typeof CreatePlaylistDialog> | null>(null);
 const menu = useContextMenu<{ itemKey: string | null; trackIds: number[] }>({
   menuElement,
-  firstMenuItemElement,
   fallbackFocusElement: root,
 });
 const request = menu.request;
@@ -215,7 +213,6 @@ watch(keys, (keys) => {
       @pointerdown.stop
     >
       <button
-        ref="firstMenuItemElement"
         role="menuitem"
         type="button"
         :disabled="!trackIds.length || state.pending"

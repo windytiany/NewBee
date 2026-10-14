@@ -7,6 +7,7 @@ import {
   findNode,
   getTextContent,
   removeNode,
+  visit,
 } from "../../../../../support/host/renderer";
 import { createItemSelection } from "@/shared/interaction/item/useSelection";
 import * as contextMenuModule from "@/shared/interaction/useContextMenu";
@@ -23,6 +24,7 @@ type HostNode = {
   focus: () => void;
   isConnected: boolean;
   closest: (selector: string) => HostNode | null;
+  querySelectorAll: (selector: string) => HostNode[];
   getBoundingClientRect: () => DOMRect;
 };
 
@@ -224,6 +226,7 @@ function createHostNode(type: string, text = ""): HostNode {
     closest(selector) {
       let current: HostNode | null = node;
       while (current) {
+        if (selector === '[role="menu"]' && current.props.role === "menu") return current;
         if (
           selector === "[data-item-interaction]" &&
           Object.prototype.hasOwnProperty.call(current.props, "data-item-interaction")
@@ -234,10 +237,23 @@ function createHostNode(type: string, text = ""): HostNode {
       }
       return null;
     },
+    querySelectorAll(selector) {
+      const matches: HostNode[] = [];
+      visit(node, (candidate) => {
+        if (
+          selector === '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])' &&
+          candidate.props.role === "menuitem" &&
+          !candidate.props.disabled &&
+          candidate.props["aria-disabled"] !== "true"
+        )
+          matches.push(candidate);
+      });
+      return matches;
+    },
     getBoundingClientRect: () =>
       ({ left: 10, top: 10, right: 250, bottom: 250, width: 240, height: 240 }) as DOMRect,
   };
-  return node;
+  return Vue.markRaw(node);
 }
 
 function mountAlbumDetail(sourceTracks = tracks) {

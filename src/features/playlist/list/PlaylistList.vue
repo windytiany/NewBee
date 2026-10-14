@@ -56,7 +56,6 @@
       @pointerdown.stop
     >
       <button
-        ref="firstMenuItemElement"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
         role="menuitem"
         :disabled="isContextMenuTargetPending"
@@ -110,7 +109,6 @@ const createPlaylistButtonElement = ref<InstanceType<typeof globalThis.HTMLButto
   null,
 );
 const contextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
-const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const playlistItemKeys = computed(() => props.playlists.map((playlist) => String(playlist.id)));
 const keyboard = createItemKeyboard({
   getItemKeys: () => playlistItemKeys.value,
@@ -137,7 +135,6 @@ const {
   close: closeContextMenu,
 } = useContextMenu<number>({
   menuElement: contextMenuElement,
-  firstMenuItemElement,
   fallbackFocusElement: createPlaylistButtonElement,
 });
 const contextMenuTargetExists = computed(() => {

@@ -148,7 +148,6 @@
       @pointerdown.stop
     >
       <button
-        ref="firstMenuItemElement"
         type="button"
         role="menuitem"
         :disabled="locked || !ready"
@@ -232,7 +231,6 @@ watch(
 );
 const additionElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const menuElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
-const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const {
   request: contextMenu,
   position: menuPosition,
@@ -240,7 +238,6 @@ const {
   close: closeMenu,
 } = useContextMenu<null>({
   menuElement,
-  firstMenuItemElement,
   fallbackFocusElement: additionElement,
 });
 watch(locked, (value) => {

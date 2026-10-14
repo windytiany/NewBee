@@ -12,7 +12,6 @@
     @pointerleave="isPlaylistMenuOpen = false"
   >
     <button
-      ref="firstMenuItemElement"
       class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
       role="menuitem"
       :disabled="pending"
@@ -131,7 +130,6 @@ const emit = defineEmits<{
 }>();
 type MenuElement = InstanceType<typeof globalThis.HTMLElement>;
 const menuElement = ref<MenuElement | null>(null);
-const firstMenuItemElement = ref<MenuElement | null>(null);
 const fallbackFocusElement = ref<MenuElement | null>(null);
 const playlistTriggerElement = ref<MenuElement | null>(null);
 const playlistMenuElement = ref<MenuElement | null>(null);
@@ -143,7 +141,6 @@ const {
   close,
 } = useContextMenu<LibraryAlbumSelection>({
   menuElement,
-  firstMenuItemElement,
   fallbackFocusElement,
 });
 const isPlaylistMenuOpen = ref(false);

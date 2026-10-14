@@ -32,7 +32,6 @@
       @pointerdown.stop
     >
       <button
-        ref="firstMenuItemElement"
         type="button"
         role="menuitem"
         :disabled="pending"
@@ -78,13 +77,12 @@ const props = defineProps<{ artist: string | null }>();
 const photoElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const fileInput = ref<InstanceType<typeof globalThis.HTMLInputElement> | null>(null);
 const menuElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
-const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const {
   request: contextMenu,
   position: menuPosition,
   open: openMenu,
   close: closeMenu,
-} = useContextMenu<null>({ menuElement, firstMenuItemElement, fallbackFocusElement: photoElement });
+} = useContextMenu<null>({ menuElement, fallbackFocusElement: photoElement });
 const clipboardAvailable = ref(false);
 const pending = ref(false);
 const MAX_PHOTO_BYTES = 20 * 1024 * 1024;

@@ -119,7 +119,6 @@
         @pointerdown.stop
       >
         <button
-          ref="firstMenuItemElement"
           class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
           role="menuitem"
           :disabled="props.isPlaylistActionPending"
@@ -309,7 +308,6 @@ const trackScrollContainerElement = ref<InstanceType<typeof globalThis.HTMLDivEl
   null,
 );
 const contextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
-const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 
 type PlaylistTrackContextMenuPayload = {
   itemKey: string;
@@ -338,7 +336,6 @@ const {
   close: closeContextMenu,
 } = useContextMenu<PlaylistTrackContextMenuPayload>({
   menuElement: contextMenuElement,
-  firstMenuItemElement,
   fallbackFocusElement: playlistHeadingElement,
 });
 

@@ -108,7 +108,6 @@
       @pointerleave="closePlaylistMenuOnPointerLeave"
     >
       <button
-        ref="firstMenuItemElement"
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-white/10 focus-visible:outline-2"
         role="menuitem"
         :disabled="props.trackActionPending"
@@ -364,7 +363,6 @@ watch(visibleTrackKeys, (itemKeys) => trackFocus.syncVisibleItems(itemKeys), {
 });
 const albumHeadingElement = ref<InstanceType<typeof globalThis.HTMLHeadingElement> | null>(null);
 const contextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
-const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 const playlistMenuTriggerElement = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(
   null,
 );
@@ -379,7 +377,6 @@ const {
   close: closeContextMenu,
 } = useContextMenu<AlbumTrackContextMenuPayload>({
   menuElement: contextMenuElement,
-  firstMenuItemElement,
   fallbackFocusElement: albumHeadingElement,
 });
 const playlistMenuPosition = ref({ x: 0, y: 0 });

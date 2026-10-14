@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
+import * as contextMenuModule from "@/shared/interaction/useContextMenu";
 import { compileSfc, evaluateSource } from "../../../support/module/loader";
 
 import {
@@ -7,6 +8,7 @@ import {
   findNode,
   insertNode,
   removeNode,
+  visit,
 } from "../../../support/host/renderer";
 import type { PlaylistSummary } from "@/features/playlist/types";
 
@@ -19,6 +21,8 @@ type HostNode = {
   focusCalls: number;
   isConnected: boolean;
   focus: () => void;
+  closest: (selector: string) => HostNode | null;
+  querySelectorAll: (selector: string) => HostNode[];
   contains: (target: unknown) => boolean;
   getBoundingClientRect: () => DOMRect;
 };
@@ -28,7 +32,10 @@ const playlists: PlaylistSummary[] = [
   { id: 2, name: "Target", trackCount: 0, coverTrackId: null },
 ];
 const mountedApps: Array<{ unmount: () => void }> = [];
-const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+const globalNames = ["document", "window", "innerWidth", "innerHeight"] as const;
+const originalGlobals = globalNames.map((name) =>
+  Object.getOwnPropertyDescriptor(globalThis, name),
+);
 const pendingPlaylistIds = Vue.ref<number[]>([]);
 const selectedPlaylistId = Vue.ref<number | null>(1);
 const selectedEvents: PlaylistSummary[] = [];
@@ -58,32 +65,6 @@ function useTestItemFocusList() {
   };
 }
 
-function useTestContextMenu(elements: {
-  menuElement: Vue.Ref<HostNode | null>;
-  firstMenuItemElement: Vue.Ref<HostNode | null>;
-  fallbackFocusElement: Vue.Ref<HostNode | null>;
-}) {
-  const request = Vue.shallowRef<{
-    x: number;
-    y: number;
-    trigger: HostNode;
-    payload: number;
-  } | null>(null);
-  const position = Vue.reactive({ x: 0, y: 0 });
-  function open(nextRequest: NonNullable<typeof request.value>) {
-    request.value = nextRequest;
-    position.x = nextRequest.x;
-    position.y = nextRequest.y;
-    void Vue.nextTick(() => elements.firstMenuItemElement.value?.focus());
-  }
-  function close(restoreFocus = false) {
-    const previousRequest = request.value;
-    request.value = null;
-    if (restoreFocus) void Vue.nextTick(() => previousRequest?.trigger.focus());
-  }
-  return { request: Vue.computed(() => request.value), position, open, close };
-}
-
 const icon = Vue.defineComponent({ setup: () => () => null });
 const TrackArtwork = Vue.defineComponent({
   setup(_, { slots }) {
@@ -110,7 +91,7 @@ const playlistList = createComponent(
   "playlist-list-context-test",
   {
     vue: Vue,
-    "@/shared/interaction/useContextMenu": { useContextMenu: useTestContextMenu },
+    "@/shared/interaction/useContextMenu": contextMenuModule,
     "@/shared/interaction/item/useSelection": { useItemSelection: useTestItemFocusList },
     "@/features/playlist/list/PlaylistRow.vue": {
       __esModule: true,
@@ -132,6 +113,27 @@ function createHostNode(type: string, text = ""): HostNode {
       node.focusCalls += 1;
       focusedNode = node;
     },
+    closest(selector) {
+      let current: HostNode | null = node;
+      while (current) {
+        if (selector === '[role="menu"]' && current.props.role === "menu") return current;
+        current = current.parent;
+      }
+      return null;
+    },
+    querySelectorAll(selector) {
+      const matches: HostNode[] = [];
+      visit(node, (candidate) => {
+        if (
+          selector === '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])' &&
+          candidate.props.role === "menuitem" &&
+          !candidate.props.disabled &&
+          candidate.props["aria-disabled"] !== "true"
+        )
+          matches.push(candidate);
+      });
+      return matches;
+    },
     contains(target) {
       let current = target;
       while (current && typeof current === "object") {
@@ -143,7 +145,7 @@ function createHostNode(type: string, text = ""): HostNode {
     getBoundingClientRect: () =>
       ({ left: 20, top: 30, right: 220, bottom: 130, width: 200, height: 100 }) as DOMRect,
   };
-  return node;
+  return Vue.markRaw(node);
 }
 
 function mountPlaylistList() {
@@ -221,16 +223,22 @@ beforeEach(() => {
   deleteEvents.length = 0;
   focusedNode = null;
   focusItemCalls = [];
-  Object.defineProperty(globalThis, "window", {
-    configurable: true,
-    value: { addEventListener() {}, removeEventListener() {} },
-  });
+  for (const [name, value] of Object.entries({
+    document: { addEventListener() {}, removeEventListener() {} },
+    window: { addEventListener() {}, removeEventListener() {} },
+    innerWidth: 1024,
+    innerHeight: 768,
+  }))
+    Object.defineProperty(globalThis, name, { configurable: true, value });
 });
 
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
-  if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
-  else Reflect.deleteProperty(globalThis, "window");
+  globalNames.forEach((name, index) => {
+    const descriptor = originalGlobals[index];
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+    else Reflect.deleteProperty(globalThis, name);
+  });
 });
 
 describe("歌单列表上下文菜单", () => {

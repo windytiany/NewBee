@@ -131,7 +131,6 @@ type QueueContextMenuPayload = { rowKey: string; targetRowKeys: string[] };
 const headingElement = ref<InstanceType<typeof globalThis.HTMLHeadingElement> | null>(null);
 const listElement = ref<InstanceType<typeof globalThis.HTMLUListElement> | null>(null);
 const queueContextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
-const firstMenuItemElement = ref<globalThis.HTMLElement | null>(null);
 const {
   request: contextMenu,
   position: menuPosition,
@@ -139,7 +138,6 @@ const {
   close: closeQueueContextMenu,
 } = useContextMenu<QueueContextMenuPayload>({
   menuElement: queueContextMenuElement,
-  firstMenuItemElement,
   fallbackFocusElement: headingElement,
 });
 
@@ -205,12 +203,6 @@ function openQueueContextMenu(request: QueueContextMenuTrigger) {
   const targetRowKeys = queueFocus.contextMenuTargets(request.rowKey, visibleRowKeys.value);
   if (targetRowKeys.length === 0) return;
   openContextMenu({ ...request, payload: { rowKey: request.rowKey, targetRowKeys } });
-  void nextTick(() => {
-    firstMenuItemElement.value =
-      queueContextMenuElement.value?.querySelector<globalThis.HTMLElement>(
-        'button[role="menuitem"]:not(:disabled)',
-      ) ?? null;
-  });
 }
 
 function playContextMenuItem() {

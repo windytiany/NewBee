@@ -10,7 +10,6 @@ type ContextMenuRequest<Payload> = {
 
 type ContextMenuElements = {
   menuElement: Readonly<Ref<HTMLElement | null>>;
-  firstMenuItemElement: Readonly<Ref<HTMLElement | null>>;
   fallbackFocusElement: Readonly<Ref<HTMLElement | null>>;
 };
 
@@ -108,7 +107,16 @@ async function positionAndFocus<Payload>(
 
   await nextTick();
   if (isCurrentRequest(controller, request, generation)) {
-    controller.elements.firstMenuItemElement.value?.focus({ preventScroll: true });
+    const menu = controller.elements.menuElement.value;
+    if (!menu) return;
+
+    menu.tabIndex = -1;
+    const firstItem = Array.from(
+      menu.querySelectorAll<HTMLElement>(
+        '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])',
+      ),
+    ).find((item) => item.closest('[role="menu"]') === menu);
+    (firstItem ?? menu).focus({ preventScroll: true });
   }
 }
 

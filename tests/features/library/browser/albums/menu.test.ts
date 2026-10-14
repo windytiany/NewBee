@@ -12,6 +12,8 @@ type HostNode = {
   text: string;
   isConnected: boolean;
   focus: () => void;
+  closest: (selector: string) => HostNode | null;
+  querySelectorAll: (selector: string) => HostNode[];
   getBoundingClientRect: () => DOMRect;
 };
 const album = { albumArtist: "Artist", album: "Album" };
@@ -52,17 +54,31 @@ const modules: Record<string, unknown> = {
 };
 const AlbumContextMenu = evaluateSource<{ default: Vue.Component }>(output, modules).default;
 
-function createNode(): HostNode {
-  return {
+function createNode(text = ""): HostNode {
+  return Vue.markRaw<HostNode>({
     props: {},
     children: [],
     parent: null,
-    text: "",
+    text,
     isConnected: true,
     focus: () => {},
+    closest(selector) {
+      if (selector === '[role="menu"]' && this.props.role === "menu") return this;
+      return this.parent?.closest(selector) ?? null;
+    },
+    querySelectorAll(selector) {
+      return findNodes(
+        this,
+        (candidate) =>
+          selector === '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])' &&
+          candidate.props.role === "menuitem" &&
+          !candidate.props.disabled &&
+          candidate.props["aria-disabled"] !== "true",
+      );
+    },
     getBoundingClientRect: () =>
       ({ left: 10, top: 10, right: 250, bottom: 250, width: 240, height: 240 }) as DOMRect,
-  };
+  });
 }
 function findNodes(node: HostNode, predicate: (node: HostNode) => boolean): HostNode[] {
   return [
@@ -85,7 +101,7 @@ function mountMenu() {
   const menu = Vue.ref<{
     open: (request: { album: typeof album; x: number; y: number; trigger: HostNode }) => void;
   } | null>(null);
-  const renderer = createHostRenderer((_type, text = "") => ({ ...createNode(), text }), {
+  const renderer = createHostRenderer((_type, text = "") => createNode(text), {
     createComment: () => createNode(),
     remove: (node) => {
       removeNode(node);

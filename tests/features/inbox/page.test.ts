@@ -34,6 +34,7 @@ class Scene {
   }
   scrollIntoView() {}
   closest(selector: string): Scene | null {
+    if (selector === '[role="menu"]' && this.props.role === "menu") return this;
     if (selector === "[data-item-interaction]" && "data-item-interaction" in this.props)
       return this;
     return this.parent?.closest(selector) ?? null;
@@ -47,6 +48,13 @@ class Scene {
   querySelectorAll(selector: string): Scene[] {
     const nodes: Scene[] = [];
     visit<Scene>(this, (node) => {
+      if (
+        selector === '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])' &&
+        node.props.role === "menuitem" &&
+        !node.props.disabled &&
+        node.props["aria-disabled"] !== "true"
+      )
+        nodes.push(node);
       if (
         selector === "button[data-track-select]" &&
         node.type === "button" &&

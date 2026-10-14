@@ -38,14 +38,22 @@ class Scene {
   contains(target: Scene): boolean {
     return target === this || this.children.some((child) => child.contains(target));
   }
-  querySelector(): Scene | null {
-    return findNode<Scene>(
-      this,
-      (node) => node.type === "button" && node.props.role === "menuitem" && !node.props.disabled,
-    );
+  closest(selector: string): Scene | null {
+    if (selector === '[role="menu"]' && this.props.role === "menu") return this;
+    return this.parent?.closest(selector) ?? null;
   }
-  querySelectorAll(): Scene[] {
-    return [];
+  querySelectorAll(selector: string): Scene[] {
+    const matches: Scene[] = [];
+    visit<Scene>(this, (node) => {
+      if (
+        selector === '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])' &&
+        node.props.role === "menuitem" &&
+        !node.props.disabled &&
+        node.props["aria-disabled"] !== "true"
+      )
+        matches.push(node);
+    });
+    return matches;
   }
 }
 beforeEach(() => {

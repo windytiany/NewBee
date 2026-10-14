@@ -253,6 +253,7 @@ function createHostNode(type: string, text = ""): HostNode {
     closest(selector) {
       let current: HostNode | null = node;
       while (current) {
+        if (selector === '[role="menu"]' && current.props.role === "menu") return current;
         if (
           selector === "[data-item-interaction]" &&
           Object.prototype.hasOwnProperty.call(current.props, "data-item-interaction")
@@ -285,6 +286,13 @@ function createHostNode(type: string, text = ""): HostNode {
       const matches: HostNode[] = [];
       visit(node, (candidate) => {
         if (
+          selector === '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])' &&
+          candidate.props.role === "menuitem" &&
+          !candidate.props.disabled &&
+          candidate.props["aria-disabled"] !== "true"
+        )
+          matches.push(candidate);
+        if (
           selector === "[data-playlist-item-id]" &&
           Object.prototype.hasOwnProperty.call(candidate.props, "data-playlist-item-id")
         ) {
@@ -294,7 +302,7 @@ function createHostNode(type: string, text = ""): HostNode {
       return matches;
     },
   };
-  return node;
+  return Vue.markRaw(node);
 }
 
 function mountPlaylistBrowser() {
@@ -518,6 +526,39 @@ describe("歌单曲目上下文菜单", () => {
     expect(addToQueueEndCalls).toEqual([[102]]);
   });
 
+  it("菜单全禁用时聚焦容器并更新右键曲目的逻辑焦点", async () => {
+    const root = mountPlaylistBrowser();
+    const first = findTrackButton(root, 101);
+    const second = findTrackButton(root, 102);
+    if (!first || !second) throw new Error("Playlist rows were not rendered.");
+    clickNode(first);
+    isPlaylistActionPending.value = true;
+    await settle();
+
+    openContextMenu(second);
+    await settle();
+
+    const menu = findNode(root, (node) => node.props.role === "menu");
+    if (!menu) throw new Error("Playlist menu was not rendered.");
+    const items: HostNode[] = [];
+    visit(menu, (node) => {
+      if (node.props.role === "menuitem") items.push(node);
+    });
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((node) => node.props.disabled === true)).toBe(true);
+    expect(focusedNode).toBe(menu);
+    expect(itemSelection.focusedItem.value?.itemKey).toBe("102");
+    expect(itemSelection.selection.value?.selectedItemKeys).toEqual(["102"]);
+
+    isPlaylistActionPending.value = false;
+    await settle();
+    expect(focusedNode).toBe(menu);
+    openContextMenu(second);
+    await settle();
+    expect(focusedNode).toBe(findMenuItem(root, "添加为下一首"));
+    expect(itemSelection.focusedItem.value?.itemKey).toBe("102");
+  });
+
   it("键盘打开菜单后按 Escape 关闭并将焦点还给触发行", async () => {
     const root = mountPlaylistBrowser();
     const second = findTrackButton(root, 102);
@@ -526,6 +567,7 @@ describe("歌单曲目上下文菜单", () => {
     openContextMenu(second, true);
     await settle();
     expect(findMenuItem(root, "添加为下一首")).not.toBeNull();
+    expect(focusedNode).toBe(findMenuItem(root, "添加为下一首"));
 
     (globalThis.document as unknown as ReturnType<typeof createDocumentTarget>).dispatch(
       "keydown",

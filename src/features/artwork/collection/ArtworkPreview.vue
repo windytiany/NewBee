@@ -46,7 +46,6 @@
       @pointerdown.stop
     >
       <button
-        ref="firstMenuItemElement"
         type="button"
         role="menuitem"
         :disabled="disabled || status !== 'ready' || transferring || selection.mixed"
@@ -83,7 +82,6 @@ const { url, data, status, error } = usePicture(() =>
 const transferring = ref(false);
 const pictureElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const menuElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
-const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const {
   request: contextMenu,
   position: menuPosition,
@@ -91,7 +89,6 @@ const {
   close: closeMenu,
 } = useContextMenu<null>({
   menuElement,
-  firstMenuItemElement,
   fallbackFocusElement: pictureElement,
 });
 function openContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
