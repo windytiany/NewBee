@@ -18,6 +18,10 @@ function load(
         },
       },
       "@tauri-apps/plugin-dialog": {
+        open: async (options: Record<string, unknown>) => {
+          dialogs.push(options);
+          return choose(options);
+        },
         save: async (options: Record<string, unknown>) => {
           dialogs.push(options);
           return choose(options);
@@ -74,7 +78,7 @@ describe("cover transfer", () => {
       (command) => (command === "artwork_extensions" ? ["jpg", "jpeg"] : undefined),
       async () => "D:/cover.jpg",
     );
-    await api.saveCover(data, () => true);
+    expect(await api.saveCover(data, () => true)).toBe("D:/cover.jpg");
     expect(dialogs).toEqual([
       {
         title: "保存封面",
@@ -135,5 +139,28 @@ describe("cover transfer", () => {
     ];
     for (const { api } of failures)
       await expect(api.saveCover([1], () => true)).rejects.toBe(error);
+  });
+  it("selects the actual native path and validates/reads its bytes on the backend", async () => {
+    const { api, calls, dialogs } = load(
+      () => [9, 8],
+      async () => "D:/actual.png",
+    );
+    const selected = await api.selectCover();
+    expect(selected?.path).toBe("D:/actual.png");
+    expect(Array.from(selected?.data ?? [])).toEqual([9, 8]);
+    expect(calls).toEqual([{ command: "read_artwork_file", args: { path: "D:/actual.png" } }]);
+    expect(dialogs).toEqual([{ title: "添加图片", multiple: false, directory: false }]);
+    const cancelled = load(() => {
+      throw new Error("must not read");
+    });
+    expect(await cancelled.api.selectCover()).toBeNull();
+    expect(cancelled.calls).toEqual([]);
+    const failed = load(
+      () => {
+        throw new Error("invalid image");
+      },
+      async () => "D:/invalid.png",
+    );
+    await expect(failed.api.selectCover()).rejects.toThrow("invalid image");
   });
 });

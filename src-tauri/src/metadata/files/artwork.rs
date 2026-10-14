@@ -16,7 +16,7 @@ pub(crate) fn read_collection(audio: &Path) -> Scan {
     }
 }
 
-fn read_embedded_pictures(audio: &Path) -> Result<Vec<Picture>, String> {
+pub(crate) fn read_embedded_pictures(audio: &Path) -> Result<Vec<Picture>, String> {
     let file = super::read_file(audio)?;
     pictures_from_file(&file)
 }

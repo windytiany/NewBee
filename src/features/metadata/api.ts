@@ -39,10 +39,9 @@ export function createMetadataApi(invokeCommand: typeof invoke = invoke) {
       lyricsAction: LyricsMarkAction,
       operationId?: string,
       artworkDrafts: ArtworkDraft[] = [],
-      embedArtwork = false,
     ) => {
       return invokeCommand<MetadataSaveResult[]>("save_track_metadata", {
-        request: { trackIds, changes, lyricsAction, artworkDrafts, embedArtwork },
+        request: { trackIds, changes, lyricsAction, artworkDrafts },
         onProgress,
         ...(operationId ? { operationId } : {}),
       });

@@ -92,7 +92,7 @@ function mountDialog(
 ) {
   const saved: TagChange[][] = [];
   const savedActions: string[] = [];
-  const savedArtwork: Array<{ drafts: ArtworkDraft[]; embed: boolean }> = [];
+  const savedArtwork: Array<{ drafts: ArtworkDraft[] }> = [];
   const editor = createTagEditor({
     loadTracks: async (ids) =>
       ids.map((id) => ({
@@ -109,12 +109,14 @@ function mountDialog(
         displayIndex: null,
         error: null,
       })),
+    planArtwork: async (drafts) =>
+      drafts.map(({ trackId }) => ({ trackId, fileWriteRequired: true, error: null })),
     readArtwork: async () => {
       throw new Error("No artwork in this fixture");
     },
     loadAlbum: async () => [1, 2],
-    save: async (ids, changes, _progress, action, _operation, drafts, embed) => {
-      savedArtwork.push({ drafts, embed });
+    save: async (ids, changes, _progress, action, _operation, drafts) => {
+      savedArtwork.push({ drafts });
       saved.push(changes);
       savedActions.push(action);
       return ids.map((trackId) => ({
@@ -132,6 +134,8 @@ function mountDialog(
     compileSfc(dialogSource, "TagEditorDialog.vue"),
     {
       vue: Vue,
+      "@tauri-apps/api/core": { isTauri: () => false },
+      "@/features/artwork/collection/useDrop": { usePictureDrop: () => Vue.ref(null) },
       "@/features/metadata/manual/useEditor": { useTagEditor: () => editor },
       "@/features/lyrics/download/batch": {
         useLyricsBatch: () => ({ state: { running: downloading } }),
@@ -144,7 +148,7 @@ function mountDialog(
           ]),
       }),
       "@/features/artwork/collection/ArtworkPreview.vue": Vue.defineComponent({
-        props: { selection: Object, disabled: Boolean, exportable: Boolean },
+        props: { selection: Object, disabled: Boolean, exportable: Boolean, exportMenu: Boolean },
         setup:
           (props, { slots }) =>
           () =>
@@ -155,6 +159,7 @@ function mountDialog(
                 "data-mixed": props.selection?.mixed,
                 "data-disabled": props.disabled,
                 "data-exportable": props.exportable,
+                "data-export-menu": props.exportMenu,
               },
               [slots.details?.(), slots.actions?.({ save: () => {}, disabled: props.disabled })],
             ),
@@ -162,6 +167,7 @@ function mountDialog(
       "@/features/artwork/transfer": {
         readClipboardCover: async () => [1, 2, 3],
         pictureMimeType: async () => "image/png",
+        selectCover: async () => ({ path: "D:/cover.png", data: Uint8Array.from([1, 2, 3]) }),
       },
       "@/features/tracks/format": { formatTrackDuration: () => "0:01" },
     },
@@ -209,6 +215,8 @@ describe("metadata editor views", () => {
     if (!tags) throw new Error("Missing tags panel");
     const preview = findNode(tags, (node) => node.props["data-artwork-preview"] === true);
     expect(preview?.props["data-exportable"]).toBe(true);
+    expect(preview?.props["data-export-menu"]).toBe(true);
+    expect(getTextContent(tags)).not.toContain("保存封面");
     expect(preview?.parent?.children.indexOf(preview)).toBe(0);
     expect(findNode(tags, (node) => node.props.type === "file")).toBeNull();
     expect(getTextContent(tags)).not.toContain("添加图片");
@@ -216,7 +224,69 @@ describe("metadata editor views", () => {
     (tab?.props.onClick as () => void)();
     await settle();
     expect(tab?.props["aria-selected"]).toBe(true);
-    expect(findNode(root, (node) => node.props.type === "file")?.props.disabled).toBe(false);
+    expect(
+      findNode(root, (node) => node.type === "button" && getTextContent(node) === "添加")?.props
+        .disabled,
+    ).toBe(false);
+    expect(editor.state.dirty).toBe(false);
+  });
+
+  it("blocks global save and close while a picture awaits confirmation and restores them on cancel", async () => {
+    const { editor, root, saved } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    (
+      findNode(root, (node) => node.props.id === "metadata-tab-artwork")?.props
+        .onClick as () => void
+    )();
+    await settle();
+    (
+      findNode(root, (node) => node.type === "button" && getTextContent(node) === "添加")?.props
+        .onClick as () => void
+    )();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
+    const outer = findNode(
+      root,
+      (node) => node.props["aria-labelledby"] === "metadata-editor-title",
+    );
+    const addition = findNode(
+      root,
+      (node) => node.type === "dialog" && node.props["aria-label"] === "添加图片",
+    );
+    expect(addition).not.toBeNull();
+    const save = findNode(
+      root,
+      (node) => node.props.form === "metadata-editor-form" && node.props.type === "submit",
+    );
+    expect(save?.props.disabled).toBe(true);
+    const outerCancel = findNode(
+      outer!,
+      (node) =>
+        node.type === "button" && getTextContent(node) === "取消" && node.parent?.type === "footer",
+    );
+    expect(outerCancel?.props.disabled).toBe(true);
+    (
+      findNode(root, (node) => node.props.id === "metadata-editor-form")?.props.onSubmit as (
+        event: object,
+      ) => void
+    )({ preventDefault() {} });
+    (outer?.props.onCancel as (event: object) => void)({ preventDefault() {} });
+    expect(saved).toEqual([]);
+    expect(editor.state.open).toBe(true);
+    expect(editor.state.confirmDiscard).toBe(false);
+    expect(editor.state.dirty).toBe(false);
+    expect(editor.state.artwork.tracks[0]?.pictures).toEqual([]);
+    (
+      findNode(addition!, (node) => node.type === "button" && getTextContent(node) === "取消")
+        ?.props.onClick as () => void
+    )();
+    await settle();
+    expect(
+      findNode(root, (node) => node.type === "dialog" && node.props["aria-label"] === "添加图片"),
+    ).toBeNull();
+    expect(save?.props.disabled).toBe(false);
+    expect(outerCancel?.props.disabled).toBe(false);
     expect(editor.state.dirty).toBe(false);
   });
 
@@ -628,7 +698,7 @@ describe("metadata editor views", () => {
     );
   });
 
-  it("saves DB-only picture edits with read-only tags and embeds unchanged collections only when checked", async () => {
+  it("saves picture edits with read-only tags without a global embedding checkbox", async () => {
     const collections: ArtworkCollection[] = [1, 2].map((trackId) => ({
       trackId,
       pictures: [
@@ -637,13 +707,21 @@ describe("metadata editor views", () => {
           mimeType: "image/png",
           byteLength: 3,
           pictureType: 3,
-          embedded: false,
+          artworkId: trackId * 10 + 1,
+          source: "embedded",
+          path: "",
+          error: null,
         },
       ],
       displayIndex: 0,
       error: null,
     }));
-    for (const embedding of [false, true]) {
+    for (const storage of ["embedded", "manual"] as const) {
+      for (const collection of collections)
+        for (const picture of collection.pictures) {
+          picture.source = storage;
+          picture.path = storage === "manual" ? "/covers/shared.png" : "";
+        }
       const { editor, root, saved, savedArtwork } = mountDialog(
         true,
         false,
@@ -656,18 +734,11 @@ describe("metadata editor views", () => {
       const tab = findNode(root, (node) => node.props.id === "metadata-tab-artwork");
       (tab?.props.onClick as () => void)();
       await settle();
-      if (embedding) {
-        const checkbox = findNode(root, (node) => node.props.type === "checkbox");
-        expect(checkbox?.props.checked).toBe(false);
-        (checkbox?.props.onChange as (event: { target: { checked: boolean } }) => void)({
-          target: { checked: true },
-        });
-      } else {
-        const type = findNode(root, (node) => node.type === "select");
-        (type?.props.onChange as (event: { target: { value: string } }) => void)({
-          target: { value: "4" },
-        });
-      }
+      expect(findNode(root, (node) => node.props.type === "checkbox")).toBeNull();
+      const type = findNode(root, (node) => node.type === "select");
+      (type?.props.onChange as (event: { target: { value: string } }) => void)({
+        target: { value: "4" },
+      });
       await settle();
       expect(findNode(root, (node) => node.props.type === "submit")?.props.disabled).toBe(false);
       const form = findNode(root, (node) => node.type === "form");
@@ -677,18 +748,17 @@ describe("metadata editor views", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       await settle();
       expect(saved).toEqual([[]]);
-      expect(savedArtwork[0]?.embed).toBe(embedding);
+      expect(savedArtwork[0]?.drafts).toHaveLength(2);
       expect(savedArtwork[0]?.drafts).toEqual(
         [1, 2].map((trackId) => ({
           trackId,
-          pictures: [{ source: "existing", contentId: "shared", pictureType: embedding ? 3 : 4 }],
+          pictures: [{ source: "existing", artworkId: trackId * 10 + 1, pictureType: 4 }],
           displayIndex: 0,
         })),
       );
       expect(editor.state.open).toBe(false);
       await editor.openTracks([1, 2]);
       await settle();
-      expect(editor.state.embedArtwork).toBe(false);
     }
   });
 
@@ -696,7 +766,6 @@ describe("metadata editor views", () => {
     const { editor, root, savedArtwork } = mountDialog(true);
     await editor.openTracks([1]);
     await editor.addPicture(Uint8Array.from([8]), "image/png");
-    editor.changeEmbedArtwork(true);
     await settle();
     editor.requestClose();
     await settle();
@@ -710,7 +779,6 @@ describe("metadata editor views", () => {
     expect(savedArtwork).toEqual([]);
     await editor.openTracks([1]);
     await settle();
-    expect(editor.state.embedArtwork).toBe(false);
     expect(editor.pictures.value).toEqual([]);
   });
 

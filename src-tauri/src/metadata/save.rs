@@ -86,10 +86,11 @@ fn persist_track(
                 value: None,
             });
         }
-        if !effective_changes.is_empty()
-            || cover.is_some()
-            || artwork.is_some_and(|artwork| artwork.embed)
-        {
+        let write_artwork = artwork
+            .map(|artwork| artwork.requires_file_write(Path::new(track.path())))
+            .transpose()?
+            .unwrap_or(false);
+        if !effective_changes.is_empty() || cover.is_some() || write_artwork {
             database.begin_track_inspection(track_id)?;
             let path = Path::new(track.path());
             if let Some(cover) = cover {
@@ -101,13 +102,11 @@ fn persist_track(
                         None => files::CoverAction::Delete,
                     }),
                 )?;
-            } else if artwork.is_some_and(|artwork| artwork.embed) {
+            } else if write_artwork {
                 files::write_file_with_pictures(
                     path,
                     &effective_changes,
-                    artwork
-                        .filter(|artwork| artwork.embed)
-                        .map(|artwork| artwork.pictures.as_slice()),
+                    artwork.map(|artwork| artwork.pictures.as_slice()),
                 )?;
             } else {
                 files::write_file(path, &effective_changes)?;
@@ -120,6 +119,7 @@ fn persist_track(
         }
         let synchronize = (|| {
             if !result.file_written
+                && !artwork.is_some_and(|artwork| artwork.embedded_changed)
                 && effective_changes.is_empty()
                 && action == LyricsMarkAction::Keep
             {
@@ -127,14 +127,15 @@ fn persist_track(
                     return database.save_artwork_drafts(&[(track_id, artwork.draft.clone())]);
                 }
             }
-            let confirmed = if result.file_written {
-                Some(
-                    files::read_track_metadata(Path::new(track.path()))?
-                        .ok_or_else(|| "写后文件格式不支持快照".to_owned())?,
-                )
-            } else {
-                None
-            };
+            let confirmed =
+                if result.file_written || artwork.is_some_and(|artwork| artwork.embedded_changed) {
+                    Some(
+                        files::read_track_metadata(Path::new(track.path()))?
+                            .ok_or_else(|| "写后文件格式不支持快照".to_owned())?,
+                    )
+                } else {
+                    None
+                };
             database.update_metadata_cover_and_lyrics(
                 track_id,
                 &effective_changes,

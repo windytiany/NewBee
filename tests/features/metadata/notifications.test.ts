@@ -56,9 +56,7 @@ describe("tag business notifications", () => {
       writeTrackIds: [1, 2],
       execute: async () => [result(1), result(2, false)],
     });
-    expect(notifications.items.value[0]?.message).toBe(
-      "Tags saved: 1 succeeded, 1 failed. Metadata saved, but the interface could not be refreshed.",
-    );
+    expect(notifications.items.value[0]?.message).toBe("1 succeeded, 1 failed");
     expect(save.state.synchronizationError).toBe(
       "Metadata saved, but the interface could not be refreshed: refresh failed",
     );
@@ -107,7 +105,7 @@ describe("tag business notifications", () => {
         expect(notification?.message).not.toContain("/music/");
         expect(notification?.message).not.toContain("request failed");
         if (outcome === "interrupted") {
-          expect(notification?.message).toContain("界面刷新失败");
+          expect(notification?.message).toBe("1 首成功，1 首失败");
           expect(saved[1]?.error).toBe("request failed");
           expect(save.state.synchronizationError).toContain("refresh failed");
         }
@@ -149,6 +147,8 @@ describe("tag business notifications", () => {
             displayIndex: null,
             error: null,
           })),
+        planArtwork: async (drafts) =>
+          drafts.map(({ trackId }) => ({ trackId, fileWriteRequired: true, error: null })),
         readArtwork: async () => {
           throw new Error("No artwork in this fixture");
         },

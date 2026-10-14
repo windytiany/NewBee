@@ -21,6 +21,7 @@ import type {
   MetadataSaveResult,
 } from "@/features/metadata/types";
 
+import { planCollectionWrites } from "@/features/artwork/collection/plan";
 import { createArtworkCollectionApi } from "@/features/artwork/collection/api";
 import { createTracksApi } from "@/features/tracks/api";
 import { createManualLoading } from "@/features/metadata/manual/loading";
@@ -38,13 +39,15 @@ import {
 import type {
   ArtworkCollection,
   ArtworkDraft,
+  ArtworkWritePlan,
   CollectionDraft,
 } from "@/features/artwork/collection/types";
 
 export type TagEditorOptions = {
   loadTracks: (trackIds: MetadataTarget[]) => Promise<EditableTrack[]>;
   loadCollections: (trackIds: number[]) => Promise<ArtworkCollection[]>;
-  readArtwork: (contentId: string) => Promise<ArrayBuffer>;
+  readArtwork: (artworkId: number) => Promise<ArrayBuffer>;
+  planArtwork: (artworkDrafts: ArtworkDraft[]) => Promise<ArtworkWritePlan[]>;
   loadAlbum: (album: LibraryAlbumSelection) => Promise<MetadataTarget[]>;
   save: (
     trackIds: number[],
@@ -53,7 +56,6 @@ export type TagEditorOptions = {
     lyricsAction: LyricsMarkAction,
     operationId: string | undefined,
     artworkDrafts: ArtworkDraft[],
-    embedArtwork: boolean,
   ) => Promise<MetadataSaveResult[]>;
   editFiles: MetadataFileEditor;
   synchronize: (trackIds: MetadataTarget[]) => Promise<void>;
@@ -87,7 +89,6 @@ export function createTagEditor(options: TagEditorOptions) {
     dirty: false,
     lyricsAction: "keep" as LyricsMarkAction,
     artwork: { tracks: [] } as CollectionDraft,
-    embedArtwork: false,
     importingArtwork: false,
     confirmDiscard: false,
   });
@@ -104,7 +105,6 @@ export function createTagEditor(options: TagEditorOptions) {
   let pendingChanges: TagChange[] = [];
   let pendingTrackIds: number[] = [];
   let pendingArtwork: ArtworkDraft[] = [];
-  let pendingEmbedArtwork = false;
   let pendingLyricsAction: LyricsMarkAction = "keep";
   const pendingArtworkReload = new Set<number>();
 
@@ -126,7 +126,6 @@ export function createTagEditor(options: TagEditorOptions) {
       dirty: false,
       lyricsAction: "keep",
       artwork: { tracks: [] },
-      embedArtwork: false,
       importingArtwork: false,
       confirmDiscard: false,
       results: [],
@@ -251,11 +250,18 @@ export function createTagEditor(options: TagEditorOptions) {
       reportError("editor_artwork_failed", error);
     }
   }
-  async function importPicture(data: Uint8Array, mimeType: string, pictureType = 3) {
+  async function importPicture(data: Uint8Array, mimeType: string, pictureType = 3, path?: string) {
     if (state.loading || state.saving || state.importingArtwork || !artworkReady.value) return;
     state.importingArtwork = true;
     try {
-      const key = await addPicture(state.artwork, data, mimeType, options.readArtwork, pictureType);
+      const key = await addPicture(
+        state.artwork,
+        data,
+        mimeType,
+        options.readArtwork,
+        pictureType,
+        path,
+      );
       edited();
       return key;
     } catch (error) {
@@ -281,7 +287,8 @@ export function createTagEditor(options: TagEditorOptions) {
     } catch (error) {
       for (const track of state.artwork.tracks)
         if (pendingArtworkReload.has(track.trackId)) track.error = errorMessage(error);
-      reportError("editor_artwork_failed", error);
+      state.error = errorMessage(error);
+      logger.error("metadata", "editor_artwork_refresh_failed", error);
     } finally {
       state.saving = false;
     }
@@ -306,15 +313,19 @@ export function createTagEditor(options: TagEditorOptions) {
         void retrySynchronization();
         return;
       }
-      pendingEmbedArtwork = state.embedArtwork;
-      pendingArtwork = serializeCollections(state.artwork, pendingEmbedArtwork).filter(
-        ({ trackId }) => pendingTrackIds.includes(trackId),
+      pendingArtwork = serializeCollections(state.artwork).filter(({ trackId }) =>
+        pendingTrackIds.includes(trackId),
       );
       pendingLyricsAction = state.lyricsAction;
       pendingChanges = buildTagChanges(state.draft, state.tracks, {
         changedOnly: true,
-        allowEmpty: pendingLyricsAction !== "keep" || pendingArtwork.length > 0,
+        allowEmpty: state.dirty || pendingLyricsAction !== "keep" || pendingArtwork.length > 0,
       });
+      if (!pendingChanges.length && pendingLyricsAction === "keep" && !pendingArtwork.length) {
+        state.dirty = false;
+        void retrySynchronization();
+        return;
+      }
       if (pendingLyricsAction === "mark")
         pendingChanges = pendingChanges.filter(({ field }) => field !== "lyrics");
       void save();
@@ -333,36 +344,51 @@ export function createTagEditor(options: TagEditorOptions) {
         ? [{ trackId: track.id, path: track.path }]
         : [],
     );
-    const writeIds = state.tracks.flatMap(({ track }) => {
-      if (typeof track.id !== "number" || !ids.includes(track.id)) return [];
-      if (
-        changes.length ||
-        action === "mark" ||
-        (pendingEmbedArtwork && pendingArtwork.some((draft) => draft.trackId === track.id))
-      )
-        return [track.id];
-      return [];
-    });
+    let saveIds = ids;
     await saving.run({
       targets,
-      writeTrackIds: writeIds,
+      writeTrackIds: ids.filter(() => changes.length || action === "mark"),
+      prepareWriteTrackIds: pendingArtwork.length
+        ? async (progress) => {
+            const plan = await planCollectionWrites(pendingArtwork, options.planArtwork);
+            const failed = new Set<number>();
+            const artworkWrites = new Set<number>();
+            for (const entry of plan) {
+              if (entry.error !== null) {
+                failed.add(entry.trackId);
+                progress({
+                  trackId: entry.trackId,
+                  path: targets.find(({ trackId }) => trackId === entry.trackId)?.path ?? "",
+                  fileWritten: false,
+                  databaseUpdated: false,
+                  error: entry.error,
+                });
+              } else if (entry.fileWriteRequired) artworkWrites.add(entry.trackId);
+            }
+            saveIds = ids.filter((id) => !failed.has(id));
+            return saveIds.filter(
+              (id) => changes.length || action === "mark" || artworkWrites.has(id),
+            );
+          }
+        : undefined,
       execute: (progress, operationId) =>
-        options.save(
-          ids,
-          changes,
-          progress,
-          action,
-          operationId,
-          pendingArtwork,
-          pendingEmbedArtwork,
-        ),
+        saveIds.length
+          ? options.save(
+              saveIds,
+              changes,
+              progress,
+              action,
+              operationId,
+              pendingArtwork.filter(({ trackId }) => saveIds.includes(trackId)),
+            )
+          : Promise.resolve([]),
     });
     const successfulIds = state.results.flatMap((result) =>
       typeof result.trackId === "number" && ids.includes(result.trackId) && metadataSaved(result)
         ? [result.trackId]
         : [],
     );
-    acceptCollectionChanges(state.artwork, successfulIds, pendingEmbedArtwork);
+    acceptCollectionChanges(state.artwork, successfulIds);
     for (const { trackId } of pendingArtwork)
       if (successfulIds.includes(trackId)) pendingArtworkReload.add(trackId);
     await reloadSavedArtwork();
@@ -388,10 +414,6 @@ export function createTagEditor(options: TagEditorOptions) {
       changeArtwork(() => changePictureType(state.artwork, key, pictureType)),
     deletePicture: (key: string) => changeArtwork(() => deletePicture(state.artwork, key)),
     setDisplayPicture: (key: string) => changeArtwork(() => setDisplayPicture(state.artwork, key)),
-    changeEmbedArtwork: (enabled: boolean) =>
-      changeArtwork(() => {
-        state.embedArtwork = enabled;
-      }),
     artworkSelectionFailed: (error: unknown) => reportError("editor_artwork_failed", error),
     retrySynchronization,
     edited,
@@ -411,9 +433,10 @@ export function useTagEditor() {
   sharedEditor = createTagEditor({
     loadTracks: createManualLoading(api, createTracksApi(invoke)),
     loadCollections: artwork.collections,
-    readArtwork: artwork.content,
+    readArtwork: artwork.picture,
+    planArtwork: artwork.writePlan,
     loadAlbum: async (album) => (await library.listAlbumTracks(album)).map((track) => track.id),
-    save: (trackIds, changes, progress, lyricsAction, operationId, artworkDrafts, embedArtwork) => {
+    save: (trackIds, changes, progress, lyricsAction, operationId, artworkDrafts) => {
       const onProgress = new Channel<MetadataSaveResult>();
       onProgress.onmessage = progress;
       return api.saveMetadata(
@@ -423,7 +446,6 @@ export function useTagEditor() {
         lyricsAction,
         operationId,
         artworkDrafts,
-        embedArtwork,
       );
     },
     editFiles: session.withMetadataEditing,

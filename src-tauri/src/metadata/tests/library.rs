@@ -318,7 +318,6 @@ fn save_command_retains_each_file_and_database_outcome_when_database_sync_fails(
                 changes: vec![change(MetadataField::Title, Some("new"))],
                 lyrics_action: LyricsMarkAction::Keep,
                 artwork_drafts: Vec::new(),
-                embed_artwork: false,
             },
             tauri::ipc::Channel::new(|_| Ok(())),
             None,
@@ -499,7 +498,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();
-    for (id, expected) in [(1, updated), (2, shared)] {
+    for (id, expected) in [(1, updated), (2, Vec::new())] {
         let tauri::ipc::InvokeResponseBody::Raw(bytes) = invoke(
             &window,
             "get_track_artwork",
@@ -511,5 +510,31 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     }
     assert_eq!(app.state::<Database>().artwork_decode_count(), 0);
     assert!(files::access::take(&fixture.0).is_empty());
+    let collection = app.state::<Database>().get_artwork_collection(2).unwrap();
+    assert_eq!(collection.images.len(), 1);
+    assert_eq!(collection.images[0].source, "directory");
+    assert_eq!(
+        collection.images[0].path,
+        crate::artwork::collection::linked::normalize(&directory_cover.to_string_lossy()).unwrap()
+    );
+    assert!(collection.images[0].error.is_some());
+    std::fs::write(&directory_cover, &red).unwrap();
+    let tauri::ipc::InvokeResponseBody::Raw(restored) = invoke(
+        &window,
+        "get_track_artwork",
+        json!({"trackId":2,"size":128}),
+    ) else {
+        panic!("Expected binary thumbnail")
+    };
+    assert_eq!(restored, shared);
+    assert_eq!(std::fs::read(&directory_cover).unwrap(), red);
+    assert_eq!(app.state::<Database>().artwork_decode_count(), 0);
+    assert!(app
+        .state::<Database>()
+        .get_artwork_collection(2)
+        .unwrap()
+        .images[0]
+        .error
+        .is_none());
     app.state::<Database>().close_test_connection();
 }

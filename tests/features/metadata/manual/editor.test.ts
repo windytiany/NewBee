@@ -53,6 +53,8 @@ function fixture(overrides: Partial<TagEditorOptions> = {}) {
         displayIndex: null,
         error: null,
       })),
+    planArtwork: async (drafts) =>
+      drafts.map(({ trackId }) => ({ trackId, fileWriteRequired: true, error: null })),
     readArtwork: async () => {
       throw new Error("No existing artwork in this fixture");
     },
@@ -506,14 +508,20 @@ function collections(ids: number[]): ArtworkCollection[] {
         mimeType: "image/png",
         byteLength: 1,
         pictureType: trackId === 1 ? 3 : 4,
-        embedded: true,
+        artworkId: trackId * 10,
+        source: "embedded",
+        path: "",
+        error: null,
       },
       {
         contentId: `hidden:${trackId}`,
         mimeType: "image/png",
         byteLength: 1,
         pictureType: 0,
-        embedded: false,
+        artworkId: trackId * 10 + 1,
+        source: "embedded",
+        path: "",
+        error: null,
       },
     ],
     displayIndex: trackId === 1 ? 0 : 1,
@@ -526,14 +534,16 @@ describe("manual artwork collections", () => {
     const editing: MetadataTarget[][] = [];
     const requests: ArtworkDraft[][] = [];
     const { editor } = fixture({
+      planArtwork: async (drafts) =>
+        drafts.map(({ trackId }) => ({ trackId, fileWriteRequired: false, error: null })),
       loadCollections: async (ids) => collections(ids),
       editFiles: (ids, execute) => {
         editing.push([...ids]);
         return execute();
       },
-      save: async (ids, changes, _progress, _action, _operation, drafts, embed) => {
+      save: async (ids, changes, _progress, _action, _operation, drafts) => {
         expect(changes).toEqual([]);
-        expect(embed).toBe(false);
+        expect(drafts).toBeDefined();
         requests.push(drafts);
         return ids.map((id) => ({ ...result(id), fileWritten: false }));
       },
@@ -554,8 +564,8 @@ describe("manual artwork collections", () => {
       [1, 2].map((trackId) => ({
         trackId,
         pictures: [
-          { source: "existing", contentId: "common", pictureType: 5 },
-          { source: "existing", contentId: `hidden:${trackId}`, pictureType: 0 },
+          { source: "existing", artworkId: trackId * 10, pictureType: 5 },
+          { source: "existing", artworkId: trackId * 10 + 1, pictureType: 0 },
         ],
         displayIndex: 0,
       })),
@@ -563,7 +573,7 @@ describe("manual artwork collections", () => {
     expect(editor.state.results.map(({ fileWritten }) => fileWritten)).toEqual([false, false]);
   });
 
-  it("embedding alone sends complete unchanged collections and resets on each open", async () => {
+  it("embedded type edits write audio and saved drafts reset on each open", async () => {
     const editing: MetadataTarget[][] = [];
     const requests: ArtworkDraft[][] = [];
     const { editor } = fixture({
@@ -572,15 +582,15 @@ describe("manual artwork collections", () => {
         editing.push([...ids]);
         return execute();
       },
-      save: async (ids, changes, _progress, _action, _operation, drafts, embed) => {
+      save: async (ids, changes, _progress, _action, _operation, drafts) => {
         expect(changes).toEqual([]);
-        expect(embed).toBe(true);
+        expect(drafts).toBeDefined();
         requests.push(drafts);
         return ids.map((id) => result(id));
       },
     });
     await editor.openTracks([1, 2]);
-    editor.changeEmbedArtwork(true);
+    editor.changePictureType("common", 5);
     expect(editor.state.dirty).toBe(true);
     editor.prepareSave();
     await settle();
@@ -588,7 +598,6 @@ describe("manual artwork collections", () => {
     expect(requests[0]?.map(({ pictures }) => pictures.length)).toEqual([2, 2]);
     expect(editor.state.open).toBe(false);
     await editor.openTracks([1]);
-    expect(editor.state.embedArtwork).toBe(false);
   });
 
   it("deletes common pictures without removing hidden pictures or leaving display empty", async () => {
@@ -614,18 +623,16 @@ describe("manual artwork collections", () => {
       loadCollections: async () => {
         throw new Error("collection read failed");
       },
-      save: async (ids, _changes, _progress, _action, _operation, drafts, embed) => {
+      save: async (ids, _changes, _progress, _action, _operation, drafts) => {
         requests.push(drafts);
-        expect(embed).toBe(false);
+        expect(drafts).toBeDefined();
         return ids.map((id) => result(id));
       },
     });
     await editor.openTracks([1]);
     expect(editor.artworkReady.value).toBe(false);
-    editor.changeEmbedArtwork(true);
     await editor.addPicture(new Uint8Array([1]), "image/png");
     editor.deletePicture("common");
-    expect(editor.state.embedArtwork).toBe(false);
     expect(editor.state.artwork.tracks[0]?.pictures).toEqual([]);
     const field = editor.state.draft.find(({ key }) => key === "title");
     if (!field) throw new Error("Missing title");
@@ -652,7 +659,10 @@ describe("manual artwork collections", () => {
                   mimeType: "image/png",
                   byteLength: 3,
                   pictureType: 3,
-                  embedded: true,
+                  artworkId: trackId * 10,
+                  source: "embedded",
+                  path: "",
+                  error: null,
                 },
               ]
             : [],
@@ -680,7 +690,6 @@ describe("manual artwork collections", () => {
     });
     await editor.openTracks([1, 2]);
     await editor.addPicture(new Uint8Array([1, 2, 3]), "image/png");
-    editor.changeEmbedArtwork(true);
     editor.prepareSave();
     await settle();
     expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([
@@ -690,10 +699,10 @@ describe("manual artwork collections", () => {
     expect(editor.state.results[1]?.error).toContain("interrupted");
     expect(editor.state.artwork.tracks[0]?.pictures[0]?.picture).toEqual({
       source: "existing",
-      contentId: "persisted",
+      artworkId: 10,
       pictureType: 3,
     });
-    expect(editor.state.artwork.tracks[1]?.pictures[0]?.picture.source).toBe("new");
+    expect(editor.state.artwork.tracks[1]?.pictures[0]?.picture.source).toBe("embedded");
     editor.prepareSave();
     await settle();
     expect(calls).toEqual([[1, 2], [2]]);
@@ -755,7 +764,7 @@ describe("manual collection refresh boundaries", () => {
       },
     });
     await editor.openTracks([1]);
-    editor.changeEmbedArtwork(true);
+    editor.changePictureType("common", 5);
     editor.prepareSave();
     await settle();
     expect(editor.state.results[0]?.databaseUpdated).toBe(true);
@@ -792,10 +801,240 @@ describe("manual collection refresh boundaries", () => {
     expect(editor.artworkReady.value).toBe(false);
     expect(editor.pictures.value).toEqual([]);
     editor.changePictureType("common", 5);
-    editor.changeEmbedArtwork(true);
     editor.changeLyricsAction("unmark");
     editor.prepareSave();
     await settle();
     expect(sent).toEqual([[]]);
+  });
+});
+
+describe("artwork file write planning", () => {
+  it("reads the plan before acquiring a lease and guards only the real write IDs", async () => {
+    const editing: MetadataTarget[][] = [];
+    let leased = false;
+    let planned = false;
+    const { editor } = fixture({
+      planArtwork: async (drafts) => {
+        expect(leased).toBe(false);
+        planned = true;
+        return drafts.map(({ trackId }) => ({
+          trackId,
+          fileWriteRequired: trackId === 2,
+          error: null,
+        }));
+      },
+      editFiles: async (ids, execute) => {
+        expect(planned).toBe(true);
+        editing.push([...ids]);
+        leased = true;
+        try {
+          return await execute();
+        } finally {
+          leased = false;
+        }
+      },
+      save: async (ids) => {
+        expect(leased).toBe(true);
+        expect(ids).toEqual([1, 2]);
+        return ids.map((id) => ({ ...result(id), fileWritten: id === 2 }));
+      },
+    });
+    await editor.openTracks([1, 2]);
+    await editor.addPicture(Uint8Array.from([1]), "image/png");
+    editor.prepareSave();
+    await settle();
+    expect(editing).toEqual([[2]]);
+    expect(
+      editor.state.results.map(({ databaseUpdated, fileWritten }) => ({
+        databaseUpdated,
+        fileWritten,
+      })),
+    ).toEqual([
+      { databaseUpdated: true, fileWritten: false },
+      { databaseUpdated: true, fileWritten: true },
+    ]);
+  });
+  it("applies linked additions to every target without guarding playback or embedding the bytes", async () => {
+    const requests: ArtworkDraft[][] = [];
+    const { editor } = fixture({
+      planArtwork: async (drafts) =>
+        drafts.map(({ trackId }) => ({ trackId, fileWriteRequired: false, error: null })),
+      editFiles: () => {
+        throw new Error("DB-only artwork must not release playback");
+      },
+      save: async (ids, _changes, _progress, _action, _operation, drafts) => {
+        requests.push(drafts);
+        return ids.map((id) => ({ ...result(id), fileWritten: false }));
+      },
+    });
+    await editor.openTracks([1, 2]);
+    await editor.addPicture(Uint8Array.from([1]), "image/png", 3, "D:/cover.png");
+    editor.prepareSave();
+    await settle();
+    expect(requests[0]).toEqual(
+      [1, 2].map((trackId) => ({
+        trackId,
+        pictures: [{ source: "linked", path: "D:/cover.png", pictureType: 3 }],
+        displayIndex: 0,
+      })),
+    );
+    expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
+  });
+  it("closes without writing when a linked addition is deleted before saving", async () => {
+    const { editor, saves, synchronized } = fixture({
+      planArtwork: async () => {
+        throw new Error("No changes to plan");
+      },
+      editFiles: () => {
+        throw new Error("No files to write");
+      },
+    });
+    await editor.openTracks([1]);
+    const key = await editor.addPicture(Uint8Array.from([1]), "image/png", 3, "D:/cover.png");
+    if (!key) throw new Error("Missing picture");
+    editor.deletePicture(key);
+    editor.prepareSave();
+    await settle();
+    expect(editor.state.error).toBe("");
+    expect(editor.state.open).toBe(false);
+    expect(editor.state.dirty).toBe(false);
+    expect(editor.pictures.value).toEqual([]);
+    expect(saves).toEqual([]);
+    expect(synchronized).toEqual([]);
+  });
+  it("retains every plan failure and saves only successfully planned targets", async () => {
+    const editing: MetadataTarget[][] = [];
+    const { editor, saves } = fixture({
+      planArtwork: async () => [
+        { trackId: 1, fileWriteRequired: false, error: "audio unavailable" },
+        { trackId: 2, fileWriteRequired: true, error: null },
+      ],
+      editFiles: (ids, execute) => {
+        editing.push([...ids]);
+        return execute();
+      },
+    });
+    await editor.openTracks([1, 2, 3]);
+    await editor.addPicture(Uint8Array.from([1]), "image/png");
+    editor.prepareSave();
+    await settle();
+    expect(saves.map(({ ids }) => ids)).toEqual([[2]]);
+    expect(editing).toEqual([[2]]);
+    const outcomes = editor.state.results
+      .slice()
+      .sort((left, right) => Number(left.trackId) - Number(right.trackId));
+    expect(outcomes.map(({ databaseUpdated }) => databaseUpdated)).toEqual([false, true, false]);
+    expect(outcomes[0]?.error).toBe("audio unavailable");
+    expect(outcomes[2]?.error).toContain("写入计划无效");
+    expect(
+      editor.state.artwork.tracks
+        .filter(({ trackId }) => trackId !== 2)
+        .every(({ pictures }) => pictures[0]?.picture.source === "embedded"),
+    ).toBe(true);
+    expect(editor.state.dirty).toBe(true);
+  });
+  it("never saves or acquires a lease after a rejected planning request", async () => {
+    const { editor, saves } = fixture({
+      planArtwork: async () => {
+        throw new Error("plan failed");
+      },
+      editFiles: () => {
+        throw new Error("must not guard");
+      },
+    });
+    await editor.openTracks([1, 2]);
+    await editor.addPicture(Uint8Array.from([1]), "image/png");
+    editor.prepareSave();
+    await settle();
+    expect(saves).toEqual([]);
+    expect(
+      editor.state.results.map(({ error, databaseUpdated }) => ({ error, databaseUpdated })),
+    ).toEqual([
+      { error: "plan failed", databaseUpdated: false },
+      { error: "plan failed", databaseUpdated: false },
+    ]);
+    expect(editor.state.artwork.tracks.every(({ pictures }) => pictures.length === 1)).toBe(true);
+  });
+  it("retries only DB-failed targets, replans without another file lease, and retains fileWritten", async () => {
+    const calls: number[][] = [];
+    const plans: number[][] = [];
+    const editing: MetadataTarget[][] = [];
+    const { editor } = fixture({
+      planArtwork: async (drafts) => {
+        plans.push(drafts.map(({ trackId }) => trackId));
+        return drafts.map(({ trackId }) => ({
+          trackId,
+          fileWriteRequired: plans.length === 1,
+          error: null,
+        }));
+      },
+      editFiles: (ids, execute) => {
+        editing.push([...ids]);
+        return execute();
+      },
+      save: async (ids) => {
+        calls.push([...ids]);
+        return ids.map((id) =>
+          calls.length === 1 && id === 2
+            ? { ...result(id, false), fileWritten: true, error: "database failed" }
+            : { ...result(id), fileWritten: calls.length === 1 },
+        );
+      },
+    });
+    await editor.openTracks([1, 2]);
+    await editor.addPicture(Uint8Array.from([1]), "image/png");
+    editor.prepareSave();
+    await settle();
+    expect(
+      editor.state.results.map(({ fileWritten, databaseUpdated }) => ({
+        fileWritten,
+        databaseUpdated,
+      })),
+    ).toEqual([
+      { fileWritten: true, databaseUpdated: true },
+      { fileWritten: true, databaseUpdated: false },
+    ]);
+    expect(editor.state.artwork.tracks[1]?.pictures[0]?.picture.source).toBe("embedded");
+    editor.prepareSave();
+    await settle();
+    expect(plans).toEqual([[1, 2], [2]]);
+    expect(calls).toEqual([[1, 2], [2]]);
+    expect(editing).toEqual([[1, 2]]);
+    expect(
+      editor.state.results.map(({ fileWritten, databaseUpdated }) => ({
+        fileWritten,
+        databaseUpdated,
+      })),
+    ).toEqual([
+      { fileWritten: true, databaseUpdated: true },
+      { fileWritten: true, databaseUpdated: true },
+    ]);
+  });
+  it("does not lock broken linked paths and can change type or detach them without file writes", async () => {
+    const { editor, saves } = fixture({
+      loadCollections: async (ids) =>
+        collections(ids).map((collection) => ({
+          ...collection,
+          pictures: collection.pictures.map((picture, index) =>
+            index
+              ? picture
+              : { ...picture, source: "manual", path: "/missing.png", error: "missing" },
+          ),
+        })),
+      planArtwork: async (drafts) =>
+        drafts.map(({ trackId }) => ({ trackId, fileWriteRequired: false, error: null })),
+      editFiles: () => {
+        throw new Error("must not release playback");
+      },
+    });
+    await editor.openTracks([1, 2]);
+    expect(editor.artworkReady.value).toBe(true);
+    editor.changePictureType("linked:/missing.png", 8);
+    expect(editor.pictures.value[0]?.pictureType).toBe(8);
+    editor.deletePicture("linked:/missing.png");
+    editor.prepareSave();
+    await settle();
+    expect(saves).toHaveLength(1);
+    expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
   });
 });

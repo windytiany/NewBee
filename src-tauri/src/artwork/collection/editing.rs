@@ -1,5 +1,5 @@
 use super::{Draft, DraftPicture, Picture};
-use crate::{artwork::model::ArtworkContent, database::Database};
+use crate::database::Database;
 use serde::Deserialize;
 use std::collections::HashSet;
 
@@ -15,97 +15,124 @@ pub(crate) struct TrackDraft {
 #[serde(tag = "source", rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) enum PictureDraft {
     #[serde(rename_all = "camelCase")]
-    Existing {
-        content_id: String,
-        picture_type: u8,
-    },
+    Existing { artwork_id: i64, picture_type: u8 },
     #[serde(rename_all = "camelCase")]
-    New { data: Vec<u8>, picture_type: u8 },
+    Embedded { data: Vec<u8>, picture_type: u8 },
+    #[serde(rename_all = "camelCase")]
+    Linked { path: String, picture_type: u8 },
 }
 
 pub(crate) struct Prepared {
     pub(crate) draft: Draft,
     pub(crate) pictures: Vec<Picture>,
-    pub(crate) embed: bool,
+    pub(crate) embedded_changed: bool,
 }
 
-pub(crate) fn prepare(
-    database: &Database,
-    track_ids: &[i64],
-    requests: Vec<TrackDraft>,
-    embed: bool,
-) -> Result<Vec<(i64, Prepared)>, String> {
-    let mut seen = HashSet::new();
-    let mut prepared = Vec::new();
-    for request in requests {
-        if !track_ids.contains(&request.track_id) || !seen.insert(request.track_id) {
-            return Err("图片草稿包含重复或非目标曲目".into());
-        }
-        if request
-            .display_index
-            .is_some_and(|index| index >= request.pictures.len())
-        {
-            return Err("无效的展示图片索引".into());
-        }
-        let existing = database.get_artwork_collection(request.track_id)?;
-        let mut pictures = Vec::new();
-        let mut draft = Draft {
-            pictures: Vec::new(),
-            display_index: request.display_index,
-        };
-        let mut contents = HashSet::new();
-        for item in request.pictures {
-            let (picture, entry) = match item {
-                PictureDraft::Existing {
-                    content_id,
-                    picture_type,
-                } => {
-                    let image = existing
-                        .images
-                        .iter()
-                        .find(|image| image.content_id == content_id)
-                        .ok_or_else(|| "图片草稿引用了不属于曲目的内容".to_owned())?;
-                    (
-                        Picture {
-                            content: image.picture.content.clone(),
-                            picture_type,
-                        },
-                        DraftPicture::Existing {
-                            content_id,
-                            picture_type,
-                        },
-                    )
+pub(crate) fn prepare(database: &Database, request: TrackDraft) -> Result<Prepared, String> {
+    if request
+        .display_index
+        .is_some_and(|index| index >= request.pictures.len())
+    {
+        return Err("无效的展示图片索引".into());
+    }
+    let existing = database.get_artwork_collection(request.track_id)?;
+    let original: Vec<_> = existing
+        .images
+        .iter()
+        .filter(|image| image.source == "embedded")
+        .map(|image| image.picture.clone())
+        .collect();
+    let mut pictures = Vec::new();
+    let mut draft = Draft {
+        pictures: Vec::new(),
+        display_index: request.display_index,
+    };
+    let mut embedded = HashSet::new();
+    let mut paths = HashSet::new();
+    let mut ids = HashSet::new();
+    for item in request.pictures {
+        let entry = match item {
+            PictureDraft::Existing {
+                artwork_id,
+                picture_type,
+            } => {
+                if !ids.insert(artwork_id) {
+                    return Err("图片集合包含重复项".into());
                 }
-                PictureDraft::New { data, picture_type } => {
-                    let decoded = crate::metadata::files::cover_picture(&data)?;
+                let image = existing
+                    .images
+                    .iter()
+                    .find(|image| image.artwork_id == artwork_id)
+                    .ok_or_else(|| "图片草稿引用了不属于曲目的图片".to_owned())?;
+                if image.source == "embedded" {
                     let picture = Picture {
-                        content: ArtworkContent {
-                            mime_type: decoded
-                                .mime_type()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
-                            image: data,
-                        },
+                        content: image.picture.content.clone(),
                         picture_type,
                     };
-                    (picture.clone(), DraftPicture::New(picture))
+                    if !embedded.insert((picture.content.image.clone(), picture_type)) {
+                        return Err("内嵌图片包含重复内容及类型".into());
+                    }
+                    pictures.push(picture);
+                } else if !paths.insert(image.path.clone()) {
+                    return Err("图片集合包含重复关联路径".into());
                 }
-            };
-            let content_id = picture.content.image.clone();
-            if !contents.insert(content_id) {
-                return Err("图片集合包含重复内容".into());
+                DraftPicture::Existing {
+                    artwork_id,
+                    picture_type,
+                }
             }
-            pictures.push(picture);
-            draft.pictures.push(entry);
-        }
-        prepared.push((
-            request.track_id,
-            Prepared {
-                draft,
-                pictures,
-                embed,
-            },
-        ));
+            PictureDraft::Embedded { data, picture_type } => {
+                let content = super::linked::decode(data)?;
+                if !embedded.insert((content.image.clone(), picture_type)) {
+                    return Err("内嵌图片包含重复内容及类型".into());
+                }
+                let picture = Picture {
+                    content,
+                    picture_type,
+                };
+                pictures.push(picture.clone());
+                DraftPicture::New(picture)
+            }
+            PictureDraft::Linked { path, picture_type } => {
+                let path = super::linked::normalize(&path)?;
+                if !paths.insert(path.clone()) {
+                    return Err("图片集合包含重复关联路径".into());
+                }
+                let content = super::linked::read(&path)?;
+                DraftPicture::Linked {
+                    path,
+                    picture: Picture {
+                        content,
+                        picture_type,
+                    },
+                }
+            }
+        };
+        draft.pictures.push(entry);
     }
-    Ok(prepared)
+    Ok(Prepared {
+        embedded_changed: !same_embedded(&original, &pictures),
+        draft,
+        pictures,
+    })
+}
+
+impl Prepared {
+    pub(crate) fn requires_file_write(&self, path: &std::path::Path) -> Result<bool, String> {
+        if !self.embedded_changed {
+            return Ok(false);
+        }
+        let original = crate::metadata::files::artwork::read_embedded_pictures(path)?;
+        Ok(!same_embedded(&original, &self.pictures))
+    }
+}
+
+pub(crate) fn same_embedded(left: &[Picture], right: &[Picture]) -> bool {
+    let signature = |pictures: &[Picture]| -> HashSet<_> {
+        pictures
+            .iter()
+            .map(|picture| (picture.picture_type, picture.content.image.clone()))
+            .collect()
+    };
+    signature(left) == signature(right)
 }

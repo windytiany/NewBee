@@ -246,8 +246,6 @@ pub(crate) struct MetadataSaveRequest {
     pub(crate) lyrics_action: LyricsMarkAction,
     #[serde(default)]
     pub(crate) artwork_drafts: Vec<crate::artwork::collection::editing::TrackDraft>,
-    #[serde(default)]
-    pub(crate) embed_artwork: bool,
 }
 
 #[derive(Deserialize)]

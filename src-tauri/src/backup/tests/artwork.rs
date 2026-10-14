@@ -158,7 +158,7 @@ fn restoring_reused_database_ids_never_returns_previous_library_cache() {
 }
 
 #[test]
-fn backup_round_trip_preserves_collection_sources_type_override_and_display_selection() {
+fn backup_round_trip_preserves_collection_sources_types_and_display_selection() {
     use crate::artwork::collection::{DirectoryPicture, Draft, DraftPicture, Picture, Scan};
     let source = Directory::new();
     let target = Directory::new();
@@ -202,7 +202,7 @@ fn backup_round_trip_preserves_collection_sources_type_override_and_display_sele
         content: content(green.clone()),
         picture_type: 4,
     }));
-    draft.display_index = Some(2);
+    draft.display_index = Some(3);
     database.save_artwork_drafts(&[(1, draft)]).unwrap();
     let before = database.get_artwork_collection(1).unwrap();
     let file = source.0.join("collection.newbee");
@@ -213,7 +213,7 @@ fn backup_round_trip_preserves_collection_sources_type_override_and_display_sele
             row.get(0)
         })
         .unwrap();
-    assert_eq!(sources, 5);
+    assert_eq!(sources, 4);
     drop(backup);
     drop(database);
     fs::copy(file, target.0.join(restore::PENDING_FILE)).unwrap();
@@ -225,8 +225,12 @@ fn backup_round_trip_preserves_collection_sources_type_override_and_display_sele
     .unwrap();
     let after = restored.get_artwork_collection(1).unwrap();
     assert_eq!(after.display_index, before.display_index);
-    assert_eq!(after.images.len(), 3);
+    assert_eq!(after.images.len(), 4);
     for (actual, expected) in after.images.iter().zip(&before.images) {
+        assert_eq!(actual.artwork_id, expected.artwork_id);
+        assert_eq!(actual.source, expected.source);
+        assert_eq!(actual.path, expected.path);
+        assert_eq!(actual.error.is_some(), expected.error.is_some());
         assert_eq!(actual.content_id, expected.content_id);
         assert_eq!(actual.picture.picture_type, expected.picture.picture_type);
         assert_eq!(actual.picture.content.image, expected.picture.content.image);
@@ -251,13 +255,14 @@ fn backup_round_trip_preserves_collection_sources_type_override_and_display_sele
     assert_eq!(
         remaining.images.len(),
         2,
-        "manual sources survive successful scan removal"
+        "external associations survive confirmed file source absence"
     );
-    assert_eq!(remaining.images[0].picture.picture_type, 18);
-    assert_eq!(
-        restored
-            .track_artwork_bytes(1, None, |_, _| panic!("original derived"))
-            .unwrap(),
-        green
-    );
+    assert!(remaining
+        .images
+        .iter()
+        .all(|image| image.source == "directory" && image.error.is_some()));
+    assert!(restored
+        .track_artwork_bytes(1, None, |_, _| panic!("unavailable association derived"))
+        .unwrap()
+        .is_empty());
 }

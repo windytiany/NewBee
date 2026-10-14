@@ -70,7 +70,7 @@ fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidate
         2
     );
     let collection = lazy.get_artwork_collection(id).unwrap();
-    assert_eq!(collection.images.len(), 3);
+    assert_eq!(collection.images.len(), 4);
     assert_eq!(
         collection.images[collection.display_index.unwrap()]
             .picture
@@ -95,7 +95,7 @@ fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidate
         json!({"added":1,"updated":0,"skipped":0,"failed":0})
     );
     let collection = imported.get_artwork_collection(1).unwrap();
-    assert_eq!(collection.images.len(), 3);
+    assert_eq!(collection.images.len(), 4);
     assert_eq!(
         collection.images[collection.display_index.unwrap()]
             .picture
@@ -106,7 +106,7 @@ fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidate
 
     let result = super::super::reading::reread(&lazy, id).unwrap();
     assert!(result.database_updated && result.error.is_none());
-    assert_eq!(lazy.get_artwork_collection(id).unwrap().images.len(), 3);
+    assert_eq!(lazy.get_artwork_collection(id).unwrap().images.len(), 4);
     std::fs::remove_file(&path).unwrap();
     std::fs::remove_file(directory.path().join("COVER.PNG")).unwrap();
     std::fs::remove_file(directory.path().join("folder.png")).unwrap();
@@ -122,8 +122,7 @@ fn lazy_import_and_reread_collect_all_embedded_types_and_all_directory_candidate
 }
 
 #[test]
-fn reread_partial_directory_failure_reports_committed_metadata_and_preserves_type_and_display_edits(
-) {
+fn reread_partial_directory_failure_preserves_external_selection_and_confirms_embedded_types() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("track.flac");
     std::fs::write(&path, include_bytes!("../../../fixtures/silence.flac")).unwrap();
@@ -163,7 +162,9 @@ fn reread_partial_directory_failure_reports_committed_metadata_and_preserves_typ
         .contains("Directory artwork"));
     let collection = database.get_artwork_collection(id).unwrap();
     assert_eq!(collection.images.len(), 2);
-    assert_eq!(collection.images[0].picture.picture_type, 18);
+    assert_eq!(collection.images[0].source, "directory");
+    assert!(collection.images[0].error.is_some());
+    assert_eq!(collection.images[1].picture.picture_type, 3);
     assert_eq!(
         collection.images[collection.display_index.unwrap()]
             .picture
@@ -175,12 +176,14 @@ fn reread_partial_directory_failure_reports_committed_metadata_and_preserves_typ
     let result = super::super::reading::reread(&database, id).unwrap();
     assert!(result.database_updated && result.error.is_none());
     assert!(database.get_editing_snapshot(id).unwrap().issue.is_none());
-    assert_eq!(database.get_artwork_collection(id).unwrap().images.len(), 1);
+    assert_eq!(database.get_artwork_collection(id).unwrap().images.len(), 2);
+    assert!(database.get_artwork_collection(id).unwrap().images[0]
+        .error
+        .is_some());
 }
 
 #[test]
-fn ordinary_tag_save_preserves_database_only_deletion_manual_addition_type_override_and_display_choice(
-) {
+fn ordinary_tag_save_preserves_linked_deletion_addition_type_and_display_choice() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("track.flac");
     std::fs::write(&path, include_bytes!("../../../fixtures/silence.flac")).unwrap();
@@ -188,27 +191,32 @@ fn ordinary_tag_save_preserves_database_only_deletion_manual_addition_type_overr
     let back = png(2);
     let manual = png(3);
     write_pictures(&path, &[(3, &front), (4, &back)]);
+    let source = directory.path().join("cover.png");
+    std::fs::write(&source, &front).unwrap();
+    let linked = directory.path().join("manual.png");
+    std::fs::write(&linked, &manual).unwrap();
     let database = Database::open(":memory:").unwrap();
     let id = placeholder(&database, &path);
     database
         .complete_track_artwork(id, &WriteState::default())
         .unwrap();
     let mut draft = Draft::from(database.get_artwork_collection(id).unwrap());
-    draft.pictures.remove(0);
-    let DraftPicture::Existing { picture_type, .. } = &mut draft.pictures[0] else {
-        panic!("existing back")
-    };
-    *picture_type = 8;
-    draft
-        .pictures
-        .push(DraftPicture::New(crate::artwork::collection::Picture {
+    draft.pictures.remove(2);
+    draft.pictures.push(DraftPicture::Linked {
+        path: linked
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
+        picture: crate::artwork::collection::Picture {
             content: crate::artwork::model::ArtworkContent {
                 mime_type: "image/png".into(),
                 image: manual.clone(),
             },
             picture_type: 18,
-        }));
-    draft.display_index = Some(1);
+        },
+    });
+    draft.display_index = Some(2);
     database.save_artwork_drafts(&[(id, draft)]).unwrap();
     let before = database.get_artwork_collection(id).unwrap();
     let result = save_track(
@@ -229,16 +237,17 @@ fn ordinary_tag_save_preserves_database_only_deletion_manual_addition_type_overr
     );
     let after = database.get_artwork_collection(id).unwrap();
     assert_eq!(after.display_index, before.display_index);
-    assert_eq!(after.images.len(), 2);
+    assert_eq!(after.images.len(), 3);
     assert_eq!(after.images[0].content_id, before.images[0].content_id);
-    assert_eq!(after.images[0].picture.picture_type, 8);
-    assert_eq!(after.images[1].picture.content.image, manual);
+    assert_eq!(after.images[2].picture.picture_type, 18);
+    assert_eq!(after.images[2].picture.content.image, manual);
     assert_eq!(
         database
             .track_artwork_bytes(id, None, |_, _| panic!("original derived"))
             .unwrap(),
         manual
     );
+    assert_eq!(std::fs::read(source).unwrap(), front);
 }
 
 #[test]

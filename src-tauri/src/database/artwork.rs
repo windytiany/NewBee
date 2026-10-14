@@ -1,5 +1,6 @@
 pub(super) mod collection;
 mod confirmation;
+mod linked;
 pub(super) mod synchronization;
 
 use crate::artwork::model::ArtworkContent;

@@ -214,29 +214,27 @@ impl Database {
         album_artist: Option<String>,
         album: Option<String>,
     ) -> Result<Option<TrackArtwork>, String> {
-        let connection = self.connection()?;
-        connection
+        let track_id = self
+            .connection()?
             .query_row(
-                "SELECT ai.mime_type, ai.image
+                "SELECT t.id
                  FROM tracks t
                  INNER JOIN track_artwork ta ON ta.track_id = t.id AND ta.is_display = 1
-                 INNER JOIN artwork_images ai ON ai.id = ta.image_id
                  WHERE t.in_library = 1 AND t.album_artist IS ?1 AND t.album IS ?2
                  ORDER BY t.disc_number IS NULL, t.disc_number,
                           t.track_number IS NULL, t.track_number, t.id
                  LIMIT 1",
                 params![album_artist.as_deref(), album.as_deref()],
-                |row| {
-                    Ok(TrackArtwork::Available {
-                        mime_type: row.get(0)?,
-                        data: row.get(1)?,
-                    })
-                },
+                |row| row.get::<_, i64>(0),
             )
             .optional()
             .map_err(|error| {
                 format!("Failed to get artwork for album {album:?} by {album_artist:?}: {error}")
-            })
+            })?;
+        match track_id {
+            Some(track_id) => self.get_track_artwork(track_id),
+            None => Ok(None),
+        }
     }
 
     pub fn list_album_tracks(

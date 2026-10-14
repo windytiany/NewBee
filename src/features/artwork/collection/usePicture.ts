@@ -4,7 +4,7 @@ import { createArtworkCollectionApi } from "@/features/artwork/collection/api";
 
 export function usePicture(
   picture: () => DraftPicture | null,
-  readContent = createArtworkCollectionApi().content,
+  readPicture = createArtworkCollectionApi().picture,
 ) {
   const url = ref<string | null>(null);
   const data = shallowRef<number[] | null>(null);
@@ -26,9 +26,11 @@ export function usePicture(
       if (!entry) return;
       try {
         const bytes =
-          entry.picture.source === "new"
+          entry.picture.source === "embedded"
             ? Uint8Array.from(entry.picture.data)
-            : new Uint8Array(await readContent(entry.picture.contentId));
+            : entry.picture.source === "linked"
+              ? Uint8Array.from(await createArtworkCollectionApi().readFile(entry.picture.path))
+              : new Uint8Array(await readPicture(entry.picture.artworkId));
         if (current !== generation) return;
         if (!bytes.length) throw new Error("图片内容为空");
         url.value = globalThis.URL.createObjectURL(

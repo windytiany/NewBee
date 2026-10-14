@@ -27,7 +27,16 @@ afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();
 });
 function picture(contentId: string, pictureType = 3): ArtworkPicture {
-  return { contentId, pictureType, mimeType: "image/png", byteLength: 3, embedded: false };
+  return {
+    contentId,
+    pictureType,
+    mimeType: "image/png",
+    byteLength: 3,
+    artworkId: Array.from(contentId).reduce((sum, char) => sum + char.charCodeAt(0), 1),
+    source: "embedded",
+    path: "",
+    error: null,
+  };
 }
 function collection(
   trackId: number,
@@ -48,15 +57,33 @@ function mount(collections: ArtworkCollection[], clipboard = async () => [9, 8])
       collections,
     ),
   );
-  const props = Vue.reactive({ disabled: false, importing: false, embedArtwork: false });
+  const props = Vue.reactive({ disabled: false, importing: false });
   const failures: unknown[] = [];
   const busy: boolean[] = [];
   const imports: Array<{ data: number[]; mime: string }> = [];
   const exports: string[] = [];
+  const pendingPath = Vue.ref<string | null>(null);
   const component = evaluateSource<{ default: Vue.Component }>(
     compileSfc(source, "CollectionEditor.vue"),
     {
       vue: Vue,
+      "@tauri-apps/api/core": { isTauri: () => false },
+      "@/shared/interaction/useContextMenu": {
+        useContextMenu: () => {
+          const request = Vue.ref<object | null>(null);
+          return {
+            request,
+            position: Vue.ref({ x: 0, y: 0 }),
+            open: (value: object) => {
+              request.value = value;
+            },
+            close: () => {
+              request.value = null;
+            },
+          };
+        },
+      },
+      "@/features/artwork/collection/useDrop": { usePictureDrop: () => pendingPath },
       "@/features/artwork/collection/ArtworkPreview.vue": Vue.defineComponent({
         props: ["selection", "disabled"],
         setup:
@@ -74,6 +101,9 @@ function mount(collections: ArtworkCollection[], clipboard = async () => [9, 8])
       "@/features/artwork/transfer": {
         readClipboardCover: clipboard,
         pictureMimeType: async () => "image/png",
+        readCover: async () => Uint8Array.from([9, 8]),
+        selectCover: async () => ({ path: "/covers/native.png", data: Uint8Array.from([9, 8]) }),
+        saveCover: async () => "/covers/clipboard.png",
       },
     },
   ).default;
@@ -81,6 +111,8 @@ function mount(collections: ArtworkCollection[], clipboard = async () => [9, 8])
   const app = createHostRenderer<HostNode>((type, text) => ({
     ...createHostNode(type, type === "#comment" ? "" : text),
     click: () => {},
+    showModal: () => {},
+    close: () => {},
   })).createApp({
     setup: () => () =>
       Vue.h(component, {
@@ -89,7 +121,7 @@ function mount(collections: ArtworkCollection[], clipboard = async () => [9, 8])
         pictures: commonPictures(draft),
         display: displaySelection(draft),
         ready: draft.tracks.every((entry) => entry.error === null),
-        addPicture: async (data: Uint8Array, mime: string, pictureType: number) => {
+        addPicture: async (data: Uint8Array, mime: string, pictureType: number, path?: string) => {
           imports.push({ data: Array.from(data), mime });
           return addPicture(
             draft,
@@ -97,21 +129,19 @@ function mount(collections: ArtworkCollection[], clipboard = async () => [9, 8])
             mime,
             async () => Uint8Array.from([1, 2, 3]).buffer,
             pictureType,
+            path,
           );
         },
         onType: (key: string, type: number) => changePictureType(draft, key, type),
         onDelete: (key: string) => deletePicture(draft, key),
         onDisplay: (key: string) => setDisplayPicture(draft, key),
-        onEmbed: (enabled: boolean) => {
-          props.embedArtwork = enabled;
-        },
         onFailed: (error: unknown) => failures.push(error),
         onBusy: (value: boolean) => busy.push(value),
       }),
   });
   app.mount(root);
   apps.push(app);
-  return { root, draft, props, failures, busy, imports, exports, app };
+  return { root, draft, props, failures, busy, imports, exports, app, pendingPath };
 }
 function node(root: HostNode, predicate: (entry: HostNode) => boolean) {
   const result = findNode(root, predicate);
@@ -124,17 +154,41 @@ function button(root: HostNode, label: string) {
 function click(entry: HostNode) {
   (entry.props.onClick as () => void)();
 }
+async function paste(root: HostNode) {
+  const trigger = node(
+    root,
+    (entry) => entry.props["aria-label"] === "添加图片" && entry.type === "button",
+  );
+  (trigger.props.onContextmenu as (event: object) => void)({
+    preventDefault() {},
+    stopPropagation() {},
+    clientX: 0,
+    clientY: 0,
+  });
+  await settle();
+  click(button(root, "粘贴封面"));
+}
+async function confirm(root: HostNode, storage = "embedded") {
+  await settle();
+  const choice = node(
+    root,
+    (entry) => entry.props.name === "artwork-storage" && entry.props.value === storage,
+  );
+  (choice.props.onChange as () => void)();
+  await settle();
+  const form = node(root, (entry) => entry.type === "form");
+  (form.props.onSubmit as (event: object) => void)({ preventDefault() {} });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await settle();
+}
 function select(
   root: HostNode,
   file: { size: number; type?: string; arrayBuffer: () => Promise<ArrayBuffer> } | null,
 ) {
-  const target = { files: file ? [file] : [], value: "selected" };
-  (
-    node(root, (entry) => entry.props.type === "file").props.onChange as (event: {
-      target: typeof target;
-    }) => void
-  )({ target });
-  expect(target.value).toBe("");
+  (root.children[0]?.props.onDrop as (event: object) => void)({
+    preventDefault() {},
+    dataTransfer: { files: file ? [file] : [] },
+  });
 }
 
 describe("picture collection controls", () => {
@@ -160,9 +214,11 @@ describe("picture collection controls", () => {
     (type.props.onChange as (event: { target: { value: string } }) => void)({
       target: { value: "4" },
     });
-    click(button(root, "粘贴封面"));
+    await paste(root);
     await new Promise((resolve) => setTimeout(resolve, 0));
     await settle();
+    expect(commonPictures(draft)).toEqual([]);
+    await confirm(root);
     expect(commonPictures(draft)[0]?.pictureType).toBe(4);
   });
   it("lists only common contents, shows mixed type and applies type/display/delete to all targets", async () => {
@@ -225,9 +281,12 @@ describe("picture collection controls", () => {
       collection(1, [picture("old")]),
       collection(2, []),
     ]);
-    click(button(root, "粘贴封面"));
+    await paste(root);
     await new Promise((resolve) => setTimeout(resolve, 0));
     await settle();
+    expect(imports).toEqual([]);
+    expect(busy[busy.length - 1]).toBe(true);
+    await confirm(root);
     expect(imports).toEqual([{ data: [9, 8], mime: "image/png" }]);
     expect(busy).toEqual([true, false]);
     expect(draft.tracks.map((entry) => entry.pictures.length)).toEqual([2, 1]);
@@ -244,10 +303,16 @@ describe("picture collection controls", () => {
     select(root, file);
     await new Promise((resolve) => setTimeout(resolve, 0));
     await settle();
+    expect(imports).toHaveLength(0);
+    await confirm(root);
     (root.children[0]?.props.onDrop as (event: object) => void)({
       preventDefault() {},
       dataTransfer: { files: [file] },
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
+    expect(imports).toHaveLength(1);
+    await confirm(root);
     await new Promise((resolve) => setTimeout(resolve, 0));
     await settle();
     expect(imports).toEqual([
@@ -255,29 +320,52 @@ describe("picture collection controls", () => {
       { data: [9, 8], mime: "image/png" },
     ]);
   });
-  it("toggles embedding without requiring picture edits", async () => {
-    const { root, props, draft } = mount([collection(1, [picture("a")])]);
-    const checkbox = node(root, (entry) => entry.props.type === "checkbox");
-    expect(checkbox.props.checked).toBe(false);
-    (checkbox.props.onChange as (event: { target: { checked: boolean } }) => void)({
-      target: { checked: true },
-    });
+  it("offers explicit native embedded and linked choices without a global embedding checkbox", async () => {
+    const { root, draft } = mount([collection(1, [])]);
+    expect(findNode(root, (entry) => entry.props.type === "checkbox")).toBeNull();
+    click(button(root, "添加"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await settle();
-    expect(props.embedArtwork).toBe(true);
-    expect(checkbox.props.checked).toBe(true);
-    expect(draft.tracks[0]?.pictures).toHaveLength(1);
+    expect(draft.tracks[0]?.pictures).toEqual([]);
+    await confirm(root, "linked");
+    expect(draft.tracks[0]?.pictures[0]?.picture).toEqual({
+      source: "linked",
+      path: "/covers/native.png",
+      pictureType: 3,
+    });
+    click(button(root, "添加"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
+    await confirm(root);
+    expect(draft.tracks[0]?.pictures[1]?.picture).toEqual({
+      source: "embedded",
+      data: [9, 8],
+      pictureType: 3,
+    });
+  });
+  it("saves clipboard images externally before associating their real path", async () => {
+    const { root, draft } = mount([collection(1, [])]);
+    await paste(root);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
+    expect(draft.tracks[0]?.pictures).toEqual([]);
+    await confirm(root, "linked");
+    expect(draft.tracks[0]?.pictures[0]?.picture).toEqual({
+      source: "linked",
+      path: "/covers/clipboard.png",
+      pictureType: 3,
+    });
   });
   it("shows collection load errors and blocks import and embedding", async () => {
     const failed = collection(1, []);
     failed.error = "failed";
-    const { root, imports, props } = mount([failed]);
+    const { root, imports } = mount([failed]);
     expect(getTextContent(root)).toContain("图片集合加载失败");
-    expect(button(root, "添加图片").props.disabled).toBe(true);
-    click(button(root, "粘贴封面"));
+    expect(button(root, "添加").props.disabled).toBe(true);
+    click(button(root, "添加"));
     await settle();
     expect(imports).toEqual([]);
-    expect(node(root, (entry) => entry.props.type === "checkbox").props.disabled).toBe(true);
-    expect(props.embedArtwork).toBe(false);
+    expect(button(root, "添加").props.disabled).toBe(true);
   });
   for (const size of [0, 20 * 1024 * 1024 + 1]) {
     it(`rejects invalid file size ${size} before reading`, async () => {
@@ -303,9 +391,9 @@ describe("picture collection controls", () => {
         resolve = yes;
       });
       const { root, props, app, imports, busy } = mount([collection(1, [])], () => pending);
-      click(button(root, "粘贴封面"));
+      await paste(root);
       await settle();
-      expect(button(root, "添加图片").props.disabled).toBe(true);
+      expect(button(root, "添加").props.disabled).toBe(true);
       if (change === "disable") props.disabled = true;
       else app.unmount();
       await settle();
@@ -319,9 +407,64 @@ describe("picture collection controls", () => {
     const { root, failures, draft } = mount([collection(1, [])], async () => {
       throw new Error("clipboard failed");
     });
-    click(button(root, "粘贴封面"));
+    await paste(root);
     await settle();
     expect(String(failures[0])).toContain("clipboard failed");
+    expect(draft.tracks[0]?.pictures).toEqual([]);
+  });
+  it("uses the dropped native path for linking rather than opening another file", async () => {
+    const { root, draft, pendingPath } = mount([collection(1, [])]);
+    pendingPath.value = "D:/dropped.png";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
+    expect(draft.tracks[0]?.pictures).toEqual([]);
+    await confirm(root, "linked");
+    expect(draft.tracks[0]?.pictures[0]?.picture).toEqual({
+      source: "linked",
+      path: "D:/dropped.png",
+      pictureType: 3,
+    });
+  });
+  it("reports missing DOM paths without silently selecting a different linked picture", async () => {
+    const { root, draft, failures } = mount([collection(1, [])]);
+    (root.children[0]?.props.onDrop as (event: object) => void)({
+      preventDefault() {},
+      dataTransfer: {
+        files: [
+          { size: 2, name: "fake.png", arrayBuffer: async () => Uint8Array.from([9, 8]).buffer },
+        ],
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
+    await confirm(root, "linked");
+    expect(String(failures[0])).toContain("无法取得拖入图片路径");
+    expect(draft.tracks[0]?.pictures).toEqual([]);
+    await confirm(root);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
+    expect(draft.tracks[0]?.pictures[0]?.picture.source).toBe("embedded");
+  });
+  it("shows linked source and unavailable path status without disabling type or delete", async () => {
+    const linked = {
+      ...picture("a"),
+      source: "manual" as const,
+      path: "/missing.png",
+      error: "missing",
+    };
+    const { root, draft } = mount([collection(1, [linked])]);
+    expect(getTextContent(root)).toContain("关联");
+    expect(getTextContent(root)).toContain("路径不可用");
+    expect(button(root, "删除").props.disabled).toBe(false);
+    const type = node(root, (entry) => entry.type === "select");
+    expect(type.props.disabled).toBe(false);
+    (type.props.onChange as (event: { target: { value: string } }) => void)({
+      target: { value: "4" },
+    });
+    await settle();
+    expect(draft.tracks[0]?.pictures[0]?.picture.pictureType).toBe(4);
+    click(button(root, "删除"));
+    await settle();
     expect(draft.tracks[0]?.pictures).toEqual([]);
   });
 });

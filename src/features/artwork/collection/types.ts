@@ -1,9 +1,12 @@
 export type ArtworkPicture = {
+  artworkId: number;
   contentId: string;
   mimeType: string;
   byteLength: number;
   pictureType: number;
-  embedded: boolean;
+  source: "embedded" | "directory" | "manual";
+  path: string;
+  error: string | null;
 };
 
 export type ArtworkCollection = {
@@ -14,8 +17,9 @@ export type ArtworkCollection = {
 };
 
 export type ArtworkPictureDraft =
-  | { source: "existing"; contentId: string; pictureType: number }
-  | { source: "new"; data: number[]; pictureType: number };
+  | { source: "existing"; artworkId: number; pictureType: number }
+  | { source: "embedded"; data: number[]; pictureType: number }
+  | { source: "linked"; path: string; pictureType: number };
 
 export type ArtworkDraft = {
   trackId: number;
@@ -23,11 +27,20 @@ export type ArtworkDraft = {
   displayIndex: number | null;
 };
 
+export type ArtworkWritePlan = {
+  trackId: number;
+  fileWriteRequired: boolean;
+  error: string | null;
+};
+
 export type DraftPicture = {
   key: string;
+  contentId: string;
   mimeType: string;
   byteLength: number;
-  embedded: boolean;
+  storage: "embedded" | "linked";
+  path: string;
+  error: string | null;
   picture: ArtworkPictureDraft;
 };
 
@@ -43,7 +56,7 @@ export type CollectionTrack = CollectionSnapshot & {
 };
 
 export type CollectionDraft = { tracks: CollectionTrack[] };
-export type CommonPicture = Omit<DraftPicture, "picture" | "embedded"> & {
+export type CommonPicture = Omit<DraftPicture, "picture"> & {
   pictureType: number | null;
   mixed: boolean;
 };

@@ -3,7 +3,7 @@
     ref="dialogElement"
     aria-labelledby="metadata-editor-title"
     class="bg-app-surface m-auto max-h-[90vh] w-[min(48rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-lg border border-white/15 p-0 text-white shadow-2xl backdrop:bg-black/70"
-    @cancel.prevent="editor.requestClose()"
+    @cancel.prevent="requestClose"
     @mousedown.stop
   >
     <header class="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
@@ -153,6 +153,7 @@
                 activeTab !== 'tags'
               "
               exportable
+              export-menu
               class="w-36 shrink-0"
               @failed="editor.artworkSelectionFailed($event)"
             />
@@ -210,12 +211,10 @@
           :ready="artworkReady"
           :disabled="state.saving || state.confirmDiscard || activeTab !== 'artwork'"
           :importing="state.importingArtwork"
-          :embed-artwork="state.embedArtwork"
           :add-picture="editor.addPicture"
           @type="editor.changePictureType"
           @delete="editor.deletePicture"
           @display="editor.setDisplayPicture"
-          @embed="editor.changeEmbedArtwork"
           @failed="editor.artworkSelectionFailed"
           @busy="selectingArtwork = $event"
         />
@@ -293,7 +292,7 @@
         type="button"
         class="focus-visible:outline-app-accent rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
         :disabled="state.saving || state.importingArtwork || selectingArtwork"
-        @click="editor.requestClose()"
+        @click="requestClose"
       >
         {{ t("取消") }}
       </button>
@@ -430,7 +429,7 @@ const canSave = computed(
     !batch.state.running &&
     !state.confirmDiscard &&
     state.tracks.length > 0 &&
-    ((artworkReady.value && (state.embedArtwork || state.artwork.tracks.some(collectionChanged))) ||
+    ((artworkReady.value && state.artwork.tracks.some(collectionChanged)) ||
       state.lyricsAction !== "keep" ||
       state.draft.some((field) => field.writable && !field.mixed)),
 );
@@ -452,6 +451,9 @@ watch(
 );
 function prepareSave() {
   if (canSave.value) editor.prepareSave();
+}
+function requestClose() {
+  if (!selectingArtwork.value) editor.requestClose();
 }
 function changeLyricsAction(event: InstanceType<typeof globalThis.Event>) {
   const action = (event.target as InstanceType<typeof globalThis.HTMLSelectElement>).value;

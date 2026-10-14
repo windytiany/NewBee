@@ -58,7 +58,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
         .unwrap();
         assert!(
             files::access::take(&music.0).is_empty(),
-            "daily artwork must not access the music disk"
+            "artwork reads must not parse audio tags"
         );
         bytes
     };
@@ -136,11 +136,18 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     );
     assert_eq!(app.state::<Database>().artwork_decode_count(), 3);
 
-    // Failed reads retain the last snapshot, unlike confirmed removal.
+    // Failed external reads retain the association, not a readable cached snapshot.
     std::fs::write(&cover, b"broken image").unwrap();
     scan();
-    assert_eq!(read(1), shared_green);
-    assert_eq!(read(2), shared_green);
+    assert!(read(1).is_empty());
+    assert!(read(2).is_empty());
+    for id in [1, 2] {
+        let collection = app.state::<Database>().get_artwork_collection(id).unwrap();
+        assert_eq!(collection.images.len(), 1);
+        assert!(collection.images[0].error.is_some());
+        assert!(collection.images[0].path.ends_with("cover.png"));
+    }
+    assert_eq!(std::fs::read(&cover).unwrap(), b"broken image");
     std::fs::remove_file(&cover).unwrap();
     scan();
     assert!(read(1).is_empty());
@@ -153,4 +160,8 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     .unwrap()
     .is_empty());
     assert_eq!(app.state::<Database>().artwork_decode_count(), 3);
+    std::fs::write(&cover, &green).unwrap();
+    assert_eq!(read(1), shared_green);
+    assert_eq!(read(2), shared_green);
+    assert_eq!(std::fs::read(&cover).unwrap(), green);
 }

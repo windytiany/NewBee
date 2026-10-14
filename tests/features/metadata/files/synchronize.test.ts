@@ -109,6 +109,8 @@ it("maps file snapshots to registered numeric targets and refreshes file and dat
       }),
       loadCollections: async (ids) =>
         ids.map((trackId) => ({ trackId, pictures: [], displayIndex: null, error: null })),
+      planArtwork: async (drafts) =>
+        drafts.map(({ trackId }) => ({ trackId, fileWriteRequired: true, error: null })),
       readArtwork: async () => {
         throw new Error("No artwork in this fixture");
       },

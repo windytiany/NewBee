@@ -87,13 +87,14 @@ impl Database {
     }
 
     pub fn get_track_artwork(&self, track_id: i64) -> Result<Option<TrackArtwork>, String> {
+        self.refresh_artwork_paths(Some(track_id))?;
         let connection = self.connection()?;
         let artwork = connection
             .query_row(
                 "SELECT ai.mime_type, ai.image
                  FROM tracks t
                  LEFT JOIN track_artwork ta ON ta.track_id = t.id AND ta.is_display = 1
-                 LEFT JOIN artwork_images ai ON ai.id = ta.image_id
+                 LEFT JOIN artwork_images ai ON ai.id = ta.image_id AND ta.source_error IS NULL
                  WHERE t.id = ?1",
                 [track_id],
                 |row| {

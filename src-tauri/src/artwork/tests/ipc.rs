@@ -274,12 +274,14 @@ fn requested_sizes_reuse_shared_images_across_database_reopen_without_decoding()
     let cache = directory.path().join("cache");
     let database = Database::open_with_cache(&path, &cache).unwrap();
     let red = fixture(Rgba([255, 0, 0, 255]));
+    let cover = directory.path().join("cover.png");
+    std::fs::write(&cover, &red).unwrap();
     for name in ["one", "two"] {
         let track = track(&format!("/offline/{name}.mp3"), red.clone());
         let scan = if name == "one" {
             crate::database::tests::support::embedded(&track)
         } else {
-            crate::database::tests::support::directory(&track, "/offline/cover.png")
+            crate::database::tests::support::directory(&track, cover.to_str().unwrap())
         };
         database.upsert_track(&track, Some(&scan)).unwrap();
     }

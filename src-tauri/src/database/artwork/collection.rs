@@ -1,4 +1,4 @@
-use super::synchronization::{attach, select_display, source};
+use super::synchronization::attach_source;
 use crate::artwork::{
     collection::{Collection, Draft, DraftPicture, Image, Picture},
     model::ArtworkContent,
@@ -15,62 +15,81 @@ impl Database {
         track_ids: &[i64],
     ) -> Result<Vec<crate::artwork::collection::commands::Description>, String> {
         use crate::artwork::collection::commands::{Description, PictureDescription};
-        let connection = self.connection()?;
-        let mut descriptions: Vec<_> = track_ids
+        track_ids
             .iter()
-            .map(|id| Description {
-                track_id: *id,
-                pictures: Vec::new(),
-                display_index: None,
-                error: Some(format!("曲目 {id} 已不在数据库中")),
+            .map(|id| {
+                let result = (|| {
+                    self.refresh_artwork_paths(Some(*id))?;
+                    let connection = self.connection()?;
+                    require_track(&connection, *id)?;
+                    let mut statement = connection.prepare(
+                        "SELECT a.id, i.content_id, i.mime_type, length(i.image), a.picture_type,
+                                s.source_kind, s.source_path, a.source_error, a.is_display
+                         FROM track_artwork a JOIN artwork_images i ON i.id = a.image_id
+                         JOIN track_artwork_sources s ON s.artwork_id = a.id
+                         WHERE a.track_id = ?1 ORDER BY a.id",
+                    ).map_err(|error| error.to_string())?;
+                    let rows = statement
+                        .query_map([id], |row| {
+                            Ok((
+                                PictureDescription {
+                                    artwork_id: row.get(0)?,
+                                    content_id: row.get(1)?,
+                                    mime_type: row.get(2)?,
+                                    byte_length: row.get(3)?,
+                                    picture_type: row.get(4)?,
+                                    source: row.get(5)?,
+                                    path: row.get(6)?,
+                                    error: row.get(7)?,
+                                },
+                                row.get::<_, bool>(8)?,
+                            ))
+                        })
+                        .map_err(|error| error.to_string())?;
+                    let mut description = Description {
+                        track_id: *id,
+                        pictures: Vec::new(),
+                        display_index: None,
+                        error: None,
+                    };
+                    for row in rows {
+                        let (picture, selected) = row.map_err(|error| error.to_string())?;
+                        if selected {
+                            description.display_index = Some(description.pictures.len());
+                        }
+                        description.pictures.push(picture);
+                    }
+                    Ok::<_, String>(description)
+                })();
+                Ok(result.unwrap_or_else(|error| Description {
+                    track_id: *id,
+                    pictures: Vec::new(),
+                    display_index: None,
+                    error: Some(error),
+                }))
             })
-            .collect();
-        let mut statement = connection.prepare(
-            "SELECT t.id, i.content_id, i.mime_type, length(i.image), COALESCE(a.type_override, a.picture_type), a.is_display,
-                    EXISTS (SELECT 1 FROM track_artwork_sources s WHERE s.artwork_id = a.id AND s.source_kind = 'embedded')
-             FROM tracks t LEFT JOIN track_artwork a ON a.track_id = t.id LEFT JOIN artwork_images i ON i.id = a.image_id
-             WHERE t.id IN (SELECT value FROM json_each(?1)) ORDER BY t.id, a.id"
-        ).map_err(|error| error.to_string())?;
-        let ids = serde_json::to_string(track_ids).map_err(|error| error.to_string())?;
-        let mut rows = statement.query([ids]).map_err(|error| error.to_string())?;
-        while let Some(row) = rows.next().map_err(|error| error.to_string())? {
-            let id: i64 = row.get(0).map_err(|error| error.to_string())?;
-            let description = descriptions
-                .iter_mut()
-                .find(|item| item.track_id == id)
-                .ok_or_else(|| "Unexpected artwork track".to_owned())?;
-            description.error = None;
-            if let Some(content_id) = row
-                .get::<_, Option<String>>(1)
-                .map_err(|error| error.to_string())?
-            {
-                if row.get::<_, bool>(5).map_err(|error| error.to_string())? {
-                    description.display_index = Some(description.pictures.len());
-                }
-                description.pictures.push(PictureDescription {
-                    content_id,
-                    mime_type: row.get(2).map_err(|error| error.to_string())?,
-                    byte_length: row.get(3).map_err(|error| error.to_string())?,
-                    picture_type: row.get(4).map_err(|error| error.to_string())?,
-                    embedded: row.get(6).map_err(|error| error.to_string())?,
-                });
-            }
-        }
-        Ok(descriptions)
+            .collect()
     }
 
     pub fn get_artwork_collection(&self, track_id: i64) -> Result<Collection, String> {
+        self.refresh_artwork_paths(Some(track_id))?;
         let connection = self.connection()?;
         require_track(&connection, track_id)?;
         let mut statement = connection.prepare(
-            "SELECT i.content_id, i.mime_type, i.image, COALESCE(a.type_override, a.picture_type), a.is_display
-             FROM track_artwork a JOIN artwork_images i ON i.id = a.image_id
+            "SELECT i.content_id, i.mime_type, i.image, a.picture_type, a.is_display, a.id, s.source_kind, s.source_path, a.source_error
+             FROM track_artwork a JOIN artwork_images i ON i.id = a.image_id JOIN track_artwork_sources s ON s.artwork_id = a.id
              WHERE a.track_id = ?1 ORDER BY a.id",
         ).map_err(|error| error.to_string())?;
         let rows = statement
             .query_map([track_id], |row| {
                 Ok((
                     Image {
+                        artwork_id: row.get(5)?,
+                        source: row.get(6)?,
+                        path: row.get(7)?,
+                        #[cfg(test)]
+                        error: row.get(8)?,
+                        #[cfg(test)]
                         content_id: row.get(0)?,
                         picture: Picture {
                             content: ArtworkContent {
@@ -184,31 +203,61 @@ pub(in crate::database) fn save(
     for picture in &draft.pictures {
         let (id, picture_type) = match picture {
             DraftPicture::Existing {
-                content_id,
+                artwork_id,
                 picture_type,
             } => {
-                let id = transaction.query_row(
-                    "SELECT a.id FROM track_artwork a JOIN artwork_images i ON i.id = a.image_id
-                     WHERE a.track_id = ?1 AND i.content_id = ?2",
-                    params![track_id, content_id], |row| row.get::<_, i64>(0),
-                ).map_err(|error| format!("Artwork draft references missing content: {error}"))?;
+                let id = transaction
+                    .query_row(
+                        "SELECT id FROM track_artwork WHERE track_id = ?1 AND id = ?2",
+                        params![track_id, artwork_id],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .map_err(|error| format!("Artwork draft references missing item: {error}"))?;
                 (id, *picture_type)
             }
             DraftPicture::New(picture) => {
                 validate_content(&picture.content)?;
-                let id = attach(
-                    transaction,
-                    track_id,
-                    &picture.content,
+                let path: String = transaction
+                    .query_row("SELECT path FROM tracks WHERE id = ?1", [track_id], |row| {
+                        row.get(0)
+                    })
+                    .map_err(|error| error.to_string())?;
+                (
+                    attach_source(
+                        transaction,
+                        track_id,
+                        &picture.content,
+                        picture.picture_type,
+                        "embedded",
+                        &path,
+                    )?,
                     picture.picture_type,
-                )?;
-                source(transaction, id, "manual", "", picture.picture_type)?;
-                (id, picture.picture_type)
+                )
+            }
+            DraftPicture::Linked { path, picture } => {
+                validate_content(&picture.content)?;
+                if !std::path::Path::new(path).is_absolute() {
+                    return Err("Linked artwork path must be absolute".into());
+                }
+                (
+                    attach_source(
+                        transaction,
+                        track_id,
+                        &picture.content,
+                        picture.picture_type,
+                        "manual",
+                        path,
+                    )?,
+                    picture.picture_type,
+                )
             }
         };
+        if ids.contains(&id) {
+            return Err("Duplicate artwork item".into());
+        }
         let current_type: u8 = transaction
             .query_row(
-                "SELECT COALESCE(type_override, picture_type) FROM track_artwork WHERE id = ?1",
+                "SELECT picture_type FROM track_artwork WHERE id = ?1",
                 [id],
                 |row| row.get(0),
             )
@@ -216,7 +265,7 @@ pub(in crate::database) fn save(
         if current_type != picture_type {
             transaction
                 .execute(
-                    "UPDATE track_artwork SET type_override = ?2 WHERE id = ?1",
+                    "UPDATE track_artwork SET picture_type = ?2 WHERE id = ?1",
                     params![id, picture_type],
                 )
                 .map_err(|error| error.to_string())?;
@@ -240,21 +289,25 @@ pub(in crate::database) fn save(
                 .map_err(|error| error.to_string())?;
         }
     }
-    if let Some(index) = draft.display_index {
-        transaction
-            .execute(
-                "UPDATE track_artwork SET is_display = 0 WHERE track_id = ?1",
-                [track_id],
-            )
-            .map_err(|error| error.to_string())?;
+    transaction
+        .execute(
+            "UPDATE track_artwork SET is_display = 0 WHERE track_id = ?1",
+            [track_id],
+        )
+        .map_err(|error| error.to_string())?;
+    if let Some(id) = draft
+        .display_index
+        .or(if ids.is_empty() { None } else { Some(0) })
+        .map(|index| ids[index])
+    {
         transaction
             .execute(
                 "UPDATE track_artwork SET is_display = 1 WHERE id = ?1",
-                [ids[index]],
+                [id],
             )
             .map_err(|error| error.to_string())?;
     }
-    select_display(transaction, track_id)
+    Ok(())
 }
 
 fn validate_content(content: &ArtworkContent) -> Result<(), String> {
@@ -277,9 +330,8 @@ pub(in crate::database) fn add_cover(
     cover: &ArtworkContent,
     audio_path: Option<&str>,
 ) -> Result<(), String> {
-    let id = attach(transaction, track_id, cover, 3)?;
-    let (kind, path) = audio_path.map_or(("manual", ""), |path| ("embedded", path));
-    source(transaction, id, kind, path, 3)?;
+    let path = audio_path.unwrap_or("");
+    let id = attach_source(transaction, track_id, cover, 3, "embedded", path)?;
     transaction
         .execute(
             "UPDATE track_artwork SET is_display = 0 WHERE track_id = ?1",

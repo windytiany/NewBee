@@ -79,7 +79,6 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
         mut changes,
         lyrics_action,
         artwork_drafts,
-        embed_artwork,
     } = request;
     let track_ids = validate_track_ids(&track_ids)?;
     if changes
@@ -104,25 +103,44 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
         crate::logging::with_operation(operation_id.clone(), || {
             let _guard = guard;
             let database = app.state::<Database>();
-            let artwork = crate::artwork::collection::editing::prepare(
-                &database,
-                &track_ids,
-                artwork_drafts,
-                embed_artwork,
-            )?;
+            let mut drafts = std::collections::HashMap::new();
+            for draft in artwork_drafts {
+                let id = draft.track_id;
+                if !track_ids.contains(&id) || drafts.insert(id, draft).is_some() {
+                    return Err("图片草稿包含重复或非目标曲目".into());
+                }
+            }
             let results = track_ids
                 .into_iter()
                 .map(|id| {
-                    let result = save::save_track_collection(
-                        &database,
-                        id,
-                        &changes,
-                        lyrics_action,
-                        artwork
-                            .iter()
-                            .find(|(track_id, _)| *track_id == id)
-                            .map(|(_, prepared)| prepared),
-                    );
+                    let prepared = drafts
+                        .remove(&id)
+                        .map(|draft| crate::artwork::collection::editing::prepare(&database, draft))
+                        .transpose();
+                    let result = match prepared {
+                        Ok(prepared) => save::save_track_collection(
+                            &database,
+                            id,
+                            &changes,
+                            lyrics_action,
+                            prepared.as_ref(),
+                        ),
+                        Err(error) => {
+                            log::warn!("event=metadata_prepare_failed trackId={id} error={error}");
+                            MetadataSaveResult {
+                                track_id: id,
+                                path: database
+                                    .get_track(id)
+                                    .ok()
+                                    .flatten()
+                                    .map(|track| track.path().to_owned())
+                                    .unwrap_or_default(),
+                                file_written: false,
+                                database_updated: false,
+                                error: Some(error),
+                            }
+                        }
+                    };
                     if let Err(error) = on_progress.send(result.clone()) {
                         log::warn!("Could not report metadata progress: {error}");
                     }

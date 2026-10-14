@@ -21,6 +21,9 @@ type SaveRequest = {
   operationId?: string;
   targets: readonly SaveTarget[];
   writeTrackIds: readonly MetadataTarget[];
+  prepareWriteTrackIds?: (
+    progress: (result: MetadataSaveResult) => void,
+  ) => Promise<readonly MetadataTarget[]>;
   execute: (
     progress: (result: MetadataSaveResult) => void,
     operationId: string,
@@ -81,7 +84,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     const targets = new Map(request.targets.map((target) => [target.trackId, target]));
     const results = new Map(state.results.map((result) => [result.trackId, result]));
     const reported = new Map<MetadataTarget, MetadataSaveResult>();
-    const writeIds = [...new Set(request.writeTrackIds)].filter((id) => targets.has(id));
+
     state.saving = true;
     state.error = "";
     state.completed = 0;
@@ -89,12 +92,23 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     let accepting = true;
     const progress = (result: MetadataSaveResult) => {
       if (!accepting || !targets.has(result.trackId)) return;
+      result = {
+        ...result,
+        fileWritten: result.fileWritten || (results.get(result.trackId)?.fileWritten ?? false),
+      };
       results.set(result.trackId, result);
       reported.set(result.trackId, result);
       state.results = [...results.values()];
       state.completed = reported.size;
     };
     try {
+      const writeIds = [
+        ...new Set(
+          request.prepareWriteTrackIds
+            ? await request.prepareWriteTrackIds(progress)
+            : request.writeTrackIds,
+        ),
+      ].filter((id) => targets.has(id));
       const execute = async () => {
         for (const result of await request.execute(progress, id)) progress(result);
       };
@@ -107,7 +121,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
       for (const target of targets.values()) {
         const result = reported.get(target.trackId) ?? {
           ...target,
-          fileWritten: false,
+          fileWritten: results.get(target.trackId)?.fileWritten ?? false,
           databaseUpdated: false,
           error: state.error || t("保存未返回结果，请重试或重新扫描。"),
         };
@@ -144,12 +158,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
             : state.synchronizationError
               ? "warning"
               : "success",
-          message: state.synchronizationError
-            ? t("标签保存完成：{count} 首成功，{failed} 首失败。元数据已保存，但界面刷新失败。", {
-                count: succeeded,
-                failed,
-              })
-            : t("标签保存完成：{count} 首成功，{failed} 首失败。", { count: succeeded, failed }),
+          message: t("{count} 首成功，{failed} 首失败", { count: succeeded, failed }),
         });
       state.saving = false;
     }

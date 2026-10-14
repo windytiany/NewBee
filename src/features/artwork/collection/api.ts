@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ArtworkCollection } from "@/features/artwork/collection/types";
+import type {
+  ArtworkCollection,
+  ArtworkDraft,
+  ArtworkWritePlan,
+} from "@/features/artwork/collection/types";
 
 export type ArtworkSize = null | 128 | 512 | 2048;
 
@@ -9,7 +13,10 @@ export function createArtworkCollectionApi(invokeCommand: typeof invoke = invoke
       invokeCommand<ArtworkCollection[]>("get_track_artwork_collections", {
         trackIds: [...trackIds],
       }),
-    content: (contentId: string, size: ArtworkSize = null) =>
-      invokeCommand<ArrayBuffer>("get_artwork_content", { contentId, size }),
+    picture: (artworkId: number, size: ArtworkSize = null) =>
+      invokeCommand<ArrayBuffer>("get_artwork_picture", { artworkId, size }),
+    readFile: (path: string) => invokeCommand<number[]>("read_artwork_file", { path }),
+    writePlan: (artworkDrafts: ArtworkDraft[]) =>
+      invokeCommand<ArtworkWritePlan[]>("get_artwork_write_plan", { artworkDrafts }),
   };
 }

@@ -37,7 +37,6 @@ describe("file metadata save", () => {
       changes: [{ field: "lyrics", value: "words" }],
       lyricsAction: "keep",
       artworkDrafts: [],
-      embedArtwork: false,
     });
     expect(calls[2].args?.patches).toEqual([
       { path, changes: [{ field: "title", value: "New" }], writeCover: true },

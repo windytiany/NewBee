@@ -1,14 +1,6 @@
 <template>
   <div @dragover.prevent @drop.prevent="dropPicture">
-    <input
-      ref="fileInput"
-      type="file"
-      accept="image/*"
-      class="hidden"
-      :disabled="locked || !ready"
-      @change="selectPicture"
-    />
-    <p v-if="busy || importing" role="status" class="text-app-muted mb-4 text-sm">
+    <p v-if="working || importing" role="status" class="text-app-muted mb-4 text-sm">
       {{ t("正在导入图片…") }}
     </p>
     <p v-if="!ready" role="alert" class="mb-4 text-sm text-red-400">
@@ -32,6 +24,12 @@
         >
           <template #details>
             <div class="min-w-0 space-y-6">
+              <p class="text-app-muted text-sm">
+                {{ entry.storage === "embedded" ? t("内嵌") : t("关联") }}
+              </p>
+              <p v-if="entry.error" role="status" class="text-sm text-red-400">
+                {{ t("路径不可用") }}
+              </p>
               <label class="block space-y-1.5 text-sm">
                 <span>{{ t("用途类型") }}</span>
                 <select
@@ -95,11 +93,16 @@
       class="grid grid-cols-[11.5rem_minmax(0,1fr)_6.5rem] items-start gap-x-6 gap-y-3 py-6 max-[640px]:grid-cols-[8rem_minmax(0,1fr)]"
     >
       <button
+        ref="additionElement"
         type="button"
         :aria-label="t('添加图片')"
+        aria-haspopup="menu"
+        :aria-expanded="!!contextMenu"
         :disabled="locked || !ready"
-        class="focus-visible:outline-app-accent text-app-muted flex aspect-square items-center justify-center border border-white/25 hover:border-white/50 hover:bg-white/5 hover:text-white focus-visible:outline-2 disabled:opacity-40"
-        @click="fileInput?.click()"
+        class="focus-visible:outline-app-accent flex aspect-square w-full items-center justify-center border border-white/25 bg-white/5 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-40"
+        @click="selectPicture"
+        @contextmenu.prevent.stop="openContextMenu"
+        @keydown="onAdditionKeydown"
       >
         <svg
           width="28"
@@ -126,49 +129,61 @@
           </option>
         </select>
       </label>
-      <div class="space-y-1 max-[640px]:col-start-2">
-        <button
-          type="button"
-          :disabled="locked || !ready"
-          class="focus-visible:outline-app-accent w-full rounded-sm border border-white/15 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-40"
-          @click="fileInput?.click()"
-        >
-          {{ t("添加图片") }}
-        </button>
-        <button
-          type="button"
-          :disabled="locked || !ready"
-          class="focus-visible:outline-app-accent w-full rounded-sm border border-white/15 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-40"
-          @click="pastePicture"
-        >
-          {{ t("粘贴封面") }}
-        </button>
-      </div>
-    </div>
-    <label class="inline-flex items-center gap-2 border-t border-white/15 pt-4 text-sm">
-      <input
-        type="checkbox"
-        :checked="embedArtwork"
+      <button
+        type="button"
         :disabled="locked || !ready"
-        class="accent-app-accent size-3.5"
-        @change="changeEmbedding"
-      />
-      {{ t("嵌入音频文件") }}
-    </label>
+        class="focus-visible:outline-app-accent rounded-sm border border-white/15 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-40 max-[640px]:col-start-2"
+        @click="selectPicture"
+      >
+        {{ t("添加") }}
+      </button>
+    </div>
+    <div
+      v-if="contextMenu"
+      ref="menuElement"
+      role="menu"
+      :aria-label="t('封面')"
+      class="bg-app-interactive fixed z-100 w-40 rounded-md p-1 shadow-xl ring-1 ring-white/10"
+      :style="{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }"
+      @pointerdown.stop
+    >
+      <button
+        ref="firstMenuItemElement"
+        type="button"
+        role="menuitem"
+        :disabled="locked || !ready"
+        class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-40"
+        @click="pastePicture"
+      >
+        {{ t("粘贴封面") }}
+      </button>
+    </div>
+    <AdditionDialog
+      v-if="pending"
+      :url="pending.url"
+      :path="pending.path"
+      :working="working"
+      @confirm="confirm"
+      @cancel="cancel"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { isTauri } from "@tauri-apps/api/core";
+import AdditionDialog from "@/features/artwork/collection/AdditionDialog.vue";
+import { useAddition } from "@/features/artwork/collection/useAddition";
+import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { t } from "@/shared/i18n/locale";
 import type {
   CollectionDraft,
   CommonPicture,
   DisplaySelection,
 } from "@/features/artwork/collection/types";
+import { usePictureDrop } from "@/features/artwork/collection/useDrop";
 import ArtworkPreview from "@/features/artwork/collection/ArtworkPreview.vue";
 import { pictureTypes, pictureTypeLabel } from "@/features/artwork/collection/presentation";
-import { pictureMimeType, readClipboardCover } from "@/features/artwork/transfer";
 const props = defineProps<{
   draft: CollectionDraft;
   pictures: CommonPicture[];
@@ -176,38 +191,82 @@ const props = defineProps<{
   ready: boolean;
   disabled: boolean;
   importing: boolean;
-  embedArtwork: boolean;
   addPicture: (
     data: Uint8Array,
     mimeType: string,
     pictureType: number,
+    path?: string,
   ) => Promise<string | undefined>;
 }>();
 const emit = defineEmits<{
   type: [key: string, value: number];
   delete: [key: string];
   display: [key: string];
-  embed: [value: boolean];
   failed: [error: unknown];
   busy: [value: boolean];
 }>();
-const fileInput = ref<InstanceType<typeof globalThis.HTMLInputElement> | null>(null);
-const busy = ref(false);
 const importType = ref(3);
-const locked = computed(() => props.disabled || props.importing || busy.value);
-const MAX_PICTURE_BYTES = 20 * 1024 * 1024;
-let generation = 0;
+const { pending, working, active, cancel, confirm, select, paste, dropPath, dropFile } =
+  useAddition({
+    enabled: () => props.ready && !props.disabled,
+    context: () => props.draft,
+    pictureType: () => importType.value,
+    add: (...args) => props.addPicture(...args),
+    failed: (error) => emit("failed", error),
+    busy: (value) => emit("busy", value),
+  });
+const locked = computed(() => props.disabled || props.importing || active.value);
+const pendingPath = usePictureDrop(
+  () => !locked.value && props.ready,
+  () => {},
+  (error) => emit("failed", error),
+);
 watch(
-  () => [props.draft, props.disabled, props.ready],
-  () => {
-    ++generation;
+  pendingPath,
+  (path) => {
+    if (!path) return;
+    pendingPath.value = null;
+    void dropPath(path);
   },
   { flush: "sync" },
 );
-onScopeDispose(() => {
-  ++generation;
-  emit("busy", false);
+const additionElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const menuElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const firstMenuItemElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const {
+  request: contextMenu,
+  position: menuPosition,
+  open: openMenu,
+  close: closeMenu,
+} = useContextMenu<null>({
+  menuElement,
+  firstMenuItemElement,
+  fallbackFocusElement: additionElement,
 });
+watch(locked, (value) => {
+  if (value) closeMenu();
+});
+function openContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
+  if (locked.value || !props.ready || !additionElement.value) return;
+  openMenu({ x: event.clientX, y: event.clientY, trigger: additionElement.value, payload: null });
+}
+function onAdditionKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+  if (locked.value || !props.ready || !additionElement.value) return;
+  if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const bounds = additionElement.value.getBoundingClientRect();
+  openMenu({ x: bounds.left, y: bounds.bottom, trigger: additionElement.value, payload: null });
+}
+function selectPicture() {
+  if (locked.value || !props.ready) return;
+  void select();
+}
+function pastePicture() {
+  if (locked.value || !props.ready) return;
+  closeMenu(true);
+  void paste();
+}
 function findPicture(key: string) {
   return props.draft.tracks[0]?.pictures.find((entry) => entry.key === key) ?? null;
 }
@@ -221,48 +280,9 @@ function changeImportType(event: InstanceType<typeof globalThis.Event>) {
   const value = Number((event.target as InstanceType<typeof globalThis.HTMLSelectElement>).value);
   if (pictureTypes.includes(value)) importType.value = value;
 }
-function changeEmbedding(event: InstanceType<typeof globalThis.Event>) {
-  if (!locked.value && props.ready)
-    emit("embed", (event.target as InstanceType<typeof globalThis.HTMLInputElement>).checked);
-}
-async function importPicture(read: () => Promise<Uint8Array>) {
-  if (locked.value || !props.ready) return;
-  const current = generation;
-  const pictureType = importType.value;
-  busy.value = true;
-  emit("busy", true);
-  try {
-    const data = await read();
-    if (current !== generation) return;
-    if (!data.length || data.length > MAX_PICTURE_BYTES)
-      throw new Error(t("封面为空或超过 20 MiB。"));
-    const mimeType = await pictureMimeType(Array.from(data));
-    if (current !== generation) return;
-    await props.addPicture(data, mimeType, pictureType);
-  } catch (error) {
-    if (current === generation) emit("failed", error);
-  } finally {
-    busy.value = false;
-    emit("busy", false);
-  }
-}
-function importFile(file: InstanceType<typeof globalThis.File>) {
-  return importPicture(async () => {
-    if (!file.size || file.size > MAX_PICTURE_BYTES) throw new Error(t("封面为空或超过 20 MiB。"));
-    return new Uint8Array(await file.arrayBuffer());
-  });
-}
-function selectPicture(event: InstanceType<typeof globalThis.Event>) {
-  const input = event.target as InstanceType<typeof globalThis.HTMLInputElement>;
-  const file = input.files?.[0];
-  input.value = "";
-  if (file) void importFile(file);
-}
 function dropPicture(event: InstanceType<typeof globalThis.DragEvent>) {
+  if (isTauri() || locked.value || !props.ready) return;
   const file = event.dataTransfer?.files[0];
-  if (file) void importFile(file);
-}
-function pastePicture() {
-  void importPicture(async () => Uint8Array.from(await readClipboardCover()));
+  if (file) void dropFile(file);
 }
 </script>

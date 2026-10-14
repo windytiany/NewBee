@@ -25,11 +25,10 @@ it("sends manual metadata and complete artwork drafts in the shared save request
       [
         {
           trackId: 1,
-          pictures: [{ source: "new", data: [1, 2], pictureType: 3 }],
+          pictures: [{ source: "embedded", data: [1, 2], pictureType: 3 }],
           displayIndex: 0,
         },
       ],
-      true,
     );
     expect(calls[0]).toEqual({
       command: "save_track_metadata",
@@ -41,11 +40,10 @@ it("sends manual metadata and complete artwork drafts in the shared save request
           artworkDrafts: [
             {
               trackId: 1,
-              pictures: [{ source: "new", data: [1, 2], pictureType: 3 }],
+              pictures: [{ source: "embedded", data: [1, 2], pictureType: 3 }],
               displayIndex: 0,
             },
           ],
-          embedArtwork: true,
         },
         onProgress,
         operationId: "operation",
@@ -62,7 +60,6 @@ it("sends manual metadata and complete artwork drafts in the shared save request
           changes: [],
           lyricsAction: "keep",
           artworkDrafts: [{ trackId: 1, pictures: [], displayIndex: null }],
-          embedArtwork: false,
         },
         onProgress,
       },
@@ -76,7 +73,6 @@ it("sends manual metadata and complete artwork drafts in the shared save request
           changes: [{ field: "artistSort", value: null }],
           lyricsAction: "keep",
           artworkDrafts: [],
-          embedArtwork: false,
         },
         onProgress,
       },

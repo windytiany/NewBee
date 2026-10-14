@@ -14,11 +14,14 @@ pub(crate) struct Description {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PictureDescription {
+    pub(crate) artwork_id: i64,
     pub(crate) content_id: String,
     pub(crate) mime_type: String,
     pub(crate) byte_length: i64,
     pub(crate) picture_type: u8,
-    pub(crate) embedded: bool,
+    pub(crate) source: String,
+    pub(crate) path: String,
+    pub(crate) error: Option<String>,
 }
 
 #[tauri::command]
@@ -55,8 +58,8 @@ pub(crate) async fn get_track_artwork_collections<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub(crate) async fn get_artwork_content<R: tauri::Runtime>(
-    content_id: String,
+pub(crate) async fn get_artwork_picture<R: tauri::Runtime>(
+    artwork_id: i64,
     size: Option<u32>,
     app: tauri::AppHandle<R>,
 ) -> Result<Response, String> {
@@ -64,7 +67,7 @@ pub(crate) async fn get_artwork_content<R: tauri::Runtime>(
     tauri::async_runtime::spawn_blocking(move || {
         let database = app.state::<Database>();
         database
-            .artwork_content_bytes(&content_id, size, |data, size| {
+            .artwork_picture_bytes(artwork_id, size, |data, size| {
                 super::super::thumbnail(&database, data, size)
             })
             .map(Response::new)

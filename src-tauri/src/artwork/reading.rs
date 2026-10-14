@@ -75,10 +75,11 @@ impl Database {
         derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
     ) -> Result<Vec<u8>, String> {
         use rusqlite::OptionalExtension;
+        self.refresh_artwork_paths(Some(track_id))?;
         self.artwork_bytes(size, derive, |connection| {
             connection
                 .query_row(
-                    "SELECT image_id FROM track_artwork WHERE track_id = ?1 AND is_display = 1",
+                    "SELECT image_id FROM track_artwork WHERE track_id = ?1 AND is_display = 1 AND source_error IS NULL",
                     [track_id],
                     |row| row.get::<_, i64>(0),
                 )
@@ -87,6 +88,7 @@ impl Database {
         })
     }
 
+    #[cfg(test)]
     pub fn artwork_content_bytes(
         &self,
         content_id: &str,
@@ -114,19 +116,59 @@ impl Database {
         derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
     ) -> Result<Vec<u8>, String> {
         use rusqlite::OptionalExtension;
+        let track_id: Option<i64> = self.connection()?.query_row(
+            "SELECT t.id FROM tracks t INNER JOIN track_artwork a ON a.track_id = t.id AND a.is_display = 1
+             WHERE t.in_library = 1 AND t.album_artist IS ?1 AND t.album IS ?2
+             ORDER BY t.disc_number IS NULL, t.disc_number, t.track_number IS NULL, t.track_number, t.id LIMIT 1",
+            params![album_artist, album], |row| row.get(0),
+        ).optional().map_err(|error| error.to_string())?;
+        if let Some(track_id) = track_id {
+            self.refresh_artwork_paths(Some(track_id))?;
+        }
         self.artwork_bytes(size, derive, |connection| {
             connection
                 .query_row(
-                    "SELECT ta.image_id FROM tracks t
+                    "SELECT CASE WHEN ta.source_error IS NULL THEN ta.image_id END FROM tracks t
              INNER JOIN track_artwork ta ON ta.track_id = t.id AND ta.is_display = 1
              WHERE t.in_library = 1 AND t.album_artist IS ?1 AND t.album IS ?2
              ORDER BY t.disc_number IS NULL, t.disc_number,
                       t.track_number IS NULL, t.track_number, t.id LIMIT 1",
                     params![album_artist, album],
-                    |row| row.get::<_, i64>(0),
+                    |row| row.get::<_, Option<i64>>(0),
                 )
                 .optional()
+                .map(|id| id.flatten())
                 .map_err(|error| error.to_string())
+        })
+    }
+
+    pub(crate) fn artwork_picture_bytes(
+        &self,
+        artwork_id: i64,
+        size: Option<u32>,
+        derive: impl FnOnce(Vec<u8>, u32) -> Result<Vec<u8>, String>,
+    ) -> Result<Vec<u8>, String> {
+        let track_id: i64 = self
+            .connection()?
+            .query_row(
+                "SELECT track_id FROM track_artwork WHERE id = ?1",
+                [artwork_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        self.refresh_artwork_paths(Some(track_id))?;
+        self.artwork_bytes(size, derive, |connection| {
+            let (image_id, error): (i64, Option<String>) = connection
+                .query_row(
+                    "SELECT image_id, source_error FROM track_artwork WHERE id = ?1",
+                    [artwork_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .map_err(|error| error.to_string())?;
+            if let Some(error) = error {
+                return Err(error);
+            }
+            Ok(Some(image_id))
         })
     }
 

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { t } from "@/shared/i18n/locale";
 
 export function hasClipboardCover(): Promise<boolean> {
@@ -48,7 +48,10 @@ export async function pictureMimeType(data: number[]): Promise<string> {
   return mimeType;
 }
 
-export async function saveCover(data: number[], isCurrent: () => boolean): Promise<void> {
+export async function saveCover(
+  data: number[],
+  isCurrent: () => boolean,
+): Promise<string | undefined> {
   const extensions = await invoke<string[]>("artwork_extensions", { data });
   if (!isCurrent()) return;
   const path = await save({
@@ -58,4 +61,15 @@ export async function saveCover(data: number[], isCurrent: () => boolean): Promi
   });
   if (!path || !isCurrent()) return;
   await invoke<void>("save_artwork", { path, data });
+  return path;
+}
+
+export async function selectCover(): Promise<{ path: string; data: Uint8Array } | null> {
+  const path = await open({ multiple: false, directory: false, title: t("添加图片") });
+  if (!path || Array.isArray(path)) return null;
+  return { path, data: await readCover(path) };
+}
+
+export async function readCover(path: string): Promise<Uint8Array> {
+  return Uint8Array.from(await invoke<number[]>("read_artwork_file", { path }));
 }

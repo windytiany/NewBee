@@ -35,8 +35,8 @@ fn rejects_old_schema_without_modifying_it() {
 }
 
 #[test]
-fn rejects_previous_versions_without_changing_snapshots_or_schema() {
-    for version in 4..=10 {
+fn rejects_other_versions_without_changing_snapshots_or_schema() {
+    for version in [0, SCHEMA_VERSION + 1, SCHEMA_VERSION + 2] {
         let mut connection = Connection::open_in_memory().unwrap();
         connection.execute_batch("CREATE TABLE tracks (id INTEGER PRIMARY KEY, path TEXT, title TEXT); INSERT INTO tracks VALUES (42, 'song.mp3', 'Stored'); PRAGMA foreign_keys = ON;").unwrap();
         connection

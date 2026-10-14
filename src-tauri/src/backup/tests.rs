@@ -468,7 +468,7 @@ fn inline_table_constraints_and_declaration_order_restore_the_same_structure() {
             return "CREATE TABLE track_lyrics (track_id INTEGER, text TEXT, no_lyrics INTEGER DEFAULT 0 CHECK (text IS NULL OR no_lyrics = 0) NOT NULL, FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE, CHECK (no_lyrics IN (0, 1)), PRIMARY KEY (track_id))".into();
         }
         if sql.starts_with("CREATE TABLE track_artwork ") {
-            return "CREATE TABLE track_artwork (id INTEGER PRIMARY KEY AUTOINCREMENT, track_id INTEGER NOT NULL, image_id INTEGER NOT NULL, picture_type INTEGER NOT NULL, type_override INTEGER, is_display INTEGER DEFAULT 0 NOT NULL, CHECK (picture_type BETWEEN 0 AND 255), UNIQUE (track_id, image_id), FOREIGN KEY (image_id) REFERENCES artwork_images(id), CHECK (is_display IN (0, 1)), CHECK (type_override BETWEEN 0 AND 255), FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE)".into();
+            return "CREATE TABLE track_artwork (id INTEGER PRIMARY KEY AUTOINCREMENT, track_id INTEGER NOT NULL, image_id INTEGER NOT NULL, picture_type INTEGER NOT NULL, is_display INTEGER DEFAULT 0 NOT NULL, source_error TEXT, CHECK (picture_type BETWEEN 0 AND 255), FOREIGN KEY (image_id) REFERENCES artwork_images(id), CHECK (is_display IN (0, 1)), FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE)".into();
         }
         if sql.starts_with("CREATE TABLE tracks ") {
             return sql

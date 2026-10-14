@@ -1,5 +1,7 @@
 pub(crate) mod commands;
 pub(crate) mod editing;
+pub(crate) mod linked;
+pub(crate) mod plan;
 
 use super::model::ArtworkContent;
 
@@ -43,6 +45,12 @@ impl Scan {
 
 #[derive(Debug)]
 pub struct Image {
+    pub artwork_id: i64,
+    pub source: String,
+    pub path: String,
+    #[cfg(test)]
+    pub error: Option<String>,
+    #[cfg(test)]
     pub content_id: String,
     pub picture: Picture,
 }
@@ -55,11 +63,9 @@ pub struct Collection {
 
 #[derive(Debug, Clone)]
 pub enum DraftPicture {
-    Existing {
-        content_id: String,
-        picture_type: u8,
-    },
+    Existing { artwork_id: i64, picture_type: u8 },
     New(Picture),
+    Linked { path: String, picture: Picture },
 }
 
 #[derive(Debug, Default, Clone)]
@@ -75,7 +81,7 @@ impl From<Collection> for Draft {
                 .images
                 .into_iter()
                 .map(|image| DraftPicture::Existing {
-                    content_id: image.content_id,
+                    artwork_id: image.artwork_id,
                     picture_type: image.picture.picture_type,
                 })
                 .collect(),
