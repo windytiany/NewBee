@@ -332,6 +332,17 @@ describe("library album cover playback", () => {
 });
 
 describe("album detail playback button", () => {
+  it("keeps the title non-growing while allowing truncation beside the playback button", () => {
+    const browser = mountBrowser(true);
+    const heading = findNode(browser.root, (node) => node.type === "h2");
+    if (!heading) throw new Error("Missing album heading");
+    const classes = String(heading.props.class).split(/\s+/);
+    expect(classes).not.toContain("flex-1");
+    expect(classes).toContain("min-w-0");
+    expect(classes).toContain("truncate");
+    expect(heading.parent).toBe(browser.playbackButton().parent);
+  });
+
   for (const currentTrackId of [null, 99, 1, 2]) {
     for (const isPlaying of [false, true]) {
       it(`uses album membership for track ${currentTrackId} while playing=${isPlaying}`, () => {

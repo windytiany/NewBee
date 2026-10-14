@@ -14,7 +14,7 @@
         <div class="flex min-w-0 items-center gap-3">
           <h2
             ref="albumHeadingElement"
-            class="min-w-0 flex-1 truncate text-xl font-bold sm:text-2xl"
+            class="min-w-0 truncate text-xl font-bold sm:text-2xl"
             tabindex="-1"
           >
             {{ props.album.album ?? t("未知专辑") }}
