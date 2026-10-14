@@ -185,6 +185,24 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
+  it("disables tag autocomplete and aligns additional inputs with a shared label width", async () => {
+    const { editor, root } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    const form = findNode(root, (node) => node.props.id === "metadata-editor-form");
+    expect(form?.props.autocomplete).toBe("off");
+    const panel = findNode(root, (node) => node.props.id === "metadata-panel-additional");
+    if (!panel) throw new Error("Missing additional tags panel");
+    for (const field of editor.state.draft) {
+      if (field.key === "lyrics") continue;
+      const node = input(root, field.key);
+      expect(node.props.autocomplete).toBe("off");
+      const label = findNode(panel, (entry) => entry.props.for === `metadata-${field.key}`);
+      if (!label) continue;
+      expect(label.props.class).toContain("whitespace-nowrap");
+      expect(label.parent?.props.class).toContain("grid-cols-[11rem_minmax(0,1fr)]");
+    }
+  });
   it("updates field and property labels after opening without changing draft values", async () => {
     const { editor, root } = mountDialog();
     await editor.openTracks([1, 2]);

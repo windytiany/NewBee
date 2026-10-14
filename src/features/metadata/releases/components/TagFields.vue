@@ -131,6 +131,7 @@ function changeCover(event: InstanceType<typeof globalThis.Event>) {
         </label>
         <input
           :id="`album-tag-${field.key}`"
+          autocomplete="off"
           :value="common(field.key) ?? ''"
           :disabled="disabled || !state.fields.includes(field.key) || !state.selected"
           :placeholder="state.selected && common(field.key) === undefined ? '—' : ''"

@@ -40,6 +40,7 @@
             <span>{{ t("图片路径") }}</span>
             <input
               :value="path"
+              autocomplete="off"
               readonly
               class="bg-app-surface w-full rounded-sm border border-white/25 px-2 py-1.5"
             />

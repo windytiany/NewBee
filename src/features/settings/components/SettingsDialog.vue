@@ -358,6 +358,7 @@ defineExpose({ show });
                 <input
                   v-model="accentColor"
                   type="text"
+                  autocomplete="off"
                   name="accent-color"
                   :aria-label="t('自定义主题色')"
                   pattern="#[0-9a-fA-F]{6}"
@@ -525,6 +526,7 @@ defineExpose({ show });
               <div class="flex gap-2">
                 <input
                   id="shortcut-recorder"
+                  autocomplete="off"
                   name="shortcut-recorder"
                   :value="formatShortcut(selectedBinding.shortcut)"
                   data-shortcut-recorder

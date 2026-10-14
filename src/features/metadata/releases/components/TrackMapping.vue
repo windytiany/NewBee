@@ -348,6 +348,7 @@ function durationDiffers(index: number) {
                     </p>
                     <input
                       :id="`match-${index}-${field.key}`"
+                      autocomplete="off"
                       :value="row.values[field.key] ?? ''"
                       :placeholder="row.values[field.key] === undefined ? t('保留本地') : ''"
                       :disabled="disabled || !state.fields.includes(field.key)"

@@ -132,7 +132,7 @@
         </dl>
       </section>
 
-      <form id="metadata-editor-form" @submit.prevent="prepareSave">
+      <form id="metadata-editor-form" autocomplete="off" @submit.prevent="prepareSave">
         <section
           v-for="tab in fieldTabs"
           v-show="activeTab === tab"
@@ -169,16 +169,19 @@
                   :key="field.key"
                   class="grid min-w-0 items-center gap-3"
                   :class="
-                    index === 1
-                      ? 'grid-cols-[auto_minmax(0,1fr)]'
-                      : 'grid-cols-[5rem_minmax(0,1fr)]'
+                    tab === 'additional'
+                      ? 'grid-cols-[11rem_minmax(0,1fr)]'
+                      : index === 1
+                        ? 'grid-cols-[auto_minmax(0,1fr)]'
+                        : 'grid-cols-[5rem_minmax(0,1fr)]'
                   "
                 >
-                  <label :for="`metadata-${field.key}`" class="text-sm">{{
+                  <label :for="`metadata-${field.key}`" class="text-sm whitespace-nowrap">{{
                     index === 1 && state.mode !== "album" ? t("共") : t(field.label)
                   }}</label>
                   <input
                     :id="`metadata-${field.key}`"
+                    autocomplete="off"
                     :aria-label="t(field.label)"
                     :value="field.value"
                     :readonly="!field.writable"

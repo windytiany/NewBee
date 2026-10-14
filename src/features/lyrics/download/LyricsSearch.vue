@@ -163,6 +163,7 @@ void loadSettings();
     <form class="mb-4 flex flex-wrap gap-2" @submit.prevent="search.search()">
       <input
         v-model="state.query"
+        autocomplete="off"
         :aria-label="t('歌词搜索关键词')"
         :placeholder="t('歌名、歌手或其他关键词')"
         type="text"
@@ -229,6 +230,7 @@ void loadSettings();
         <p v-if="state.previewing" role="status" class="mb-2 text-sm">{{ t("正在加载歌词…") }}</p>
         <textarea
           :value="state.preview"
+          autocomplete="off"
           readonly
           :aria-label="t('候选歌词预览')"
           :placeholder="t('选择曲目以预览歌词')"

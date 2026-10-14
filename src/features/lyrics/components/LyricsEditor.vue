@@ -24,6 +24,7 @@ function edit(event: InstanceType<typeof globalThis.Event>) {
 <template>
   <textarea
     :id="inputId"
+    autocomplete="off"
     :form="form"
     :aria-label="t('内嵌歌词')"
     :value="props.modelValue"

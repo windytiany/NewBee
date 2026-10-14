@@ -36,6 +36,7 @@ function scrollResult(event: InstanceType<typeof globalThis.WheelEvent>) {
         <span class="shrink-0">{{ t("专辑艺术家") }}</span>
         <input
           v-model="state.artist"
+          autocomplete="off"
           :disabled="disabled || state.searching"
           autofocus
           class="focus:border-app-accent h-6 w-full min-w-0 rounded border border-white/15 bg-black/20 px-2 text-xs text-white focus:outline-none"
@@ -45,6 +46,7 @@ function scrollResult(event: InstanceType<typeof globalThis.WheelEvent>) {
         <span class="shrink-0">{{ t("专辑") }}</span>
         <input
           v-model="state.album"
+          autocomplete="off"
           :disabled="disabled || state.searching"
           class="focus:border-app-accent h-6 w-full min-w-0 rounded border border-white/15 bg-black/20 px-2 text-xs text-white focus:outline-none"
         />
@@ -159,6 +161,7 @@ function scrollResult(event: InstanceType<typeof globalThis.WheelEvent>) {
         >
           <input
             v-model="state.directId"
+            autocomplete="off"
             :aria-label="t('MusicBrainz 发行版本链接或 ID')"
             :disabled="disabled || state.loadingRelease"
             placeholder="https://musicbrainz.org/release/…"
