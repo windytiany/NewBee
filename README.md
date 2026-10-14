@@ -1,62 +1,62 @@
 # NewBee
 
-NewBee 是一款面向本地音乐收藏的桌面播放器。它可以扫描和管理音乐目录，按艺人和专辑浏览曲目，创建播放列表，并通过播放队列收听和管理音乐。
+NewBee 是一款面向本地音乐收藏的桌面播放器，集音乐库管理、播放与标签整理于一体。基于 Tauri、Vue 和 Rust 构建，目前提供 Windows x64 安装包。
 
-## 功能
+## 特色
 
-- 保存并扫描本地音乐目录，也可以直接导入音频文件。
-- 按艺人、专辑浏览音乐库和曲目。
-- 创建、编辑播放列表，并调整列表中的曲目顺序。
-- 使用播放队列管理接下来播放的曲目。
+- 扫描音乐目录或导入音频文件，按艺人、专辑浏览本地音乐库。
+- 创建播放列表，通过播放队列安排接下来收听的曲目。
+- 编辑音频标签与封面，也可根据 MusicBrainz 发行版本匹配、更新专辑信息。
+- 显示、编辑和在线搜索歌词。
 
-## 技术栈
+项目处于早期开发阶段，功能仍在持续完善。
 
-- 桌面应用：Tauri 2、Rust 2021
-- 前端：Vue 3、TypeScript、Vite、Tailwind CSS
-- JavaScript 包管理器：Bun
+## 安装
+
+1. 打开 [GitHub Releases](https://github.com/windytiany/NewBee/releases/latest)。
+2. 在 Assets 中下载 Windows x64 的 `*-setup.exe` 安装包。
+3. 运行安装包，按提示完成安装。
+
+若系统缺少 WebView2，安装程序会联网下载并安装该运行时。
 
 ## 开发
 
-需要安装 Bun、Rust 1.90 或更新的工具链，以及当前平台所需的 Tauri 构建依赖。
+Windows 开发环境需要：
+
+- [Bun](https://bun.sh/) 1.4.2。
+- [Rust](https://rustup.rs/) stable，使用 MSVC 工具链。
+- [Visual Studio C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)，勾选“使用 C++ 的桌面开发”。
+- [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)。
+
+完整环境要求见 [Tauri 前置依赖](https://v2.tauri.app/start/prerequisites/)。
 
 ```sh
-bun install
+git clone https://github.com/windytiany/NewBee.git
+cd NewBee
+bun install --frozen-lockfile
 bun run tauri dev
 ```
 
-## 诊断日志
+## 构建
 
-在“设置 → 诊断”中打开日志目录。前端和 Rust 共用本机日志文件，默认记录 INFO 及以上级别；启用“详细日志”后立即记录 DEBUG，下次启动恢复默认，不保存该开关。
-
-每个文件约 5 MB，保留 5 份归档。轮转产生的临时备份在启动及每分钟清理，通常总量约 30 MB。日志不会自动上传，也不包含歌词正文、封面数据或请求响应正文。排障日志保留必要的文件路径，手动分享前请检查隐私。通知只显示简短结果，逐曲失败与诊断原因记录在日志中。
-
-## 构建与检查
+在 Windows 上构建 x64 安装包：
 
 ```sh
-bun test
-bun run build
-bun run lint
-bun run format:check
-bun run tauri build
-cargo check --manifest-path src-tauri/Cargo.toml
+rustup target add x86_64-pc-windows-msvc
+bun run tauri build --target x86_64-pc-windows-msvc --bundles nsis -- --locked
 ```
 
-## 提交检查与 CI
+安装包输出到 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/`。
 
-`bun install` 会通过 Husky 安装 pre-commit hook。提交时，lint-staged 只对匹配的暂存文件运行 ESLint 自动修复和 Prettier 格式化；它不运行完整测试、类型检查或 Rust 检查。
+## 检查
 
-CI 在 push 和 pull request 时对完整 checkout 运行前端和 Rust 检查，不自动修改代码。pre-commit 提供快速本地反馈，CI 验证最终提交，两者互补；跳过或未安装 hook 不会跳过 CI。
-
-仓库通过 `.gitattributes` 统一文本文件 checkout 为 LF，与 Prettier 默认换行符一致，避免 Windows 的 `core.autocrlf` 导致本地与 CI 结果不同。
-
-## 项目结构
-
-- `src/app/`：应用启动、页面切换、窗口壳与全局主题样式。
-- `src/features/`：媒体库、歌单、播放、歌词、标签、封面和设置，每个功能拥有自己的组件与逻辑。
-- `src/shared/`：无音乐业务语义的组件、交互与通知设施，不依赖 `app` 或 `features`。
-- `tests/app/`、`tests/features/`、`tests/shared/`：对应模块的测试；跨模块约束放在 `tests/integration/`。
-- `src-tauri/`：Tauri 配置、Rust 后端及桌面应用图标。
-
-功能间使用明确的类型、请求、事件或组件入口，不引用其他功能的播放运行时或队列内部实现。业务代码即使被多个功能复用，也不放入 `shared`。
-
-项目目前处于早期开发阶段，功能和内部实现可能继续调整。
+```sh
+bun run lint
+bun run format:check
+bun test
+bun run build
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo check --locked --manifest-path src-tauri/Cargo.toml
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --locked --manifest-path src-tauri/Cargo.toml
+```
