@@ -25,6 +25,13 @@
   body {
     background-color: var(--app-base);
     color: var(--app-text);
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable]:not([contenteditable="false"]) {
+    user-select: text;
   }
 
   :lang(ja) {
