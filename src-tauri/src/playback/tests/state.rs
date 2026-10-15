@@ -2,6 +2,7 @@ use super::super::{
     connect_source, is_expected_playback_id, open_decoder, ActivePlayback, ContinuousSource,
     NowPlayingTrack, PlaybackError, PlaybackState, PreparedTrack, AUDIO_FILE_NOT_FOUND_PREFIX,
 };
+use rodio::Source;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -83,6 +84,19 @@ fn a_stop_request_only_matches_its_playback_instance() {
     assert!(is_expected_playback_id(Some(12), 12));
     assert!(!is_expected_playback_id(Some(13), 12));
     assert!(!is_expected_playback_id(None, 12));
+}
+
+#[test]
+fn alac_in_m4a_decodes_audio() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/alac/tone.m4a");
+    let decoder =
+        open_decoder(&path).unwrap_or_else(|error| panic!("{}", error.into_play_command_message()));
+    assert_eq!(decoder.channels().get(), 2);
+    assert_eq!(decoder.sample_rate().get(), 44_100);
+    let samples: Vec<_> = decoder.collect();
+    assert_eq!(samples.len(), 4_410 * 2);
+    assert!(samples.iter().all(|sample| sample.is_finite()));
+    assert!(samples.iter().any(|sample| sample.abs() > 0.0001));
 }
 
 #[test]
