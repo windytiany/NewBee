@@ -1,16 +1,6 @@
 ## References
 
-- 编写、修改或审查代码前，必须读取并遵循 `CODING_STANDARDS.md`。
 - 查阅 `package.json` 与 `src-tauri/Cargo.toml` 获取技术栈信息。
-
-## Development
-
-```sh
-bun install
-bun run tauri dev
-
-bun run tauri build
-```
 
 ## Directory
 
@@ -40,11 +30,3 @@ cargo check --locked --manifest-path src-tauri/Cargo.toml
 cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --locked --manifest-path src-tauri/Cargo.toml
 ```
-
-## Issue tracker
-
-使用 GitHub Issues，通过 `gh` CLI 查询、发布和更新；目标仓库以 `git remote` 为准。 参考 `docs/agents/issue-tracker.md`。
-
-## Domain docs
-
-Single-context： `GLOSSARY.md` + `docs/adr`
