@@ -63,6 +63,16 @@ function collectSources(directory: string): string[] {
 }
 
 describe("library and playlist translations", () => {
+  it("translates both artist grouping options when switching languages", () => {
+    expect(t("专辑演出者")).toBe("专辑演出者");
+    expect(t("演出者")).toBe("演出者");
+    setLocale("en");
+    expect(t("专辑演出者")).toBe("Album artist");
+    expect(t("演出者")).toBe("Artist");
+    setLocale("zh-CN");
+    expect(t("演出者")).toBe("演出者");
+  });
+
   it("provides English translations for every literal UI key", () => {
     const keys = new Set<string>();
     for (const source of [

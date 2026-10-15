@@ -7,6 +7,7 @@ export const libraryMessages: Record<string, string> = {
   专辑操作: "Album actions",
   专辑曲目操作: "Album track actions",
   专辑演出者: "Album artist",
+  演出者: "Artist",
   专辑演出者列表: "Album artists",
   演出者列表: "Artists",
   演出者照片: "Artist photo",
