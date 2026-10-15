@@ -13,11 +13,29 @@ const source = await Bun.file(
 const output = transpileScript(source);
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 let events: string[];
+let receiveProgress: (event: {
+  payload: { operationId: string; completed: number; total: number };
+}) => void;
+let unlistened: boolean;
+let activeOperation: string;
 function createScan(invoke: () => Promise<ScanResult>) {
   const modules: Record<string, unknown> = {
     vue: { ref },
-    "@tauri-apps/api/core": { invoke },
-    "@/shared/notifications/center": { notify },
+    "@tauri-apps/api/core": {
+      invoke: (_command: string, args: { operationId: string }) => {
+        activeOperation = args.operationId;
+        return invoke();
+      },
+    },
+    "@tauri-apps/api/event": {
+      listen: async (_event: string, receive: typeof receiveProgress) => {
+        receiveProgress = receive;
+        return () => {
+          unlistened = true;
+        };
+      },
+    },
+    "@/shared/notifications/center": { notifications, notify },
     "@/features/library/events": {
       reportLibraryImport: () => {
         globalThis.window.dispatchEvent(new Event("newbee:library-changed"));
@@ -31,6 +49,7 @@ function createScan(invoke: () => Promise<ScanResult>) {
 }
 beforeEach(() => {
   events = [];
+  unlistened = false;
   notifications.clear();
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -83,9 +102,11 @@ describe("scan notifications", () => {
     expect(scan.isScanning.value).toBe(false);
     notifications.dismiss(notifications.items.value[0].id);
     expect(scan.scanError.value).toBe("permission denied");
+    expect(notifications.tasks.value).toEqual([]);
+    expect(unlistened).toBe(true);
   });
 
-  it("does not report pending work and ignores a concurrent scan request", async () => {
+  it("shows pending progress, filters unrelated events and ignores concurrent scans", async () => {
     let resolveScan!: (result: ScanResult) => void;
     let calls = 0;
     const scan = createScan(() => {
@@ -99,8 +120,16 @@ describe("scan notifications", () => {
     expect(calls).toBe(1);
     expect(notifications.items.value).toEqual([]);
     expect(scan.isScanning.value).toBe(true);
+    expect(notifications.tasks.value).toHaveLength(1);
+    expect(notifications.tasks.value[0].total).toBeUndefined();
+    receiveProgress({ payload: { operationId: "other", completed: 9, total: 10 } });
+    expect(notifications.tasks.value[0].completed).toBe(0);
+    receiveProgress({ payload: { operationId: activeOperation, completed: 3, total: 10 } });
+    expect(notifications.tasks.value[0]).toMatchObject({ completed: 3, total: 10 });
     resolveScan({ added: 1, updated: 0, skipped: 0, failed: 0 });
     await pending;
+    expect(notifications.tasks.value).toEqual([]);
+    expect(unlistened).toBe(true);
     expect(notifications.items.value).toHaveLength(1);
     expect(scan.isScanning.value).toBe(false);
   });

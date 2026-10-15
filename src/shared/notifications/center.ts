@@ -12,9 +12,9 @@ export type TaskNotification = {
   key: string;
   message: string;
   completed: number;
-  total: number;
-  cancelling: boolean;
-  cancel: () => void;
+  total?: number;
+  cancelling?: boolean;
+  cancel?: () => void;
 };
 type PauseReason = "hover" | "focus";
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>;

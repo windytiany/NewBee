@@ -6,7 +6,7 @@ import type * as LibraryChanges from "@/features/library/events";
 import type * as LibraryScan from "@/features/library/import/useScan";
 import type * as LibraryPage from "@/features/library/browser/useBrowser";
 import type * as PlaylistPage from "@/features/playlist/composables/usePage";
-import type { NotificationInput } from "@/shared/notifications/center";
+import { notifications, type NotificationInput } from "@/shared/notifications/center";
 
 const outputs = new Map<string, string>();
 for (const path of [
@@ -92,7 +92,9 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     "@/features/artwork/useAlbumArtwork": {
       invalidateAlbumArtworkCache: () => effects.push("albums"),
     },
+    "@tauri-apps/api/event": { listen: async () => () => {} },
     "@/shared/notifications/center": {
+      notifications,
       notify: (notice: NotificationInput) => notices.push(notice),
     },
     "@/features/settings/events": { SETTINGS_CHANGED_EVENT: "settings-changed" },

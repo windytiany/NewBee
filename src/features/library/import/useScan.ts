@@ -1,11 +1,14 @@
 import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ref } from "vue";
-import { notify } from "@/shared/notifications/center";
+import { notifications, notify } from "@/shared/notifications/center";
 import { reportLibraryImport } from "@/features/library/events";
 import type { IngestResult } from "@/features/library/types";
 
+type ScanProgress = { operationId: string; completed: number; total: number };
+const TASK_KEY = "library-scan";
 const isScanning = ref(false);
 const scanResult = ref<IngestResult | null>(null);
 const scanError = ref("");
@@ -19,7 +22,22 @@ export function useLibraryScan() {
     scanError.value = "";
     const id = operationId("library-import");
     const started = performance.now();
+    let unlisten: UnlistenFn | undefined;
+    notifications.updateTask({
+      key: TASK_KEY,
+      message: t("正在扫描…"),
+      completed: 0,
+    });
     try {
+      unlisten = await listen<ScanProgress>("library-scan-progress", ({ payload }) => {
+        if (payload.operationId !== id) return;
+        notifications.updateTask({
+          key: TASK_KEY,
+          message: t("正在扫描…"),
+          completed: payload.completed,
+          total: payload.total || undefined,
+        });
+      });
       logger.info("library", "import_started", { operationId: id });
       scanResult.value = await invoke<IngestResult>("scan_music_library", { operationId: id });
       const result = scanResult.value;
@@ -44,6 +62,8 @@ export function useLibraryScan() {
       logger.error("library", "scan_failed", error, { operationId: id });
       notify({ type: "error", message: t("扫描失败，请查看日志"), key: "library-scan" });
     } finally {
+      unlisten?.();
+      notifications.removeTask(TASK_KEY);
       isScanning.value = false;
     }
   }

@@ -16,15 +16,16 @@
         <p role="status" aria-live="polite">{{ task.message }}</p>
         <progress
           :aria-label="t('任务进度')"
-          :value="task.completed"
-          :max="Math.max(1, task.total)"
+          :value="task.total === undefined ? undefined : task.completed"
+          :max="Math.max(1, task.total ?? 1)"
           class="accent-app-accent w-full"
         ></progress>
         <div class="flex items-center justify-between gap-3">
-          <span class="text-app-muted">{{
+          <span v-if="task.total !== undefined" class="text-app-muted">{{
             t("已处理 {completed} / {total}", { completed: task.completed, total: task.total })
           }}</span>
           <button
+            v-if="task.cancel"
             type="button"
             :disabled="task.cancelling"
             class="focus-visible:outline-app-accent rounded px-3 py-1 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"

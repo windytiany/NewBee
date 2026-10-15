@@ -1,7 +1,45 @@
-use super::super::directory::run_scan;
+use super::super::directory::run_scan as scan_with_progress;
+use super::super::ImportResult;
 use super::support::TestFiles;
 use crate::database::Database;
 use std::fs;
+
+fn run_scan(database: &Database) -> Result<ImportResult, String> {
+    scan_with_progress(database, |_, _| {})
+}
+
+#[test]
+fn reports_progress_for_unique_audio_files_including_failures() {
+    let files = TestFiles::new();
+    fs::create_dir_all(files.0.join("nested")).unwrap();
+    files.wav("song.wav");
+    files.write("nested/broken.wav", b"not audio");
+    files.write("notes.txt", b"not audio");
+    let database = Database::open(":memory:").unwrap();
+    for directory in [&files.0, &files.0.join("nested")] {
+        database
+            .add_music_library_directory(&fs::canonicalize(directory).unwrap().to_string_lossy())
+            .unwrap();
+    }
+    let mut updates = Vec::new();
+    let result = scan_with_progress(&database, |completed, total| {
+        updates.push((completed, total));
+    })
+    .unwrap();
+    assert_eq!(updates, vec![(0, 2), (1, 2), (2, 2)]);
+    assert_eq!((result.added, result.failed), (1, 1));
+}
+
+#[test]
+fn reports_empty_scan_progress() {
+    let database = Database::open(":memory:").unwrap();
+    let mut updates = Vec::new();
+    scan_with_progress(&database, |completed, total| {
+        updates.push((completed, total))
+    })
+    .unwrap();
+    assert_eq!(updates, vec![(0, 0)]);
+}
 
 #[test]
 fn scans_nested_and_overlapping_directories_once_in_either_order() {

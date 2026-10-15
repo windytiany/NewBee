@@ -60,7 +60,7 @@ describe("notification center", () => {
     center.updateTask({ ...task, completed: 5 });
     expect(center.tasks.value).toHaveLength(1);
     expect(center.tasks.value[0]?.completed).toBe(5);
-    center.tasks.value[0]?.cancel();
+    center.tasks.value[0]?.cancel?.();
     expect(cancelled).toBe(1);
     center.removeTask("lyrics");
     expect(center.tasks.value).toEqual([]);

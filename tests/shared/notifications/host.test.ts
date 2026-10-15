@@ -174,6 +174,25 @@ describe("notification host", () => {
     }
   });
 
+  it("shows indeterminate then measured progress without cancellation", async () => {
+    mountHost();
+    notifications.updateTask({ key: "scan", message: "正在扫描…", completed: 0 });
+    try {
+      await Vue.nextTick();
+      const task = find(host(), (node) => node.props["data-task-notification"] !== undefined);
+      if (!task) throw new Error("Missing scan progress");
+      expect(task.querySelector("progress")?.props.value).toBeUndefined();
+      expect(task.querySelector("button")).toBeNull();
+      notifications.updateTask({ key: "scan", message: "正在扫描…", completed: 4, total: 10 });
+      await Vue.nextTick();
+      expect(task.querySelector("progress")?.props.value).toBe(4);
+      expect(task.querySelector("progress")?.props.max).toBe(10);
+      expect(textContent(task)).toContain("已处理 4 / 10");
+    } finally {
+      notifications.removeTask("scan");
+    }
+  });
+
   it("renders accessible dismissable toasts outside the page layout", async () => {
     mountHost();
     notifications.notify({ type: "success", message: "已添加到歌单" });

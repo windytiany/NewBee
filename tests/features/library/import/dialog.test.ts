@@ -45,7 +45,8 @@ function createScan(invoke: () => Promise<IngestResult>) {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@tauri-apps/api/core": { invoke },
-    "@/shared/notifications/center": { notify },
+    "@tauri-apps/api/event": { listen: async () => () => {} },
+    "@/shared/notifications/center": { notifications, notify },
     "@/features/library/events": {
       reportLibraryImport: () => {
         globalThis.window.dispatchEvent(new Event("newbee:library-changed"));
@@ -258,7 +259,9 @@ describe("library scan dialog", () => {
     expect(element?.open).toBe(false);
     expect(scan.isScanning.value).toBe(true);
     expect(notifications.items.value).toEqual([]);
+    expect(notifications.tasks.value).toHaveLength(1);
     dialog.unmount();
+    await settle();
     resolveScan({ added: 2, updated: 1, skipped: 0, failed: 0 });
     await settle();
     expect(scan.isScanning.value).toBe(false);

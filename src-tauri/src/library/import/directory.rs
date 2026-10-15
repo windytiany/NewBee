@@ -6,7 +6,15 @@ use crate::tracks::discovery::has_supported_extension;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{Emitter, State};
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScanProgress {
+    operation_id: Option<String>,
+    completed: usize,
+    total: usize,
+}
 
 #[tauri::command]
 pub async fn scan_music_library<R: tauri::Runtime>(
@@ -21,7 +29,26 @@ pub async fn scan_music_library<R: tauri::Runtime>(
             log::info!("event=import_started operationId={operation_id:?}");
             use tauri::Manager;
             let database = app.state::<Database>();
-            let result = run_scan(&database);
+            let mut last_update = std::time::Instant::now();
+            let result = run_scan(&database, |completed, total| {
+                if completed != 0
+                    && completed != total
+                    && last_update.elapsed() < std::time::Duration::from_millis(100)
+                {
+                    return;
+                }
+                last_update = std::time::Instant::now();
+                if let Err(error) = app.emit(
+                    "library-scan-progress",
+                    ScanProgress {
+                        operation_id: operation_id.clone(),
+                        completed,
+                        total,
+                    },
+                ) {
+                    log::warn!("Failed to publish library scan progress: {error}");
+                }
+            });
             log::info!("event=import_completed operationId={operation_id:?}");
             result
         })
@@ -30,11 +57,15 @@ pub async fn scan_music_library<R: tauri::Runtime>(
     .map_err(|error| format!("Music library scan task failed: {error}"))?
 }
 
-pub(super) fn run_scan(database: &Database) -> Result<ImportResult, String> {
+pub(super) fn run_scan(
+    database: &Database,
+    mut progress: impl FnMut(usize, usize),
+) -> Result<ImportResult, String> {
     let directories = database.list_music_library_directories()?;
     let mut result = ImportResult::default();
     let mut visited_directories = HashSet::new();
     let mut visited_files = HashSet::new();
+    let mut files = Vec::new();
 
     for directory in &directories {
         scan_directory(
@@ -43,7 +74,14 @@ pub(super) fn run_scan(database: &Database) -> Result<ImportResult, String> {
             &mut visited_directories,
             &mut visited_files,
             &mut result,
+            &mut files,
         );
+    }
+
+    progress(0, files.len());
+    for (index, path) in files.iter().enumerate() {
+        import_track(database, path, &mut result);
+        progress(index + 1, files.len());
     }
 
     for path in database.library_track_paths()? {
@@ -68,6 +106,7 @@ fn scan_directory(
     visited_directories: &mut HashSet<PathBuf>,
     visited_files: &mut HashSet<PathBuf>,
     result: &mut ImportResult,
+    files: &mut Vec<PathBuf>,
 ) {
     let configured_path = PathBuf::from(&directory.path);
     let root = match fs::canonicalize(&configured_path) {
@@ -165,7 +204,7 @@ fn scan_directory(
                     continue;
                 }
 
-                import_track(database, &canonical_file, result);
+                files.push(canonical_file);
             } else {
                 result.skipped += 1;
             }
