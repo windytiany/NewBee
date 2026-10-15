@@ -47,7 +47,10 @@ const track: TrackDetails = {
 function createDrop({
   desktop = true,
   validate = async () => ["song.wav"],
+  preview,
   subscription,
+  directories = async () => [],
+  createPlaylist = async () => 12,
   registration = async () =>
     [{ status: "registered", track, needsMetadata: true }] as TrackRegistrationResult[],
   append = async () => true,
@@ -61,7 +64,10 @@ function createDrop({
 }: {
   desktop?: boolean;
   validate?: () => Promise<string[]>;
+  preview?: () => Promise<{ hasFiles: boolean; hasDirectories: boolean }>;
   subscription?: Promise<() => void>;
+  directories?: () => Promise<{ path: string; name: string }[]>;
+  createPlaylist?: (name: string) => Promise<number>;
   registration?: () => Promise<TrackRegistrationResult[]>;
   append?: (tracks: readonly Omit<PlaybackDisplayTrack, "rowKey">[]) => Promise<boolean>;
   playlistAppend?: (
@@ -128,8 +134,15 @@ function createDrop({
     "@tauri-apps/api/core": {
       isTauri: () => desktop,
       invoke: async <T>(command: string, args?: Record<string, unknown>) => {
+        if (command === "preview_local_drop") {
+          if (preview) return (await preview()) as T;
+          const [files, folders] = await Promise.all([validate(), directories()]);
+          return { hasFiles: files.length > 0, hasDirectories: folders.length > 0 } as T;
+        }
         if (command === "readable_audio_files") return (await validate()) as T;
+        if (command === "playlist_directories") return (await directories()) as T;
         calls.push([command, args]);
+        if (command === "create_playlist") return (await createPlaylist(args?.name as string)) as T;
         if (command === "register_local_tracks") return (await registration()) as T;
         if (command === "get_tracks") return [{ ...track, title: "Confirmed" }] as T;
         if (command === "append_playlist_tracks")
@@ -287,6 +300,116 @@ it("routes by hit region, converts physical coordinates and updates scale withou
   expect(drop.highlight.value).toBeNull();
   expect(drop.counts()).toMatchObject({ stops: 2, disconnects: 1 });
 });
+it("highlights folders across drop regions before recursive audio discovery finishes", async () => {
+  const discovery = deferred<string[]>();
+  const drop = createDrop({
+    validate: () => discovery.promise,
+    preview: async () => ({ hasFiles: false, hasDirectories: true }),
+    directories: async () => [{ path: "/Music", name: "Music" }],
+  });
+  await drop.mount();
+  await drop.emit("enter", ["/Music"]);
+  try {
+    for (const kind of ["Library", "Inbox", "queue", "playlist", "playlists"]) {
+      drop.region.value = kind;
+      await drop.emit("over");
+      expect(drop.highlight.value).not.toBeNull();
+    }
+  } finally {
+    drop.unmount();
+    discovery.resolve(["song.wav"]);
+  }
+});
+
+it("creates a named playlist per sidebar folder and registers each folder recursively", async () => {
+  let nextId = 12;
+  const drop = createDrop({
+    directories: async () => [
+      { path: "/music/Album", name: "Album" },
+      { path: "/music/Other", name: "Other" },
+    ],
+    createPlaylist: async () => nextId++,
+  });
+  await drop.mount();
+  drop.region.value = "playlists";
+  await drop.emit("enter", ["/music/Album", "/music/Other"]);
+  expect(drop.highlight.value).not.toBeNull();
+  await drop.emit("drop", ["/music/Album", "/music/Other"]);
+  for (let i = 0; i < 60; i++) await Promise.resolve();
+  expect(drop.calls.filter(([name]) => name === "create_playlist")).toEqual([
+    ["create_playlist", { name: "Album" }],
+    ["create_playlist", { name: "Other" }],
+  ]);
+  expect(drop.calls.filter(([name]) => name === "register_local_tracks")).toEqual([
+    ["register_local_tracks", { paths: ["/music/Album"] }],
+    ["register_local_tracks", { paths: ["/music/Other"] }],
+  ]);
+  for (const playlistId of [12, 13]) {
+    expect(drop.calls).toContainEqual(["append_playlist_tracks", { playlistId, trackIds: [7] }]);
+    expect(drop.calls).toContainEqual(["playlistChanged", playlistId]);
+  }
+  expect(drop.notices).toEqual([]);
+  drop.unmount();
+});
+
+it("moving audio between sidebar and browser changes feedback and only the browser appends it", async () => {
+  const drop = createDrop();
+  await drop.mount();
+  await drop.emit("enter");
+  drop.region.value = "playlists";
+  await drop.emit("over");
+  expect(drop.highlight.value).toBeNull();
+  await drop.emit("drop");
+  expect(drop.calls).toEqual([]);
+  drop.region.value = "playlist";
+  await drop.emit("enter");
+  expect(drop.highlight.value).not.toBeNull();
+  await drop.emit("drop");
+  expect(drop.calls).toContainEqual(["append_playlist_tracks", { playlistId: 3, trackIds: [7] }]);
+  expect(drop.calls.some(([name]) => name === "create_playlist")).toBe(false);
+  drop.unmount();
+});
+
+it("creates empty folder playlists and switches folder feedback without re-entering", async () => {
+  const drop = createDrop({
+    validate: async () => [],
+    directories: async () => [{ path: "/Empty", name: "Empty" }],
+    registration: async () => [],
+  });
+  await drop.mount();
+  await drop.emit("enter", ["/Empty"]);
+  expect(drop.highlight.value).not.toBeNull();
+  drop.region.value = "playlists";
+  await drop.emit("over");
+  expect(drop.highlight.value).not.toBeNull();
+  await drop.emit("drop", ["/Empty"]);
+  expect(drop.calls).toContainEqual(["create_playlist", { name: "Empty" }]);
+  expect(drop.calls).toContainEqual(["playlistChanged", 12]);
+  expect(drop.calls.some(([name]) => name === "append_playlist_tracks")).toBe(false);
+  drop.unmount();
+});
+
+it("continues creating later folders after a playlist creation failure", async () => {
+  const drop = createDrop({
+    directories: async () => [
+      { path: "/Bad", name: "Bad" },
+      { path: "/Good", name: "Good" },
+    ],
+    createPlaylist: async (name) => {
+      if (name === "Bad") throw new Error("database busy");
+      return 12;
+    },
+  });
+  await drop.mount();
+  drop.region.value = "playlists";
+  await drop.emit("drop", ["/Bad", "/Good"]);
+  for (let i = 0; i < 60; i++) await Promise.resolve();
+  expect(drop.calls).toContainEqual(["playlistChanged", 12]);
+  expect(drop.calls).toContainEqual(["register_local_tracks", { paths: ["/Good"] }]);
+  expect(drop.notices.map(({ message }) => message)).toEqual(["创建歌单失败，请查看日志"]);
+  drop.unmount();
+});
+
 it("blocks modal drops and reports busy import/scan without executing", async () => {
   const drop = createDrop();
   await drop.mount();

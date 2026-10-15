@@ -37,7 +37,7 @@ it("requires an explicit region and a valid selected playlist ID", () => {
     target: { kind: "playlist", playlistId: 9 },
     bounds,
   });
-  for (const kind of ["Library", "Inbox", "queue"] as const) {
+  for (const kind of ["Library", "Inbox", "queue", "playlists"] as const) {
     expect(resolveDropRegion({ x: 0, y: 0 }, 1, () => [region(kind)])).toEqual({
       target: { kind },
       bounds,

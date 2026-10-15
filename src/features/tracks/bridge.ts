@@ -12,7 +12,7 @@ type Subscribe = (receive: (results: readonly TrackReadResult[]) => void) => Pro
 export function createTrackBridge(
   refresh: (ids: readonly number[]) => Promise<void>,
   subscribe: Subscribe,
-  reportError: (error: unknown) => void,
+  reportError: (error: unknown, source: "reading" | "bridge") => void,
 ) {
   const pending = new Set<number>();
   let disposed = false;
@@ -36,7 +36,7 @@ export function createTrackBridge(
     try {
       await refresh(ids);
     } catch (error) {
-      if (!disposed) reportError(error);
+      if (!disposed) reportError(error, "bridge");
     } finally {
       flushing = false;
       schedule();
@@ -51,13 +51,13 @@ export function createTrackBridge(
           if (result.databaseUpdated) pending.add(result.trackId);
         }
         const failure = results.find((result) => result.error);
-        if (failure) reportError(failure.error);
+        if (failure) reportError(failure.error, "reading");
         schedule();
       });
       if (disposed) unlisten();
       else stop = unlisten;
     } catch (error) {
-      if (!disposed) reportError(error);
+      if (!disposed) reportError(error, "bridge");
     }
   }
 
@@ -78,9 +78,13 @@ export function useTrackBridge() {
   const bridge = createTrackBridge(
     (ids) => synchronization.refresh(ids, () => !bridge.isDisposed()),
     (receive) => listen<TrackReadResult[]>("tracks-confirmed", ({ payload }) => receive(payload)),
-    (error) => {
-      logger.warn("tracks/bridge", "Track confirmation failed.", error);
-      notify({ type: "error", message: String(error), key: "track-confirmation" });
+    (error, source) => {
+      if (source === "bridge") logger.error("tracks/bridge", "Track confirmation failed.", error);
+      notify({
+        type: source === "reading" ? "warning" : "error",
+        message: String(error),
+        key: "track-confirmation",
+      });
     },
   );
   onMounted(() => {

@@ -11,6 +11,10 @@ export function createPlaylistApi(invokeCommand: typeof invoke = invoke) {
     listTracks: (playlistId: number) =>
       invokeCommand<PlaylistTrackSummary[]>("list_playlist_tracks", { playlistId }),
     create: (name: string) => invokeCommand<number>("create_playlist", { name }),
+    directories: (paths: readonly string[]) =>
+      invokeCommand<{ path: string; name: string }[]>("playlist_directories", {
+        paths: [...paths],
+      }),
     rename: (playlistId: number, name: string) =>
       invokeCommand<void>("rename_playlist", { playlistId, name }),
     remove: (playlistId: number) => invokeCommand<void>("delete_playlist", { playlistId }),

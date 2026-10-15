@@ -1,6 +1,26 @@
-use super::readable_files;
+use super::{preview_paths, readable_files};
 use crate::library::import::tests::support::TestFiles;
 use std::path::Path;
+
+#[test]
+fn previews_directories_without_searching_for_audio_or_reading_tags() {
+    let files = TestFiles::new();
+    let empty = files.0.join("empty");
+    std::fs::create_dir(&empty).unwrap();
+    let preview = preview_paths(vec![empty.to_string_lossy().into_owned()]);
+    assert!(preview.has_directories);
+    assert!(!preview.has_files);
+
+    let broken = files.write("broken.mp3", b"not audio");
+    let unsupported = files.wav("unsupported.opus");
+    let missing = files.0.join("missing.wav").to_string_lossy().into_owned();
+    let preview = preview_paths(vec![broken, unsupported.clone(), missing.clone()]);
+    assert!(preview.has_files);
+    assert!(!preview.has_directories);
+    let preview = preview_paths(vec![unsupported, missing]);
+    assert!(!preview.has_files);
+    assert!(!preview.has_directories);
+}
 
 #[test]
 fn discovers_accessible_files_and_directories_without_requiring_readable_tags() {

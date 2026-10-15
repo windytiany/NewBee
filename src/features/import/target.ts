@@ -1,5 +1,9 @@
 export type DropTarget =
-  { kind: "Library" | "Inbox" | "queue" } | { kind: "playlist"; playlistId: number };
+  | { kind: "Library" }
+  | { kind: "Inbox" }
+  | { kind: "queue" }
+  | { kind: "playlists" }
+  | { kind: "playlist"; playlistId: number };
 
 export type DropBounds = Pick<DOMRect, "left" | "top" | "width" | "height">;
 export type DropRegion = { target: DropTarget; bounds: DropBounds };
@@ -25,7 +29,7 @@ export function resolveDropRegion(
     if (!region) return null;
     const kind = region.getAttribute("data-local-drop");
     let target: DropTarget;
-    if (kind === "queue" || kind === "Library" || kind === "Inbox") {
+    if (kind === "queue" || kind === "Library" || kind === "Inbox" || kind === "playlists") {
       target = { kind };
     } else if (kind === "playlist") {
       const playlistId = Number(region.getAttribute("data-playlist-id"));

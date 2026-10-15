@@ -10,6 +10,7 @@ import { resolveDropRegion, type DropRegion, type DropTarget } from "@/features/
 import { createTrackRegistration } from "@/features/tracks/registration";
 import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { createPlaylistApi } from "@/features/playlist/api";
+import { createDirectoryPlaylists } from "@/features/playlist/creation/directory";
 import { createPlaylistAppend } from "@/features/playlist/tracks/append";
 import { usePlaybackSession } from "@/features/playback/session";
 import { notify } from "@/shared/notifications/center";
@@ -23,16 +24,23 @@ export function useDropImport() {
   const session = usePlaybackSession();
   const synchronization = createTrackSynchronization(session, invoke);
   const register = createTrackRegistration(invoke);
-  const appendPlaylist = createPlaylistAppend(createPlaylistApi(invoke));
+  const playlistApi = createPlaylistApi(invoke);
+  const appendPlaylist = createPlaylistAppend(playlistApi);
+  const importDirectories = createDirectoryPlaylists(playlistApi, (playlistId, paths) =>
+    appendLocal(paths, { kind: "playlist", playlistId }),
+  );
   const pending = ref(false);
   const hasFiles = ref(false);
+  const hasDirectories = ref(false);
   const modalOpen = ref(false);
   const region = ref<DropRegion | null>(null);
   const busy = computed(
     () => pending.value || library.isImporting.value || inbox.pending.value || isScanning.value,
   );
   const highlight = computed(() => {
-    if (!hasFiles.value || !region.value || modalOpen.value || busy.value) return null;
+    if (!region.value || modalOpen.value || busy.value) return null;
+    if (!hasDirectories.value && (region.value.target.kind === "playlists" || !hasFiles.value))
+      return null;
     const { left, top, width, height } = region.value.bounds;
     return { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` };
   });
@@ -49,7 +57,10 @@ export function useDropImport() {
     if (disposed) stop();
     else subscriptions.push(stop);
   }
-  async function appendLocal(paths: readonly string[], captured: DropTarget) {
+  async function appendLocal(
+    paths: readonly string[],
+    captured: Extract<DropTarget, { kind: "playlist" }> | { kind: "queue" },
+  ) {
     const outcome = await register(
       paths,
       async (tracks) => {
@@ -100,6 +111,7 @@ export function useDropImport() {
     if (event.type === "leave") {
       ++generation;
       hasFiles.value = false;
+      hasDirectories.value = false;
       region.value = null;
       return;
     }
@@ -110,6 +122,7 @@ export function useDropImport() {
     if (event.type === "over") return;
     const current = ++generation;
     hasFiles.value = false;
+    hasDirectories.value = false;
     if (modalOpen.value || (event.type === "drop" && !captured)) return;
     if (busy.value) {
       if (event.type === "drop")
@@ -122,6 +135,7 @@ export function useDropImport() {
       try {
         if (captured.kind === "Library") await library.importPaths(event.paths);
         else if (captured.kind === "Inbox") await inbox.importPaths(event.paths);
+        else if (captured.kind === "playlists") await importDirectories(event.paths);
         else await appendLocal(event.paths, captured);
       } catch (error) {
         logger.error("import", "drop_failed", error);
@@ -132,8 +146,14 @@ export function useDropImport() {
       return;
     }
     try {
-      const paths = await invoke<string[]>("readable_audio_files", { paths: event.paths });
-      if (!disposed && generation === current) hasFiles.value = paths.length > 0;
+      const preview = await invoke<{ hasFiles: boolean; hasDirectories: boolean }>(
+        "preview_local_drop",
+        { paths: event.paths },
+      );
+      if (!disposed && generation === current) {
+        hasFiles.value = preview.hasFiles;
+        hasDirectories.value = preview.hasDirectories;
+      }
     } catch (error) {
       logger.error("import", "drop_preview_failed", error);
     }
@@ -172,6 +192,7 @@ export function useDropImport() {
     disposed = true;
     ++generation;
     hasFiles.value = false;
+    hasDirectories.value = false;
     region.value = null;
     observer?.disconnect();
     subscriptions.splice(0).forEach((stop) => stop());

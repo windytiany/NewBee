@@ -242,6 +242,12 @@ afterEach(() => {
 });
 
 describe("歌单列表上下文菜单", () => {
+  it("marks the entire sidebar as the playlist creation drop region", () => {
+    const root = mountPlaylistList();
+    const region = findNode(root, (node) => node.props["data-local-drop"] === "playlists");
+    expect(region?.type).toBe("section");
+  });
+
   it("右键目标歌单打开菜单而不切换当前歌单", async () => {
     const root = mountPlaylistList();
     const target = findPlaylistButton(root, 2);

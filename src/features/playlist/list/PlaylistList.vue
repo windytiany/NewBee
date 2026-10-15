@@ -1,5 +1,6 @@
 <template>
   <section
+    data-local-drop="playlists"
     :aria-label="t('播放列表浏览')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
