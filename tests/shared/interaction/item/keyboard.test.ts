@@ -7,6 +7,8 @@ const itemSelector = "[data-keyboard-item]";
 
 class TestElement extends EventTarget {
   readonly children: TestElement[] = [];
+  tagName = "BUTTON";
+  isContentEditable = false;
   readonly focus = mock((options?: FocusOptions) => {
     void options;
   });
@@ -149,15 +151,18 @@ function createHarness(options: { grid?: boolean; callbacks?: boolean; keys?: st
     void key;
   });
   const onEscape = mock(() => {});
+  const onSelectAll = mock((keys: readonly string[]) => {
+    void keys;
+  });
   const keyboard = createItemKeyboard({
     getItemKeys: () => keys,
     itemSelector,
     grid: options.grid,
     onFocus,
     onMove,
-    ...(options.callbacks === false ? {} : { onActivate: onPlay, onEscape }),
+    ...(options.callbacks === false ? {} : { onActivate: onPlay, onEscape, onSelectAll }),
   });
-  return { keys, items, container, onFocus, onMove, onPlay, onEscape, keyboard };
+  return { keys, items, container, onFocus, onMove, onPlay, onEscape, onSelectAll, keyboard };
 }
 
 function expectUnhandled(event: TestKeyboardEvent, harness: ReturnType<typeof createHarness>) {
@@ -167,6 +172,7 @@ function expectUnhandled(event: TestKeyboardEvent, harness: ReturnType<typeof cr
   expect(harness.onPlay).not.toHaveBeenCalled();
   expect(harness.onEscape).not.toHaveBeenCalled();
   expect(harness.onFocus).not.toHaveBeenCalled();
+  expect(harness.onSelectAll).not.toHaveBeenCalled();
   for (const item of harness.items) {
     expect(item.focus).not.toHaveBeenCalled();
     expect(item.scrollIntoView).not.toHaveBeenCalled();
@@ -191,6 +197,67 @@ afterEach(() => {
 });
 
 describe("Item 列表键盘", () => {
+  it.each(["a", "A"])("Ctrl+%s 全选当前列表并保留焦点与锚点", (key) => {
+    const selection = createItemSelection();
+    const harness = createHarness();
+    selection.selectItem("tracks", "b", harness.keys);
+    const focused = selection.focusedItem.value;
+    harness.onSelectAll.mockImplementation((keys) => {
+      selection.selectAll("tracks", keys);
+    });
+    const event = new TestKeyboardEvent(key, harness.items[1], harness.container, {
+      ctrlKey: true,
+    });
+    harness.keyboard.onKeydown(event);
+
+    expect(selection.getSelectedItemKeys("tracks", harness.keys)).toEqual(harness.keys);
+    expect(selection.focusedItem.value).toBe(focused);
+    expect(selection.selection.value?.anchorItemKey).toBe("b");
+    expect(harness.onSelectAll.mock.calls).toEqual([[harness.keys]]);
+    expect(event.defaultPrevented).toBe(true);
+    expect(event.stopPropagationCalls).toHaveBeenCalledTimes(1);
+    expect(harness.onMove).not.toHaveBeenCalled();
+    expect(harness.onFocus).not.toHaveBeenCalled();
+    for (const item of harness.items) {
+      expect(item.focus).not.toHaveBeenCalled();
+      expect(item.scrollIntoView).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each(["INPUT", "TEXTAREA", "SELECT", "editable"])("保留行内 %s 的原生 Ctrl+A", (tagName) => {
+    const harness = createHarness();
+    const input = new TestElement();
+    input.tagName = tagName;
+    input.isContentEditable = tagName === "editable";
+    harness.items[1].children.push(input);
+    const event = new TestKeyboardEvent("a", input, harness.container, { ctrlKey: true });
+    harness.keyboard.onKeydown(event);
+    expectUnhandled(event, harness);
+  });
+
+  it.each([
+    { ctrlKey: false },
+    { ctrlKey: true, shiftKey: true },
+    { ctrlKey: true, altKey: true },
+    { ctrlKey: true, metaKey: true },
+    { ctrlKey: true, isComposing: true },
+  ])("不接管其他 A 组合键 %j", (modifiers) => {
+    const harness = createHarness();
+    const event = new TestKeyboardEvent("a", harness.items[1], harness.container, modifiers);
+    harness.keyboard.onKeydown(event);
+    expectUnhandled(event, harness);
+  });
+
+  it("未启用多选、空列表或焦点在列表外时不接管 Ctrl+A", () => {
+    for (const options of [{ callbacks: false }, { keys: [] }, {}]) {
+      const harness = createHarness(options);
+      const target = options.callbacks === false ? harness.items[0] : harness.container;
+      const event = new TestKeyboardEvent("a", target, harness.container, { ctrlKey: true });
+      harness.keyboard.onKeydown(event);
+      expectUnhandled(event, harness);
+    }
+  });
+
   it.each([
     { ctrlKey: true, shiftKey: false, expected: ["a", "c"] },
     { ctrlKey: false, shiftKey: true, expected: ["a", "b", "c"] },

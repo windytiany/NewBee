@@ -350,6 +350,7 @@ const trackKeyboard = createItemKeyboard({
     if (!trackFocus.isFocused(key)) trackFocus.focusItem(key);
   },
   onMove: (key, event) => trackFocus.selectItem(key, visibleTrackKeys.value, event),
+  onSelectAll: (keys) => trackFocus.selectAll(keys),
   onActivate: (key) => {
     if (!props.trackActionPending && !props.playbackCommandPending && !props.tracksLoading) {
       emit("playTrack", Number(key));

@@ -194,6 +194,7 @@ const keyboard = createItemKeyboard({
     if (!queueFocus.isFocused(key)) queueFocus.focusItem(key);
   },
   onMove: (key, event) => selectTrack(key, event),
+  onSelectAll: (keys) => queueFocus.selectAll(keys),
   onActivate: (key) => emit("playQueueItem", key),
 });
 

@@ -629,6 +629,25 @@ describe("Inbox workspace", () => {
     expect(getTextContent(context.root)).not.toContain("下载封面");
     expect(getTextContent(context.root)).not.toContain("下载歌词");
   });
+  it("Ctrl+A selects all tracks without moving focus and uses them as menu targets", async () => {
+    const context = await mount();
+    const list = findNode(context.root, (node) => node.type === "ol");
+    if (!list) throw new Error("Missing track list");
+    const row = context.rows()[1]!;
+    row.focus();
+    dispatch(list, "onFocusin", { target: row });
+    dispatch(row, "onClick");
+    dispatch(list, "onKeydown", { target: row, key: "a", ctrlKey: true });
+    await settle();
+    expect(context.rows().map((item) => item.props["aria-pressed"])).toEqual([true, true, true]);
+    expect(focused).toBe(row);
+    dispatch(row, "onContextmenu", { clientX: 0, clientY: 0 });
+    await settle();
+    dispatch(menuButton(context.root, "编辑"), "onClick");
+    await settle();
+    expect(context.edited).toEqual([[1, 2, 3]]);
+    expect(focused).toBe(row);
+  });
   it("uses shared keyboard range navigation and restores a surviving row after removal", async () => {
     const context = await mount();
     const list = findNode(context.root, (node) => node.type === "ol");

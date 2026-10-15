@@ -3,6 +3,7 @@ type ItemKeyboardOptions = {
   itemSelector: string;
   onFocus: (key: string) => void;
   onMove: (key: string, event: KeyboardEvent) => void;
+  onSelectAll?: (keys: readonly string[]) => void;
   onActivate?: (key: string) => void;
   onEscape?: () => void;
   grid?: boolean;
@@ -56,6 +57,23 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
     const target = getTarget(event);
     if (!target) return;
     const { items, index, key } = target;
+    if (
+      event.ctrlKey &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === "a" &&
+      options.onSelectAll
+    ) {
+      if (
+        event.target instanceof HTMLElement &&
+        (event.target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName))
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      options.onSelectAll(options.getItemKeys());
+      return;
+    }
     if (event.key === "Enter" && options.onActivate) {
       event.preventDefault();
       event.stopPropagation();

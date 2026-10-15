@@ -364,6 +364,7 @@ const keyboard = createItemKeyboard({
   onMove: (key, event) => {
     playlistTrackFocus.selectItem(key, visibleTrackKeys.value, event);
   },
+  onSelectAll: (keys) => playlistTrackFocus.selectAll(keys),
   onActivate: (key) => {
     const track = props.tracks.find((entry) => String(entry.playlistItemId) === key);
     if (track) emit("playTrack", track.playlistItemId, visiblePlaylistItemIds.value);

@@ -77,6 +77,7 @@ const keyboard = createItemKeyboard({
     if (!selection.isFocused(key)) selection.focusItem(key);
   },
   onMove: (key, event) => selection.selectItem(key, keys.value, event),
+  onSelectAll: (keys) => selection.selectAll(keys),
   onActivate: (key) => {
     void inbox.play(Number(key), keys.value.map(Number));
   },

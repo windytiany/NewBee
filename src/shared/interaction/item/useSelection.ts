@@ -106,6 +106,21 @@ export function createItemSelection() {
     return getSelectedItemKeys(listScope, visibleItemKeys);
   }
 
+  function selectAll(listScope: string, visibleItemKeys: readonly string[]) {
+    if (visibleItemKeys.length === 0) return [];
+    const previous = selection.value?.listScope === listScope ? selection.value : null;
+    const focusedKey =
+      focusedItem.value?.listScope === listScope ? focusedItem.value.itemKey : null;
+    const anchorItemKey =
+      previous?.anchorItemKey && visibleItemKeys.includes(previous.anchorItemKey)
+        ? previous.anchorItemKey
+        : focusedKey && visibleItemKeys.includes(focusedKey)
+          ? focusedKey
+          : visibleItemKeys[0]!;
+    selection.value = { listScope, selectedItemKeys: [...visibleItemKeys], anchorItemKey };
+    return getSelectedItemKeys(listScope, visibleItemKeys);
+  }
+
   function contextMenuTargets(
     listScope: string,
     itemKey: string,
@@ -181,6 +196,7 @@ export function createItemSelection() {
     isSelected,
     getSelectedItemKeys,
     selectItem,
+    selectAll,
     contextMenuTargets,
     syncVisibleItems,
     registerList,
@@ -214,6 +230,8 @@ export function useItemSelection(listScope: MaybeRefOrGetter<string>) {
       visibleItemKeys: readonly string[],
       modifiers: ItemSelectionModifiers,
     ) => itemSelection.selectItem(currentListScope.value, itemKey, visibleItemKeys, modifiers),
+    selectAll: (visibleItemKeys: readonly string[]) =>
+      itemSelection.selectAll(currentListScope.value, visibleItemKeys),
     contextMenuTargets: (itemKey: string, visibleItemKeys: readonly string[]) =>
       itemSelection.contextMenuTargets(currentListScope.value, itemKey, visibleItemKeys),
     getSelectedItemKeys: (visibleItemKeys: readonly string[]) =>

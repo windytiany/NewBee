@@ -31,6 +31,42 @@ function createDocumentHarness() {
 }
 
 describe("Item 焦点与列表选择", () => {
+  it("全选仅包含当前可见项，保留焦点及原有 Shift 锚点", () => {
+    const manager = createItemSelection();
+    const keys = ["a", "b", "c", "d"];
+    manager.selectItem("tracks", "b", keys, plainClick);
+    manager.selectItem("tracks", "c", keys, ctrlClick);
+    const focused = manager.focusedItem.value;
+
+    expect(manager.selectAll("tracks", ["d", "c", "b"])).toEqual(["d", "c", "b"]);
+    expect(manager.focusedItem.value).toBe(focused);
+    expect(manager.selection.value?.anchorItemKey).toBe("b");
+    expect(manager.getSelectedItemKeys("other", keys)).toEqual([]);
+    manager.selectItem("tracks", "d", keys, shiftClick);
+    expect(manager.getSelectedItemKeys("tracks", keys)).toEqual(["b", "c", "d"]);
+  });
+
+  it("尚无选择时全选以当前焦点为锚点，不移动焦点", () => {
+    const manager = createItemSelection();
+    manager.focusItem("tracks", "b");
+    const focused = manager.focusedItem.value;
+    manager.selectAll("tracks", ["a", "b", "c"]);
+    expect(manager.focusedItem.value).toBe(focused);
+    expect(manager.selection.value?.anchorItemKey).toBe("b");
+  });
+
+  it("空列表全选不修改状态，失效锚点回退到当前焦点", () => {
+    const manager = createItemSelection();
+    manager.selectItem("tracks", "a", ["a", "b"], plainClick);
+    manager.focusItem("tracks", "b");
+    const previous = manager.selection.value;
+    expect(manager.selectAll("tracks", [])).toEqual([]);
+    expect(manager.selection.value).toBe(previous);
+    manager.selectAll("tracks", ["b", "c"]);
+    expect(manager.selection.value?.anchorItemKey).toBe("b");
+    expect(manager.focusedItem.value?.itemKey).toBe("b");
+  });
+
   it("全应用只保留一个焦点，点击空白同时清除焦点和多选", () => {
     const manager = createItemSelection();
     const albumRows = ["41", "42", "43"];
