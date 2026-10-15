@@ -20,6 +20,7 @@ export type Settings = {
   locale: Locale;
   accentColor: string;
   reducedMotion: boolean;
+  layoutDensity: "regular" | "compact";
   albumCoverBackground: boolean;
   playingCoverBackground: boolean;
   closeBehavior: "tray" | "exit";

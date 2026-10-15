@@ -27,9 +27,11 @@ describe("application appearance", () => {
       },
     });
     setLocale("en");
-    applyAppearance({ accentColor: "#abcdef", reducedMotion: true });
+    applyAppearance({ accentColor: "#abcdef", reducedMotion: true, layoutDensity: "compact" });
     expect(locale.value).toBe("en");
     expect(styles).toEqual({ "--app-accent": "#abcdef" });
-    expect(dataset).toEqual({ reducedMotion: "true" });
+    expect(dataset).toEqual({ reducedMotion: "true", layoutDensity: "compact" });
+    applyAppearance({ accentColor: "#abcdef", reducedMotion: false, layoutDensity: "regular" });
+    expect(dataset).toEqual({ reducedMotion: "false", layoutDensity: "regular" });
   });
 });

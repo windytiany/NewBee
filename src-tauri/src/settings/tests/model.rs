@@ -1,6 +1,34 @@
 use super::super::*;
 
 #[test]
+fn layout_density_defaults_round_trips_and_persists() {
+    assert_eq!(Settings::default().layout_density, LayoutDensity::Regular);
+    assert_eq!(
+        serde_json::from_str::<Settings>("{}")
+            .unwrap()
+            .layout_density,
+        LayoutDensity::Regular
+    );
+    assert!(serde_json::from_str::<Settings>(r#"{"layoutDensity":"invalid"}"#).is_err());
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    let state = SettingsState::load(path.clone()).unwrap();
+    for layout_density in [LayoutDensity::Compact, LayoutDensity::Regular] {
+        let settings = Settings {
+            layout_density,
+            ..Settings::default()
+        };
+        let data = serde_json::to_vec(&settings).unwrap();
+        assert_eq!(serde_json::from_slice::<Settings>(&data).unwrap(), settings);
+        state.save(settings.clone()).unwrap();
+        assert_eq!(
+            SettingsState::load(path.clone()).unwrap().get().unwrap(),
+            settings
+        );
+    }
+}
+
+#[test]
 fn defaults_to_background_playback() {
     assert_eq!(Settings::default().close_behavior, CloseBehavior::Tray);
 }

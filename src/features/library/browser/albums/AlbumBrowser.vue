@@ -30,7 +30,7 @@
         class="flex flex-col gap-6 px-5 pb-8 sm:px-8"
       >
         <template v-for="row in albumRows" :key="row.id">
-          <div class="grid grid-cols-2 gap-x-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4">
+          <div class="grid gap-x-4 sm:gap-x-6" :style="{ gridTemplateColumns }">
             <AlbumCard
               v-for="(album, index) in row.albums"
               :key="getAlbumKey(album)"
@@ -55,7 +55,8 @@
           >
             <div
               aria-hidden="true"
-              class="pointer-events-none absolute inset-x-0 top-px z-10 grid grid-cols-2 gap-x-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4"
+              class="pointer-events-none absolute inset-x-0 top-px z-10 grid gap-x-4 sm:gap-x-6"
+              :style="{ gridTemplateColumns }"
             >
               <span
                 class="border-b-app-interactive -translate-y-full justify-self-center border-x-12 border-b-12 border-x-transparent"
@@ -123,6 +124,7 @@ import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
+import { layoutDensity } from "@/features/settings/layout";
 import type {
   LibraryAlbumSelection,
   ArtistSummary,
@@ -205,6 +207,7 @@ function openAlbumContextMenu(
 }
 
 const columnCount = ref(2);
+const gridTemplateColumns = computed(() => `repeat(${columnCount.value}, minmax(0, 1fr))`);
 const albumListScope = computed(() =>
   JSON.stringify(["library", "albums", props.grouping, props.artist?.artist ?? null]),
 );
@@ -276,9 +279,20 @@ const albumRows = computed(() => {
 
 function updateColumnCount() {
   const viewportWidth = globalThis.window.innerWidth;
+  const compact = layoutDensity.value === "compact";
   columnCount.value =
-    viewportWidth >= WIDE_SCREEN_BREAKPOINT ? 4 : viewportWidth >= SMALL_SCREEN_BREAKPOINT ? 3 : 2;
+    viewportWidth >= WIDE_SCREEN_BREAKPOINT
+      ? compact
+        ? 5
+        : 4
+      : viewportWidth >= SMALL_SCREEN_BREAKPOINT
+        ? compact
+          ? 4
+          : 3
+        : 2;
 }
+
+watch(layoutDensity, updateColumnCount);
 
 onMounted(() => {
   updateColumnCount();

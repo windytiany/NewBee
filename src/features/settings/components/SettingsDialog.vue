@@ -67,6 +67,7 @@ const closeBehavior = ref<Settings["closeBehavior"]>("tray");
 const accentColor = ref(DEFAULT_ACCENT_COLOR);
 const normalizedAccentColor = computed(() => normalizeAccentColor(accentColor.value));
 const reducedMotion = ref(false);
+const layoutDensity = ref<Settings["layoutDensity"]>("regular");
 const albumCoverBackground = ref(false);
 const playingCoverBackground = ref(false);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
@@ -162,6 +163,7 @@ async function show() {
     closeBehavior.value = settings.closeBehavior;
     accentColor.value = settings.accentColor;
     reducedMotion.value = settings.reducedMotion;
+    layoutDensity.value = settings.layoutDensity;
     albumCoverBackground.value = settings.albumCoverBackground;
     playingCoverBackground.value = settings.playingCoverBackground;
     albumSortBy.value = settings.albumSortBy;
@@ -207,6 +209,7 @@ async function save() {
       closeBehavior: closeBehavior.value,
       accentColor: color,
       reducedMotion: reducedMotion.value,
+      layoutDensity: layoutDensity.value,
       albumCoverBackground: albumCoverBackground.value,
       playingCoverBackground: playingCoverBackground.value,
       albumSortBy: albumSortBy.value,
@@ -216,7 +219,11 @@ async function save() {
     });
     setLocale(selectedLocale.value);
     accentColor.value = color;
-    applyAppearance({ accentColor: color, reducedMotion: reducedMotion.value });
+    applyAppearance({
+      accentColor: color,
+      reducedMotion: reducedMotion.value,
+      layoutDensity: layoutDensity.value,
+    });
     globalThis.window.dispatchEvent(new globalThis.Event(SETTINGS_CHANGED_EVENT));
     dialogElement.value?.close();
     onDialogClosed();
@@ -330,6 +337,17 @@ defineExpose({ show });
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           >
             <legend class="sr-only">{{ t("外观") }}</legend>
+            <label class="mb-5 flex flex-col gap-2 text-sm font-semibold">
+              {{ t("布局") }}
+              <select
+                v-model="layoutDensity"
+                name="layout-density"
+                class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
+              >
+                <option value="regular">{{ t("常规布局") }}</option>
+                <option value="compact">{{ t("紧凑布局") }}</option>
+              </select>
+            </label>
             <div role="group" aria-labelledby="accent-color-label" class="space-y-3">
               <h4 id="accent-color-label" class="text-sm font-semibold">{{ t("主题色") }}</h4>
               <div class="flex flex-wrap gap-3">

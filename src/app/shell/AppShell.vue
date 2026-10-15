@@ -1,7 +1,7 @@
 <template>
   <div
     ref="layoutElement"
-    class="bg-app-base grid h-[calc(100vh-8.5rem)] min-h-0 w-full min-w-0 grid-cols-(--three-column-layout-columns) overflow-hidden max-md:grid-cols-1 md:h-[calc(100vh-6rem)]"
+    class="bg-app-base grid h-[calc(100vh-var(--spacing)*34)] min-h-0 w-full min-w-0 grid-cols-(--three-column-layout-columns) overflow-hidden max-md:grid-cols-1 md:h-[calc(100vh-var(--spacing)*24)]"
     :style="{ '--three-column-layout-columns': gridColumns }"
   >
     <slot name="workspace" />

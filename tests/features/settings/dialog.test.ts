@@ -39,6 +39,7 @@ type DialogBindings = {
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   accentColor: Vue.Ref<Settings["accentColor"]>;
   reducedMotion: Vue.Ref<boolean>;
+  layoutDensity: Vue.Ref<Settings["layoutDensity"]>;
   albumCoverBackground: Vue.Ref<boolean>;
   playingCoverBackground: Vue.Ref<boolean>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
@@ -54,6 +55,7 @@ const defaults: Settings = {
   locale: "zh-CN",
   accentColor: AccentColor.DEFAULT_ACCENT_COLOR,
   reducedMotion: false,
+  layoutDensity: "regular",
   albumCoverBackground: false,
   playingCoverBackground: false,
   closeBehavior: "tray",
@@ -444,6 +446,12 @@ describe("settings dialog", () => {
         await Vue.nextTick();
         expect(getTextContent(panel)).not.toContain(explanation);
         if (category === "外观") {
+          const layoutSelect = findNode(panel, (node) => node.props.name === "layout-density");
+          expect(layoutSelect?.type).toBe("select");
+          expect(layoutSelect?.children.map((node) => node.props.value)).toEqual([
+            "regular",
+            "compact",
+          ]);
           for (const color of AccentColor.ACCENT_COLORS) {
             const preset = findNode(
               panel,
@@ -872,6 +880,7 @@ describe("settings dialog", () => {
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      layoutDensity: "regular",
       locale: "zh-CN",
       accentColor: "#60a5fa",
       reducedMotion: false,
@@ -979,6 +988,7 @@ describe("settings dialog", () => {
       {
         settings: {
           locale: "zh-CN",
+          layoutDensity: "regular",
           accentColor: "#60a5fa",
           reducedMotion: false,
           albumCoverBackground: true,
@@ -1035,6 +1045,29 @@ describe("settings dialog", () => {
       await bindings.save();
       expect(saved).toEqual([{ settings: { ...defaults, reducedMotion: enabled } }]);
       expect(appliedMotion).toEqual([enabled]);
+    });
+  }
+
+  for (const layoutDensity of ["regular", "compact"] as const) {
+    it(`saves layout ${layoutDensity} and applies it only after success`, async () => {
+      let fail = true;
+      const saved: unknown[] = [];
+      const { bindings, events } = createDialog(async (command, args) => {
+        if (command === "get_settings") return defaults;
+        if (fail) throw new Error("Disk unavailable");
+        saved.push(args);
+      });
+      await bindings.show();
+      expect(bindings.layoutDensity.value).toBe("regular");
+      bindings.layoutDensity.value = layoutDensity;
+      await bindings.save();
+      expect(events).toEqual([]);
+      fail = false;
+      await bindings.save();
+      expect(saved).toEqual([{ settings: { ...defaults, layoutDensity } }]);
+      expect(events).toEqual([SETTINGS_CHANGED_EVENT]);
+      await bindings.show();
+      expect(bindings.layoutDensity.value).toBe("regular");
     });
   }
 
@@ -1098,6 +1131,7 @@ describe("settings dialog", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls).toBe(2);
     first.resolve({
+      layoutDensity: "regular",
       locale: "zh-CN",
       accentColor: "#60a5fa",
       reducedMotion: false,

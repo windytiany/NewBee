@@ -35,6 +35,14 @@ pub enum AlbumSortOrder {
     Descending,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum LayoutDensity {
+    #[default]
+    Regular,
+    Compact,
+}
+
 fn validate_accent_color(color: &str) -> Result<(), String> {
     if color.len() == 7
         && color.starts_with('#')
@@ -63,6 +71,7 @@ pub struct Settings {
     #[serde(deserialize_with = "deserialize_accent_color")]
     pub accent_color: String,
     pub reduced_motion: bool,
+    pub layout_density: LayoutDensity,
     pub album_cover_background: bool,
     pub playing_cover_background: bool,
     pub close_behavior: CloseBehavior,
@@ -81,6 +90,7 @@ impl Default for Settings {
             shortcuts: crate::shortcuts::ShortcutSettings::default(),
             accent_color: "#1ed760".to_owned(),
             reduced_motion: false,
+            layout_density: LayoutDensity::default(),
             album_cover_background: false,
             playing_cover_background: false,
             close_behavior: CloseBehavior::default(),

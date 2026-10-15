@@ -16,7 +16,7 @@ afterEach(() => {
 
 function createPreferences(
   desktop: boolean,
-  settings: Pick<Settings, "accentColor" | "reducedMotion" | "locale">,
+  settings: Pick<Settings, "accentColor" | "reducedMotion" | "locale" | "layoutDensity">,
 ) {
   const dataset: Record<string, string> = {};
   const styles: Record<string, string> = {};
@@ -61,11 +61,15 @@ describe("application preference restoration", () => {
       const test = createPreferences(true, {
         locale: "zh-CN",
         accentColor: "#123abc",
+        layoutDensity: "compact",
         reducedMotion,
       });
       await test.preferences.restorePreferences();
       expect(test.calls).toBe(1);
-      expect(test.dataset).toEqual({ reducedMotion: String(reducedMotion) });
+      expect(test.dataset).toEqual({
+        reducedMotion: String(reducedMotion),
+        layoutDensity: "compact",
+      });
       expect(test.styles).toEqual({ "--app-accent": "#123abc" });
     });
   }
@@ -75,6 +79,7 @@ describe("application preference restoration", () => {
       setLocale(savedLocale === "en" ? "zh-CN" : "en");
       const test = createPreferences(true, {
         locale: savedLocale,
+        layoutDensity: "regular",
         accentColor: "#123abc",
         reducedMotion: false,
       });
@@ -88,6 +93,7 @@ describe("application preference restoration", () => {
     const test = createPreferences(false, {
       locale: "zh-CN",
       accentColor: "#1ed760",
+      layoutDensity: "regular",
       reducedMotion: false,
     });
     await test.preferences.restorePreferences();
