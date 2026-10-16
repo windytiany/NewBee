@@ -4,6 +4,7 @@ export const libraryMessages: Record<string, string> = {
   "不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。":
     "Files will not be deleted. The track will be removed from all playlists and the current queue. Scan again to reimport it.",
   最常播放曲目: "Most played tracks",
+  调整统计栏宽度: "Resize statistics pane",
   暂无播放记录: "No plays yet",
   "正在加载…": "Loading…",
   播放次数: "Play count",

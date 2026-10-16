@@ -139,6 +139,7 @@ import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LibraryStatistics from "@/features/library/statistics/LibraryStatistics.vue";
+import { ALBUM_COLUMN_WIDTH } from "@/features/library/browser/albums/layout";
 import { layoutDensity } from "@/features/settings/layout";
 import type {
   LibraryAlbumSelection,
@@ -301,7 +302,7 @@ function updateColumnCount() {
   const compact = layoutDensity.value === "compact";
   columnCount.value = Math.max(
     1,
-    Math.min(compact ? 5 : 4, Math.floor(width / (compact ? 156 : 200))),
+    Math.min(compact ? 5 : 4, Math.floor(width / ALBUM_COLUMN_WIDTH[layoutDensity.value])),
   );
 }
 
