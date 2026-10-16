@@ -113,7 +113,10 @@ impl SettingsState {
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let settings = match std::fs::read(&path) {
             Ok(data) => serde_json::from_slice(&data)?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Settings::default(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Settings {
+                shortcuts: crate::shortcuts::ShortcutSettings::defaults(),
+                ..Settings::default()
+            },
             Err(error) => return Err(error.into()),
         };
         Ok(Self {

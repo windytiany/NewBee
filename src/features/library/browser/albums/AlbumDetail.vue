@@ -59,6 +59,8 @@
     <div
       v-if="!props.tracksLoading && !props.tracksError && props.tracks.length > 0"
       ref="trackListElement"
+      data-keyboard-list
+      data-keyboard-grid
       class="relative grid gap-x-8 gap-y-6"
       @keydown="trackKeyboard.onKeydown"
       @focusin="trackKeyboard.onFocusin"
@@ -233,6 +235,7 @@ import { ChevronRight, Pause, Play, X } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { useContextCommands } from "@/features/shortcuts/context";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { AlbumSummary } from "@/features/library/types";
 import type { TrackSummary } from "@/features/tracks/types";
@@ -357,6 +360,15 @@ const trackKeyboard = createItemKeyboard({
     }
   },
   onEscape: () => emit("close"),
+});
+
+useContextCommands(trackListElement, () => {
+  if (props.tracksLoading || props.trackActionPending || props.playbackCommandPending) return {};
+  const selected = trackFocus.getSelectedItemKeys(visibleTrackKeys.value);
+  const ids = (
+    selected.length ? selected : visibleTrackKeys.value.filter((key) => trackFocus.isFocused(key))
+  ).map(Number);
+  return ids.length ? { addToQueue: () => emit("addTracksToQueueEnd", ids) } : {};
 });
 
 watch(visibleTrackKeys, (itemKeys) => trackFocus.syncVisibleItems(itemKeys), {

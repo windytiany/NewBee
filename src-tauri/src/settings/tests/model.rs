@@ -1,6 +1,30 @@
 use super::super::*;
 
 #[test]
+fn shortcuts_default_only_for_a_missing_settings_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    let new_user = SettingsState::load(path.clone()).unwrap().get().unwrap();
+    assert_eq!(new_user.shortcuts.toggle_playback.shortcut, "Space");
+    assert_eq!(new_user.shortcuts.show_commands.shortcut, "Ctrl+KeyK");
+    std::fs::write(&path, r#"{"locale":"en"}"#).unwrap();
+    let legacy = SettingsState::load(path.clone()).unwrap().get().unwrap();
+    assert_eq!(
+        legacy.shortcuts,
+        crate::shortcuts::ShortcutSettings::default()
+    );
+    std::fs::write(&path, r#"{"shortcuts":{"previous":{"shortcut":"Ctrl+KeyP","global":true},"togglePlayback":{"shortcut":"","global":false}}}"#).unwrap();
+    let state = SettingsState::load(path.clone()).unwrap();
+    let settings = state.get().unwrap();
+    assert_eq!(settings.shortcuts.previous.shortcut, "Ctrl+KeyP");
+    assert!(settings.shortcuts.previous.global);
+    assert!(settings.shortcuts.toggle_playback.shortcut.is_empty());
+    assert!(settings.shortcuts.show_commands.shortcut.is_empty());
+    state.save(settings.clone()).unwrap();
+    assert_eq!(SettingsState::load(path).unwrap().get().unwrap(), settings);
+}
+
+#[test]
 fn layout_density_defaults_round_trips_and_persists() {
     assert_eq!(Settings::default().layout_density, LayoutDensity::Regular);
     assert_eq!(
@@ -205,6 +229,7 @@ fn accent_color_disk_write_failure_preserves_memory_and_disk() {
         std::process::id()
     ));
     let state = SettingsState::load(path.clone()).unwrap();
+    let original = state.get().unwrap();
     std::fs::create_dir(&path).unwrap();
     let sentinel = path.join("sentinel");
     std::fs::write(&sentinel, b"unchanged").unwrap();
@@ -213,7 +238,7 @@ fn accent_color_disk_write_failure_preserves_memory_and_disk() {
         ..Settings::default()
     };
     assert!(state.save(settings).is_err());
-    assert_eq!(state.get().unwrap(), Settings::default());
+    assert_eq!(state.get().unwrap(), original);
     assert!(path.is_dir());
     assert_eq!(std::fs::read(&sentinel).unwrap(), b"unchanged");
     std::fs::remove_dir_all(path).unwrap();
@@ -452,9 +477,14 @@ fn shortcuts_use_per_action_scope_and_reject_legacy_contract() {
         "toggleWindow": {"shortcut": "Ctrl+KeyD", "global": true}
     }});
     let settings = serde_json::from_value::<Settings>(data.clone()).unwrap();
+    let serialized = serde_json::to_value(&settings).unwrap();
+    for (action, binding) in data["shortcuts"].as_object().unwrap() {
+        assert_eq!(serialized["shortcuts"][action], *binding);
+    }
+    assert_eq!(serialized["shortcuts"]["showCommands"]["shortcut"], "");
     assert_eq!(
-        serde_json::to_value(settings).unwrap()["shortcuts"],
-        data["shortcuts"]
+        serde_json::from_value::<Settings>(serialized).unwrap(),
+        settings
     );
     for shortcuts in [
         serde_json::json!({"global": false}),

@@ -1,5 +1,6 @@
 <template>
   <section
+    data-focus-region
     :aria-label="t('正在播放')"
     class="relative isolate grid h-full min-h-0 w-full min-w-0 place-items-center"
     :class="displayedBackground ? '[--app-muted:#e5e7eb] [--app-text:#fff]' : ''"

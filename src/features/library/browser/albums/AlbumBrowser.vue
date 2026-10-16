@@ -1,8 +1,12 @@
 <template>
   <section
     ref="browserElement"
+    data-keyboard-list
+    data-keyboard-grid
     data-local-drop="Library"
-    aria-labelledby="album-browser-heading"
+    data-focus-region
+    :aria-labelledby="props.artist ? 'album-browser-heading' : undefined"
+    :aria-label="props.artist ? undefined : t('专辑')"
     :aria-busy="props.trackActionPending || props.albumsLoading"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
     @keydown="handleAlbumKeydown"
@@ -235,14 +239,20 @@ const albumKeyboard = createItemKeyboard({
   onActivate: (key) => {
     const album = props.albums.find((entry) => getAlbumKey(entry) === key);
     if (!album) return;
-    if (props.selectedAlbum) playAlbum(album);
-    else toggleAlbum(album);
+    if (!isSelectedAlbum(album)) toggleAlbum(album);
+    void nextTick(() =>
+      browserElement.value
+        ?.querySelector<globalThis.HTMLElement>("button[data-album-track-row]")
+        ?.focus(),
+    );
   },
 });
 
 function handleAlbumKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
   if (
     !props.selectedAlbum ||
+    event.ctrlKey ||
+    event.shiftKey ||
     !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
   ) {
     albumKeyboard.onKeydown(event);

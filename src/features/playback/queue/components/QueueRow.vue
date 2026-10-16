@@ -2,6 +2,7 @@
   <li ref="rowElement" :aria-current="isCurrentTrack ? 'true' : undefined">
     <button
       data-item-interaction
+      data-keyboard-item
       class="focus-visible:bg-app-track flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors outline-none"
       :class="isFocused ? 'bg-app-track' : isSelected ? 'bg-white/10' : 'hover:bg-white/5'"
       :aria-pressed="isSelected ? true : undefined"

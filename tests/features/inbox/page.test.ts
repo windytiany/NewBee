@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
+import * as ShortcutContext from "@/features/shortcuts/context";
 import { createInbox } from "@/features/inbox/useInbox";
 import type { InboxTrack } from "@/features/inbox/api";
 import { compileSfc, evaluateSource } from "../../support/module/loader";
@@ -215,6 +216,7 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
         Check: Vue.defineComponent(() => () => null),
       },
       "@/features/inbox/useInbox": { useInbox: () => inbox },
+      "@/features/shortcuts/context": ShortcutContext,
       "@/features/playback/session": {
         usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
       },
@@ -251,9 +253,12 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
     },
   ).default;
   const root = new Scene("root");
-  app = createHostRenderer((type, text) => new Scene(type, text)).createApp(component, {
-    active: true,
-  });
+  app = createHostRenderer((type, text) => Vue.markRaw(new Scene(type, text))).createApp(
+    component,
+    {
+      active: true,
+    },
+  );
   app.mount(root);
   await settle();
   return {
@@ -306,6 +311,20 @@ function clickRow(root: Scene, row: Scene, modifiers: Record<string, unknown> = 
   dispatch(row, "onClick", modifiers);
 }
 describe("Inbox workspace", () => {
+  it("adds the current keyboard selection to the queue and disables commands while pending", async () => {
+    const h = await mount();
+    const rows = h.rows();
+    clickRow(h.root, rows[0]!);
+    clickRow(h.root, rows[2]!, { ctrlKey: true });
+    const target = rows[2] as unknown as Element;
+    const commands = ShortcutContext.getContextCommands(target);
+    expect(commands.addToQueue).toBeDefined();
+    await commands.addToQueue?.();
+    expect(h.addedEnd).toEqual([[1, 3]]);
+    const reread = h.inbox.reread();
+    expect(ShortcutContext.getContextCommands(target)).toEqual({});
+    await reread;
+  });
   it("F5 and the empty menu scan every Inbox ID, while selected reread uses only the selection", async () => {
     const context = await mount();
     context.inbox.state.artist = { artist: "Artist", albumCount: 1 };

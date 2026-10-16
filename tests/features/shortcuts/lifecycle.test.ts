@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
-import { evaluateSource, transpileScript } from "../../../support/module/loader";
-import { createHostNode, createHostRenderer } from "../../../support/host/renderer";
-import { DEFAULT_SHORTCUTS } from "@/features/settings/shortcuts/bindings";
+import { evaluateSource, transpileScript } from "../../support/module/loader";
+import { createHostNode, createHostRenderer } from "../../support/host/renderer";
+import { DEFAULT_SHORTCUTS } from "@/features/shortcuts/bindings";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 
 const output = transpileScript(
   await Bun.file(
-    new URL("../../../../src/features/settings/shortcuts/useShortcuts.ts", import.meta.url),
+    new URL("../../../src/features/shortcuts/useShortcuts.ts", import.meta.url),
   ).text(),
 );
 const originals = new Map(
@@ -27,9 +27,14 @@ afterEach(() => {
 });
 
 class ShortcutTarget {
-  constructor(private readonly editing = false) {}
-  closest() {
-    return this.editing ? this : null;
+  constructor(
+    private readonly editing = false,
+    private readonly selectors: readonly string[] = [],
+  ) {}
+  closest(selector: string) {
+    return (this.editing && selector.startsWith("input,")) || this.selectors.includes(selector)
+      ? this
+      : null;
   }
 }
 
@@ -77,7 +82,7 @@ async function mountShortcuts(desktop = true, registrationError: string | null =
     },
   });
   Object.defineProperty(globalThis, "Element", { configurable: true, value: ShortcutTarget });
-  const hook = evaluateSource<typeof import("@/features/settings/shortcuts/useShortcuts")>(output, {
+  const hook = evaluateSource<typeof import("@/features/shortcuts/useShortcuts")>(output, {
     vue: Vue,
     "@tauri-apps/api/core": {
       isTauri: () => desktop,
@@ -116,7 +121,16 @@ async function mountShortcuts(desktop = true, registrationError: string | null =
   app.mount(createHostNode("root"));
   apps.push(app);
   await flush();
-  function keydown(code = "KeyP", editing = false) {
+  function keydown(
+    code = "KeyP",
+    editing = false,
+    options: {
+      target?: ShortcutTarget;
+      ctrlKey?: boolean;
+      shiftKey?: boolean;
+      repeat?: boolean;
+    } = {},
+  ) {
     let prevented = false;
     let stopped = false;
     listeners.get("keydown")?.({
@@ -129,6 +143,7 @@ async function mountShortcuts(desktop = true, registrationError: string | null =
       defaultPrevented: false,
       repeat: false,
       target: new ShortcutTarget(editing),
+      ...options,
       preventDefault: () => {
         prevented = true;
       },
@@ -177,6 +192,31 @@ describe("application shortcut lifecycle", () => {
     expect(harness.keydown("KeyW")).toEqual({ prevented: false, stopped: false });
     await flush();
     expect(harness.invocations.filter((call) => call.command === "run_shortcut")).toHaveLength(1);
+  });
+
+  it("preserves native button space and list navigation before application bindings", async () => {
+    const harness = await mountShortcuts();
+    harness.settings.shortcuts.volumeUp = { shortcut: "Ctrl+ArrowUp", global: false };
+    harness.settings.shortcuts.seekForward = { shortcut: "Ctrl+ArrowRight", global: false };
+    harness.settings.shortcuts.togglePlayback = { shortcut: "Space", global: false };
+    harness.listeners.get(SETTINGS_CHANGED_EVENT)?.(new Event(SETTINGS_CHANGED_EVENT));
+    await flush();
+    const button = new ShortcutTarget(false, ['button, a, [role="button"]']);
+    expect(harness.keydown("Space", false, { target: button, ctrlKey: false }).prevented).toBe(
+      false,
+    );
+    const list = new ShortcutTarget(false, ["[data-keyboard-list]"]);
+    expect(harness.keydown("ArrowUp", false, { target: list }).prevented).toBe(false);
+    expect(harness.keydown("ArrowRight", false, { target: list }).prevented).toBe(true);
+    const grid = new ShortcutTarget(false, ["[data-keyboard-list]", "[data-keyboard-grid]"]);
+    expect(harness.keydown("ArrowRight", false, { target: grid }).prevented).toBe(false);
+    expect(harness.keydown("ArrowUp").prevented).toBe(true);
+    await flush();
+    expect(
+      harness.invocations
+        .filter((call) => call.command === "run_shortcut")
+        .map((call) => call.args?.action),
+    ).toEqual(["seekForward", "volumeUp"]);
   });
 
   it("navigates to each page locally without invoking backend actions", async () => {

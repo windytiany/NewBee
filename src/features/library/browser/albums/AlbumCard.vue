@@ -3,6 +3,7 @@
     <button
       data-item-interaction
       data-album-card
+      data-keyboard-item
       class="focus-visible:ring-app-accent block w-full rounded-md p-3 text-center transition-colors outline-none hover:bg-white/5 focus-visible:ring-2"
       :class="isFocused ? 'ring-app-accent ring-2' : ''"
       :aria-label="t('查看专辑 {album}', { album: album.album ?? t('未知专辑') })"

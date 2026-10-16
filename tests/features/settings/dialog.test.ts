@@ -18,8 +18,10 @@ import {
   DEFAULT_SHORTCUTS,
   SHORTCUT_ACTIONS,
   type ShortcutAction,
-} from "@/features/settings/shortcuts/bindings";
+  formatShortcut,
+} from "@/features/shortcuts/bindings";
 import * as AccentColor from "@/features/settings/accent";
+import { BINDING_GROUPS } from "@/features/shortcuts/groups";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 type DialogBindings = {
@@ -51,6 +53,8 @@ type DialogBindings = {
   show: () => Promise<void>;
   close: () => void;
   save: () => Promise<void>;
+  resetShortcuts: () => void;
+  recordShortcut: (event: KeyboardEvent) => void;
 };
 const defaults: Settings = {
   locale: "zh-CN",
@@ -146,6 +150,59 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("restores the draft immediately, discards it on cancel and persists only on save", async () => {
+    const persisted = { ...defaults, shortcuts: cloneShortcuts({}) };
+    const saved: Settings[] = [];
+    const { bindings } = createDialog(async (command, args) => {
+      if (command === "get_settings") return persisted;
+      if (command === "save_settings") saved.push((args as { settings: Settings }).settings);
+    });
+    await bindings.show();
+    expect(bindings.shortcuts.value.togglePlayback.shortcut).toBe("");
+    bindings.resetShortcuts();
+    expect(saved).toEqual([]);
+    bindings.close();
+    await bindings.show();
+    expect(bindings.shortcuts.value.togglePlayback.shortcut).toBe("");
+    bindings.resetShortcuts();
+    expect(bindings.shortcuts.value).toEqual(DEFAULT_SHORTCUTS);
+    expect(persisted.shortcuts.togglePlayback.shortcut).toBe("");
+    bindings.shortcuts.value.toggleWindow.global = true;
+    expect(DEFAULT_SHORTCUTS.toggleWindow.global).toBe(false);
+    await bindings.save();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.shortcuts.togglePlayback.shortcut).toBe("Space");
+  });
+
+  it("clears with Escape in the draft without changing scope and persists only on save", async () => {
+    const persisted = { ...defaults, shortcuts: cloneShortcuts(DEFAULT_SHORTCUTS) };
+    persisted.shortcuts.previous.global = true;
+    const saved: Settings[] = [];
+    const { bindings, element } = createDialog(async (command, args) => {
+      if (command === "get_settings") return persisted;
+      if (command === "save_settings") saved.push((args as { settings: Settings }).settings);
+    });
+    const escape = {
+      key: "Escape",
+      code: "Escape",
+      isComposing: false,
+      preventDefault() {},
+      stopPropagation() {},
+    } as KeyboardEvent;
+    await bindings.show();
+    bindings.recordShortcut(escape);
+    expect(bindings.shortcuts.value.previous).toEqual({ shortcut: "", global: true });
+    expect(element.open).toBe(true);
+    expect(saved).toEqual([]);
+    expect(persisted.shortcuts.previous.shortcut).toBe(DEFAULT_SHORTCUTS.previous.shortcut);
+    bindings.close();
+    await bindings.show();
+    expect(bindings.shortcuts.value.previous.shortcut).toBe(DEFAULT_SHORTCUTS.previous.shortcut);
+    bindings.recordShortcut(escape);
+    await bindings.save();
+    expect(saved[0]?.shortcuts.previous).toEqual({ shortcut: "", global: true });
+  });
+
   it("blocks settings saving and closing while backup is pending", async () => {
     const calls: string[] = [];
     const { bindings, element } = createDialog(async (command) => {
@@ -172,8 +229,8 @@ describe("settings dialog", () => {
     await bindings.show();
     expect(suspensions).toEqual([true]);
     bindings.shortcuts.value.previous.shortcut = "Ctrl+KeyP";
-    expect(defaults.shortcuts.previous.shortcut).toBe("");
-    expect(DEFAULT_SHORTCUTS.previous.shortcut).toBe("");
+    expect(defaults.shortcuts.previous.shortcut).toBe("Ctrl+Shift+ArrowLeft");
+    expect(DEFAULT_SHORTCUTS.previous.shortcut).toBe("Ctrl+Shift+ArrowLeft");
     bindings.close();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(suspensions).toEqual([true, false]);
@@ -351,6 +408,7 @@ describe("settings dialog", () => {
           addEventListener: () => {},
           removeEventListener: () => {},
           getRootNode: () => ({ activeElement: null }),
+          focus() {},
           showModal() {
             this.open = true;
           },
@@ -383,6 +441,9 @@ describe("settings dialog", () => {
     try {
       await dialog.show();
       await Vue.nextTick();
+      expect(String(findNode(root, (node) => node.type === "dialog")?.props.class)).toContain(
+        "sidebar-scrollbars",
+      );
       const header = findNode(root, (node) => node.type === "header");
       const footer = findNode(root, (node) => node.type === "footer");
       if (!header || !footer) throw new Error("Missing dialog header or footer");
@@ -549,6 +610,36 @@ describe("settings dialog", () => {
       await Vue.nextTick();
       expect(findNode(panel, (node) => node.props["aria-label"] === "快捷键设置说明")).toBeNull();
       expect(getTextContent(panel)).not.toContain("缺少日期");
+      const initialRecorder = findNode(panel, (node) => node.props.name === "shortcut-recorder");
+      expect(
+        findNode(panel, (node) => node.type === "button" && getTextContent(node).trim() === "清除"),
+      ).toBeNull();
+      const reset = findNode(
+        panel,
+        (node) => node.type === "button" && getTextContent(node).trim() === "恢复默认",
+      );
+      if (
+        !initialRecorder ||
+        typeof initialRecorder.props.onKeydown !== "function" ||
+        typeof reset?.props.onClick !== "function"
+      )
+        throw new Error("Missing shortcut draft controls");
+      initialRecorder.props.onKeydown({
+        key: "Escape",
+        code: "Escape",
+        isComposing: false,
+        preventDefault() {},
+        stopPropagation() {},
+      });
+      await Vue.nextTick();
+      expect(Reflect.get(initialRecorder, "value")).toBe("");
+      await reset.props.onClick();
+      await Vue.nextTick();
+      expect(Reflect.get(initialRecorder, "value")).toBe(
+        formatShortcut(DEFAULT_SHORTCUTS.previous.shortcut),
+      );
+      expect(getTextContent(panel)).not.toContain("确认恢复");
+      expect(saved).toEqual([]);
       for (const label of [
         "上一首",
         "下一首",
@@ -563,12 +654,40 @@ describe("settings dialog", () => {
         expect(getTextContent(panel)).toContain(label);
       const table = findNode(panel, (node) => node.type === "table");
       if (!table) throw new Error("Missing shortcut table");
+      const scroller = table.parent;
+      if (!scroller) throw new Error("Missing shortcut table scroller");
+      expect(String(scroller.props.class)).toContain("overflow-auto");
+      expect(String(scroller.props.class)).toContain("min-h-0");
+      expect(String(panel.props.class)).toContain("overflow-hidden");
+      expect(String(table.props.class)).toContain("table-fixed");
+      const editor = initialRecorder.parent?.parent;
+      expect(editor?.parent).toBe(scroller.parent);
+      expect(String(editor?.props.class)).toContain("shrink-0");
+      expect(findNode(scroller, (node) => node === initialRecorder)).toBeNull();
+      const globalControl = findNode(panel, (node) => node.props.name === "shortcuts-global");
+      expect(globalControl?.parent?.parent).toBe(initialRecorder.parent);
+      expect(
+        table.children
+          .filter((node) => node.type === "tbody")
+          .map((node) => node.props["data-shortcut-group"]),
+      ).toEqual(BINDING_GROUPS.map((group) => group.id));
+      for (const group of BINDING_GROUPS) {
+        const body = findNode(table, (node) => node.props["data-shortcut-group"] === group.id);
+        if (!body) throw new Error(`Missing shortcut group: ${group.id}`);
+        const heading = findNode(body, (node) => node.props.scope === "rowgroup");
+        expect(getTextContent(heading!)).toBe(group.label);
+        expect(
+          body.children
+            .filter((node) => node.props["data-shortcut-action"])
+            .map((node) => node.props["data-shortcut-action"]),
+        ).toEqual([...group.actions]);
+      }
       const rows = SHORTCUT_ACTIONS.map((action) => {
         const row = findNode(table, (node) => node.props["data-shortcut-action"] === action);
         if (!row) throw new Error("Missing shortcut action row");
         return row;
       });
-      expect(rows).toHaveLength(8);
+      expect(rows).toHaveLength(SHORTCUT_ACTIONS.length);
       const headings = findNode(table, (node) => node.type === "thead");
       expect(headings?.children[0]?.children.map((node) => getTextContent(node))).toEqual([
         "操作",
@@ -594,14 +713,16 @@ describe("settings dialog", () => {
       for (const action of SHORTCUT_ACTIONS) {
         await selectAction(action);
         const global = findNode(panel, (node) => node.props.name === "shortcuts-global");
-        expect(global?.props.disabled).toBe(action.startsWith("show"));
+        expect(global?.props.disabled).toBe(action.startsWith("show") || action === "addToQueue");
         const recorder = findNode(panel, (node) => node.props.name === "shortcut-recorder");
         if (!recorder || typeof recorder.props.onKeydown !== "function")
           throw new Error("Missing shortcut recorder");
         expect(recorder.props.readonly).toBe("");
         expect(recorder.props["data-shortcut-recorder"]).toBe("");
         expect(recorder.props.placeholder).toBeUndefined();
-        expect(Reflect.get(recorder, "value")).toBe("");
+        expect(Reflect.get(recorder, "value")).toBe(
+          formatShortcut(DEFAULT_SHORTCUTS[action].shortcut),
+        );
         let prevented = false;
         let stopped = false;
         const press = (key: string, code: string, ctrlKey = false, isComposing = false) =>
@@ -624,7 +745,9 @@ describe("settings dialog", () => {
         press("Control", "ControlLeft", true);
         press("a", "KeyA", true, true);
         await Vue.nextTick();
-        expect(Reflect.get(recorder, "value")).toBe("");
+        expect(Reflect.get(recorder, "value")).toBe(
+          formatShortcut(DEFAULT_SHORTCUTS[action].shortcut),
+        );
         press("a", "KeyA", true);
         await Vue.nextTick();
         expect(prevented).toBe(true);
@@ -638,21 +761,37 @@ describe("settings dialog", () => {
           }
         }
         Object.defineProperty(globalThis, "HTMLInputElement", { configurable: true, value: Input });
+        prevented = false;
+        stopped = false;
         try {
           recorder.props.onKeydown({
             key: "Escape",
             code: "Escape",
             isComposing: false,
             target: new Input(),
-            preventDefault() {},
-            stopPropagation() {},
+            preventDefault() {
+              prevented = true;
+            },
+            stopPropagation() {
+              stopped = true;
+            },
           });
         } finally {
           if (originalInput) Object.defineProperty(globalThis, "HTMLInputElement", originalInput);
           else Reflect.deleteProperty(globalThis, "HTMLInputElement");
         }
-        expect(blurred).toBe(true);
-        expect(Reflect.get(recorder, "value")).toBe("Ctrl + A");
+        await Vue.nextTick();
+        expect(blurred).toBe(false);
+        expect(prevented).toBe(true);
+        expect(stopped).toBe(true);
+        expect(Reflect.get(recorder, "value")).toBe("");
+        expect(
+          Reflect.get(
+            findNode(root, (node) => node.type === "dialog")!,
+            "open",
+          ),
+        ).toBe(true);
+        press("a", "KeyA", true);
         press("Delete", "Delete");
         await Vue.nextTick();
         expect(Reflect.get(recorder, "value")).toBe("");
@@ -660,9 +799,8 @@ describe("settings dialog", () => {
         await Vue.nextTick();
         const row = recorder.parent;
         if (!row) throw new Error("Missing shortcut row");
-        const clear = findNode(row, (node) => node.type === "button");
-        if (!clear || typeof clear.props.onClick !== "function") throw new Error("Missing clear");
-        clear.props.onClick();
+        expect(findNode(row, (node) => node.type === "button")).toBeNull();
+        press("Escape", "Escape");
         await Vue.nextTick();
         expect(Reflect.get(recorder, "value")).toBe("");
         press("a", "KeyA", true);
@@ -722,13 +860,13 @@ describe("settings dialog", () => {
       await selectAction("previous");
       expect(Reflect.get(previous, "value")).toBe("Ctrl + P");
       expect(Reflect.get(global, "checked")).toBe(true);
-      const clearSelected = findNode(
-        panel,
-        (node) => node.type === "button" && getTextContent(node).trim() === "清除",
-      );
-      if (!clearSelected || typeof clearSelected.props.onClick !== "function")
-        throw new Error("Missing clear selected shortcut");
-      clearSelected.props.onClick();
+      previous.props.onKeydown({
+        key: "Escape",
+        code: "Escape",
+        isComposing: false,
+        preventDefault() {},
+        stopPropagation() {},
+      });
       await Vue.nextTick();
       expect(Reflect.get(previous, "value")).toBe("");
       expect(Reflect.get(global, "checked")).toBe(true);
@@ -766,7 +904,7 @@ describe("settings dialog", () => {
       failSave = false;
       await form.props.onSubmit({ preventDefault() {} });
       expect(saved[0]?.shortcuts).toEqual({
-        ...cloneShortcuts(DEFAULT_SHORTCUTS),
+        ...cloneShortcuts({}),
         previous: { shortcut: "Ctrl+KeyP", global: true },
         next: { shortcut: "Ctrl+KeyN", global: false },
       });

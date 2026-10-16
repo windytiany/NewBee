@@ -2,6 +2,7 @@
   <li>
     <button
       data-item-interaction
+      data-keyboard-item
       class="focus-visible:bg-app-track flex w-full min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left transition-colors outline-none"
       :class="isFocused ? 'bg-app-track' : 'hover:bg-white/5'"
       :aria-current="isSelected ? 'true' : undefined"

@@ -1,5 +1,6 @@
 import type { Locale } from "@/shared/i18n/locale";
 import type { LyricsProvider } from "@/features/lyrics/types";
+import type { ShortcutAction } from "@/features/shortcuts/bindings";
 
 export type NeteaseLyricsMode = "original" | "translated" | "bilingual";
 
@@ -8,16 +9,7 @@ export type ShortcutBinding = {
   global: boolean;
 };
 
-export type ShortcutSettings = {
-  previous: ShortcutBinding;
-  next: ShortcutBinding;
-  togglePlayback: ShortcutBinding;
-  toggleWindow: ShortcutBinding;
-  showPlaying: ShortcutBinding;
-  showLibrary: ShortcutBinding;
-  showPlaylist: ShortcutBinding;
-  showInbox: ShortcutBinding;
-};
+export type ShortcutSettings = Record<ShortcutAction, ShortcutBinding>;
 
 export type Settings = {
   shortcuts: ShortcutSettings;

@@ -1,6 +1,7 @@
 <template>
   <section
     v-persistent-scroll="JSON.stringify(['playback', 'details', currentTrack?.trackId])"
+    data-focus-region
     :aria-label="t('曲目信息')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto text-white"
   >

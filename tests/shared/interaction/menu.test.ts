@@ -34,7 +34,11 @@ class MenuNode extends EventTarget {
   }
 
   querySelectorAll(selector: string): MenuNode[] {
-    if (selector !== '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])') {
+    if (
+      selector !== '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])' &&
+      selector !==
+        '[role="menuitem"]:not(:disabled):not([aria-disabled="true"]), [role="menuitemradio"]:not(:disabled)'
+    ) {
       throw new Error(`Unexpected selector: ${selector}`);
     }
     return this.children.flatMap((child) => [
@@ -55,7 +59,7 @@ class MenuDocument extends EventTarget {
 type Item = { id: string; disabled?: boolean; ariaDisabled?: string; submenu?: Item[] };
 const mountedApps: Array<{ unmount: () => void }> = [];
 const focusCalls: Array<{ node: MenuNode; options?: FocusOptions; style: unknown }> = [];
-const globalNames = ["document", "window", "Node", "innerWidth", "innerHeight"] as const;
+const globalNames = ["document", "window", "Node", "Element", "innerWidth", "innerHeight"] as const;
 const originalGlobals = globalNames.map((name) =>
   Object.getOwnPropertyDescriptor(globalThis, name),
 );
@@ -70,6 +74,7 @@ beforeEach(() => {
     document: documentTarget,
     window: windowTarget,
     Node: MenuNode,
+    Element: MenuNode,
     innerWidth: 500,
     innerHeight: 300,
   })) {
@@ -180,6 +185,29 @@ function dispatch(target: EventTarget, type: string, eventTarget?: MenuNode, key
   target.dispatchEvent(event);
   return event;
 }
+
+describe("context menu keyboard navigation", () => {
+  it("moves within the current menu, skips disabled items and restores focus on Tab", async () => {
+    const menu = fixture([{ id: "first" }, { id: "disabled", disabled: true }, { id: "last" }]);
+    menu.open();
+    await settle();
+    for (const [key, expected] of [
+      ["ArrowDown", "last"],
+      ["ArrowDown", "first"],
+      ["ArrowUp", "last"],
+      ["Home", "first"],
+      ["End", "last"],
+    ]) {
+      const event = dispatch(documentTarget, "keydown", documentTarget.activeElement!, key);
+      expect(event.defaultPrevented).toBe(true);
+      expect(documentTarget.activeElement).toBe(menu.node(expected!));
+    }
+    dispatch(documentTarget, "keydown", documentTarget.activeElement!, "Tab");
+    await settle();
+    expect(menu.menu.request.value).toBeNull();
+    expect(documentTarget.activeElement).toBe(menu.trigger);
+  });
+});
 
 describe("context menu opening focus", () => {
   it("focuses the first available item in DOM order after rendering the clamped position", async () => {

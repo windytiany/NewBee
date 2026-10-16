@@ -3,6 +3,7 @@
     <button
       data-item-interaction
       data-album-track-row
+      data-keyboard-item
       class="focus-visible:bg-app-track flex w-full min-w-0 items-center gap-3 rounded-md py-2.5 pr-3 text-left text-sm transition-colors outline-none"
       :class="
         props.isFocused ? 'bg-app-track' : props.isSelected ? 'bg-white/10' : 'hover:bg-white/5'

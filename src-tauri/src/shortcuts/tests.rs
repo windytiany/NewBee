@@ -54,6 +54,67 @@ fn ids(bindings: &[Binding]) -> HashSet<u32> {
 }
 
 #[test]
+fn defaults_are_unique_local_and_match_frontend_actions() {
+    let config = ShortcutSettings::defaults();
+    let bindings = config.parse().unwrap();
+    assert_eq!(bindings.len(), ShortcutAction::ALL.len() - 1);
+    assert!(bindings.iter().all(|binding| !binding.global));
+    assert_eq!(config.seek_forward.shortcut, "Ctrl+ArrowRight");
+    assert_eq!(config.show_commands.shortcut, "Ctrl+KeyK");
+    let source = include_str!("../../../src/features/shortcuts/bindings.ts");
+    for binding in bindings {
+        let action = serde_json::to_value(binding.action).unwrap();
+        let action = action.as_str().unwrap();
+        let definition = source
+            .split(&format!("  {action}: {{"))
+            .nth(1)
+            .unwrap()
+            .split("},")
+            .next()
+            .unwrap();
+        assert!(definition.contains(&format!("shortcut: \"{}\"", binding.text)));
+        assert!(definition.contains(&format!("global: {}", binding.action.allows_global())));
+    }
+}
+
+#[test]
+fn only_audio_and_window_actions_allow_global_registration() {
+    for action in ShortcutAction::ALL {
+        let mut config = ShortcutSettings::default();
+        *config.binding_mut(action) = definition("Ctrl+KeyG", true);
+        let name = serde_json::to_value(action).unwrap();
+        let allowed =
+            !name.as_str().unwrap().starts_with("show") && action != ShortcutAction::AddToQueue;
+        assert_eq!(config.parse().is_ok(), allowed, "{name}");
+    }
+}
+
+#[test]
+fn repeated_global_events_repeat_only_seeking_and_volume() {
+    for action in [
+        ShortcutAction::VolumeUp,
+        ShortcutAction::SeekForward,
+        ShortcutAction::ToggleMute,
+    ] {
+        let mut config = ShortcutSettings::default();
+        *config.binding_mut(action) = definition("Ctrl+KeyG", true);
+        let mut runtime = ShortcutRuntime::default();
+        let mut registry = FakeRegistration::default();
+        runtime
+            .initialize(config.parse().unwrap(), &mut registry)
+            .unwrap();
+        let id = "Ctrl+KeyG".parse::<Shortcut>().unwrap().id();
+        assert_eq!(runtime.event(id, ShortcutState::Pressed), Some(action));
+        assert_eq!(
+            runtime.event(id, ShortcutState::Pressed),
+            action.repeats().then_some(action)
+        );
+        assert_eq!(runtime.event(id, ShortcutState::Released), None);
+        assert_eq!(runtime.event(id, ShortcutState::Pressed), Some(action));
+    }
+}
+
+#[test]
 fn page_shortcuts_are_local_only_and_share_conflict_validation() {
     for action in [
         ShortcutAction::ShowPlaying,

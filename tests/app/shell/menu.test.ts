@@ -149,10 +149,10 @@ function dispatchPointer(document: EventTarget, target: MenuNode) {
 }
 
 describe("brand menu", () => {
-  it("groups file and tool actions into right-hand submenus, leaving settings at the root", async () => {
+  it("places shortcuts in tools and the command palette immediately before settings", async () => {
     const menu = createMenu();
     await menu.open();
-    expect(menu.rootLabels()).toEqual(["文件", "工具", "设置"]);
+    expect(menu.rootLabels()).toEqual(["文件", "工具", "命令面板", "设置"]);
     fire(menu.button("文件").parent!, "onMouseenter");
     await Vue.nextTick();
     expect(menu.button("文件").props["aria-expanded"]).toBe(true);
@@ -162,11 +162,12 @@ describe("brand menu", () => {
     await Vue.nextTick();
     expect(menu.button("文件").props["aria-expanded"]).toBe(false);
     expect(menu.button("路径迁移").closest('[role="menu"]')?.props.id).toBe("brand-menu-tools");
+    expect(menu.button("快捷键总览").closest('[role="menu"]')?.props.id).toBe("brand-menu-tools");
     expect(getTextContent(menu.menu())).not.toContain("播放统计");
     expect(getTextContent(menu.menu())).not.toContain("导入音频文件");
     fire(menu.button("设置"), "onMouseenter");
     await Vue.nextTick();
-    expect(menu.rootLabels()).toEqual(["文件", "工具", "设置"]);
+    expect(menu.rootLabels()).toEqual(["文件", "工具", "命令面板", "设置"]);
   });
 
   for (const [group, label, action] of [
@@ -174,6 +175,8 @@ describe("brand menu", () => {
     ["文件", "扫描文件夹", "scan"],
     ["工具", "路径迁移", "migrate"],
     [null, "设置", "settings"],
+    [null, "命令面板", "commands"],
+    ["工具", "快捷键总览", "shortcuts"],
   ] as const) {
     it(`selects ${action} after closing the menu and restoring trigger focus`, async () => {
       const menu = createMenu();
@@ -185,7 +188,7 @@ describe("brand menu", () => {
       await fire(menu.button(label));
       expect(menu.actions).toEqual([action]);
       await menu.open();
-      expect(menu.rootLabels()).toEqual(["文件", "工具", "设置"]);
+      expect(menu.rootLabels()).toEqual(["文件", "工具", "命令面板", "设置"]);
     });
   }
 
@@ -283,11 +286,11 @@ it("updates open menu groups, actions and status when the language changes", asy
   expect(menu.button("正在导入…").props.disabled).toBe(true);
   setLocale("en");
   await Vue.nextTick();
-  expect(menu.rootLabels()).toEqual(["File", "Tools", "Settings"]);
+  expect(menu.rootLabels()).toEqual(["File", "Tools", "Command palette", "Settings"]);
   expect(menu.button("Importing…").props.disabled).toBe(true);
   expect(menu.button("Scan folder")).toBeDefined();
   expect(menu.menu().props["aria-label"]).toBe("NewBee menu");
   setLocale("zh-CN");
   await Vue.nextTick();
-  expect(menu.rootLabels()).toEqual(["文件", "工具", "设置"]);
+  expect(menu.rootLabels()).toEqual(["文件", "工具", "命令面板", "设置"]);
 });

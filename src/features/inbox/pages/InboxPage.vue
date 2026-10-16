@@ -17,6 +17,7 @@ import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDia
 import { reportPlaylistChanged } from "@/features/playlist/events";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { useContextCommands } from "@/features/shortcuts/context";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { t } from "@/shared/i18n/locale";
@@ -81,6 +82,14 @@ const keyboard = createItemKeyboard({
   onActivate: (key) => {
     void inbox.play(Number(key), keys.value.map(Number));
   },
+});
+useContextCommands(list, () => {
+  if (state.loading || state.pending) return {};
+  const selected = selection.getSelectedItemKeys(keys.value);
+  const ids = (
+    selected.length ? selected : keys.value.filter((key) => selection.isFocused(key))
+  ).map(Number);
+  return ids.length ? { addToQueue: async () => inbox.addEnd(ids) } : {};
 });
 function open(request: {
   itemKey: string;
@@ -157,6 +166,7 @@ watch(keys, (keys) => {
     <section
       ref="root"
       v-persistent-scroll="scope"
+      data-focus-region
       data-local-drop="Inbox"
       tabindex="-1"
       :aria-label="t('Inbox')"
@@ -177,7 +187,13 @@ watch(keys, (keys) => {
         </p>
         <p v-else-if="state.error" role="alert" class="py-4 text-sm">{{ state.error }}</p>
         <p v-else-if="!tracks.length" class="text-app-muted py-4 text-sm">{{ t("无曲目") }}</p>
-        <ol v-else ref="list" @keydown="keyboard.onKeydown" @focusin="keyboard.onFocusin">
+        <ol
+          v-else
+          ref="list"
+          data-keyboard-list
+          @keydown="keyboard.onKeydown"
+          @focusin="keyboard.onFocusin"
+        >
           <TrackRow
             v-for="track in tracks"
             :key="track.id"

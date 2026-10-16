@@ -1,6 +1,7 @@
 <template>
   <section
     data-local-drop="playlists"
+    data-focus-region
     :aria-label="t('播放列表浏览')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
@@ -26,6 +27,7 @@
       <ul
         v-if="props.playlists.length > 0"
         ref="playlistListElement"
+        data-keyboard-list
         class="space-y-0.5"
         @keydown="keyboard.onKeydown"
         @focusin="keyboard.onFocusin"
@@ -118,6 +120,10 @@ const keyboard = createItemKeyboard({
     if (!playlistFocus.isFocused(key)) playlistFocus.focusItem(key);
   },
   onMove: (key) => {
+    const playlist = props.playlists.find((entry) => String(entry.id) === key);
+    if (playlist) selectPlaylist(playlist);
+  },
+  onActivate: (key) => {
     const playlist = props.playlists.find((entry) => String(entry.id) === key);
     if (playlist) selectPlaylist(playlist);
   },

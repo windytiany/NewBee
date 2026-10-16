@@ -1,5 +1,6 @@
 <template>
   <section
+    data-focus-region
     :aria-label="t(props.grouping === 'artist' ? '演出者列表' : '专辑演出者列表')"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
@@ -11,7 +12,9 @@
         class="focus-visible:outline-app-accent flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium text-white/90 transition-colors hover:bg-white/5 focus-visible:outline-2"
         :aria-expanded="isGroupingMenuOpen"
         type="button"
-        @click="isGroupingMenuOpen = !isGroupingMenuOpen"
+        @click="toggleGroupingMenu"
+        @keydown.down.prevent="openGroupingMenu()"
+        @keydown.up.prevent="openGroupingMenu(true)"
       >
         <span>{{ t(props.grouping === "artist" ? "演出者" : "专辑演出者") }}</span>
         <ChevronDown
@@ -24,9 +27,11 @@
       <div
         v-if="isGroupingMenuOpen"
         id="grouping-options"
+        ref="groupingMenu"
         class="bg-app-interactive absolute top-full right-2 left-2 rounded-md p-1 shadow-xl ring-1 ring-white/10"
         role="menu"
         :aria-label="t('分组方式')"
+        @keydown="onGroupingKeydown"
       >
         <button
           v-for="option in groupingOptions"
@@ -60,12 +65,14 @@
       <ul
         v-if="props.allArtists || props.artists.length > 0"
         class="space-y-0.5"
+        data-keyboard-list
         @keydown="artistKeyboard.onKeydown"
         @focusin="artistKeyboard.onFocusin"
       >
         <li v-if="props.allArtists">
           <button
             data-item-interaction
+            data-keyboard-item
             type="button"
             class="focus-visible:bg-app-track w-full rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-white/5"
             :class="{ 'bg-app-track': artistFocus.isFocused('all') }"
@@ -93,7 +100,7 @@
 
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { Check, ChevronDown } from "@lucide/vue";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
@@ -147,6 +154,13 @@ const artistKeyboard = createItemKeyboard({
     const artist = props.artists.find((entry) => getArtistKey(entry.artist) === key);
     if (artist) selectArtist(artist);
   },
+  onActivate: (key) => {
+    if (key === "all") selectAll();
+    else {
+      const artist = props.artists.find((entry) => getArtistKey(entry.artist) === key);
+      if (artist) selectArtist(artist);
+    }
+  },
 });
 
 watch(artistItemKeys, (itemKeys) => artistFocus.syncVisibleItems(itemKeys), { immediate: true });
@@ -176,6 +190,42 @@ function selectGrouping(grouping: LibraryGrouping) {
 }
 
 const isGroupingMenuOpen = ref(false);
+const groupingMenu = ref<globalThis.HTMLElement | null>(null);
+async function openGroupingMenu(last = false) {
+  isGroupingMenuOpen.value = true;
+  await nextTick();
+  const items = groupingMenu.value?.querySelectorAll<globalThis.HTMLButtonElement>(
+    'button[role="menuitemradio"]',
+  );
+  items?.[last ? items.length - 1 : 0]?.focus();
+}
+function toggleGroupingMenu() {
+  if (isGroupingMenuOpen.value) isGroupingMenuOpen.value = false;
+  else void openGroupingMenu();
+}
+function onGroupingKeydown(event: globalThis.KeyboardEvent) {
+  if (event.isComposing) return;
+  if (event.key === "Tab") {
+    isGroupingMenuOpen.value = false;
+    return;
+  }
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  const items = [
+    ...(groupingMenu.value?.querySelectorAll<globalThis.HTMLButtonElement>(
+      'button[role="menuitemradio"]',
+    ) ?? []),
+  ];
+  if (!items.length) return;
+  event.preventDefault();
+  const index = items.indexOf(event.target as globalThis.HTMLButtonElement);
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+  items[next]?.focus();
+}
 const groupingControl = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const groupingButton = ref<InstanceType<typeof globalThis.HTMLButtonElement> | null>(null);
 function closeMenuOnOutsidePointer(event: InstanceType<typeof globalThis.PointerEvent>) {

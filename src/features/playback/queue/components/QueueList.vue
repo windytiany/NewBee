@@ -1,6 +1,7 @@
 <template>
   <section
     data-local-drop="queue"
+    data-focus-region
     :aria-label="displayTitle"
     class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
   >
@@ -22,6 +23,7 @@
       <ul
         v-else-if="!props.isLoading"
         ref="listElement"
+        data-keyboard-list
         class="space-y-1"
         @keydown="keyboard.onKeydown"
         @focusin="keyboard.onFocusin"
@@ -109,6 +111,7 @@ import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { useContextCommands } from "@/features/shortcuts/context";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { formatTrackDuration } from "@/features/tracks/format";
@@ -185,6 +188,7 @@ watch(visibleRowKeys, (rowKeys) => queueFocus.syncVisibleItems(rowKeys), { immed
 const emit = defineEmits<{
   playQueueItem: [rowKey: string];
   removeQueueItems: [rowKeys: string[]];
+  addTracksToQueueEnd: [tracks: Track[]];
 }>();
 
 const keyboard = createItemKeyboard({
@@ -196,6 +200,16 @@ const keyboard = createItemKeyboard({
   onMove: (key, event) => selectTrack(key, event),
   onSelectAll: (keys) => queueFocus.selectAll(keys),
   onActivate: (key) => emit("playQueueItem", key),
+});
+
+useContextCommands(listElement, () => {
+  if (props.isLoading) return {};
+  const selected = queueFocus.getSelectedItemKeys(visibleRowKeys.value);
+  const keys = new Set(
+    selected.length ? selected : visibleRowKeys.value.filter((key) => queueFocus.isFocused(key)),
+  );
+  const tracks = props.tracks.filter((track) => keys.has(track.rowKey));
+  return tracks.length ? { addToQueue: () => emit("addTracksToQueueEnd", tracks) } : {};
 });
 
 function openQueueContextMenu(request: QueueContextMenuTrigger) {

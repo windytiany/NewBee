@@ -1,11 +1,11 @@
 import type { ShortcutSettings } from "@/features/settings/types";
 import {
-  DEFAULT_SHORTCUTS,
+  SHORTCUT_DEFINITIONS,
   cloneShortcuts,
   SHORTCUT_ACTIONS,
   shortcutFromEvent,
-} from "@/features/settings/shortcuts/bindings";
-import type { ShortcutAction, ShortcutKeyEvent } from "@/features/settings/shortcuts/bindings";
+} from "@/features/shortcuts/bindings";
+import type { ShortcutAction, ShortcutKeyEvent } from "@/features/shortcuts/bindings";
 
 type ShortcutEvent = ShortcutKeyEvent &
   Pick<
@@ -16,10 +16,11 @@ type ShortcutRuntimeOptions = {
   getSettings: () => Promise<{ shortcuts: ShortcutSettings }>;
   run: (action: ShortcutAction) => Promise<void>;
   onError: (reason: unknown) => void;
+  onChange?: (settings: ShortcutSettings) => void;
 };
 
 export function createShortcutRuntime(options: ShortcutRuntimeOptions) {
-  let shortcuts = DEFAULT_SHORTCUTS;
+  let shortcuts = cloneShortcuts({});
   let requestSequence = 0;
   let disposed = false;
   const pending = new Set<ShortcutAction>();
@@ -28,7 +29,10 @@ export function createShortcutRuntime(options: ShortcutRuntimeOptions) {
     const request = ++requestSequence;
     try {
       const settings = await options.getSettings();
-      if (!disposed && request === requestSequence) shortcuts = cloneShortcuts(settings.shortcuts);
+      if (!disposed && request === requestSequence) {
+        shortcuts = cloneShortcuts(settings.shortcuts);
+        options.onChange?.(cloneShortcuts(shortcuts));
+      }
     } catch (reason) {
       if (!disposed && request === requestSequence) options.onError(reason);
     }
@@ -44,7 +48,7 @@ export function createShortcutRuntime(options: ShortcutRuntimeOptions) {
     if (!action) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (event.repeat || pending.has(action)) return;
+    if ((event.repeat && !SHORTCUT_DEFINITIONS[action].repeat) || pending.has(action)) return;
     pending.add(action);
     void Promise.resolve()
       .then(() => options.run(action))
@@ -57,7 +61,7 @@ export function createShortcutRuntime(options: ShortcutRuntimeOptions) {
   function dispose() {
     disposed = true;
     requestSequence++;
-    shortcuts = DEFAULT_SHORTCUTS;
+    shortcuts = cloneShortcuts({});
   }
 
   return { refresh, handleKeydown, dispose };

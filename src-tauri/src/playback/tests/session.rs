@@ -13,6 +13,7 @@ struct FakeAudio {
     playing: bool,
     ended: bool,
     position: u64,
+    duration: Option<u64>,
     next_id: u64,
     starts: Vec<i64>,
     stops: Vec<u64>,
@@ -130,7 +131,11 @@ impl SessionAudio for FakeAudio {
             has_ended: self.ended,
             playback_id: self.track.as_ref().map(|track| track.playback_id),
             position_ms: self.position,
-            duration_ms: if self.track.is_some() { 100 } else { 0 },
+            duration_ms: if self.track.is_some() {
+                self.duration.unwrap_or(100)
+            } else {
+                0
+            },
             now_playing: self.track.clone(),
         })
     }
@@ -186,7 +191,7 @@ impl SessionAudio for FakeAudio {
             return Err("seek failed".into());
         }
         self.position = position;
-        self.ended = position >= 100;
+        self.ended = position >= self.duration.unwrap_or(100);
         Ok(())
     }
     fn set_volume(&mut self, volume: u8) -> Result<(), String> {
@@ -353,6 +358,8 @@ pub(crate) fn initialize_test_session<R: tauri::Runtime>(app: &AppHandle<R>, pat
 
 #[path = "session/performance.rs"]
 mod performance;
+#[path = "session/shortcuts.rs"]
+mod shortcuts;
 #[path = "session/volume.rs"]
 mod volume;
 #[path = "session/worker.rs"]

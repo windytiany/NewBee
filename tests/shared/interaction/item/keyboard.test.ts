@@ -448,7 +448,41 @@ describe("Item 列表键盘", () => {
     }
   });
 
-  it.each([{ ctrlKey: true }, { shiftKey: true }, { ctrlKey: true, shiftKey: true }])(
+  it("Home/End 到达列表首尾，焦点进入列表后仅保留一个 Tab 入口", () => {
+    const harness = createHarness();
+    harness.keyboard.onFocusin(new TestFocusEvent(harness.items[1], harness.container));
+    expect(harness.items.map((item) => Reflect.get(item, "tabIndex"))).toEqual([-1, 0, -1]);
+    harness.keyboard.onKeydown(new TestKeyboardEvent("End", harness.items[1], harness.container));
+    expect(harness.items[2]?.focus).toHaveBeenCalled();
+    harness.keyboard.onKeydown(new TestKeyboardEvent("Home", harness.items[1], harness.container));
+    expect(harness.items[0]?.focus).toHaveBeenCalled();
+    for (const key of ["Enter", "ArrowDown", "Home"]) {
+      const input = new TestElement();
+      input.tagName = "INPUT";
+      harness.items[1]?.children.push(input);
+      const event = new TestKeyboardEvent(key, input, harness.container);
+      harness.keyboard.onKeydown(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+  });
+
+  it("Ctrl+方向键只移动焦点，Ctrl+Space 切换选择", () => {
+    const harness = createHarness();
+    const move = new TestKeyboardEvent("ArrowDown", harness.items[0], harness.container, {
+      ctrlKey: true,
+    });
+    harness.keyboard.onKeydown(move);
+    expect(harness.onMove).not.toHaveBeenCalled();
+    expect(harness.onFocus).toHaveBeenCalledWith("b");
+    expect(harness.items[1]?.focus).toHaveBeenCalled();
+    const toggle = new TestKeyboardEvent(" ", harness.items[1], harness.container, {
+      ctrlKey: true,
+    });
+    harness.keyboard.onKeydown(toggle);
+    expect(harness.onMove.mock.calls).toEqual([["b", toggle]]);
+  });
+
+  it.each([{ shiftKey: true }, { ctrlKey: true, shiftKey: true }])(
     "Ctrl/Shift %j 原样传入移动 callback",
     (modifiers) => {
       const harness = createHarness();

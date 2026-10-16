@@ -52,6 +52,7 @@ function keydown(event: globalThis.KeyboardEvent) {
     <button
       data-item-interaction
       data-track-select
+      data-keyboard-item
       type="button"
       class="focus-visible:bg-app-track grid w-full grid-cols-[var(--table-columns,1.5rem_minmax(0,1fr)_3rem)] items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm transition-colors outline-none"
       :class="[

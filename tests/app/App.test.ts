@@ -229,7 +229,11 @@ async function createComponent(source: string) {
   ]) {
     modules[name] = defaultModule(passiveComponent);
   }
-  modules["@/features/settings/shortcuts/useShortcuts"] = { useShortcuts: () => {} };
+  modules["@/features/shortcuts/useShortcuts"] = {
+    useShortcuts: () => ({ bindings: Vue.ref({}), run: async () => {} }),
+  };
+  modules["@/app/usePageFocus"] = { usePageFocus: () => {} };
+  modules["@/features/shortcuts/CommandDialog.vue"] = defaultModule(passiveComponent);
   modules["@/features/tracks/bridge"] = { useTrackBridge: () => {} };
   await loadLibraryModules(modules);
   await loadPlaylistModules(modules);

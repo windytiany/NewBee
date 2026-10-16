@@ -1,5 +1,6 @@
 <template>
   <footer
+    data-focus-region
     :aria-label="t('播放控制')"
     class="bg-app-surface text-app-muted fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 px-4 py-1 sm:h-10 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:gap-x-6 sm:px-6 sm:py-0 md:grid-cols-[minmax(10rem,20rem)_minmax(20rem,1fr)_minmax(9.5rem,14rem)] md:gap-x-[clamp(4px,calc(9.459459459vw-68.64864865px),32px)] md:pr-4 md:pl-8"
   >

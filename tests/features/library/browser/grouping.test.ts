@@ -367,7 +367,18 @@ it("offers both grouping options and emits the selected mode", async () => {
   );
   const grouping = Vue.ref<LibraryGrouping>("albumArtist");
   const root = createHostNode("root");
-  const app = createHostRenderer(createHostNode).createApp({
+  const focused = { value: null as ReturnType<typeof createHostNode> | null };
+  const app = createHostRenderer<ReturnType<typeof createHostNode>>((type, text) => {
+    const node = Vue.markRaw(createHostNode(type, text));
+    return Object.assign(node, {
+      focus() {
+        focused.value = node;
+      },
+      querySelectorAll() {
+        return node.children.filter((child) => child.props.role === "menuitemradio");
+      },
+    });
+  }).createApp({
     setup: () => () =>
       Vue.h(ArtistList, {
         artists: [],
@@ -396,6 +407,15 @@ it("offers both grouping options and emits the selected mode", async () => {
   if (!artistOption || typeof artistOption.props.onClick !== "function")
     throw new Error("Missing artist option");
   expect(artistOption.props["aria-checked"]).toBe(false);
+  const menu = findNode(root, (node) => node.props.role === "menu");
+  if (!menu || typeof menu.props.onKeydown !== "function")
+    throw new Error("Missing grouping menu keyboard handler");
+  menu.props.onKeydown({ key: "End", target: focused.value, preventDefault() {} });
+  expect(focused.value).toBe(artistOption);
+  menu.props.onKeydown({ key: "ArrowDown", target: focused.value, preventDefault() {} });
+  expect(focused.value).not.toBe(artistOption);
+  menu.props.onKeydown({ key: "ArrowUp", target: focused.value, preventDefault() {} });
+  expect(focused.value).toBe(artistOption);
   artistOption.props.onClick();
   await Vue.nextTick();
   expect(grouping.value).toBe("artist");

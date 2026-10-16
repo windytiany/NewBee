@@ -49,11 +49,22 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
 
   function onFocusin(event: FocusEvent) {
     const target = getTarget(event);
-    if (target) options.onFocus(target.key);
+    if (target) {
+      options.onFocus(target.key);
+      target.items.forEach((item, index) => {
+        item.tabIndex = index === target.index ? 0 : -1;
+      });
+    }
   }
 
   function onKeydown(event: KeyboardEvent) {
     if (event.defaultPrevented || event.altKey || event.metaKey || event.isComposing) return;
+    if (
+      event.target instanceof HTMLElement &&
+      (event.target.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName))
+    )
+      return;
     const target = getTarget(event);
     if (!target) return;
     const { items, index, key } = target;
@@ -74,7 +85,13 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
       options.onSelectAll(options.getItemKeys());
       return;
     }
-    if (event.key === "Enter" && options.onActivate) {
+    if (event.ctrlKey && !event.shiftKey && event.key === " " && options.onSelectAll) {
+      event.preventDefault();
+      event.stopPropagation();
+      options.onMove(key, event);
+      return;
+    }
+    if (event.key === "Enter" && !event.ctrlKey && !event.shiftKey && options.onActivate) {
       event.preventDefault();
       event.stopPropagation();
       options.onActivate(key);
@@ -89,21 +106,29 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
     if (
       event.key !== "ArrowUp" &&
       event.key !== "ArrowDown" &&
+      event.key !== "Home" &&
+      event.key !== "End" &&
       !(options.grid && (event.key === "ArrowLeft" || event.key === "ArrowRight"))
     )
       return;
     event.preventDefault();
     event.stopPropagation();
-    const nextIndex = options.grid
-      ? findDirectionalItem(
-          items.map((item) => item.getBoundingClientRect()),
-          index,
-          event.key,
-        )
-      : Math.max(0, Math.min(items.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)));
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : options.grid
+            ? findDirectionalItem(
+                items.map((item) => item.getBoundingClientRect()),
+                index,
+                event.key,
+              )
+            : Math.max(0, Math.min(items.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)));
     const nextKey = options.getItemKeys()[nextIndex];
     if (nextKey === undefined) return;
-    options.onMove(nextKey, event);
+    if (event.ctrlKey && !event.shiftKey) options.onFocus(nextKey);
+    else options.onMove(nextKey, event);
     items[nextIndex]?.focus({ preventScroll: true });
     items[nextIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }

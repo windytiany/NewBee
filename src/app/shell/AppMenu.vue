@@ -1,5 +1,5 @@
 <script lang="ts">
-export type AppMenuAction = "import" | "scan" | "migrate" | "settings";
+export type AppMenuAction = "import" | "scan" | "migrate" | "settings" | "commands" | "shortcuts";
 </script>
 
 <script setup lang="ts">
@@ -7,7 +7,17 @@ import { t } from "@/shared/i18n/locale";
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { ChevronRight } from "@lucide/vue";
 
-const props = defineProps<{ canImport: boolean; isImporting: boolean }>();
+import type { ShortcutSettings } from "@/features/settings/types";
+import { formatShortcut } from "@/features/shortcuts/bindings";
+const props = defineProps<{
+  canImport: boolean;
+  isImporting: boolean;
+  bindings?: ShortcutSettings;
+}>();
+const commands = [
+  { action: "commands", label: "命令面板", binding: "showCommands" },
+  { action: "settings", label: "设置", binding: "showSettings" },
+] as const;
 const emit = defineEmits<{ select: [action: AppMenuAction] }>();
 const groups = [
   {
@@ -21,7 +31,10 @@ const groups = [
   {
     id: "tools",
     label: "工具",
-    items: [{ action: "migrate", label: "路径迁移" }],
+    items: [
+      { action: "migrate", label: "路径迁移" },
+      { action: "shortcuts", label: "快捷键总览" },
+    ],
   },
 ] as const;
 type SubmenuId = (typeof groups)[number]["id"];
@@ -208,29 +221,41 @@ onUnmounted(() => {
             <button
               v-for="item in group.items"
               :key="item.action"
-              class="focus-visible:outline-app-accent w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
+              class="focus-visible:outline-app-accent flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="isDisabled(item.action)"
               role="menuitem"
               tabindex="-1"
               type="button"
               @click="select(item.action)"
             >
-              {{ item.action === "import" && isImporting ? t("正在导入…") : t(item.label) }}
+              <span>{{
+                item.action === "import" && isImporting ? t("正在导入…") : t(item.label)
+              }}</span>
+              <kbd class="text-app-muted text-xs whitespace-nowrap">{{
+                item.action === "shortcuts" && bindings
+                  ? formatShortcut(bindings.showShortcuts.shortcut)
+                  : ""
+              }}</kbd>
             </button>
           </div>
         </div>
       </div>
       <div class="my-1 border-t border-white/10" role="separator" />
       <button
-        class="focus-visible:outline-app-accent w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
+        v-for="command in commands"
+        :key="command.action"
+        class="focus-visible:outline-app-accent flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
         role="menuitem"
         tabindex="-1"
         type="button"
         @mouseenter="activeSubmenu = null"
         @focus="activeSubmenu = null"
-        @click="select('settings')"
+        @click="select(command.action)"
       >
-        {{ t("设置") }}
+        <span>{{ t(command.label) }}</span>
+        <kbd class="text-app-muted text-xs whitespace-nowrap">{{
+          bindings ? formatShortcut(bindings[command.binding].shortcut) : ""
+        }}</kbd>
       </button>
     </div>
   </div>

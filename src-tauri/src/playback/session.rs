@@ -125,22 +125,27 @@ pub enum SystemOperation {
     Toggle,
     Previous,
     Next,
-}
-
-impl SystemOperation {
-    fn command(self) -> SessionCommand {
-        match self {
-            Self::Play => SessionCommand::Play,
-            Self::Pause => SessionCommand::Pause,
-            Self::Toggle => SessionCommand::Toggle,
-            Self::Previous => SessionCommand::Previous,
-            Self::Next => SessionCommand::Next,
-        }
-    }
+    SeekBackward,
+    SeekForward,
+    VolumeDown,
+    VolumeUp,
+    Mute,
+    Shuffle,
+    Repeat,
 }
 
 impl SessionCommand {
     fn invalidates(&self) -> bool {
+        if let Self::System { operation } = self {
+            return !matches!(
+                operation,
+                SystemOperation::VolumeDown
+                    | SystemOperation::VolumeUp
+                    | SystemOperation::Mute
+                    | SystemOperation::Shuffle
+                    | SystemOperation::Repeat
+            );
+        }
         matches!(
             self,
             Self::System { .. }
@@ -579,7 +584,46 @@ impl<A: SessionAudio> Session<A> {
             if self.editing.is_some() || self.seeking {
                 return Ok((false, None, None));
             }
-            return self.execute(operation.command(), generation);
+            let command = match operation {
+                SystemOperation::Play => SessionCommand::Play,
+                SystemOperation::Pause => SessionCommand::Pause,
+                SystemOperation::Toggle => SessionCommand::Toggle,
+                SystemOperation::Previous => SessionCommand::Previous,
+                SystemOperation::Next => SessionCommand::Next,
+                SystemOperation::VolumeDown => SessionCommand::Volume {
+                    volume: self.volume.volume.saturating_sub(5),
+                },
+                SystemOperation::VolumeUp => SessionCommand::Volume {
+                    volume: self.volume.volume.saturating_add(5).min(100),
+                },
+                SystemOperation::Mute => SessionCommand::Mute,
+                SystemOperation::Shuffle => SessionCommand::Shuffle {
+                    enabled: !self.queue.shuffle_enabled,
+                },
+                SystemOperation::Repeat => SessionCommand::Repeat {
+                    enabled: !self.queue.repeat_one_enabled,
+                },
+                SystemOperation::SeekBackward | SystemOperation::SeekForward => {
+                    let status = self.audio.status()?;
+                    if !status.has_audio {
+                        return Ok((false, None, None));
+                    }
+                    let position_ms = if matches!(operation, SystemOperation::SeekBackward) {
+                        status.position_ms.saturating_sub(5_000)
+                    } else {
+                        status
+                            .position_ms
+                            .saturating_add(5_000)
+                            .min(status.duration_ms)
+                    };
+                    self.execute(SessionCommand::BeginSeeking, generation)?;
+                    SessionCommand::Seek {
+                        position_ms,
+                        playback_id: self.playback_id,
+                    }
+                }
+            };
+            return self.execute(command, generation);
         }
         if self.editing.is_some()
             && !matches!(

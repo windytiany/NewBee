@@ -1,5 +1,6 @@
 <template>
   <section
+    data-focus-region
     :data-local-drop="props.playlist ? 'playlist' : undefined"
     :data-playlist-id="props.playlist?.id"
     :aria-label="t('播放列表浏览')"
@@ -82,6 +83,7 @@
         <ol
           v-else-if="!props.isLoadingTracks && !props.playlistsError && !props.tracksError"
           ref="trackListElement"
+          data-keyboard-list
           @keydown="keyboard.onKeydown"
           @focusin="keyboard.onFocusin"
         >
@@ -227,6 +229,7 @@ import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { useContextCommands } from "@/features/shortcuts/context";
 import { createPlaylistDragReorder } from "@/features/playlist/ordering/drag";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { PlaylistSummary, PlaylistTrackSummary } from "@/features/playlist/types";
@@ -369,6 +372,17 @@ const keyboard = createItemKeyboard({
     const track = props.tracks.find((entry) => String(entry.playlistItemId) === key);
     if (track) emit("playTrack", track.playlistItemId, visiblePlaylistItemIds.value);
   },
+});
+
+useContextCommands(trackListElement, () => {
+  if (props.isLoadingTracks || props.isPlaylistActionPending || dragPreview.value) return {};
+  const selected = playlistTrackFocus.getSelectedItemKeys(visibleTrackKeys.value);
+  const ids = (
+    selected.length
+      ? selected
+      : visibleTrackKeys.value.filter((key) => playlistTrackFocus.isFocused(key))
+  ).map(Number);
+  return ids.length ? { addToQueue: () => emit("addPlaylistItemsToQueueEnd", ids) } : {};
 });
 
 function getTrackRowKey(playlistItemId: number) {

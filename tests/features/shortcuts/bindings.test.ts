@@ -4,8 +4,11 @@ import {
   cloneShortcuts,
   formatShortcut,
   shortcutFromEvent,
-} from "@/features/settings/shortcuts/bindings";
-import type { ShortcutKeyEvent } from "@/features/settings/shortcuts/bindings";
+  SHORTCUT_ACTIONS,
+  SHORTCUT_DEFINITIONS,
+  allowsGlobalShortcut,
+} from "@/features/shortcuts/bindings";
+import type { ShortcutKeyEvent } from "@/features/shortcuts/bindings";
 
 function keyEvent(overrides: Partial<ShortcutKeyEvent> = {}): ShortcutKeyEvent {
   return {
@@ -20,17 +23,32 @@ function keyEvent(overrides: Partial<ShortcutKeyEvent> = {}): ShortcutKeyEvent {
 }
 
 describe("shortcut bindings", () => {
-  it("defaults to local mode without bindings", () => {
-    expect(DEFAULT_SHORTCUTS).toEqual({
-      previous: { shortcut: "", global: false },
-      next: { shortcut: "", global: false },
-      togglePlayback: { shortcut: "", global: false },
-      toggleWindow: { shortcut: "", global: false },
-      showPlaying: { shortcut: "", global: false },
-      showLibrary: { shortcut: "", global: false },
-      showPlaylist: { shortcut: "", global: false },
-      showInbox: { shortcut: "", global: false },
-    });
+  it("provides unique local defaults for core operations", () => {
+    expect(DEFAULT_SHORTCUTS.togglePlayback.shortcut).toBe("Space");
+    expect(DEFAULT_SHORTCUTS.showCommands.shortcut).toBe("Ctrl+KeyK");
+    expect(DEFAULT_SHORTCUTS.showSettings.shortcut).toBe("Ctrl+Comma");
+    const bindings = Object.values(DEFAULT_SHORTCUTS);
+    expect(bindings.every((binding) => !binding.global)).toBe(true);
+    const keys = bindings.map((binding) => binding.shortcut).filter(Boolean);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("limits global scope by command semantics", () => {
+    for (const action of SHORTCUT_ACTIONS) {
+      expect(allowsGlobalShortcut(action)).toBe(
+        !action.startsWith("show") && action !== "addToQueue",
+      );
+    }
+    expect(SHORTCUT_DEFINITIONS.seekForward.repeat).toBe(true);
+    expect(SHORTCUT_DEFINITIONS.volumeUp.repeat).toBe(true);
+    expect(SHORTCUT_DEFINITIONS.toggleShuffle.repeat).toBe(false);
+  });
+
+  it("keeps missing legacy actions and explicitly cleared bindings empty", () => {
+    const legacy = cloneShortcuts({ previous: { shortcut: "", global: false } });
+    expect(legacy.previous.shortcut).toBe("");
+    expect(legacy.showCommands.shortcut).toBe("");
+    expect(Object.keys(legacy)).toEqual(SHORTCUT_ACTIONS);
   });
 
   it("clones each action independently from defaults and saved configuration", () => {
@@ -41,9 +59,9 @@ describe("shortcut bindings", () => {
     draft.previous.global = false;
     draft.next.global = true;
     expect(saved.previous).toEqual({ shortcut: "Ctrl+KeyP", global: true });
-    expect(saved.next).toEqual({ shortcut: "", global: false });
-    expect(DEFAULT_SHORTCUTS.previous).toEqual({ shortcut: "", global: false });
-    expect(DEFAULT_SHORTCUTS.next).toEqual({ shortcut: "", global: false });
+    expect(saved.next).toEqual({ shortcut: "Ctrl+Shift+ArrowRight", global: false });
+    expect(DEFAULT_SHORTCUTS.previous).toEqual({ shortcut: "Ctrl+Shift+ArrowLeft", global: false });
+    expect(DEFAULT_SHORTCUTS.next).toEqual({ shortcut: "Ctrl+Shift+ArrowRight", global: false });
   });
 
   it("captures physical code and canonical Ctrl Alt Shift Super order", () => {

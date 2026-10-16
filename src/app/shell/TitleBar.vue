@@ -1,10 +1,16 @@
 <template>
   <header
+    data-focus-region
     class="bg-app-base fixed inset-x-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-3 text-white sm:px-6"
     @mousedown.left="startDragging"
   >
     <div class="justify-self-start">
-      <AppMenu :can-import="isTauriApp" :is-importing="isImporting" @select="onMenuSelect" />
+      <AppMenu
+        :can-import="isTauriApp"
+        :is-importing="isImporting"
+        :bindings="bindings"
+        @select="onMenuSelect"
+      />
       <ScanDialog ref="libraryScanDialog" />
       <ImportDialog ref="importDialog" />
       <PathMigrationDialog ref="pathMigrationDialog" />
@@ -42,9 +48,12 @@ import SettingsDialog from "@/features/settings/components/SettingsDialog.vue";
 import type { PageName } from "@/app/pages";
 import type { AppMenuAction } from "@/app/shell/AppMenu.vue";
 
-const props = defineProps<{ activePage: PageName }>();
+import type { ShortcutSettings } from "@/features/settings/types";
+const props = defineProps<{ activePage: PageName; bindings?: ShortcutSettings }>();
 const emit = defineEmits<{
   "update:activePage": [pageName: PageName];
+  commands: [];
+  shortcuts: [];
 }>();
 const {
   isTauriApp,
@@ -62,6 +71,11 @@ const libraryScanDialog = ref<InstanceType<typeof ScanDialog> | null>(null);
 const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
 const pathMigrationDialog = ref<InstanceType<typeof PathMigrationDialog> | null>(null);
 
+async function showSettings() {
+  await settingsDialog.value?.show();
+}
+defineExpose({ showSettings });
+
 async function onMenuSelect(action: AppMenuAction) {
   switch (action) {
     case "import":
@@ -74,7 +88,13 @@ async function onMenuSelect(action: AppMenuAction) {
       pathMigrationDialog.value?.show();
       break;
     case "settings":
-      await settingsDialog.value?.show();
+      await showSettings();
+      break;
+    case "commands":
+      emit("commands");
+      break;
+    case "shortcuts":
+      emit("shortcuts");
       break;
   }
 }

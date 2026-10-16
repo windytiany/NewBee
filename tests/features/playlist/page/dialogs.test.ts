@@ -214,7 +214,11 @@ const emptyLibraryPage = () => ({
   removeTrackFromLibrary: async () => ({ status: "not-deleted", message: "" }),
 });
 const appModules: Record<string, unknown> = {
-  "@/features/settings/shortcuts/useShortcuts": { useShortcuts() {} },
+  "@/features/shortcuts/useShortcuts": {
+    useShortcuts: () => ({ bindings: Vue.ref({}), run: async () => {} }),
+  },
+  "@/app/usePageFocus": { usePageFocus() {} },
+  "@/features/shortcuts/CommandDialog.vue": { __esModule: true, default: passiveComponent },
   ...vueModules,
   "@/shared/notifications/useNotification": { useNotification },
   "@/features/lyrics/download/LyricsDownloadDialog.vue": {

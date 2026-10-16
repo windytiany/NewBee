@@ -12,6 +12,7 @@
     >
       <button
         data-item-interaction
+        tabindex="-1"
         :aria-label="t('拖动重排第 {count} 首', { count: trackNumber })"
         :disabled="isDragDisabled"
         class="text-app-muted focus-visible:bg-app-track grid h-full min-h-10 w-full touch-none place-items-center rounded-sm transition-colors outline-none select-none disabled:cursor-not-allowed disabled:opacity-40"
@@ -26,6 +27,7 @@
       <button
         data-item-interaction
         data-playlist-track-select
+        data-keyboard-item
         class="focus-visible:bg-app-track col-start-2 -col-end-1 grid w-full grid-cols-[var(--table-body-columns,minmax(0,1fr)_3rem)] items-center gap-3 rounded-md py-2.5 pl-0 text-left text-sm transition-colors outline-none sm:grid-cols-[var(--table-desktop-body-columns,minmax(0,1.5fr)_minmax(0,1fr)_3rem)]"
         :class="isDragging ? 'cursor-grabbing' : 'cursor-grab'"
         :aria-pressed="isSelected ? true : undefined"

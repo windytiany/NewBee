@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
-import { createShortcutRuntime } from "@/features/settings/shortcuts/runtime";
-import { DEFAULT_SHORTCUTS, cloneShortcuts } from "@/features/settings/shortcuts/bindings";
-import type { ShortcutAction } from "@/features/settings/shortcuts/bindings";
+import { createShortcutRuntime } from "@/features/shortcuts/runtime";
+import { DEFAULT_SHORTCUTS, cloneShortcuts } from "@/features/shortcuts/bindings";
+import type { ShortcutAction } from "@/features/shortcuts/bindings";
 import type { ShortcutSettings } from "@/features/settings/types";
 
 type ShortcutEvent = Parameters<ReturnType<typeof createShortcutRuntime>["handleKeydown"]>[0];
@@ -74,8 +74,8 @@ describe("shortcut runtime", () => {
     expect(after.stopImmediatePropagation).toHaveBeenCalledTimes(1);
   });
 
-  it("does not dispatch default empty bindings or unmatched keys", async () => {
-    const { runtime, run } = createRuntime(async () => ({ shortcuts: DEFAULT_SHORTCUTS }));
+  it("does not dispatch empty bindings or unmatched keys", async () => {
+    const { runtime, run } = createRuntime(async () => ({ shortcuts: cloneShortcuts({}) }));
     await runtime.refresh();
     const event = keyEvent();
     runtime.handleKeydown(event);
@@ -164,6 +164,16 @@ describe("shortcut runtime", () => {
     runtime.handleKeydown(keyEvent());
     await settle();
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("repeats volume and seeking, but not toggle operations", async () => {
+    const { runtime, run } = createRuntime(async () => ({ shortcuts: DEFAULT_SHORTCUTS }));
+    await runtime.refresh();
+    runtime.handleKeydown(keyEvent({ code: "ArrowUp", ctrlKey: true, repeat: true }));
+    runtime.handleKeydown(keyEvent({ code: "ArrowRight", ctrlKey: true, repeat: true }));
+    runtime.handleKeydown(keyEvent({ repeat: true }));
+    await settle();
+    expect(run.mock.calls.map(([action]) => action)).toEqual(["volumeUp", "seekForward"]);
   });
 
   it("deduplicates pending actions but permits other actions and later retries", async () => {

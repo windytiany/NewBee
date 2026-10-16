@@ -62,7 +62,7 @@ export function useContextMenu<Payload>(elements: ContextMenuElements) {
 function createContextMenuListeners<Payload>(controller: ContextMenuController<Payload>) {
   return {
     pointerdown: (event: PointerEvent) => closeOnOutsidePointer(controller, event),
-    keydown: (event: KeyboardEvent) => closeOnEscape(controller, event),
+    keydown: (event: KeyboardEvent) => handleMenuKeydown(controller, event),
     scroll: (event: Event) => closeOnScroll(controller, event),
     resize: () => closeContextMenu(controller),
   };
@@ -149,10 +149,43 @@ function closeOnOutsidePointer<Payload>(
   closeContextMenu(controller);
 }
 
-function closeOnEscape<Payload>(controller: ContextMenuController<Payload>, event: KeyboardEvent) {
-  if (event.key !== "Escape" || controller.request.value === null) return;
+function handleMenuKeydown<Payload>(
+  controller: ContextMenuController<Payload>,
+  event: KeyboardEvent,
+) {
+  if (controller.request.value === null || event.defaultPrevented || event.isComposing) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeContextMenu(controller, true);
+    return;
+  }
+  if (event.key === "Tab") {
+    closeContextMenu(controller, true);
+    return;
+  }
+  if (
+    !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key) ||
+    !(event.target instanceof globalThis.Element) ||
+    !isInsideMenu(controller, event.target)
+  )
+    return;
+  const menu = event.target.closest<HTMLElement>('[role="menu"]');
+  if (!menu) return;
+  const items = [
+    ...menu.querySelectorAll<HTMLElement>(
+      '[role="menuitem"]:not(:disabled):not([aria-disabled="true"]), [role="menuitemradio"]:not(:disabled)',
+    ),
+  ].filter((item) => item.closest('[role="menu"]') === menu);
+  if (!items.length) return;
   event.preventDefault();
-  closeContextMenu(controller, true);
+  const index = items.indexOf(event.target as HTMLElement);
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+  items[next]?.focus();
 }
 
 function closeOnScroll<Payload>(controller: ContextMenuController<Payload>, event: Event) {

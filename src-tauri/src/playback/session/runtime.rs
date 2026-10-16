@@ -370,8 +370,28 @@ pub(super) fn system_operation(action: &str) -> Option<SystemOperation> {
         "toggle" => Some(SystemOperation::Toggle),
         "play" => Some(SystemOperation::Play),
         "pause" => Some(SystemOperation::Pause),
+        "seekBackward" => Some(SystemOperation::SeekBackward),
+        "seekForward" => Some(SystemOperation::SeekForward),
+        "volumeDown" => Some(SystemOperation::VolumeDown),
+        "volumeUp" => Some(SystemOperation::VolumeUp),
+        "mute" => Some(SystemOperation::Mute),
+        "shuffle" => Some(SystemOperation::Shuffle),
+        "repeat" => Some(SystemOperation::Repeat),
         _ => None,
     }
+}
+
+pub(crate) fn shortcut_command(app: &AppHandle, action: &str) -> Result<(), String> {
+    let operation = system_operation(action).ok_or("Unknown playback shortcut")?;
+    let state = app.state::<PlaybackSession>();
+    if state.busy.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    let receiver = state.request(SessionCommand::System { operation })?;
+    receiver
+        .recv()
+        .map_err(|_| "Playback session is unavailable".to_owned())??;
+    Ok(())
 }
 
 pub fn system_command(app: &AppHandle, action: &str) {

@@ -153,6 +153,7 @@ impl ShortcutRuntime {
             .active
             .iter()
             .find(|binding| binding.shortcut.id() == id)?;
-        self.pressed.insert(id).then_some(binding.action)
+        let first = self.pressed.insert(id);
+        (first || binding.action.repeats()).then_some(binding.action)
     }
 }
