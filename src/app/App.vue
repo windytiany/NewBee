@@ -26,7 +26,7 @@ useTrackBridge();
 const { activePage } = usePersistentActivePage();
 const titleBar = shallowRef<InstanceType<typeof TitleBar> | null>(null);
 const commandDialog = shallowRef<InstanceType<typeof CommandDialog> | null>(null);
-usePageFocus(activePage);
+usePageFocus();
 const { bindings, run } = useShortcuts(
   (page) => {
     activePage.value = page;

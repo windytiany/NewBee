@@ -16,9 +16,11 @@ function available(element: HTMLElement): boolean {
 export function createFocusNavigation(document: Document) {
   const regionFocus = new WeakMap<HTMLElement, HTMLElement>();
   const listFocus = new WeakMap<HTMLElement, HTMLElement>();
+  let navigationFocus: HTMLElement | null = null;
 
   function remember(event: FocusEvent) {
     const target = event.target;
+    if (target !== navigationFocus) navigationFocus = null;
     if (!(target instanceof globalThis.HTMLElement) || target.closest('dialog, [role="menu"]'))
       return;
     const region = target.closest<HTMLElement>(REGION_SELECTOR);
@@ -94,8 +96,32 @@ export function createFocusNavigation(document: Document) {
           : 0
         : (index + (event.shiftKey ? -1 : 1) + regions.length) % regions.length;
     const region = regions[next];
-    if (region) entry(region).focus();
+    if (region) {
+      const target = entry(region);
+      target.focus();
+      navigationFocus = target;
+    }
   }
 
-  return { remember, handleKeydown };
+  function handleEscape(event: KeyboardEvent) {
+    if (
+      event.key !== "Escape" ||
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      !navigationFocus ||
+      document.activeElement !== navigationFocus
+    )
+      return;
+    if ([...document.querySelectorAll<HTMLElement>('dialog[open], [role="menu"]')].some(available))
+      return;
+    event.preventDefault();
+    navigationFocus.blur();
+    navigationFocus = null;
+  }
+
+  return { remember, handleKeydown, handleEscape };
 }

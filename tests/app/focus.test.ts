@@ -37,7 +37,7 @@ class FocusElement {
     return false;
   }
 }
-it("restores page-specific focus, falls back for stale targets and does not steal dialog focus", async () => {
+it("does not assign default or remembered focus when switching pages", async () => {
   const roots = {
     Library: new FocusElement("Library"),
     Playlist: new FocusElement("Playlist"),
@@ -63,8 +63,8 @@ it("restores page-specific focus, falls back for stale targets and does not stea
   const activePage = Vue.ref<PageName>("Library");
   const app = createHostRenderer(createHostNode).createApp({
     setup() {
-      usePageFocus(activePage);
-      return () => null;
+      usePageFocus();
+      return () => Vue.h("div", { "data-page": activePage.value });
     },
   });
   app.mount(createHostNode("root"));
@@ -75,11 +75,11 @@ it("restores page-specific focus, falls back for stale targets and does not stea
   activePage.value = "Playlist";
   await Vue.nextTick();
   await Vue.nextTick();
-  expect(playlistFirst.focus).toHaveBeenCalledTimes(1);
+  expect(playlistFirst.focus).not.toHaveBeenCalled();
   activePage.value = "Library";
   await Vue.nextTick();
   await Vue.nextTick();
-  expect(libraryLast.focus).toHaveBeenCalledTimes(1);
+  expect(libraryLast.focus).not.toHaveBeenCalled();
   libraryLast.isConnected = false;
   activePage.value = "Playlist";
   await Vue.nextTick();
@@ -87,10 +87,10 @@ it("restores page-specific focus, falls back for stale targets and does not stea
   activePage.value = "Library";
   await Vue.nextTick();
   await Vue.nextTick();
-  expect(libraryFirst.focus).toHaveBeenCalledTimes(1);
+  expect(libraryFirst.focus).not.toHaveBeenCalled();
   dialogOpen = true;
   activePage.value = "Playlist";
   await Vue.nextTick();
   await Vue.nextTick();
-  expect(playlistFirst.focus).toHaveBeenCalledTimes(2);
+  expect(playlistFirst.focus).not.toHaveBeenCalled();
 });

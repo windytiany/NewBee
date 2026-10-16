@@ -1,7 +1,5 @@
 import { afterEach, expect, it } from "bun:test";
-import * as Vue from "vue";
 import { usePageFocus } from "@/app/usePageFocus";
-import type { PageName } from "@/app/pages";
 import { createHostNode, createHostRenderer } from "../../support/host/renderer";
 
 const originals = new Map(
@@ -80,6 +78,9 @@ class FocusNode {
   querySelector(selector: string) {
     return this.querySelectorAll(selector)[0] ?? null;
   }
+  blur() {
+    if (this.document.activeElement === this) this.document.activeElement = this.document.body;
+  }
   focus() {
     this.document.activeElement = this;
     const event = new Event("focusin");
@@ -125,7 +126,7 @@ function mount() {
   document.body.append(library, hiddenRegion, playback);
   const app = createHostRenderer(createHostNode).createApp({
     setup() {
-      usePageFocus(Vue.ref<PageName>("Library"));
+      usePageFocus();
       return () => null;
     },
   });
@@ -180,6 +181,40 @@ it("moves from the sidebar dropdown to the browser with F6 and restores each reg
   expect(h.document.activeElement).toBe(h.playback.children[0]);
   h.press("F6");
   expect(h.document.activeElement).toBe(h.artist);
+});
+
+it("clears F6 focus with Escape and allows region navigation to resume", () => {
+  const h = mount();
+  h.dropdown.focus();
+  h.press("F6");
+  expect(h.press("Escape").defaultPrevented).toBe(true);
+  expect(h.document.activeElement).toBe(h.document.body);
+  expect(h.press("Escape").defaultPrevented).toBe(false);
+  h.press("F6");
+  expect(h.document.activeElement).toBe(h.dropdown);
+});
+
+it("leaves ordinary focus, modified Escape and open menus or dialogs alone", () => {
+  const h = mount();
+  h.dropdown.focus();
+  expect(h.press("Escape").defaultPrevented).toBe(false);
+  expect(h.document.activeElement).toBe(h.dropdown);
+  h.press("F6");
+  for (const overrides of [{ ctrlKey: true }, { shiftKey: true }, { isComposing: true }]) {
+    expect(h.press("Escape", false, overrides).defaultPrevented).toBe(false);
+    expect(h.document.activeElement).toBe(h.firstAlbum);
+  }
+  for (const container of [h.node("DIALOG", { open: "" }), h.node("DIV", { role: "menu" })]) {
+    h.document.body.append(container);
+    expect(h.press("Escape").defaultPrevented).toBe(false);
+    expect(h.document.activeElement).toBe(h.firstAlbum);
+    container.hidden = true;
+  }
+  const input = h.node("INPUT");
+  h.browser.append(input);
+  input.focus();
+  expect(h.press("Escape").defaultPrevented).toBe(false);
+  expect(h.document.activeElement).toBe(input);
 });
 
 it("repairs a missing list Tab entry before native Tab moves from the dropdown to the items", () => {
