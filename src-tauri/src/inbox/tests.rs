@@ -93,14 +93,12 @@ fn registration_and_ingest_rescan_once_preserving_identity_and_added_at() {
             .as_deref(),
         Some("Ingested")
     );
+    assert!(database.record_track_play(track_id).unwrap());
     files::write_file(Path::new(&path), &[title("Inbox again")]).unwrap();
     assert!(register(&database, vec![path.clone()])[0].success);
     assert!(database.library_track_paths().unwrap().is_empty());
     assert_eq!(id(&database, &path), track_id);
-    assert_eq!(
-        database.list_playback_statistics().unwrap()[0].play_count,
-        1
-    );
+    assert!(database.list_playback_statistics().unwrap().is_empty());
     assert_eq!(database.list_skipped_track_ids().unwrap(), [track_id]);
     assert_eq!(
         serde_json::to_value(database.list_playlist_tracks(playlist).unwrap()).unwrap()[0]["title"],

@@ -3,6 +3,13 @@ export const libraryMessages: Record<string, string> = {
   "{count} 张专辑": "{count} albums",
   "不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。":
     "Files will not be deleted. The track will be removed from all playlists and the current queue. Scan again to reimport it.",
+  最常播放曲目: "Most played tracks",
+  暂无播放记录: "No plays yet",
+  "正在加载…": "Loading…",
+  播放次数: "Play count",
+  读取播放统计失败: "Could not read playback statistics",
+  保存播放统计失败: "Could not save playback statistics",
+  播放统计订阅失败: "Could not subscribe to playback statistics",
   专辑: "Album",
   专辑操作: "Album actions",
   专辑曲目操作: "Album track actions",

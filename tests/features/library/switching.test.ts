@@ -44,6 +44,7 @@ function mountBrowser() {
   const dependencies: Record<string, unknown> = {
     vue: Vue,
     "@/features/artwork/artist/PhotoEditor.vue": placeholder,
+    "@/features/library/statistics/LibraryStatistics.vue": placeholder,
     "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
     "@tauri-apps/api/core": {
       invoke: async (command: string) => {
@@ -214,11 +215,10 @@ it("reserves scrollbar space and only adds an outer ring when opening or closing
   await settle();
   fixture.browser.selectArtist(fixture.artist);
   await settle();
-  const section = findNode(
-    fixture.root,
-    (node) => node.props["aria-labelledby"] === "album-browser-heading",
+  const scroll = findNode(fixture.root, (node) =>
+    String(node.props.class).includes("overflow-y-auto"),
   );
-  expect(section?.props.class).toContain("[scrollbar-gutter:stable]");
+  expect(scroll?.props.class).toContain("[scrollbar-gutter:stable]");
   const card = findNode(fixture.root, (node) => node.type === "article");
   const button = findNode(fixture.root, (node) => node.props["aria-label"] === "查看专辑 Album");
   if (!button || typeof button.props.onClick !== "function") throw new Error("Missing album card");
@@ -236,7 +236,7 @@ it("reserves scrollbar space and only adds an outer ring when opening or closing
     expect(
       classes.filter((value) => value !== "ring-2" && value !== "ring-app-accent").sort(),
     ).toEqual(initialClasses);
-    expect(section?.props.class).toContain("[scrollbar-gutter:stable]");
+    expect(scroll?.props.class).toContain("[scrollbar-gutter:stable]");
     expect(findNode(fixture.root, (node) => node.type === "article")).toBe(card);
     expect(fixture.covers).toEqual({ subscriptions: 1, unsubscriptions: 0 });
     expect(fixture.requests.filter((command) => command === "get_album_artwork")).toHaveLength(1);

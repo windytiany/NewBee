@@ -99,6 +99,13 @@ CREATE TABLE IF NOT EXISTS track_play_statistics (
     play_count INTEGER NOT NULL CHECK (play_count > 0)
 );
 
+CREATE TRIGGER IF NOT EXISTS clear_statistics_after_library_removal
+AFTER UPDATE OF in_library ON tracks
+WHEN OLD.in_library = 1 AND NEW.in_library = 0
+BEGIN
+    DELETE FROM track_play_statistics WHERE track_id = NEW.id;
+END;
+
 CREATE TABLE IF NOT EXISTS track_editing (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
     snapshot TEXT NOT NULL,

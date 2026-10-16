@@ -1,7 +1,6 @@
 use super::*;
 use crate::database::tests::support::insert_track;
 use crate::tracks::{model::TrackRegistrationResult, registration};
-use rusqlite::params;
 
 fn track(database: &Database, id: i64, artwork: Option<&[u8]>) {
     insert_track(database, id, None, None, id, artwork);
@@ -32,8 +31,12 @@ fn orphan_registration_and_attached_data_are_deleted_but_shared_artwork_and_othe
     let database = Database::open(":memory:").unwrap();
     track(&database, 1, Some(b"shared"));
     track(&database, 2, Some(b"shared"));
-    database.record_track_play(1).unwrap();
-    database.record_track_play(1).unwrap();
+    assert!(!database.record_track_play(1).unwrap());
+    database
+        .connection()
+        .unwrap()
+        .execute("UPDATE tracks SET in_library = 1 WHERE id = 2", [])
+        .unwrap();
     database.record_track_play(2).unwrap();
     database.set_tracks_skipped(&[1, 2], true).unwrap();
     database
@@ -200,7 +203,7 @@ fn delete_trigger_failure_rolls_back_preceding_tracks_and_all_attached_data() {
     let database = Database::open(":memory:").unwrap();
     for id in 1..=2 {
         track(&database, id, Some(&[id as u8]));
-        database.record_track_play(id).unwrap();
+        assert!(!database.record_track_play(id).unwrap());
     }
     database.set_tracks_skipped(&[1, 2], true).unwrap();
     database
@@ -217,7 +220,6 @@ fn delete_trigger_failure_rolls_back_preceding_tracks_and_all_attached_data() {
     run(&database, References::default());
     for table in [
         "tracks",
-        "track_play_statistics",
         "track_lyrics",
         "track_editing",
         "track_artwork_pending",
@@ -292,17 +294,6 @@ fn pending_orphan_is_removed_without_touching_original_and_late_confirmation_can
         .duration_ms
         .is_none());
     assert_eq!(count(&database, "track_play_statistics"), 0);
-    database.record_track_play(next_id).unwrap();
-    assert_eq!(
-        database
-            .connection()
-            .unwrap()
-            .query_row(
-                "SELECT play_count FROM track_play_statistics WHERE track_id = ?1",
-                params![next_id],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap(),
-        1
-    );
+    assert!(!database.record_track_play(next_id).unwrap());
+    assert_eq!(count(&database, "track_play_statistics"), 0);
 }

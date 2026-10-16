@@ -162,7 +162,7 @@ describe("brand menu", () => {
     await Vue.nextTick();
     expect(menu.button("文件").props["aria-expanded"]).toBe(false);
     expect(menu.button("路径迁移").closest('[role="menu"]')?.props.id).toBe("brand-menu-tools");
-    expect(menu.button("播放统计").closest('[role="menu"]')?.props.id).toBe("brand-menu-tools");
+    expect(getTextContent(menu.menu())).not.toContain("播放统计");
     expect(getTextContent(menu.menu())).not.toContain("导入音频文件");
     fire(menu.button("设置"), "onMouseenter");
     await Vue.nextTick();
@@ -173,7 +173,6 @@ describe("brand menu", () => {
     ["文件", "导入音频文件", "import"],
     ["文件", "扫描文件夹", "scan"],
     ["工具", "路径迁移", "migrate"],
-    ["工具", "播放统计", "statistics"],
     [null, "设置", "settings"],
   ] as const) {
     it(`selects ${action} after closing the menu and restoring trigger focus`, async () => {

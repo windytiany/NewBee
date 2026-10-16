@@ -20,6 +20,7 @@ const modules: Record<string, unknown> = {
   vue: Vue,
   "@/features/metadata/releases/components/ReleaseMenuItem.vue": passive,
   "@/features/artwork/artist/PhotoEditor.vue": passive,
+  "@/features/library/statistics/LibraryStatistics.vue": passive,
   "@lucide/vue": {
     DiscAlbum: icon,
     ChevronRight: icon,

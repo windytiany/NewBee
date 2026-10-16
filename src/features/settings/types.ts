@@ -24,6 +24,7 @@ export type Settings = {
   albumCoverBackground: boolean;
   playingCoverBackground: boolean;
   closeBehavior: "tray" | "exit";
+  showPlaybackStatistics: boolean;
   albumSortBy: "name" | "year";
   albumSortOrder: "ascending" | "descending";
   lyricsProviders: LyricsProvider[];

@@ -258,10 +258,7 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
         entries
     );
     assert_eq!(database.list_playlists().unwrap()[0].track_count, 2);
-    assert_eq!(
-        database.list_playback_statistics().unwrap()[0].play_count,
-        1
-    );
+    assert!(database.list_playback_statistics().unwrap().is_empty());
     assert_eq!(database.list_skipped_track_ids().unwrap(), vec![id]);
     assert!(database.skipped_tracks().read().unwrap().contains(&id));
     assert_eq!(
@@ -311,10 +308,7 @@ fn membership_transitions_preserve_identity_references_user_data_and_files() {
     drop(database);
     let reopened = Database::open(directory.path().join("tracks.sqlite3")).unwrap();
     assert!(reopened.get_track(id).unwrap().is_some());
-    assert_eq!(
-        reopened.list_playback_statistics().unwrap()[0].play_count,
-        1
-    );
+    assert!(reopened.list_playback_statistics().unwrap().is_empty());
     assert_eq!(reopened.list_skipped_track_ids().unwrap(), vec![id]);
     assert!(reopened.library_track_paths().unwrap().is_empty());
 }
@@ -373,12 +367,9 @@ fn identical_snapshots_at_different_paths_have_independent_track_identities() {
     track.path = "copy.flac".into();
     let copy = register(&database, &track);
     assert_ne!(first, copy);
-    database.record_track_play(first).unwrap();
+    assert!(!database.record_track_play(first).unwrap());
     database.set_tracks_skipped(&[first], true).unwrap();
-    assert_eq!(
-        database.list_playback_statistics().unwrap()[0].track_id,
-        first
-    );
+    assert!(database.list_playback_statistics().unwrap().is_empty());
     assert_eq!(database.list_skipped_track_ids().unwrap(), vec![first]);
     assert_eq!(register(&database, &track), copy);
 }

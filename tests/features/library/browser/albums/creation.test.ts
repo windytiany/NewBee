@@ -38,6 +38,7 @@ function mountBrowser() {
     {
       vue: Vue,
       "@/features/artwork/artist/PhotoEditor.vue": placeholder,
+      "@/features/library/statistics/LibraryStatistics.vue": placeholder,
       "@tauri-apps/api/core": {
         invoke: async (command: string, args: unknown) => {
           requests.push({ command, args });

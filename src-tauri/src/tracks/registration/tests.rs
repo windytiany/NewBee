@@ -144,7 +144,7 @@ fn broken_audio_and_unsupported_tags_remain_registered_while_path_failures_are_i
 }
 
 #[test]
-fn preserves_confirmed_snapshots_statistics_skip_lyrics_artwork_and_inbox_without_rescanning() {
+fn preserves_confirmed_snapshots_skip_lyrics_artwork_and_inbox_without_rescanning() {
     let directory = tempfile::tempdir().unwrap();
     let input = fixture(directory.path(), "original.flac");
     let path = Path::new(&input).canonicalize().unwrap();
@@ -163,7 +163,7 @@ fn preserves_confirmed_snapshots_statistics_skip_lyrics_artwork_and_inbox_withou
         id
     };
     crate::database::tests::support::inbox(&database, &confirmed, scan).unwrap();
-    database.record_track_play(id).unwrap();
+    assert!(!database.record_track_play(id).unwrap());
     database.set_tracks_skipped(&[id], true).unwrap();
     let playlist = database.create_playlist("Outside library").unwrap();
     database.append_playlist_tracks(playlist, vec![id]).unwrap();
@@ -200,12 +200,12 @@ fn preserves_confirmed_snapshots_statistics_skip_lyrics_artwork_and_inbox_withou
     assert_eq!(
         connection
             .query_row(
-                "SELECT play_count FROM track_play_statistics WHERE track_id = ?1",
+                "SELECT COUNT(*) FROM track_play_statistics WHERE track_id = ?1",
                 [id],
                 |row| row.get::<_, i64>(0)
             )
             .unwrap(),
-        1
+        0
     );
     assert_eq!(
         connection

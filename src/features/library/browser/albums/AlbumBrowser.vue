@@ -4,7 +4,7 @@
     data-local-drop="Library"
     aria-labelledby="album-browser-heading"
     :aria-busy="props.trackActionPending || props.albumsLoading"
-    class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-white"
+    class="bg-app-base flex h-full min-h-0 w-full min-w-0 flex-col text-white"
     @keydown="handleAlbumKeydown"
     @focusin="albumKeyboard.onFocusin"
   >
@@ -20,85 +20,89 @@
           {{ props.artist.artist ?? t("未知演出者") }}
         </h1>
       </header>
-      <div
-        v-persistent-scroll="JSON.stringify(['library', grouping, artist?.artist, selectedAlbum])"
-        class="sidebar-scrollbars min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto"
-      >
-        <p
-          v-if="!props.albumsLoading && !props.albumsError && props.albums.length === 0"
-          class="text-app-muted px-4 py-3 text-sm sm:px-5"
-        >
-          {{ t("无专辑") }}
-        </p>
+      <div class="flex min-h-0 flex-1">
         <div
-          v-else-if="!props.albumsLoading && !props.albumsError"
-          class="flex flex-col gap-4 px-4 pt-3 pb-6 sm:px-5"
+          ref="albumsElement"
+          v-persistent-scroll="JSON.stringify(['library', grouping, artist?.artist, selectedAlbum])"
+          class="sidebar-scrollbars min-h-0 min-w-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto"
         >
-          <template v-for="row in albumRows" :key="row.id">
-            <div class="grid gap-x-4 sm:gap-x-6" :style="{ gridTemplateColumns }">
-              <AlbumCard
-                v-for="(album, index) in row.albums"
-                :key="getAlbumKey(album)"
-                :album="album"
-                :album-artist="album.albumArtist"
-                :cover-index="row.startIndex + index"
-                :is-selected="isSelectedAlbum(album)"
-                :is-focused="albumFocus.isFocused(getAlbumKey(album))"
-                :is-context-menu-open="
-                  albumMenu?.contextMenu?.payload.album === album.album &&
-                  albumMenu?.contextMenu?.payload.albumArtist === album.albumArtist
-                "
-                @select="toggleAlbum(album)"
-                @play="playAlbum(album)"
-                @context-menu="openAlbumContextMenu(album, $event)"
-              />
-            </div>
-            <div
-              v-if="row.selectedAlbum"
-              class="relative"
-              :style="{ '--album-background-color': selectedArtwork.background.value?.color }"
-            >
-              <div
-                aria-hidden="true"
-                class="pointer-events-none absolute inset-x-0 top-px z-10 grid gap-x-4 sm:gap-x-6"
-                :style="{ gridTemplateColumns }"
-              >
-                <span
-                  class="border-b-app-interactive -translate-y-full justify-self-center border-x-12 border-b-12 border-x-transparent"
-                  :style="{
-                    gridColumn: row.albums.findIndex(isSelectedAlbum) + 1,
-                    borderBottomColor: 'var(--album-background-color, var(--app-interactive))',
-                  }"
-                ></span>
+          <p
+            v-if="!props.albumsLoading && !props.albumsError && props.albums.length === 0"
+            class="text-app-muted px-4 py-3 text-sm sm:px-5"
+          >
+            {{ t("无专辑") }}
+          </p>
+          <div
+            v-else-if="!props.albumsLoading && !props.albumsError"
+            class="flex flex-col gap-4 px-4 pt-3 pb-6 sm:px-5"
+          >
+            <template v-for="row in albumRows" :key="row.id">
+              <div class="grid gap-x-4 sm:gap-x-6" :style="{ gridTemplateColumns }">
+                <AlbumCard
+                  v-for="(album, index) in row.albums"
+                  :key="getAlbumKey(album)"
+                  :album="album"
+                  :album-artist="album.albumArtist"
+                  :cover-index="row.startIndex + index"
+                  :is-selected="isSelectedAlbum(album)"
+                  :is-focused="albumFocus.isFocused(getAlbumKey(album))"
+                  :is-context-menu-open="
+                    albumMenu?.contextMenu?.payload.album === album.album &&
+                    albumMenu?.contextMenu?.payload.albumArtist === album.albumArtist
+                  "
+                  @select="toggleAlbum(album)"
+                  @play="playAlbum(album)"
+                  @context-menu="openAlbumContextMenu(album, $event)"
+                />
               </div>
-              <AlbumDetail
-                :album="row.selectedAlbum"
-                :background="selectedArtwork.background.value"
-                :album-artist="row.selectedAlbum.albumArtist"
-                :tracks="props.tracks"
-                :current-track-id="props.currentTrackId"
-                :is-playing="props.isPlaying"
-                :playback-command-pending="props.playbackCommandPending"
-                :tracks-loading="props.tracksLoading"
-                :tracks-error="props.tracksError"
-                :playlists="props.playlists"
-                :playlists-loading="props.playlistsLoading"
-                :playlists-error="props.playlistsError"
-                :track-action-pending="props.trackActionPending"
-                @close="closeAlbum(row.selectedAlbum)"
-                @play-track="emit('playTrack', $event)"
-                @play-album="playAlbum(row.selectedAlbum)"
-                @toggle-playback="emit('togglePlayback')"
-                @refresh-playlists="emit('refreshPlaylists')"
-                @add-tracks-to-next="emit('addTracksToNext', $event)"
-                @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
-                @add-tracks-to-playlist="addTracksToPlaylist"
-                @create-playlist-with-tracks="createPlaylistWithTracks"
-                @delete-track="emit('deleteTrack', $event)"
-              />
-            </div>
-          </template>
+              <div
+                v-if="row.selectedAlbum"
+                class="relative"
+                :style="{ '--album-background-color': selectedArtwork.background.value?.color }"
+              >
+                <div
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-x-0 top-px z-10 grid gap-x-4 sm:gap-x-6"
+                  :style="{ gridTemplateColumns }"
+                >
+                  <span
+                    class="border-b-app-interactive -translate-y-full justify-self-center border-x-12 border-b-12 border-x-transparent"
+                    :style="{
+                      gridColumn: row.albums.findIndex(isSelectedAlbum) + 1,
+                      borderBottomColor: 'var(--album-background-color, var(--app-interactive))',
+                    }"
+                  ></span>
+                </div>
+                <AlbumDetail
+                  :album="row.selectedAlbum"
+                  :background="selectedArtwork.background.value"
+                  :album-artist="row.selectedAlbum.albumArtist"
+                  :tracks="props.tracks"
+                  :current-track-id="props.currentTrackId"
+                  :is-playing="props.isPlaying"
+                  :playback-command-pending="props.playbackCommandPending"
+                  :tracks-loading="props.tracksLoading"
+                  :tracks-error="props.tracksError"
+                  :playlists="props.playlists"
+                  :playlists-loading="props.playlistsLoading"
+                  :playlists-error="props.playlistsError"
+                  :track-action-pending="props.trackActionPending"
+                  @close="closeAlbum(row.selectedAlbum)"
+                  @play-track="emit('playTrack', $event)"
+                  @play-album="playAlbum(row.selectedAlbum)"
+                  @toggle-playback="emit('togglePlayback')"
+                  @refresh-playlists="emit('refreshPlaylists')"
+                  @add-tracks-to-next="emit('addTracksToNext', $event)"
+                  @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
+                  @add-tracks-to-playlist="addTracksToPlaylist"
+                  @create-playlist-with-tracks="createPlaylistWithTracks"
+                  @delete-track="emit('deleteTrack', $event)"
+                />
+              </div>
+            </template>
+          </div>
         </div>
+        <LibraryStatistics :albums="props.albumsLoading || props.albumsError ? [] : props.albums" />
       </div>
     </template>
     <p v-else class="text-app-muted px-5 py-6 text-sm sm:px-8">{{ t("请选择演出者") }}</p>
@@ -130,6 +134,7 @@ import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
+import LibraryStatistics from "@/features/library/statistics/LibraryStatistics.vue";
 import { layoutDensity } from "@/features/settings/layout";
 import type {
   LibraryAlbumSelection,
@@ -153,9 +158,6 @@ type AlbumBrowserRow = {
   albums: AlbumSummary[];
   selectedAlbum: AlbumSummary | null;
 };
-
-const SMALL_SCREEN_BREAKPOINT = 640;
-const WIDE_SCREEN_BREAKPOINT = 1280;
 
 const props = defineProps<{
   artist: ArtistSummary | null;
@@ -212,6 +214,7 @@ function openAlbumContextMenu(
   });
 }
 
+const albumsElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 const columnCount = ref(2);
 const gridTemplateColumns = computed(() => `repeat(${columnCount.value}, minmax(0, 1fr))`);
 const albumListScope = computed(() =>
@@ -284,28 +287,33 @@ const albumRows = computed(() => {
 });
 
 function updateColumnCount() {
-  const viewportWidth = globalThis.window.innerWidth;
+  const width = albumsElement.value?.clientWidth ?? globalThis.window.innerWidth;
   const compact = layoutDensity.value === "compact";
-  columnCount.value =
-    viewportWidth >= WIDE_SCREEN_BREAKPOINT
-      ? compact
-        ? 5
-        : 4
-      : viewportWidth >= SMALL_SCREEN_BREAKPOINT
-        ? compact
-          ? 4
-          : 3
-        : 2;
+  columnCount.value = Math.max(
+    1,
+    Math.min(compact ? 5 : 4, Math.floor(width / (compact ? 156 : 200))),
+  );
 }
 
 watch(layoutDensity, updateColumnCount);
+let resizeObserver: InstanceType<typeof globalThis.ResizeObserver> | undefined;
+watch(albumsElement, (element, previous) => {
+  if (previous) resizeObserver?.unobserve(previous);
+  if (element) resizeObserver?.observe(element);
+  updateColumnCount();
+});
 
 onMounted(() => {
+  if (typeof globalThis.ResizeObserver !== "undefined") {
+    resizeObserver = new globalThis.ResizeObserver(updateColumnCount);
+    if (albumsElement.value) resizeObserver.observe(albumsElement.value);
+  }
   updateColumnCount();
   globalThis.window.addEventListener("resize", updateColumnCount);
 });
 
 onUnmounted(() => {
+  resizeObserver?.disconnect();
   globalThis.window.removeEventListener("resize", updateColumnCount);
 });
 

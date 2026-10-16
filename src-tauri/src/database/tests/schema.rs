@@ -8,7 +8,7 @@ fn initializes_new_databases_and_can_reopen_them() {
     let version: i64 = connection
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, SCHEMA_VERSION);
     connection.execute("INSERT INTO tracks (path, track_number, track_total, disc_number, disc_total) VALUES ('song.mp3', 1, 7, 1, 2)", []).unwrap();
     let thumbnails: bool = connection
         .query_row(
@@ -18,6 +18,60 @@ fn initializes_new_databases_and_can_reopen_them() {
         )
         .unwrap();
     assert!(!thumbnails);
+}
+
+#[test]
+fn upgrade_clears_legacy_counts_once_and_preserves_library_data() {
+    let mut connection = Connection::open_in_memory().unwrap();
+    connection.execute_batch(definition()).unwrap();
+    connection
+        .execute_batch(
+            "DROP TRIGGER clear_statistics_after_library_removal;
+        INSERT INTO tracks (path, in_library) VALUES ('song.mp3', 1);
+        INSERT INTO track_play_statistics VALUES (1, 8);
+        PRAGMA user_version = 1;",
+        )
+        .unwrap();
+    initialize_schema(&mut connection).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM track_play_statistics", [], |row| row
+                .get::<_, i64>(
+                0
+            ))
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT path FROM tracks", [], |row| row.get::<_, String>(0))
+            .unwrap(),
+        "song.mp3"
+    );
+    connection
+        .execute("INSERT INTO track_play_statistics VALUES (1, 1)", [])
+        .unwrap();
+    initialize_schema(&mut connection).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT play_count FROM track_play_statistics", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap(),
+        1
+    );
+    connection
+        .execute("UPDATE tracks SET in_library = 0", [])
+        .unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM track_play_statistics", [], |row| row
+                .get::<_, i64>(
+                0
+            ))
+            .unwrap(),
+        0
+    );
 }
 
 #[test]

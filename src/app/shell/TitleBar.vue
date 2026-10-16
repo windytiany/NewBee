@@ -9,7 +9,6 @@
       <ImportDialog ref="importDialog" />
       <PathMigrationDialog ref="pathMigrationDialog" />
       <SettingsDialog ref="settingsDialog" />
-      <PlaybackStatisticsDialog ref="playbackStatisticsDialog" />
     </div>
 
     <PageTabs
@@ -40,7 +39,6 @@ import { computed } from "vue";
 import PathMigrationDialog from "@/features/library/paths/PathMigrationDialog.vue";
 import { useLibraryFileImport } from "@/features/library/import/useFileImport";
 import SettingsDialog from "@/features/settings/components/SettingsDialog.vue";
-import PlaybackStatisticsDialog from "@/features/playback/statistics/PlaybackStatisticsDialog.vue";
 import type { PageName } from "@/app/pages";
 import type { AppMenuAction } from "@/app/shell/AppMenu.vue";
 
@@ -63,7 +61,6 @@ const importDialog = ref<InstanceType<typeof ImportDialog> | null>(null);
 const libraryScanDialog = ref<InstanceType<typeof ScanDialog> | null>(null);
 const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
 const pathMigrationDialog = ref<InstanceType<typeof PathMigrationDialog> | null>(null);
-const playbackStatisticsDialog = ref<InstanceType<typeof PlaybackStatisticsDialog> | null>(null);
 
 async function onMenuSelect(action: AppMenuAction) {
   switch (action) {
@@ -75,9 +72,6 @@ async function onMenuSelect(action: AppMenuAction) {
       break;
     case "migrate":
       pathMigrationDialog.value?.show();
-      break;
-    case "statistics":
-      playbackStatisticsDialog.value?.show();
       break;
     case "settings":
       await settingsDialog.value?.show();

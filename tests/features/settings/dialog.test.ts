@@ -42,6 +42,7 @@ type DialogBindings = {
   layoutDensity: Vue.Ref<Settings["layoutDensity"]>;
   albumCoverBackground: Vue.Ref<boolean>;
   playingCoverBackground: Vue.Ref<boolean>;
+  showPlaybackStatistics: Vue.Ref<boolean>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
   isLoaded: Vue.Ref<boolean>;
@@ -59,6 +60,7 @@ const defaults: Settings = {
   albumCoverBackground: false,
   playingCoverBackground: false,
   closeBehavior: "tray",
+  showPlaybackStatistics: true,
   albumSortBy: "name",
   albumSortOrder: "ascending",
   lyricsProviders: ["netease"],
@@ -880,6 +882,7 @@ describe("settings dialog", () => {
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      showPlaybackStatistics: false,
       layoutDensity: "regular",
       locale: "zh-CN",
       accentColor: "#60a5fa",
@@ -902,6 +905,8 @@ describe("settings dialog", () => {
     expect(bindings.accentColor.value).toBe("#60a5fa");
     expect(bindings.albumCoverBackground.value).toBe(true);
     expect(bindings.playingCoverBackground.value).toBe(true);
+    expect(bindings.showPlaybackStatistics.value).toBe(false);
+    bindings.showPlaybackStatistics.value = true;
     expect(bindings.albumSortBy.value).toBe("year");
     expect(bindings.albumSortOrder.value).toBe("descending");
     expect(bindings.neteaseLyricsMode.value).toBe("translated");
@@ -994,6 +999,7 @@ describe("settings dialog", () => {
           albumCoverBackground: true,
           playingCoverBackground: false,
           closeBehavior: "exit",
+          showPlaybackStatistics: true,
           albumSortBy: "year",
           albumSortOrder: "descending",
           lyricsProviders: ["netease"],
@@ -1024,6 +1030,20 @@ describe("settings dialog", () => {
         expect(saved).toEqual([{ settings: loaded }]);
       });
     }
+  }
+
+  for (const enabled of [false, true]) {
+    it(`persists statistics visibility ${enabled}`, async () => {
+      const saved: unknown[] = [];
+      const { bindings } = createDialog(async (command, args) => {
+        if (command === "get_settings") return defaults;
+        saved.push(args);
+      });
+      await bindings.show();
+      bindings.showPlaybackStatistics.value = enabled;
+      await bindings.save();
+      expect(saved).toEqual([{ settings: { ...defaults, showPlaybackStatistics: enabled } }]);
+    });
   }
 
   for (const enabled of [false, true]) {
@@ -1131,6 +1151,7 @@ describe("settings dialog", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls).toBe(2);
     first.resolve({
+      showPlaybackStatistics: false,
       layoutDensity: "regular",
       locale: "zh-CN",
       accentColor: "#60a5fa",

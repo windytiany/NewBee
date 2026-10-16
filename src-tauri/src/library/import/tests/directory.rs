@@ -277,7 +277,7 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
         .unwrap();
     let item = serde_json::to_value(database.list_playlist_tracks(playlist).unwrap()).unwrap();
     database.set_tracks_skipped(&[ids[0]], true).unwrap();
-    database.record_track_play(ids[0]).unwrap();
+    assert!(!database.record_track_play(ids[0]).unwrap());
     database
         .add_music_library_directory(&fs::canonicalize(&files.0).unwrap().to_string_lossy())
         .unwrap();
@@ -292,10 +292,7 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
         item
     );
     assert_eq!(database.list_skipped_track_ids().unwrap(), vec![ids[0]]);
-    assert_eq!(
-        database.list_playback_statistics().unwrap()[0].play_count,
-        1
-    );
+    assert!(database.list_playback_statistics().unwrap().is_empty());
     let connection = database.connection().unwrap();
     let external_issue: Option<String> = connection
         .query_row(

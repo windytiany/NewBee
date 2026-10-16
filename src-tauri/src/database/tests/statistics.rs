@@ -10,7 +10,8 @@ fn database() -> Database {
          ('a.mp3', 'Alpha', 'Artist A', 'Album A'),
          ('b.mp3', 'Beta', 'Artist B', 'Album B'),
          ('c.mp3', 'Gamma', NULL, NULL),
-         ('d.mp3', 'Delta', NULL, NULL);",
+         ('d.mp3', 'Delta', NULL, NULL);
+         UPDATE tracks SET in_library = 1;",
         )
         .unwrap();
     database
@@ -61,7 +62,7 @@ fn deletion_cascades_and_reimport_starts_at_zero_even_with_a_queued_completion()
     let connection = database.connection().unwrap();
     connection
         .execute(
-            "INSERT INTO tracks (path, title) VALUES ('a.mp3', 'Alpha')",
+            "INSERT INTO tracks (path, title, in_library) VALUES ('a.mp3', 'Alpha', 1)",
             [],
         )
         .unwrap();
@@ -110,7 +111,10 @@ fn counts_survive_a_database_restart() {
         database
             .connection()
             .unwrap()
-            .execute("INSERT INTO tracks (path) VALUES ('song.mp3')", [])
+            .execute(
+                "INSERT INTO tracks (path, in_library) VALUES ('song.mp3', 1)",
+                [],
+            )
             .unwrap();
         database.record_track_play(1).unwrap();
     }
@@ -122,4 +126,24 @@ fn counts_survive_a_database_restart() {
         );
     }
     std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn external_plays_are_ignored_and_removing_membership_clears_counts() {
+    let database = database();
+    database.record_track_play(1).unwrap();
+    database.remove_track_from_library(1).unwrap();
+    assert!(!database.record_track_play(1).unwrap());
+    assert!(database.list_playback_statistics().unwrap().is_empty());
+    database
+        .connection()
+        .unwrap()
+        .execute("UPDATE tracks SET in_library = 1 WHERE id = 1", [])
+        .unwrap();
+    assert!(database.list_playback_statistics().unwrap().is_empty());
+    assert!(database.record_track_play(1).unwrap());
+    assert_eq!(
+        database.list_playback_statistics().unwrap()[0].play_count,
+        1
+    );
 }

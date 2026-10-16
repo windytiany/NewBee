@@ -92,7 +92,7 @@ fn external_track_capabilities_use_snapshots_and_file_writes_do_not_grant_member
     database.append_playlist_tracks(playlist, vec![id]).unwrap();
     database.append_playlist_tracks(playlist, vec![id]).unwrap();
     database.set_tracks_skipped(&[id], true).unwrap();
-    assert!(database.record_track_play(id).unwrap());
+    assert!(!database.record_track_play(id).unwrap());
     let saved = save_track(
         &database,
         id,
@@ -129,10 +129,7 @@ fn external_track_capabilities_use_snapshots_and_file_writes_do_not_grant_member
     assert_ne!(entries[0]["playlistItemId"], entries[1]["playlistItemId"]);
     assert_eq!(entries[0]["title"], "Written");
     assert_eq!(database.list_skipped_track_ids().unwrap(), [id]);
-    assert_eq!(
-        database.list_playback_statistics().unwrap()[0].play_count,
-        1
-    );
+    assert!(database.list_playback_statistics().unwrap().is_empty());
     let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();

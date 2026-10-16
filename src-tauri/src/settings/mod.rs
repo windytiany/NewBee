@@ -75,6 +75,7 @@ pub struct Settings {
     pub album_cover_background: bool,
     pub playing_cover_background: bool,
     pub close_behavior: CloseBehavior,
+    pub show_playback_statistics: bool,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
     #[serde(default = "crate::lyrics::default_providers")]
@@ -94,6 +95,7 @@ impl Default for Settings {
             album_cover_background: false,
             playing_cover_background: false,
             close_behavior: CloseBehavior::default(),
+            show_playback_statistics: true,
             album_sort_by: AlbumSortBy::default(),
             album_sort_order: AlbumSortOrder::default(),
             lyrics_providers: crate::lyrics::default_providers(),

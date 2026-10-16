@@ -29,6 +29,36 @@ fn layout_density_defaults_round_trips_and_persists() {
 }
 
 #[test]
+fn statistics_visibility_defaults_to_enabled_and_persists() {
+    assert!(Settings::default().show_playback_statistics);
+    assert!(
+        serde_json::from_str::<Settings>("{}")
+            .unwrap()
+            .show_playback_statistics
+    );
+    assert!(serde_json::from_str::<Settings>(r#"{"showPlaybackStatistics":"false"}"#).is_err());
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    let state = SettingsState::load(path.clone()).unwrap();
+    for show_playback_statistics in [false, true] {
+        state
+            .save(Settings {
+                show_playback_statistics,
+                ..Settings::default()
+            })
+            .unwrap();
+        assert_eq!(
+            SettingsState::load(path.clone())
+                .unwrap()
+                .get()
+                .unwrap()
+                .show_playback_statistics,
+            show_playback_statistics
+        );
+    }
+}
+
+#[test]
 fn defaults_to_background_playback() {
     assert_eq!(Settings::default().close_behavior, CloseBehavior::Tray);
 }

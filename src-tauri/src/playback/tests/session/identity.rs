@@ -41,7 +41,7 @@ fn path_registration_still_requires_the_writer_lock() {
 }
 
 #[test]
-fn path_batch_reuses_ids_without_clearing_inbox_membership_statistics_or_skip() {
+fn path_batch_reuses_ids_without_clearing_inbox_membership_or_skip_and_ignores_statistics() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("song.flac");
     std::fs::write(&path, include_bytes!("../../../../fixtures/silence.flac")).unwrap();
@@ -56,7 +56,7 @@ fn path_batch_reuses_ids_without_clearing_inbox_membership_statistics_or_skip() 
     let mut registered = vec![target(&path, "existing")];
     super::super::identity::register(&database, &mut registered).unwrap();
     let id = registered[0].track_id.unwrap();
-    database.record_track_play(id).unwrap();
+    assert!(!database.record_track_play(id).unwrap());
     database.set_tracks_skipped(&[id], true).unwrap();
     let audio = FakeAudio {
         database: Some(database),
@@ -98,18 +98,7 @@ fn path_batch_reuses_ids_without_clearing_inbox_membership_statistics_or_skip() 
     assert_eq!(database.inbox_paths().unwrap(), std::slice::from_ref(&path));
     assert!(database.library_track_paths().unwrap().is_empty());
     assert_eq!(database.list_skipped_track_ids().unwrap(), [id]);
-    assert_eq!(
-        database
-            .connection()
-            .unwrap()
-            .query_row(
-                "SELECT play_count FROM track_play_statistics WHERE track_id = ?1",
-                [id],
-                |row| row.get::<_, i64>(0)
-            )
-            .unwrap(),
-        1
-    );
+    assert!(database.list_playback_statistics().unwrap().is_empty());
     assert!(files::access::take(directory.path()).is_empty());
     let snapshot = database.get_track(id).unwrap().unwrap();
     assert_eq!(snapshot.path, path);

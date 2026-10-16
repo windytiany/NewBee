@@ -64,6 +64,7 @@ export const settingsMessages: Record<string, string> = {
   诊断日志: "Diagnostic logs",
   打开日志目录: "Open log folder",
   "详细日志（下次启动恢复默认）": "Detailed logging (resets on restart)",
+  显示播放统计: "Show playback statistics",
   专辑排序: "Album sorting",
   排序依据: "Sort by",
   专辑名称: "Album name",

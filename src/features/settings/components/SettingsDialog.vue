@@ -70,6 +70,7 @@ const reducedMotion = ref(false);
 const layoutDensity = ref<Settings["layoutDensity"]>("regular");
 const albumCoverBackground = ref(false);
 const playingCoverBackground = ref(false);
+const showPlaybackStatistics = ref(true);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const neteaseEnabled = ref(true);
@@ -166,6 +167,7 @@ async function show() {
     layoutDensity.value = settings.layoutDensity;
     albumCoverBackground.value = settings.albumCoverBackground;
     playingCoverBackground.value = settings.playingCoverBackground;
+    showPlaybackStatistics.value = settings.showPlaybackStatistics;
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
     neteaseEnabled.value = settings.lyricsProviders.includes("netease");
@@ -212,6 +214,7 @@ async function save() {
       layoutDensity: layoutDensity.value,
       albumCoverBackground: albumCoverBackground.value,
       playingCoverBackground: playingCoverBackground.value,
+      showPlaybackStatistics: showPlaybackStatistics.value,
       albumSortBy: albumSortBy.value,
       albumSortOrder: albumSortOrder.value,
       lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
@@ -595,7 +598,11 @@ defineExpose({ show });
             </label>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
-            <legend class="sr-only">{{ t("专辑排序") }}</legend>
+            <legend class="sr-only">{{ t("媒体库") }}</legend>
+            <label class="mb-5 flex items-center gap-3 text-sm">
+              <input v-model="showPlaybackStatistics" type="checkbox" class="accent-app-accent" />
+              {{ t("显示播放统计") }}
+            </label>
             <h4 class="mb-3 text-sm font-semibold">{{ t("专辑排序") }}</h4>
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="text-app-muted flex flex-col gap-2 text-sm">

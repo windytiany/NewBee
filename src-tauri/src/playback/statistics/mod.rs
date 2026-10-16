@@ -17,6 +17,7 @@ pub(crate) struct TrackPlayStatistics {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub album_artist: Option<String>,
     pub play_count: i64,
 }
 
