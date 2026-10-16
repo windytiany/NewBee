@@ -241,7 +241,7 @@ fn play(session: &mut Session<FakeAudio>, ids: &[i64], index: usize) -> bool {
         session,
         SessionCommand::PlayTracks {
             tracks: rows(ids),
-            start_row_key: format!("row:{index}"),
+            start_row_key: Some(format!("row:{index}")),
             allow_skipped: true,
         },
     )

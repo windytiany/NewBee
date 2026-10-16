@@ -39,7 +39,8 @@ let availableAlbums = [album];
 let availableTracks = [track];
 let playlistAddCalls: number[] = [];
 let playlistAddFailures = new Map<number, Error>();
-let albumPlaybackCalls: { trackIds: number[]; rowKey: string; preserveQueue: boolean }[] = [];
+let albumPlaybackCalls: { trackIds: number[]; rowKey: string | null; preserveQueue: boolean }[] =
+  [];
 let togglePlaybackCalls = 0;
 let queueNextBatchCalls: number[][] = [];
 let queueEndBatchCalls: number[][] = [];
@@ -148,7 +149,11 @@ dependencies["@/features/playback/session"] = {
       isPlaybackCommandPending: mockedPlaybackCommandPending,
       playbackStatus: mockedPlaybackStatus,
     },
-    playTracks: async (tracks: { trackId: number }[], rowKey: string, preserveQueue: boolean) => {
+    playTracks: async (
+      tracks: { trackId: number }[],
+      rowKey: string | null,
+      preserveQueue: boolean,
+    ) => {
       albumPlaybackCalls.push({
         trackIds: tracks.map((track) => track.trackId),
         rowKey,
@@ -234,7 +239,7 @@ describe("album playback by selection", () => {
     expect(await page.playAlbumFromLibrary(target)).toBe(true);
     expect(albumTrackRequests).toEqual([target]);
     expect(albumPlaybackCalls).toEqual([
-      { trackIds: [41, 42, 43], rowKey: "album-track:41", preserveQueue: false },
+      { trackIds: [41, 42, 43], rowKey: null, preserveQueue: false },
     ]);
     expect(page.selectedAlbum.value).toBeNull();
     expect(page.tracks.value).toEqual([]);
@@ -274,7 +279,7 @@ describe("current album playback controls", () => {
     expect(await page.playAlbumFromLibrary({ albumArtist: "Artist", album: "Album" })).toBe(true);
     expect(togglePlaybackCalls).toBe(0);
     expect(albumPlaybackCalls).toEqual([
-      { trackIds: [41, 42], rowKey: "album-track:41", preserveQueue: false },
+      { trackIds: [41, 42], rowKey: null, preserveQueue: false },
     ]);
   });
 

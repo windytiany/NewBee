@@ -126,7 +126,10 @@ export function playbackFixture(
         snapshot = {
           ...snapshot,
           displayedTracks: command.tracks as PlaybackSessionSnapshot["displayedTracks"],
-          currentRowKey: command.startRowKey as string,
+          currentRowKey:
+            (command.startRowKey as string | null) ??
+            (command.tracks as PlaybackSessionSnapshot["displayedTracks"])[0]?.rowKey ??
+            null,
         };
       if (action === "playItem")
         snapshot = { ...snapshot, currentRowKey: command.rowKey as string };

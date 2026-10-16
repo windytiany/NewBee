@@ -62,6 +62,19 @@ describe("backend playback session adapter", () => {
     ]);
   });
 
+  it("delegates whole-list starting selection to the backend", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    await fixture.session.setShuffleEnabled(true);
+    await fixture.session.playTracks(rows, null, false);
+    expect(fixture.commands[fixture.commands.length - 1]).toEqual({
+      action: "playTracks",
+      tracks: rows,
+      startRowKey: null,
+      allowSkipped: false,
+    });
+  });
+
   it("status polling displays an ended projection without advancing playback", async () => {
     const fixture = playbackFixture();
     await fixture.session.ready;

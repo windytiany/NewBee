@@ -87,13 +87,8 @@ export function usePlaylistPlayback(
 
   async function playPlaylistFromPage(orderedPlaylistItemIds: readonly number[]) {
     const tracks = displayedPlaylistTracks(orderedPlaylistItemIds);
-    const firstTrack = tracks[0];
-    if (!firstTrack) return;
-    await playTracks(
-      toPlaybackDisplayTracks(tracks),
-      `playlist-item:${firstTrack.playlistItemId}`,
-      false,
-    );
+    if (tracks.length === 0) return;
+    await playTracks(toPlaybackDisplayTracks(tracks), null, false);
   }
 
   async function enqueuePlaylistItems(

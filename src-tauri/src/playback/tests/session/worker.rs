@@ -38,7 +38,7 @@ fn background_worker_advances_and_persists_without_any_webview_or_status_request
     let reply = handle
         .request(SessionCommand::PlayTracks {
             tracks: rows(&[1, 2, 3]),
-            start_row_key: "row:0".into(),
+            start_row_key: Some("row:0".into()),
             allow_skipped: true,
         })
         .unwrap()

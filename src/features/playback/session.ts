@@ -45,7 +45,7 @@ type SessionCommand =
   | {
       action: "playTracks";
       tracks: readonly PlaybackDisplayTrack[];
-      startRowKey: string;
+      startRowKey: string | null;
       allowSkipped: boolean;
     }
   | { action: "playItem"; rowKey: string }
@@ -418,7 +418,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     refreshPlaybackStatus,
     playTracks: (
       tracks: readonly PlaybackDisplayTrack[],
-      startRowKey: string,
+      startRowKey: string | null,
       allowSkipped = true,
     ) => perform({ action: "playTracks", tracks, startRowKey, allowSkipped }),
     playQueueItem: (rowKey: string) => perform({ action: "playItem", rowKey }),

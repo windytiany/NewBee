@@ -165,7 +165,7 @@ fn broken_tags_are_not_a_decoder_prerequisite_and_decode_failure_retains_queue()
             &mut session,
             SessionCommand::PlayTracks {
                 tracks: vec![target(&path.to_string_lossy(), "aac")],
-                start_row_key: "aac".into(),
+                start_row_key: Some("aac".into()),
                 allow_skipped: true
             }
         )
@@ -296,7 +296,7 @@ fn partial_path_replacement_keeps_successful_rows_when_requested_start_registrat
                         target(&good.to_string_lossy(), "good"),
                         target(&good.to_string_lossy(), "duplicate")
                     ],
-                    start_row_key: "missing".into(),
+                    start_row_key: Some("missing".into()),
                     allow_skipped: true
                 },
                 0
@@ -336,7 +336,7 @@ fn entirely_failed_path_add_replacement_and_single_target_preserve_existing_audi
                 target(&good.to_string_lossy(), "good"),
                 target(&good.to_string_lossy(), "duplicate"),
             ],
-            start_row_key: "good".into(),
+            start_row_key: Some("good".into()),
             allow_skipped: true,
         },
     );
@@ -350,7 +350,7 @@ fn entirely_failed_path_add_replacement_and_single_target_preserve_existing_audi
         },
         SessionCommand::PlayTracks {
             tracks: vec![target(&missing.to_string_lossy(), "missing")],
-            start_row_key: "missing".into(),
+            start_row_key: Some("missing".into()),
             allow_skipped: true,
         },
     ] {
@@ -387,7 +387,7 @@ fn partial_path_batches_preserve_prior_successes_for_next_end_and_replace() {
             &mut session,
             SessionCommand::PlayTracks {
                 tracks: vec![target(&initial.to_string_lossy(), "initial")],
-                start_row_key: "initial".into(),
+                start_row_key: Some("initial".into()),
                 allow_skipped: true,
             },
         );
@@ -420,7 +420,7 @@ fn partial_path_batches_preserve_prior_successes_for_next_end_and_replace() {
                 &mut session,
                 SessionCommand::PlayTracks {
                     tracks: batch,
-                    start_row_key: "good".into(),
+                    start_row_key: Some("good".into()),
                     allow_skipped: true
                 }
             )

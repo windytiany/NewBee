@@ -134,7 +134,7 @@ fn worker_metadata_failure_and_no_matches_do_not_publish_persist_or_hide_errors(
     handle
         .request(SessionCommand::PlayTracks {
             tracks: rows(&[1, 1, 2]),
-            start_row_key: "row:0".into(),
+            start_row_key: Some("row:0".into()),
             allow_skipped: true,
         })
         .unwrap()

@@ -62,7 +62,7 @@ pub enum SessionCommand {
     Snapshot,
     PlayTracks {
         tracks: Vec<QueueTrack>,
-        start_row_key: String,
+        start_row_key: Option<String>,
         allow_skipped: bool,
     },
     PlayItem {
@@ -615,7 +615,10 @@ impl<A: SessionAudio> Session<A> {
                 start_row_key,
                 allow_skipped,
             } => {
-                if !tracks.iter().any(|track| track.row_key == start_row_key) {
+                if start_row_key
+                    .as_ref()
+                    .is_some_and(|key| !tracks.iter().any(|track| &track.row_key == key))
+                {
                     return Ok((false, None, None));
                 }
                 self.queue_errors = self.audio.register(&mut tracks)?;
@@ -624,14 +627,18 @@ impl<A: SessionAudio> Session<A> {
                 }
                 let mut queue = Queue::with_tracks(tracks);
                 queue.validate()?;
-                let start_row_key = if queue.find(&start_row_key).is_some() {
-                    start_row_key
-                } else {
-                    queue.displayed_tracks[0].row_key.clone()
-                };
                 queue.shuffle_enabled = self.queue.shuffle_enabled;
                 queue.repeat_one_enabled = self.queue.repeat_one_enabled;
-                queue.start_round(&start_row_key);
+                if let Some(key) = start_row_key {
+                    let key = if queue.find(&key).is_some() {
+                        key
+                    } else {
+                        queue.displayed_tracks[0].row_key.clone()
+                    };
+                    queue.start_round(&key);
+                } else {
+                    queue.restore();
+                }
                 self.handled_end = self.playback_id;
                 self.cancel_preparation()?;
                 let old_queue = std::mem::replace(&mut self.queue, queue);
@@ -641,8 +648,17 @@ impl<A: SessionAudio> Session<A> {
                     .cloned()
                     .into_iter()
                     .collect::<Vec<_>>();
-                if !allow_skipped {
-                    candidates.extend(self.queue.candidates(false, false, &self.skipped));
+                if !allow_skipped || self.queue.current().is_none() {
+                    let skipped = HashSet::new();
+                    candidates.extend(self.queue.candidates(
+                        false,
+                        false,
+                        if allow_skipped {
+                            &skipped
+                        } else {
+                            &self.skipped
+                        },
+                    ));
                 }
                 applied = self.start_candidates(candidates, generation, allow_skipped, false)?;
                 if !applied {

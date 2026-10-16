@@ -71,7 +71,7 @@ let invokeHandler: (command: string, args?: Record<string, unknown>) => Promise<
 let invokeCalls: Array<{ command: string; args?: Record<string, unknown> }>;
 let playBatches: Array<{
   tracks: readonly PlaybackDisplayTrack[];
-  start: string;
+  start: string | null;
   allowSkipped?: boolean;
 }>;
 let addToNextBatches: number[][];
@@ -115,7 +115,7 @@ dependencies["@/features/playback/session"] = {
   usePlaybackSession: () => ({
     playTracks: async (
       tracks: readonly PlaybackDisplayTrack[],
-      start: string,
+      start: string | null,
       allowSkipped?: boolean,
     ) => {
       playBatches.push({ tracks, start, allowSkipped });
@@ -349,7 +349,7 @@ describe("歌单状态与动作", () => {
     ]);
   });
 
-  it("plays the entire visible order from the requested row or the first displayed row", async () => {
+  it("plays the requested row but lets the session choose the start for the entire list", async () => {
     const page = await createLoadedPlaylistState();
     const order = [203, 201, 202];
     await page.playTrackFromPlaylist(202, order);
@@ -362,10 +362,7 @@ describe("歌单状态与动作", () => {
       [501, 501, 502],
       [501, 501, 502],
     ]);
-    expect(playBatches.map(({ start }) => start)).toEqual([
-      "playlist-item:202",
-      "playlist-item:203",
-    ]);
+    expect(playBatches.map(({ start }) => start)).toEqual(["playlist-item:202", null]);
     expect(playBatches[1]?.allowSkipped).toBe(false);
     expect(page.playlistTracks.value).toEqual(firstPlaylistTracks);
   });

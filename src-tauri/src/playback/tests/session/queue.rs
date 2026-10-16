@@ -33,6 +33,58 @@ fn duplicate_track_ids_are_distinguished_by_row_key_and_previous_skips_failures(
 }
 
 #[test]
+fn whole_list_playback_uses_queue_order_and_consumes_every_row_once() {
+    for shuffle in [false, true] {
+        let mut session = fixture();
+        execute(&mut session, SessionCommand::Shuffle { enabled: shuffle });
+        let command = serde_json::from_value(serde_json::json!({
+            "action": "playTracks",
+            "tracks": rows(&[1, 2, 3, 4, 5]),
+            "startRowKey": null,
+            "allowSkipped": false,
+        }))
+        .unwrap();
+        assert!(execute(&mut session, command).0);
+        assert_eq!(ids(&session), [1, 2, 3, 4, 5]);
+        assert!(!session.snapshot().unwrap().can_play_previous);
+        if !shuffle {
+            assert_eq!(current(&session), Some(1));
+        }
+        for _ in 0..4 {
+            assert!(execute(&mut session, SessionCommand::Next).0);
+        }
+        assert!(!session.snapshot().unwrap().can_play_next);
+        assert_eq!(session.audio.starts.len(), 5);
+        let mut visited = session.audio.starts.clone();
+        visited.sort_unstable();
+        assert_eq!(visited, [1, 2, 3, 4, 5]);
+    }
+}
+
+#[test]
+fn whole_list_playback_excludes_skipped_rows_and_advances_past_failures() {
+    for shuffle in [false, true] {
+        let mut session = fixture();
+        session.audio.skipped.extend([1, 2]);
+        session.audio.failed.insert(3);
+        execute(&mut session, SessionCommand::Shuffle { enabled: shuffle });
+        assert!(
+            execute(
+                &mut session,
+                SessionCommand::PlayTracks {
+                    tracks: rows(&[1, 2, 3, 4]),
+                    start_row_key: None,
+                    allow_skipped: false,
+                },
+            )
+            .0
+        );
+        assert_eq!(current(&session), Some(4));
+        assert!(session.audio.starts.iter().all(|id| *id == 3 || *id == 4));
+    }
+}
+
+#[test]
 fn shuffle_uses_successful_history_and_consumes_each_pending_row_once() {
     let mut session = fixture();
     execute(&mut session, SessionCommand::Shuffle { enabled: true });

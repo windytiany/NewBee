@@ -105,14 +105,9 @@ export function useLibraryActions(
   function playAlbumFromLibrary(selection: LibraryAlbumSelection) {
     return runTrackAction("播放专辑", async () => {
       const sourceTracks = await loadAlbumActionTracks(selection);
-      const firstTrack = sourceTracks[0];
-      if (!firstTrack) return false;
+      if (sourceTracks.length === 0) return false;
 
-      return playTracks(
-        toPlaybackDisplayTracks(sourceTracks),
-        `album-track:${firstTrack.id}`,
-        false,
-      );
+      return playTracks(toPlaybackDisplayTracks(sourceTracks), null, false);
     });
   }
 

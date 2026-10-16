@@ -166,7 +166,7 @@ fn entirely_skipped_replacement_is_retained_and_stops_previous_audio() {
         &mut session,
         SessionCommand::PlayTracks {
             tracks: rows(&[1, 2]),
-            start_row_key: "row:0".into(),
+            start_row_key: Some("row:0".into()),
             allow_skipped: false,
         },
     )
@@ -187,7 +187,7 @@ fn album_start_skips_first_flagged_row_and_flagging_current_never_truncates_it()
         &mut session,
         SessionCommand::PlayTracks {
             tracks: rows(&[1, 2, 3]),
-            start_row_key: "row:0".into(),
+            start_row_key: Some("row:0".into()),
             allow_skipped: false,
         },
     );
@@ -539,7 +539,7 @@ fn file_targets_register_shared_identity_and_editing_protection() {
                     &mut session,
                     SessionCommand::PlayTracks {
                         tracks: vec![target],
-                        start_row_key: "file".into(),
+                        start_row_key: Some("file".into()),
                         allow_skipped: true
                     }
                 )
@@ -609,7 +609,7 @@ fn registered_file_metadata_updates_only_matching_id_without_touching_other_rows
         &mut session,
         SessionCommand::PlayTracks {
             tracks,
-            start_row_key: "row:1".into(),
+            start_row_key: Some("row:1".into()),
             allow_skipped: true,
         },
     );

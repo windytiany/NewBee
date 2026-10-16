@@ -59,7 +59,7 @@ fn measures_large_queue_metadata_publication_persistence_and_preparation() {
     let reply = handle
         .request(SessionCommand::PlayTracks {
             tracks: rows(&(1..=count as i64).collect::<Vec<_>>()),
-            start_row_key: "row:0".into(),
+            start_row_key: Some("row:0".into()),
             allow_skipped: true,
         })
         .unwrap()
