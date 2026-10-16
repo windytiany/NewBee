@@ -31,7 +31,7 @@
             <h1
               id="playlist-browser-heading"
               ref="playlistHeadingElement"
-              class="truncate text-2xl font-bold tracking-tight sm:text-4xl"
+              class="truncate text-2xl leading-normal font-bold tracking-tight sm:text-4xl"
               tabindex="-1"
             >
               {{ props.playlist.name }}
