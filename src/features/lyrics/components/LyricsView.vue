@@ -14,7 +14,7 @@
           ? 'max-h-[min(76vh,52rem)] md:max-h-none md:min-h-0 md:flex-1'
           : 'max-h-[min(68vh,40rem)]'
       "
-      tabindex="0"
+      tabindex="-1"
       @scroll.passive="lyricsFollow.handleScroll"
       @pointerdown="lyricsFollow.beginInteraction"
       @pointerup="lyricsFollow.endInteraction"
@@ -79,6 +79,7 @@
             <button
               v-if="line.text.trim().length > 0"
               type="button"
+              tabindex="-1"
               :disabled="!props.canSeek"
               class="block w-full cursor-pointer appearance-none border-0 bg-transparent p-0 text-left font-[inherit] text-inherit disabled:cursor-not-allowed"
               @click="emit('seek', line.startMs)"
@@ -92,6 +93,7 @@
     <button
       v-if="props.visible && props.lyrics.kind === 'synced' && followState === 'browsing'"
       type="button"
+      tabindex="-1"
       :aria-label="t('恢复歌词跟随')"
       :title="t('恢复歌词跟随')"
       class="bg-app-interactive text-app-muted focus-visible:outline-app-accent hover:bg-app-highlight absolute right-4 bottom-4 z-10 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
