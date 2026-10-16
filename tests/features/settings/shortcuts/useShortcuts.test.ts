@@ -45,6 +45,7 @@ async function mountShortcuts(desktop = true, registrationError: string | null =
   const removals: Array<{ type: string; capture?: boolean }> = [];
   const invocations: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const feedback: string[] = [];
+  const pages: string[] = [];
   let unlistenCount = 0;
   let errorListener: ((event: { payload: string }) => void) | null = null;
   const settings = {
@@ -108,7 +109,7 @@ async function mountShortcuts(desktop = true, registrationError: string | null =
   });
   const app = createHostRenderer(createHostNode).createApp({
     setup() {
-      hook.useShortcuts();
+      hook.useShortcuts((page) => pages.push(page));
       return () => null;
     },
   });
@@ -141,6 +142,7 @@ async function mountShortcuts(desktop = true, registrationError: string | null =
     app,
     settings,
     feedback,
+    pages,
     get unlistenCount() {
       return unlistenCount;
     },
@@ -175,6 +177,30 @@ describe("application shortcut lifecycle", () => {
     expect(harness.keydown("KeyW")).toEqual({ prevented: false, stopped: false });
     await flush();
     expect(harness.invocations.filter((call) => call.command === "run_shortcut")).toHaveLength(1);
+  });
+
+  it("navigates to each page locally without invoking backend actions", async () => {
+    const harness = await mountShortcuts();
+    for (const [action, page] of [
+      ["showPlaying", "Playing"],
+      ["showLibrary", "Library"],
+      ["showPlaylist", "Playlist"],
+      ["showInbox", "Inbox"],
+    ] as const) {
+      harness.settings.shortcuts[action] = { shortcut: "Ctrl+KeyN", global: false };
+      harness.listeners.get(SETTINGS_CHANGED_EVENT)?.(new Event(SETTINGS_CHANGED_EVENT));
+      await flush();
+      expect(harness.keydown("KeyN", true).prevented).toBe(false);
+      harness.setDialogOpen(true);
+      expect(harness.keydown("KeyN").prevented).toBe(false);
+      harness.setDialogOpen(false);
+      expect(harness.keydown("KeyN").prevented).toBe(true);
+      await flush();
+      expect(harness.pages[harness.pages.length - 1]).toBe(page);
+      harness.settings.shortcuts[action] = { shortcut: "", global: false };
+    }
+    expect(harness.pages).toEqual(["Playing", "Library", "Playlist", "Inbox"]);
+    expect(harness.invocations.filter((call) => call.command === "run_shortcut")).toEqual([]);
   });
 
   it("refreshes mode after saving and removes listeners on unmount", async () => {

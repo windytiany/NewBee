@@ -8,6 +8,7 @@ type ShortcutEvent = Parameters<ReturnType<typeof createShortcutRuntime>["handle
 type SettingsResult = { shortcuts: ShortcutSettings };
 
 const bindings: ShortcutSettings = {
+  ...DEFAULT_SHORTCUTS,
   previous: { shortcut: "Ctrl+ArrowLeft", global: false },
   next: { shortcut: "Ctrl+ArrowRight", global: false },
   togglePlayback: { shortcut: "Space", global: false },

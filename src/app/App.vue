@@ -19,9 +19,11 @@ import QueuePanel from "@/features/playback/queue/components/QueuePanel.vue";
 import TrackInfoPanel from "@/features/playback/current/TrackInfoPanel.vue";
 import TitleBar from "@/app/shell/TitleBar.vue";
 
-useShortcuts();
 useTrackBridge();
 const { activePage } = usePersistentActivePage();
+useShortcuts((page) => {
+  activePage.value = page;
+});
 const { highlight: dropHighlight } = useDropImport();
 const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
 </script>

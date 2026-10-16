@@ -54,12 +54,41 @@ fn ids(bindings: &[Binding]) -> HashSet<u32> {
 }
 
 #[test]
+fn page_shortcuts_are_local_only_and_share_conflict_validation() {
+    for action in [
+        ShortcutAction::ShowPlaying,
+        ShortcutAction::ShowLibrary,
+        ShortcutAction::ShowPlaylist,
+        ShortcutAction::ShowInbox,
+    ] {
+        let mut config = ShortcutSettings::default();
+        *config.binding_mut(action) = definition("Ctrl+Digit1", false);
+        assert_eq!(config.parse().unwrap()[0].action, action);
+        let mut runtime = ShortcutRuntime::default();
+        let mut registry = FakeRegistration::default();
+        runtime
+            .initialize(config.parse().unwrap(), &mut registry)
+            .unwrap();
+        assert!(registry.active.is_empty());
+        config.previous = definition("Ctrl+Digit1", false);
+        assert!(config.parse().is_err());
+        config.previous = ShortcutBinding::default();
+        config.binding_mut(action).global = true;
+        assert!(config.parse().is_err());
+        let (_, errors) = config.parse_for_restore();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(*config.binding_mut(action), ShortcutBinding::default());
+    }
+}
+
+#[test]
 fn restore_clears_only_invalid_duplicate_or_occupied_bindings() {
     let mut config = ShortcutSettings {
         previous: definition("Ctrl+Unknown", false),
         next: definition("Ctrl+KeyN", true),
         toggle_playback: definition("Space", false),
         toggle_window: definition("Space", true),
+        ..ShortcutSettings::default()
     };
     let blocked = "Ctrl+KeyN".parse::<Shortcut>().unwrap().id();
     let mut registry = FakeRegistration {
@@ -107,6 +136,10 @@ fn settings_contract_defaults_and_preserves_accelerators() {
         &defaults.next,
         &defaults.toggle_playback,
         &defaults.toggle_window,
+        &defaults.show_playing,
+        &defaults.show_library,
+        &defaults.show_playlist,
+        &defaults.show_inbox,
     ] {
         assert!(!binding.global);
         assert!(binding.shortcut.is_empty());
@@ -117,6 +150,7 @@ fn settings_contract_defaults_and_preserves_accelerators() {
         next: definition("Ctrl+Digit1", true),
         toggle_playback: definition("Space", true),
         toggle_window: definition("Super+ArrowLeft", true),
+        ..ShortcutSettings::default()
     };
     let value = serde_json::to_value(&settings).unwrap();
     assert_eq!(
@@ -350,6 +384,7 @@ fn global_events_execute_once_per_press_and_never_on_release() {
         next: definition("Ctrl+KeyB", true),
         toggle_playback: definition("Ctrl+KeyC", true),
         toggle_window: definition("Ctrl+KeyD", true),
+        ..ShortcutSettings::default()
     };
     let bindings = config.parse().unwrap();
     runtime
@@ -403,6 +438,7 @@ fn mixed_scopes_register_and_resume_only_global_bindings() {
         next: definition("Ctrl+KeyB", false),
         toggle_playback: definition("Ctrl+KeyC", true),
         toggle_window: definition("Ctrl+KeyD", false),
+        ..ShortcutSettings::default()
     };
     let bindings = config.parse().unwrap();
     let global: Vec<_> = bindings

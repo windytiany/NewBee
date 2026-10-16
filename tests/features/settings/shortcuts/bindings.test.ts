@@ -26,6 +26,10 @@ describe("shortcut bindings", () => {
       next: { shortcut: "", global: false },
       togglePlayback: { shortcut: "", global: false },
       toggleWindow: { shortcut: "", global: false },
+      showPlaying: { shortcut: "", global: false },
+      showLibrary: { shortcut: "", global: false },
+      showPlaylist: { shortcut: "", global: false },
+      showInbox: { shortcut: "", global: false },
     });
   });
 

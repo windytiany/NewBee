@@ -549,7 +549,17 @@ describe("settings dialog", () => {
       await Vue.nextTick();
       expect(findNode(panel, (node) => node.props["aria-label"] === "快捷键设置说明")).toBeNull();
       expect(getTextContent(panel)).not.toContain("缺少日期");
-      for (const label of ["上一首", "下一首", "播放/暂停", "窗口切换", "全局生效"])
+      for (const label of [
+        "上一首",
+        "下一首",
+        "播放/暂停",
+        "窗口切换",
+        "正在播放",
+        "音乐库",
+        "播放列表",
+        "Inbox",
+        "全局生效",
+      ])
         expect(getTextContent(panel)).toContain(label);
       const table = findNode(panel, (node) => node.type === "table");
       if (!table) throw new Error("Missing shortcut table");
@@ -558,7 +568,7 @@ describe("settings dialog", () => {
         if (!row) throw new Error("Missing shortcut action row");
         return row;
       });
-      expect(rows).toHaveLength(4);
+      expect(rows).toHaveLength(8);
       const headings = findNode(table, (node) => node.type === "thead");
       expect(headings?.children[0]?.children.map((node) => getTextContent(node))).toEqual([
         "操作",
@@ -583,6 +593,8 @@ describe("settings dialog", () => {
       };
       for (const action of SHORTCUT_ACTIONS) {
         await selectAction(action);
+        const global = findNode(panel, (node) => node.props.name === "shortcuts-global");
+        expect(global?.props.disabled).toBe(action.startsWith("show"));
         const recorder = findNode(panel, (node) => node.props.name === "shortcut-recorder");
         if (!recorder || typeof recorder.props.onKeydown !== "function")
           throw new Error("Missing shortcut recorder");

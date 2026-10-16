@@ -12,6 +12,7 @@ import {
   SHORTCUT_ACTIONS,
   cloneShortcuts,
   formatShortcut,
+  isPageShortcut,
   shortcutFromEvent,
   type ShortcutAction,
 } from "@/features/settings/shortcuts/bindings";
@@ -83,6 +84,10 @@ const shortcutLabels: Record<ShortcutAction, string> = {
   next: "下一首",
   togglePlayback: "播放/暂停",
   toggleWindow: "窗口切换",
+  showPlaying: "正在播放",
+  showLibrary: "音乐库",
+  showPlaylist: "播放列表",
+  showInbox: "Inbox",
 };
 
 function recordShortcut(event: InstanceType<typeof globalThis.KeyboardEvent>) {
@@ -569,6 +574,7 @@ defineExpose({ show });
                 <input
                   v-model="selectedBinding.global"
                   name="shortcuts-global"
+                  :disabled="isPageShortcut(selectedShortcutAction)"
                   type="checkbox"
                   class="accent-app-accent"
                 />

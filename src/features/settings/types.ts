@@ -13,6 +13,10 @@ export type ShortcutSettings = {
   next: ShortcutBinding;
   togglePlayback: ShortcutBinding;
   toggleWindow: ShortcutBinding;
+  showPlaying: ShortcutBinding;
+  showLibrary: ShortcutBinding;
+  showPlaylist: ShortcutBinding;
+  showInbox: ShortcutBinding;
 };
 
 export type Settings = {

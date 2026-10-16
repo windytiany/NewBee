@@ -1,6 +1,18 @@
 import type { ShortcutSettings } from "@/features/settings/types";
 
-export type ShortcutAction = "previous" | "next" | "togglePlayback" | "toggleWindow";
+export const SHORTCUT_PAGES = {
+  showPlaying: "Playing",
+  showLibrary: "Library",
+  showPlaylist: "Playlist",
+  showInbox: "Inbox",
+} as const;
+export type PageShortcutAction = keyof typeof SHORTCUT_PAGES;
+export type ShortcutAction =
+  "previous" | "next" | "togglePlayback" | "toggleWindow" | PageShortcutAction;
+
+export function isPageShortcut(action: ShortcutAction): action is PageShortcutAction {
+  return Object.prototype.hasOwnProperty.call(SHORTCUT_PAGES, action);
+}
 export type ShortcutKeyEvent = Pick<
   KeyboardEvent,
   "code" | "ctrlKey" | "altKey" | "shiftKey" | "metaKey" | "isComposing"
@@ -11,6 +23,10 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
   "next",
   "togglePlayback",
   "toggleWindow",
+  "showPlaying",
+  "showLibrary",
+  "showPlaylist",
+  "showInbox",
 ];
 
 export const DEFAULT_SHORTCUTS: ShortcutSettings = Object.freeze({
@@ -18,6 +34,10 @@ export const DEFAULT_SHORTCUTS: ShortcutSettings = Object.freeze({
   next: Object.freeze({ shortcut: "", global: false }),
   togglePlayback: Object.freeze({ shortcut: "", global: false }),
   toggleWindow: Object.freeze({ shortcut: "", global: false }),
+  showPlaying: Object.freeze({ shortcut: "", global: false }),
+  showLibrary: Object.freeze({ shortcut: "", global: false }),
+  showPlaylist: Object.freeze({ shortcut: "", global: false }),
+  showInbox: Object.freeze({ shortcut: "", global: false }),
 });
 
 export function cloneShortcuts(settings: ShortcutSettings): ShortcutSettings {
@@ -26,6 +46,10 @@ export function cloneShortcuts(settings: ShortcutSettings): ShortcutSettings {
     next: { ...settings.next },
     togglePlayback: { ...settings.togglePlayback },
     toggleWindow: { ...settings.toggleWindow },
+    showPlaying: { ...settings.showPlaying },
+    showLibrary: { ...settings.showLibrary },
+    showPlaylist: { ...settings.showPlaylist },
+    showInbox: { ...settings.showInbox },
   };
 }
 

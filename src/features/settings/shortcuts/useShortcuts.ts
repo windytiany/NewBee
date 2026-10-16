@@ -5,11 +5,14 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { createSettingsApi } from "@/features/settings/api";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import { createShortcutRuntime } from "@/features/settings/shortcuts/runtime";
+import { SHORTCUT_PAGES, isPageShortcut } from "@/features/settings/shortcuts/bindings";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { t } from "@/shared/i18n/locale";
 
-export function useShortcuts() {
+export function useShortcuts(
+  navigate: (page: (typeof SHORTCUT_PAGES)[keyof typeof SHORTCUT_PAGES]) => void,
+) {
   if (!isTauri()) return;
   const api = createSettingsApi();
   let disposed = false;
@@ -42,7 +45,13 @@ export function useShortcuts() {
   }
   const runtime = createShortcutRuntime({
     getSettings: api.get,
-    run: (action) => invoke<void>("run_shortcut", { action }),
+    run: async (action) => {
+      if (isPageShortcut(action)) {
+        navigate(SHORTCUT_PAGES[action]);
+        return;
+      }
+      await invoke<void>("run_shortcut", { action });
+    },
     onError: (reason) => {
       logger.error("settings/shortcuts", "shortcut_failed", reason);
       notify({ type: "error", message: t("快捷键操作失败，请查看日志"), key: "shortcut-error" });

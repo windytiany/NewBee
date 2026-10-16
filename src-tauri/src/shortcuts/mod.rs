@@ -18,6 +18,10 @@ pub struct ShortcutSettings {
     pub next: ShortcutBinding,
     pub toggle_playback: ShortcutBinding,
     pub toggle_window: ShortcutBinding,
+    pub show_playing: ShortcutBinding,
+    pub show_library: ShortcutBinding,
+    pub show_playlist: ShortcutBinding,
+    pub show_inbox: ShortcutBinding,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -34,15 +38,30 @@ pub enum ShortcutAction {
     Next,
     TogglePlayback,
     ToggleWindow,
+    ShowPlaying,
+    ShowLibrary,
+    ShowPlaylist,
+    ShowInbox,
 }
 
 impl ShortcutAction {
+    fn is_page(self) -> bool {
+        matches!(
+            self,
+            Self::ShowPlaying | Self::ShowLibrary | Self::ShowPlaylist | Self::ShowInbox
+        )
+    }
+
     fn playback_command(self) -> Option<&'static str> {
         match self {
             Self::Previous => Some("previous"),
             Self::Next => Some("next"),
             Self::TogglePlayback => Some("toggle"),
-            Self::ToggleWindow => None,
+            Self::ToggleWindow
+            | Self::ShowPlaying
+            | Self::ShowLibrary
+            | Self::ShowPlaylist
+            | Self::ShowInbox => None,
         }
     }
 }
@@ -54,6 +73,10 @@ impl ShortcutSettings {
             ShortcutAction::Next => &mut self.next,
             ShortcutAction::TogglePlayback => &mut self.toggle_playback,
             ShortcutAction::ToggleWindow => &mut self.toggle_window,
+            ShortcutAction::ShowPlaying => &mut self.show_playing,
+            ShortcutAction::ShowLibrary => &mut self.show_library,
+            ShortcutAction::ShowPlaylist => &mut self.show_playlist,
+            ShortcutAction::ShowInbox => &mut self.show_inbox,
         }
     }
 
@@ -66,8 +89,17 @@ impl ShortcutSettings {
             ShortcutAction::Next,
             ShortcutAction::TogglePlayback,
             ShortcutAction::ToggleWindow,
+            ShortcutAction::ShowPlaying,
+            ShortcutAction::ShowLibrary,
+            ShortcutAction::ShowPlaylist,
+            ShortcutAction::ShowInbox,
         ] {
             let definition = self.binding_mut(action);
+            if action.is_page() && definition.global {
+                errors.push("Page shortcuts cannot be global".to_owned());
+                *definition = ShortcutBinding::default();
+                continue;
+            }
             if definition.shortcut.is_empty() {
                 continue;
             }
@@ -100,7 +132,14 @@ impl ShortcutSettings {
             (&self.next, ShortcutAction::Next),
             (&self.toggle_playback, ShortcutAction::TogglePlayback),
             (&self.toggle_window, ShortcutAction::ToggleWindow),
+            (&self.show_playing, ShortcutAction::ShowPlaying),
+            (&self.show_library, ShortcutAction::ShowLibrary),
+            (&self.show_playlist, ShortcutAction::ShowPlaylist),
+            (&self.show_inbox, ShortcutAction::ShowInbox),
         ] {
+            if action.is_page() && definition.global {
+                return Err("Page shortcuts cannot be global".to_owned());
+            }
             let text = &definition.shortcut;
             if text.is_empty() {
                 continue;
@@ -246,6 +285,9 @@ fn clear_error(state: &ShortcutsState) {
 }
 
 fn execute(app: &AppHandle, action: ShortcutAction) -> Result<(), String> {
+    if action.is_page() {
+        return Err("Page shortcuts must run in the application".to_owned());
+    }
     if let Some(command) = action.playback_command() {
         crate::playback::session::system_command(app, command);
         Ok(())
