@@ -13,12 +13,22 @@ pub(crate) struct Snapshot {
 
 /// Inspect every source before publishing any part of a snapshot.
 pub(crate) fn scan(database: &Database, path: &Path) -> Result<Snapshot, String> {
+    scan_with_directory(database, path, || {
+        files::artwork::read_directory_pictures(path)
+    })
+}
+
+pub(crate) fn scan_with_directory(
+    database: &Database,
+    path: &Path,
+    directory: impl FnOnce() -> Result<Vec<crate::artwork::collection::DirectoryPicture>, String>,
+) -> Result<Snapshot, String> {
     let outcome = (|| {
         let snapshot =
             files::read_track_collection(path)?.ok_or_else(|| "文件格式不支持快照".to_owned())?;
         let artwork = Scan {
             embedded: snapshot.embedded,
-            directory: files::artwork::read_directory_pictures(path),
+            directory: directory(),
         };
         let issues = artwork.issues();
         if !issues.is_empty() {

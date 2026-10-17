@@ -9,7 +9,10 @@ use lofty::{
     picture::{MimeType, Picture as FilePicture, PictureType},
     tag::TagType,
 };
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[cfg(test)]
 pub(crate) fn read_collection(audio: &Path) -> Scan {
@@ -181,6 +184,16 @@ pub(super) fn pictures_from_file(file: &lofty::file::TaggedFile) -> Result<Vec<P
 const COVER_NAMES: &[&str] = &["cover.jpg", "cover.png", "folder.jpg", "folder.png"];
 
 pub(crate) fn read_directory_pictures(audio: &Path) -> Result<Vec<DirectoryPicture>, String> {
+    Ok(directory_picture_paths(audio)?
+        .into_iter()
+        .map(|path| DirectoryPicture {
+            content: read_directory_picture(&path),
+            path: path.to_string_lossy().into_owned(),
+        })
+        .collect())
+}
+
+pub(crate) fn directory_picture_paths(audio: &Path) -> Result<Vec<PathBuf>, String> {
     let directory = audio.parent().ok_or("Audio has no parent directory")?;
     #[cfg(test)]
     crate::metadata::files::access::record(directory, "directory artwork lookup");
@@ -208,23 +221,25 @@ pub(crate) fn read_directory_pictures(audio: &Path) -> Result<Vec<DirectoryPictu
         }
     }
     candidates.sort();
-    Ok(candidates
-        .into_iter()
-        .map(|(_, path)| {
-            let content = read_directory_picture(&path);
-            DirectoryPicture {
-                path: path.to_string_lossy().into_owned(),
-                content,
-            }
-        })
-        .collect())
+    Ok(candidates.into_iter().map(|(_, path)| path).collect())
 }
 
 fn read_directory_picture(path: &Path) -> Result<ArtworkContent, String> {
+    decode_directory_picture(path, read_directory_bytes(path)?)
+}
+
+pub(crate) fn read_directory_bytes(path: &Path) -> Result<Vec<u8>, String> {
     #[cfg(test)]
     crate::metadata::files::access::record(path, "directory artwork read");
-    let data = fs::read(path)
-        .map_err(|error| format!("Directory artwork '{}': {error}", path.display()))?;
+    fs::read(path).map_err(|error| format!("Directory artwork '{}': {error}", path.display()))
+}
+
+pub(crate) fn decode_directory_picture(
+    path: &Path,
+    data: Vec<u8>,
+) -> Result<ArtworkContent, String> {
+    #[cfg(test)]
+    crate::metadata::files::access::record(path, "directory artwork decode");
     let format = image::guess_format(&data)
         .map_err(|error| format!("Directory artwork '{}': {error}", path.display()))?;
     image::load_from_memory_with_format(&data, format)

@@ -24,6 +24,12 @@ CREATE TABLE IF NOT EXISTS tracks (
     channels INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS track_scan (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    metadata_revision INTEGER NOT NULL,
+    fingerprint TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS track_artwork_pending (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE
 );

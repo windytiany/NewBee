@@ -1,4 +1,5 @@
 mod paths;
+pub(crate) mod scanning;
 mod state;
 #[cfg(test)]
 use super::model::TrackWriteInput;
@@ -128,32 +129,7 @@ impl Database {
         let transaction = connection
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
-        let existing: bool = transaction
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM tracks WHERE path = ?1 AND in_library = 1)",
-                [&snapshot.track.path],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let before = if existing {
-            Some(state::State::read(&transaction, &snapshot.track.path)?)
-        } else {
-            None
-        };
-        let id = crate::tracks::scanning::persist(&transaction, snapshot)?;
-        let outcome = match before {
-            Some(before) if before == state::State::read(&transaction, &snapshot.track.path)? => {
-                TrackWriteOutcome::Unchanged
-            }
-            Some(_) => TrackWriteOutcome::Updated,
-            None => TrackWriteOutcome::Added,
-        };
-        transaction
-            .execute("UPDATE tracks SET in_library = 1 WHERE id = ?1", [id])
-            .map_err(|error| error.to_string())?;
-        transaction
-            .execute("DELETE FROM inbox WHERE track_id = ?1", [id])
-            .map_err(|error| error.to_string())?;
+        let outcome = import_snapshot(&transaction, snapshot)?;
         transaction.commit().map_err(|error| error.to_string())?;
         Ok(outcome)
     }
@@ -328,6 +304,52 @@ impl Database {
         }
         Ok(())
     }
+}
+
+fn import_snapshot(
+    transaction: &rusqlite::Transaction<'_>,
+    snapshot: &crate::tracks::scanning::Snapshot,
+) -> Result<TrackWriteOutcome, String> {
+    let existing: bool = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM tracks WHERE path = ?1 AND in_library = 1)",
+            [&snapshot.track.path],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    let before = if existing {
+        Some(state::State::read(transaction, &snapshot.track.path)?)
+    } else {
+        None
+    };
+    transaction
+        .execute_batch("SAVEPOINT scan_content")
+        .map_err(|error| error.to_string())?;
+    let id = crate::tracks::scanning::persist(transaction, snapshot)?;
+    let outcome = match before {
+        Some(before) if before == state::State::read(transaction, &snapshot.track.path)? => {
+            // A changed file timestamp is not itself a metadata change.
+            transaction
+                .execute_batch("ROLLBACK TO scan_content")
+                .map_err(|error| error.to_string())?;
+            TrackWriteOutcome::Unchanged
+        }
+        Some(_) => TrackWriteOutcome::Updated,
+        None => TrackWriteOutcome::Added,
+    };
+    transaction
+        .execute_batch("RELEASE scan_content")
+        .map_err(|error| error.to_string())?;
+    transaction
+        .execute(
+            "UPDATE tracks SET in_library = 1 WHERE id = ?1 AND in_library != 1",
+            [id],
+        )
+        .map_err(|error| error.to_string())?;
+    transaction
+        .execute("DELETE FROM inbox WHERE track_id = ?1", [id])
+        .map_err(|error| error.to_string())?;
+    Ok(outcome)
 }
 
 fn display_directory_path(path: &str) -> String {

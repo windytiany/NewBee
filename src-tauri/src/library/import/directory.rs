@@ -1,4 +1,7 @@
-use super::{import_track, record_failure, ImportResult};
+mod fingerprint;
+mod scanning;
+
+use super::{record_failure, ImportResult};
 use crate::database::Database;
 use crate::library::model::MusicLibraryDirectory;
 use crate::locking::write::WriteState;
@@ -78,11 +81,7 @@ pub(super) fn run_scan(
         );
     }
 
-    progress(0, files.len());
-    for (index, path) in files.iter().enumerate() {
-        import_track(database, path, &mut result);
-        progress(index + 1, files.len());
-    }
+    scanning::run(database, &files, &mut result, &mut progress)?;
 
     for path in database.library_track_paths()? {
         let path = PathBuf::from(path);

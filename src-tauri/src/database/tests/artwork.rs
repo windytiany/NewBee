@@ -211,7 +211,7 @@ fn repeated_scans_share_content_and_missing_paths_retain_associations() {
     assert_eq!(rows(), (2, 1, Some(1)));
     let source_rows: i64 = storage.query_row("SELECT COUNT(*) FROM track_artwork_sources WHERE source_kind = 'directory' AND source_path = ?1",[crate::artwork::collection::linked::normalize(&source).unwrap()],|row|row.get(0)).unwrap();
     assert_eq!(source_rows, 2);
-    assert_eq!(library.scan()["updated"], 2);
+    assert_eq!(library.scan()["updated"], 0);
     assert_eq!(rows(), (2, 1, Some(1)));
     assert_eq!(
         storage

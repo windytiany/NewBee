@@ -477,7 +477,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     assert!(pixel[0] <= 3 && pixel[1] <= 3 && pixel[2] >= 252);
     assert_eq!(pixel[3], 255);
     assert_eq!(thumbnail(2), shared);
-    assert_eq!(serde_json::to_value(scan()).unwrap()["updated"], 2);
+    assert_eq!(serde_json::to_value(scan()).unwrap()["updated"], 0);
     assert_eq!(thumbnail(1), updated);
     assert_eq!(thumbnail(2), shared);
     drop(window);

@@ -11,7 +11,7 @@ pub struct Picture {
     pub picture_type: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DirectoryPicture {
     pub path: String,
     pub content: Result<ArtworkContent, String>,
