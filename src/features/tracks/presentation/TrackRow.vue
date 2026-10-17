@@ -10,7 +10,6 @@ const props = defineProps<{
     durationMs: number | null;
   };
   number: number;
-  focused: boolean;
   selected: boolean;
   current: boolean;
   menuOpen: boolean;
@@ -54,9 +53,9 @@ function keydown(event: globalThis.KeyboardEvent) {
       data-track-select
       data-keyboard-item
       type="button"
-      class="focus-visible:bg-app-track grid w-full grid-cols-[var(--table-columns,1.5rem_minmax(0,1fr)_3rem)] items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm transition-colors outline-none"
+      class="grid w-full grid-cols-[var(--table-columns,1.5rem_minmax(0,1fr)_3rem)] items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm transition-colors outline-none"
       :class="[
-        focused ? 'bg-app-track' : selected ? 'bg-white/10' : 'hover:bg-white/5',
+        selected ? 'bg-app-track' : 'hover:bg-white/5',
         $slots['before-duration']
           ? 'sm:grid-cols-[var(--table-desktop-columns,2rem_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_3rem)]'
           : 'sm:grid-cols-[var(--table-desktop-columns,2rem_minmax(0,1.5fr)_minmax(0,1fr)_3rem)]',

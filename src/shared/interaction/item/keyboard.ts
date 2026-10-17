@@ -1,5 +1,6 @@
 type ItemKeyboardOptions = {
   getItemKeys: () => readonly string[];
+  getSelectedItemKeys?: () => readonly string[];
   itemSelector: string;
   onFocus: (key: string) => void;
   onMove: (key: string, event: KeyboardEvent) => void;
@@ -113,6 +114,28 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
       return;
     event.preventDefault();
     event.stopPropagation();
+    if (
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      options.getSelectedItemKeys
+    ) {
+      const keys = options.getItemKeys();
+      const selected = new Set(options.getSelectedItemKeys());
+      const selectedIndices = keys.flatMap((key, index) => (selected.has(key) ? [index] : []));
+      if (selectedIndices.length > 0) {
+        const nextIndex =
+          event.key === "ArrowUp"
+            ? selectedIndices[0]! - 1
+            : selectedIndices[selectedIndices.length - 1]! + 1;
+        const nextKey = keys[nextIndex];
+        if (nextKey === undefined) return;
+        options.onMove(nextKey, event);
+        items[nextIndex]?.focus({ preventScroll: true });
+        items[nextIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+        return;
+      }
+    }
     const nextIndex =
       event.key === "Home"
         ? 0

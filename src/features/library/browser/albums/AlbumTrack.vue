@@ -4,10 +4,8 @@
       data-item-interaction
       data-album-track-row
       data-keyboard-item
-      class="focus-visible:bg-app-track flex w-full min-w-0 items-center gap-3 rounded-md py-2.5 pr-3 text-left text-sm transition-colors outline-none"
-      :class="
-        props.isFocused ? 'bg-app-track' : props.isSelected ? 'bg-white/10' : 'hover:bg-white/5'
-      "
+      class="flex w-full min-w-0 items-center gap-3 rounded-md py-2.5 pr-3 text-left text-sm transition-colors outline-none"
+      :class="props.isSelected ? 'bg-app-track' : 'hover:bg-white/5'"
       :aria-pressed="props.isSelected ? true : undefined"
       aria-haspopup="menu"
       :aria-expanded="props.isContextMenuOpen"
@@ -58,7 +56,6 @@ import { formatTrackDuration } from "@/features/tracks/format";
 const props = defineProps<{
   track: TrackSummary;
   albumArtist: string | null;
-  isFocused: boolean;
   isSelected: boolean;
   isCurrentTrack: boolean;
   isContextMenuOpen: boolean;

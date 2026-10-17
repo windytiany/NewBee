@@ -80,7 +80,6 @@
           :key="track.id"
           :track="track"
           :album-artist="props.albumArtist"
-          :is-focused="trackFocus.isFocused(String(track.id))"
           :is-selected="trackFocus.isSelected(String(track.id))"
           :is-current-track="track.id === props.currentTrackId"
           :is-context-menu-open="contextMenu?.payload.itemKey === String(track.id)"
@@ -347,6 +346,7 @@ const visibleTrackKeys = computed(() =>
 
 const trackKeyboard = createItemKeyboard({
   getItemKeys: () => visibleTrackKeys.value,
+  getSelectedItemKeys: () => trackFocus.getSelectedItemKeys(visibleTrackKeys.value),
   itemSelector: "button[data-album-track-row]",
   grid: true,
   onFocus: (key) => {

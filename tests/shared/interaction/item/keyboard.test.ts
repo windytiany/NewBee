@@ -135,7 +135,14 @@ class TestFocusEvent extends TestUIEvent implements FocusEvent {
   }
 }
 
-function createHarness(options: { grid?: boolean; callbacks?: boolean; keys?: string[] } = {}) {
+function createHarness(
+  options: {
+    grid?: boolean;
+    callbacks?: boolean;
+    keys?: string[];
+    getSelectedItemKeys?: () => readonly string[];
+  } = {},
+) {
   const keys = options.keys ?? ["a", "b", "c"];
   const items = keys.map(() => new TestElement(itemSelector));
   const container = new TestElement();
@@ -156,6 +163,7 @@ function createHarness(options: { grid?: boolean; callbacks?: boolean; keys?: st
   });
   const keyboard = createItemKeyboard({
     getItemKeys: () => keys,
+    getSelectedItemKeys: options.getSelectedItemKeys,
     itemSelector,
     grid: options.grid,
     onFocus,
@@ -320,6 +328,71 @@ describe("Item 列表键盘", () => {
         expect(item.scrollIntoView).not.toHaveBeenCalled();
       }
     }
+  });
+
+  it.each([
+    ["ArrowUp", "a"],
+    ["ArrowDown", "i"],
+  ])("多选时 %s 从显示顺序的边缘跳到 %s 并收起多选", (key, expected) => {
+    const selection = createItemSelection();
+    const harness = createHarness({
+      keys: ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
+      grid: true,
+      getSelectedItemKeys: () => selection.getSelectedItemKeys("tracks", harness.keys),
+    });
+    harness.onMove.mockImplementation((key, event) => {
+      selection.selectItem("tracks", key, harness.keys, event);
+    });
+    selection.selectItem("tracks", "h", harness.keys);
+    selection.selectItem("tracks", "b", harness.keys, { ctrlKey: true, shiftKey: false });
+    selection.selectItem("tracks", "e", harness.keys, { ctrlKey: true, shiftKey: false });
+    const event = new TestKeyboardEvent(key, harness.items[4], harness.container);
+    harness.keyboard.onKeydown(event);
+    expect(selection.getSelectedItemKeys("tracks", harness.keys)).toEqual([expected]);
+    expect(harness.onMove.mock.calls).toEqual([[expected, event]]);
+    const target = harness.items[harness.keys.indexOf(expected)];
+    expect(target.focus).toHaveBeenCalledTimes(1);
+    expect(target.scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["ArrowUp", "ArrowDown"])("多选到达 %s 边界时保留原选择", (key) => {
+    const harness = createHarness({ getSelectedItemKeys: () => ["a", "c"] });
+    const event = new TestKeyboardEvent(key, harness.items[1], harness.container);
+    harness.keyboard.onKeydown(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(harness.onMove).not.toHaveBeenCalled();
+    expect(harness.onFocus).not.toHaveBeenCalled();
+    for (const item of harness.items) {
+      expect(item.focus).not.toHaveBeenCalled();
+      expect(item.scrollIntoView).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([{ ctrlKey: true }, { shiftKey: true }, { ctrlKey: true, shiftKey: true }])(
+    "多选时保留修饰键的导航规则 %j",
+    (modifiers) => {
+      const harness = createHarness({ getSelectedItemKeys: () => ["a", "c"] });
+      const event = new TestKeyboardEvent(
+        "ArrowDown",
+        harness.items[0],
+        harness.container,
+        modifiers,
+      );
+      harness.keyboard.onKeydown(event);
+      if (modifiers.ctrlKey && !modifiers.shiftKey) {
+        expect(harness.onFocus.mock.calls).toEqual([["b"]]);
+        expect(harness.onMove).not.toHaveBeenCalled();
+      } else {
+        expect(harness.onMove.mock.calls).toEqual([["b", event]]);
+      }
+    },
+  );
+
+  it.each(["ArrowUp", "ArrowDown"])("空选择时 %s 从内部导航位置移动", (key) => {
+    const harness = createHarness({ getSelectedItemKeys: () => [] });
+    const event = new TestKeyboardEvent(key, harness.items[1], harness.container);
+    harness.keyboard.onKeydown(event);
+    expect(harness.onMove.mock.calls).toEqual([[key === "ArrowUp" ? "a" : "c", event]]);
   });
 
   it.each(["ArrowUp", "ArrowDown"])("单项列表 %s 保持当前 Item", (key) => {

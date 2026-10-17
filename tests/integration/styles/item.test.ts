@@ -70,12 +70,24 @@ function findFile(pathSuffix: string) {
 }
 
 function expectBackgroundOnly(file: SfcFile, hasMultiSelectBackground: boolean) {
-  expect(file.templateSource).toContain("focus-visible:bg-app-track");
+  if (hasMultiSelectBackground) {
+    expect(file.templateSource).not.toContain("focus-visible:bg-app-track");
+    expect(file.templateSource).not.toContain("isFocused");
+    expect(file.templateSource).not.toContain("focused ?");
+    expect(file.templateSource).not.toContain("bg-white/10");
+    const selectionBinding = elements(file.template)
+      .map(classBinding)
+      .find((binding) => binding?.includes("bg-app-track"));
+    expect(selectionBinding).toMatch(
+      /(?:isSelected|selected) \? 'bg-app-track' : 'hover:bg-white\/5'/,
+    );
+  } else {
+    expect(file.templateSource).toContain("focus-visible:bg-app-track");
+  }
   expect(file.templateSource).toContain("bg-app-track");
   expect(file.templateSource).not.toContain("focus-visible:outline");
   expect(file.templateSource).not.toContain("focus:outline");
   expect(file.templateSource).not.toContain("ring-");
-  if (hasMultiSelectBackground) expect(file.templateSource).toContain("bg-white/10");
 }
 
 describe("列表条目状态样式", () => {
@@ -106,7 +118,7 @@ describe("列表条目状态样式", () => {
     }
   });
 
-  it("除专辑卡片外，焦点和多选只使用背景，不显示状态 ring 或焦点 outline", () => {
+  it("歌曲只按选中状态显示统一背景，导航条目保留焦点背景", () => {
     const withoutMultiSelectBackground = new Set(["PlaylistRow.vue", "ArtistRow.vue"]);
     for (const file of componentFiles) {
       if (file.path.endsWith("AlbumCard.vue") || file.path.endsWith("TrackFields.vue")) continue;
@@ -117,7 +129,8 @@ describe("列表条目状态样式", () => {
 
       for (const button of elements(file.template).filter(({ tag }) => tag === "button")) {
         const classes = staticClass(button);
-        expect(classes).toContain("focus-visible:bg-app-track");
+        if (hasSelectionBackground) expect(classes).not.toContain("focus-visible:bg-app-track");
+        else expect(classes).toContain("focus-visible:bg-app-track");
         expect(classes).toContain("outline-none");
         expect(classes).not.toContain("focus-visible:outline");
       }

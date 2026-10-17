@@ -73,6 +73,7 @@ function createPlaylist(ids: number[]) {
 }
 const keyboard = createItemKeyboard({
   getItemKeys: () => (state.loading || state.pending ? [] : keys.value),
+  getSelectedItemKeys: () => selection.getSelectedItemKeys(keys.value),
   itemSelector: "button[data-track-select]",
   onFocus: (key) => {
     if (!selection.isFocused(key)) selection.focusItem(key);
@@ -200,7 +201,6 @@ watch(keys, (keys) => {
             :item-key="String(track.id)"
             :track="track"
             :number="trackNumbers.get(track.id) ?? 0"
-            :focused="selection.isFocused(String(track.id))"
             :selected="selection.isSelected(String(track.id))"
             :current="playback.activeQueueRowKey.value === `inbox:${track.id}`"
             :menu-open="request?.payload.itemKey === String(track.id)"

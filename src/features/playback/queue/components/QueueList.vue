@@ -41,7 +41,6 @@
           :duration="formatTrackDuration(track.durationMs) ?? t('时长未知')"
           :is-current-track="getTrackRowKey(track) === props.currentRowKey"
           :is-selected="queueFocus.isSelected(getTrackRowKey(track))"
-          :is-focused="queueFocus.isFocused(getTrackRowKey(track))"
           @select="selectTrack(getTrackRowKey(track), $event)"
           @play="emit('playQueueItem', getTrackRowKey(track))"
           @context-menu="openQueueContextMenu"
@@ -193,6 +192,7 @@ const emit = defineEmits<{
 
 const keyboard = createItemKeyboard({
   getItemKeys: () => visibleRowKeys.value,
+  getSelectedItemKeys: () => queueFocus.getSelectedItemKeys(visibleRowKeys.value),
   itemSelector: "button[data-item-interaction]",
   onFocus: (key) => {
     if (!queueFocus.isFocused(key)) queueFocus.focusItem(key);

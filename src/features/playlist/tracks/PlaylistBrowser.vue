@@ -92,7 +92,6 @@
             :key="track.playlistItemId"
             :track="track"
             :track-number="trackNumbers.get(track.playlistItemId) ?? 0"
-            :is-focused="playlistTrackFocus.isFocused(String(track.playlistItemId))"
             :is-selected="playlistTrackFocus.isSelected(String(track.playlistItemId))"
             :is-current-track="props.currentRowKey === getTrackRowKey(track.playlistItemId)"
             :is-context-menu-open="contextMenu?.payload.itemKey === String(track.playlistItemId)"
@@ -360,6 +359,7 @@ const keyboard = createItemKeyboard({
     props.isLoadingTracks || props.isPlaylistActionPending || dragPreview.value
       ? []
       : visibleTrackKeys.value,
+  getSelectedItemKeys: () => playlistTrackFocus.getSelectedItemKeys(visibleTrackKeys.value),
   itemSelector: "button[data-playlist-track-select]",
   onFocus: (key) => {
     if (!playlistTrackFocus.isFocused(key)) playlistTrackFocus.focusItem(key);
