@@ -25,7 +25,6 @@ import {
   normalizeAccentColor,
 } from "@/features/settings/accent";
 import { applyAppearance } from "@/features/settings/appearance";
-import HelpDialog from "@/shared/components/HelpDialog.vue";
 import BackupOptions from "@/features/backup/components/BackupOptions.vue";
 import MonitoringOptions from "@/features/library/monitoring/MonitoringOptions.vue";
 import type { MonitoringFolder } from "@/features/library/monitoring/types";
@@ -278,6 +277,7 @@ defineExpose({ show });
         >
           <button
             v-for="(label, category) in categories"
+            :id="`settings-category-${category}`"
             :key="category"
             :aria-current="selectedCategory === category ? 'true' : undefined"
             :disabled="isBackingUp"
@@ -296,7 +296,7 @@ defineExpose({ show });
         </nav>
         <section
           id="settings-category-panel"
-          aria-labelledby="settings-category-title"
+          :aria-labelledby="`settings-category-${selectedCategory}`"
           class="min-h-0 min-w-0 p-5 sm:p-6"
           :class="
             selectedCategory === 'shortcuts' || selectedCategory === 'monitoring'
@@ -305,15 +305,11 @@ defineExpose({ show });
           "
         >
           <div
-            v-if="selectedCategory !== 'monitoring'"
-            class="flex shrink-0 items-center gap-2"
-            :class="selectedCategory === 'shortcuts' ? 'mb-3' : 'mb-6'"
+            v-if="selectedCategory === 'shortcuts'"
+            class="mb-3 flex shrink-0 items-center justify-between gap-2"
           >
-            <h3 id="settings-category-title" class="text-base font-semibold">
-              {{ t(categories[selectedCategory]) }}
-            </h3>
+            <h3 class="self-start text-sm font-semibold">{{ t("快捷键") }}</h3>
             <button
-              v-if="selectedCategory === 'shortcuts'"
               type="button"
               :aria-label="t('恢复默认')"
               :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
@@ -322,45 +318,6 @@ defineExpose({ show });
             >
               <RotateCcw :size="16" aria-hidden="true" />
             </button>
-            <HelpDialog
-              v-if="selectedCategory !== 'shortcuts' && selectedCategory !== 'backup'"
-              :key="selectedCategory"
-              :label="t(`${categories[selectedCategory]}设置说明`)"
-            >
-              <template v-if="selectedCategory === 'general'">
-                <p>
-                  {{ t("缩小到托盘时继续播放，点击托盘图标恢复窗口；直接退出时停止播放并退出。") }}
-                </p>
-                <p>{{ t("托盘菜单中的“退出”始终会退出软件。") }}</p>
-              </template>
-              <template v-else-if="selectedCategory === 'appearance'">
-                <p>
-                  {{
-                    t(
-                      "专辑详情和播放页的封面背景可分别开关；启用后使用封面生成的模糊背景，关闭后使用默认背景。",
-                    )
-                  }}
-                </p>
-                <p>{{ t("减少动态效果仅由应用设置控制，不跟随系统设置。") }}</p>
-                <p>{{ t("保存后立即生效，下次启动时自动恢复。") }}</p>
-              </template>
-              <template v-else-if="selectedCategory === 'lyrics'">
-                <p>{{ t("按启用的来源顺序获取歌词，无需登录网易云。") }}</p>
-                <p>{{ t("网易云歌词可以选择原始歌词、翻译歌词或双语歌词。") }}</p>
-                <p>{{ t("当前批量操作下载成功后直接覆盖内嵌歌词，不检查是否缺少。") }}</p>
-              </template>
-              <template v-else-if="selectedCategory === 'diagnostics'">
-                <p>
-                  {{ t("日志仅保存在本机，最多保留约 30 MB。分享前请检查文件路径等隐私信息。") }}
-                </p>
-                <p>{{ t("详细日志立即生效，下次启动恢复普通日志。不记录歌词正文或封面数据。") }}</p>
-              </template>
-              <template v-else>
-                <p>{{ t("按完整发布日期排序，专辑仍只显示年份。") }}</p>
-                <p>{{ t("缺少日期的专辑排在最后，相同日期按名称排序。") }}</p>
-                <p>{{ t("升序为 A → Z 或从旧到新；降序为 Z → A 或从新到旧。") }}</p>
-              </template>
-            </HelpDialog>
           </div>
           <fieldset
             v-if="selectedCategory === 'appearance'"
@@ -639,18 +596,12 @@ defineExpose({ show });
             <legend class="sr-only">{{ t("监视文件夹") }}</legend>
             <MonitoringOptions v-model="monitoringFolders">
               <template #heading>
-                <h3 id="settings-category-title" class="mr-auto text-base font-semibold">
-                  {{ t("监视文件夹") }}
-                </h3>
+                <h3 class="mr-auto self-start text-sm font-semibold">{{ t("监视文件夹") }}</h3>
               </template>
             </MonitoringOptions>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
             <legend class="sr-only">{{ t("媒体库") }}</legend>
-            <label class="mb-5 flex items-center gap-3 text-sm">
-              <input v-model="showPlaybackStatistics" type="checkbox" class="accent-app-accent" />
-              {{ t("显示播放统计") }}
-            </label>
             <h4 class="mb-3 text-sm font-semibold">{{ t("专辑排序") }}</h4>
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="text-app-muted flex flex-col gap-2 text-sm">
@@ -674,6 +625,10 @@ defineExpose({ show });
                 </select>
               </label>
             </div>
+            <label class="mt-5 flex items-center gap-3 text-sm">
+              <input v-model="showPlaybackStatistics" type="checkbox" class="accent-app-accent" />
+              {{ t("显示播放统计") }}
+            </label>
           </fieldset>
         </section>
       </div>

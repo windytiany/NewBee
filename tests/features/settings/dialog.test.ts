@@ -3,7 +3,6 @@ import * as Vue from "vue";
 import { locale, setLocale } from "@/shared/i18n/locale";
 import { compileSfc, evaluateSource } from "../../support/module/loader";
 
-import { HelpDialog } from "../../support/help/dialog";
 import {
   createHostNode,
   createHostRenderer,
@@ -113,7 +112,6 @@ function createDialog(
     vue: Vue,
     "@lucide/vue": icons,
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
-    "@/shared/components/HelpDialog.vue": HelpDialog,
     "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
     "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
       template: "<div />",
@@ -417,12 +415,14 @@ describe("settings dialog", () => {
       "@/shared/notifications/center": {
         notify: (input: NotificationInput) => feedback.push(input),
       },
-      "@/shared/components/HelpDialog.vue": HelpDialog,
       "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({
         template: "<div />",
       }),
       "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
-        template: "<div />",
+        setup:
+          (_, { slots }) =>
+          () =>
+            Vue.h("div", slots.heading?.()),
       }),
       "@tauri-apps/api/core": {
         invoke: async (command: string, args?: { settings: Settings; suspended: boolean }) => {
@@ -502,6 +502,29 @@ describe("settings dialog", () => {
       const panel = findNode(root, (node) => node.props.id === "settings-category-panel");
       const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类");
       if (!panel || !navigation) throw new Error("Missing settings panel or navigation");
+      const categoryButtons = navigation.children.filter((node) => node.type === "button");
+      for (const button of categoryButtons) {
+        if (typeof button.props.onClick !== "function") throw new Error("Missing category handler");
+        button.props.onClick();
+        await Vue.nextTick();
+        const heading = findNode(panel, (node) => node.type === "h3");
+        const category = getTextContent(button).trim();
+        if (category === "快捷键" || category === "监视文件夹") {
+          expect(heading).not.toBeNull();
+          expect(getTextContent(heading!)).toBe(category);
+        } else {
+          expect(heading).toBeNull();
+        }
+        expect(
+          findNode(panel, (node) => String(node.props["aria-label"] ?? "").endsWith("设置说明")),
+        ).toBeNull();
+        expect(panel.props["aria-labelledby"]).toBe(button.props.id);
+      }
+      const generalButton = categoryButtons[0]!;
+      if (typeof generalButton.props.onClick !== "function")
+        throw new Error("Missing general handler");
+      generalButton.props.onClick();
+      await Vue.nextTick();
       const languageSelect = findNode(panel, (node) => node.props.name === "locale");
       expect(languageSelect?.type).toBe("select");
       expect(languageSelect?.children.map((node) => getTextContent(node))).toEqual([
@@ -544,17 +567,7 @@ describe("settings dialog", () => {
         }[category];
         expect(getTextContent(panel)).not.toContain(explanation);
         const help = findNode(panel, (node) => node.props["aria-label"] === `${category}设置说明`);
-        if (!help || typeof help.props.onClick !== "function")
-          throw new Error("Missing settings help");
-        help.props.onClick();
-        await Vue.nextTick();
-        expect(getTextContent(panel)).toContain(explanation);
-        const closeHelp = findNode(panel, (node) => node.props["aria-label"] === "关闭说明");
-        if (!closeHelp || typeof closeHelp.props.onClick !== "function")
-          throw new Error("Missing help close button");
-        closeHelp.props.onClick();
-        await Vue.nextTick();
-        expect(getTextContent(panel)).not.toContain(explanation);
+        expect(help).toBeNull();
         if (category === "外观") {
           const layoutSelect = findNode(panel, (node) => node.props.name === "layout-density");
           expect(layoutSelect?.type).toBe("select");
@@ -708,8 +721,10 @@ describe("settings dialog", () => {
       expect(String(table.props.class)).toContain("table-fixed");
       expect(findNode(scroller, (node) => node === initialRecorder)).toBe(initialRecorder);
       expect(findNode(panel, (node) => node.props.name === "shortcut-recorder")).toBeNull();
-      const title = findNode(panel, (node) => node.props.id === "settings-category-title");
-      expect(reset.parent).toBe(title?.parent ?? null);
+      const shortcutHeading = findNode(panel, (node) => node.type === "h3");
+      expect(shortcutHeading).not.toBeNull();
+      expect(getTextContent(shortcutHeading!)).toBe("快捷键");
+      expect(reset.parent).toBe(shortcutHeading?.parent ?? null);
       expect(getTextContent(reset)).toBe("");
       expect(
         table.children

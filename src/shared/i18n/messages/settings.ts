@@ -60,11 +60,6 @@ export const settingsMessages: Record<string, string> = {
   "快捷键操作失败：{error}": "Shortcut operation failed: {error}",
   "快捷键操作失败，请查看日志": "Shortcut operation failed. Check the logs.",
   "恢复快捷键失败，请查看日志": "Could not restore shortcuts. Check the logs.",
-  常规设置说明: "General settings help",
-  外观设置说明: "Appearance settings help",
-  媒体库设置说明: "Library settings help",
-  歌词设置说明: "Lyrics settings help",
-  诊断设置说明: "Diagnostics settings help",
   语言: "Language",
   主题色: "Accent color",
   布局: "Layout",
@@ -111,28 +106,4 @@ export const settingsMessages: Record<string, string> = {
   "主题色必须是有效的 #RRGGBB 颜色": "Accent color must be a valid #RRGGBB color",
   "主题色必须是有效的 #RRGGBB 颜色。": "Accent color must be a valid #RRGGBB color.",
   "保存设置失败，请查看日志": "Could not save settings. Check the logs.",
-  "缩小到托盘时继续播放，点击托盘图标恢复窗口；直接退出时停止播放并退出。":
-    "Minimizing to the tray keeps playback running. Click the tray icon to restore the window. Quitting stops playback and exits.",
-  "托盘菜单中的“退出”始终会退出软件。": "Quit in the tray menu always exits the app.",
-  "专辑详情和播放页的封面背景可分别开关；启用后使用封面生成的模糊背景，关闭后使用默认背景。":
-    "Album and now playing cover backgrounds can be toggled independently. When enabled, a blurred cover background is used; otherwise, the default background is used.",
-  "减少动态效果仅由应用设置控制，不跟随系统设置。":
-    "Reduced motion is controlled by the app setting, not the system setting.",
-  "保存后立即生效，下次启动时自动恢复。": "Changes apply after saving and are restored on startup.",
-  "按启用的来源顺序获取歌词，无需登录网易云。":
-    "Lyrics are fetched in the order of enabled sources. No NetEase login is required.",
-  "网易云歌词可以选择原始歌词、翻译歌词或双语歌词。":
-    "NetEase lyrics can be original, translated, or bilingual.",
-  "当前批量操作下载成功后直接覆盖内嵌歌词，不检查是否缺少。":
-    "Successful batch downloads overwrite embedded lyrics without checking whether lyrics are missing.",
-  "日志仅保存在本机，最多保留约 30 MB。分享前请检查文件路径等隐私信息。":
-    "Logs are stored locally, up to about 30 MB. Check file paths and other private information before sharing.",
-  "详细日志立即生效，下次启动恢复普通日志。不记录歌词正文或封面数据。":
-    "Detailed logging applies immediately and resets on restart. Lyrics content and cover data are not logged.",
-  "按完整发布日期排序，专辑仍只显示年份。":
-    "Sorting uses the full release date; albums still display only the year.",
-  "缺少日期的专辑排在最后，相同日期按名称排序。":
-    "Albums without a date appear last. Albums with the same date are sorted by name.",
-  "升序为 A → Z 或从旧到新；降序为 Z → A 或从新到旧。":
-    "Ascending sorts A → Z or oldest to newest; descending sorts Z → A or newest to oldest.",
 };
