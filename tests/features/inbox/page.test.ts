@@ -498,6 +498,11 @@ describe("Inbox workspace", () => {
     const context = await mount();
     const separator = findNode(context.root, (node) => node.props["data-table-resize"] === "title");
     if (!separator) throw new Error("Missing resize handle");
+    for (const key of ["number", "addedAt", "durationMs"])
+      expect(findNode(context.root, (node) => node.props["data-table-resize"] === key)).toBeNull();
+    expect(
+      findNode(context.root, (node) => node.props["data-table-resize"] === "album"),
+    ).not.toBeNull();
     const widths = [32, 180, 120, 120, 48];
     const columnKeys = ["number", "title", "album", "addedAt", "durationMs"];
     dispatch(separator, "onPointerdown", {
@@ -522,8 +527,7 @@ describe("Inbox workspace", () => {
       return typeof style === "object" && style !== null && "--table-desktop-columns" in style;
     });
     expect(container?.props.style).toMatchObject({
-      "--table-desktop-columns":
-        "minmax(0,32fr) minmax(0,220fr) minmax(0,80fr) minmax(0,120fr) minmax(0,48fr)",
+      "--table-desktop-columns": "2rem minmax(0,220fr) minmax(0,80fr) minmax(0,120fr) 3rem",
     });
     expect(context.rows().map((row) => getTextContent(row).match(/Song \d/)?.[0])).toEqual([
       "Song 1",

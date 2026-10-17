@@ -8,6 +8,7 @@ export type TableColumn = {
   mobileWidth?: string;
   desktopOnly?: boolean;
   right?: boolean;
+  resizable?: boolean;
 };
 export type TableSort = { key: string; direction: "ascending" | "descending" };
 type CellValue = string | number | null | undefined;
@@ -52,7 +53,10 @@ export function useTable<T>(options: {
   }
   function layout(columns: readonly TableColumn[], mobile: boolean) {
     return columns.map((column) => {
-      const weight = (mobile ? widths.value.mobile : widths.value.desktop)[column.key];
+      const weight =
+        column.resizable === false
+          ? undefined
+          : (mobile ? widths.value.mobile : widths.value.desktop)[column.key];
       return weight
         ? `minmax(0,${weight}fr)`
         : mobile
@@ -94,13 +98,22 @@ export function useTable<T>(options: {
     const left = index === cells.length - 1 ? index - 1 : index;
     const first = cells[left]!;
     const second = cells[left + 1]!;
+    const resizable = new Set(
+      options
+        .columns()
+        .filter((column) => column.resizable !== false)
+        .map((column) => column.key),
+    );
+    if (!resizable.has(first.key) || !resizable.has(second.key)) return;
     const total = first.width + second.width;
     const minimum = Math.min(32, total / 3);
     const mode = cells.length === options.columns().length ? "desktop" : "mobile";
     const apply = (delta: number) => {
       const width = Math.max(minimum, Math.min(total - minimum, first.width + delta));
       widths.value[mode] = {
-        ...Object.fromEntries(cells.map((cell) => [cell.key, cell.width])),
+        ...Object.fromEntries(
+          cells.filter((cell) => resizable.has(cell.key)).map((cell) => [cell.key, cell.width]),
+        ),
         [first.key]: width,
         [second.key]: total - width,
       };

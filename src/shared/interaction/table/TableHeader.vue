@@ -36,12 +36,17 @@ const emit = defineEmits<{
         }}</span>
       </button>
       <span
-        v-if="index < columns.length - 1"
+        v-if="
+          index < columns.length - 1 &&
+          column.resizable !== false &&
+          columns[index + 1]?.resizable !== false
+        "
         role="separator"
         aria-orientation="vertical"
         :aria-label="column.label"
         :data-table-resize="column.key"
         tabindex="0"
+        :class="columns[index + 1]?.desktopOnly ? 'hidden sm:block' : ''"
         class="focus-visible:bg-app-accent/50 absolute -top-2 -right-2 h-[calc(100%+1rem)] w-2 cursor-col-resize touch-none rounded-sm outline-none hover:bg-white/20"
         @pointerdown.stop="emit('resize', column.key, $event)"
         @keydown.stop="emit('resize', column.key, $event)"

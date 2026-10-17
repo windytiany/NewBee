@@ -33,12 +33,12 @@ afterEach(() => {
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
   else Reflect.deleteProperty(globalThis, "window");
 });
-function fixture() {
+function fixture(tableColumns = columns) {
   const scope = Vue.effectScope();
   scopes.push(scope);
   const table = scope.run(() =>
     useTable({
-      columns: () => columns,
+      columns: () => tableColumns,
       rows: () => source.value,
       value: (row, key, index) => {
         if (key === "number") return index;
@@ -111,6 +111,37 @@ describe("table interactions", () => {
     expect(table.style.value).toEqual(finished);
   });
 
+  it("keeps fixed columns unchanged and rejects resizing their boundaries", () => {
+    const fixed = columns.map((column) => ({
+      ...column,
+      resizable: column.key !== "number" && column.key !== "duration",
+    }));
+    const { table } = fixture(fixed);
+    const initial = table.style.value;
+    for (const key of ["number", "album", "duration"]) {
+      const event = pointer("pointerdown", 100, handle([32, 180, 120, 48]));
+      table.resize(key, event);
+      target.dispatchEvent(pointer("pointermove", 140));
+      expect(event.defaultPrevented).toBe(false);
+      expect(table.style.value).toEqual(initial);
+    }
+    table.resize("title", pointer("pointerdown", 100, handle([32, 180, 120, 48])));
+    target.dispatchEvent(pointer("pointermove", 140));
+    expect(table.style.value["--table-desktop-columns"]).toBe(
+      "2rem minmax(0,220fr) minmax(0,80fr) 3rem",
+    );
+    expect(table.style.value["--table-desktop-body-columns"]).toBe(
+      "minmax(0,220fr) minmax(0,80fr) 3rem",
+    );
+    target.dispatchEvent(pointer("pointerup", 140));
+    const resized = table.style.value;
+    const mobile = pointer("pointerdown", 100, handle([24, 180, 0, 48]));
+    table.resize("title", mobile);
+    target.dispatchEvent(pointer("pointermove", 140));
+    expect(mobile.defaultPrevented).toBe(false);
+    expect(table.style.value).toEqual(resized);
+  });
+
   it("keeps mobile layout independent and cleans up canceled or unmounted gestures", () => {
     const { table, scope } = fixture();
     const desktop = table.style.value["--table-desktop-columns"];
@@ -133,7 +164,11 @@ describe("table interactions", () => {
   });
 
   it("exposes accessible sort buttons and keyboard column resizing", async () => {
-    const { table } = fixture();
+    const fixed = columns.map((column) => ({
+      ...column,
+      resizable: column.key !== "number" && column.key !== "duration",
+    }));
+    const { table } = fixture(fixed);
     const component = evaluateSource<{ default: Vue.Component }>(
       compileSfc(
         await Bun.file("src/shared/interaction/table/TableHeader.vue").text(),
@@ -145,7 +180,7 @@ describe("table interactions", () => {
     const app = createHostRenderer(createHostNode).createApp({
       setup: () => () =>
         Vue.h(component, {
-          columns,
+          columns: fixed,
           sort: table.sort.value,
           onSort: table.toggle,
           onResize: table.resize,
@@ -164,7 +199,10 @@ describe("table interactions", () => {
       click();
       await Vue.nextTick();
       expect(cell?.props["aria-sort"]).toBe("descending");
+      for (const key of ["number", "album", "duration"])
+        expect(findNode(root, (node) => node.props["data-table-resize"] === key)).toBeNull();
       const separator = findNode(root, (node) => node.props["data-table-resize"] === "title");
+      expect(String(separator?.props.class)).toContain("hidden sm:block");
       const keydown = separator?.props.onKeydown;
       if (typeof keydown !== "function") throw new Error("Missing resize handle");
       const event = new Event("keydown", { cancelable: true });
