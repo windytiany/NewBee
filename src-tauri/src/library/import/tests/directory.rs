@@ -92,7 +92,7 @@ fn rescanning_preserves_track_ids_and_playlist_items() {
 
     assert_eq!(
         (result.added, result.updated, result.skipped, result.failed),
-        (0, 1, 0, 0)
+        (0, 0, 0, 0)
     );
     assert_eq!(
         database.get_track(1).unwrap().unwrap().path(),
@@ -103,6 +103,59 @@ fn rescanning_preserves_track_ids_and_playlist_items() {
         serde_json::to_value(database.list_playlist_tracks(playlist_id).unwrap()).unwrap(),
         original
     );
+}
+
+#[test]
+fn rescanning_counts_only_changed_metadata_and_artwork() {
+    use lofty::{
+        config::WriteOptions,
+        prelude::*,
+        tag::{ItemKey, Tag, TagType},
+    };
+
+    let files = TestFiles::new();
+    let path = files.wav("changed.wav");
+    files.wav("unchanged.wav");
+    let database = Database::open(":memory:").unwrap();
+    database
+        .add_music_library_directory(&files.0.to_string_lossy())
+        .unwrap();
+    assert_eq!(run_scan(&database).unwrap().added, 2);
+    assert_eq!(run_scan(&database).unwrap().updated, 0);
+
+    let mut tag = Tag::new(TagType::Id3v2);
+    tag.set_title("Changed title".into());
+    tag.set_artist("Artist".into());
+    tag.insert_text(ItemKey::TrackArtistSortOrder, "Sorted artist".into());
+    tag.save_to_path(&path, WriteOptions::default()).unwrap();
+    let result = run_scan(&database).unwrap();
+    assert_eq!((result.added, result.updated, result.failed), (0, 1, 0));
+    for _ in 0..5 {
+        assert_eq!(run_scan(&database).unwrap().updated, 0);
+    }
+
+    tag.insert_text(ItemKey::TrackArtistSortOrder, "New sorted artist".into());
+    tag.save_to_path(&path, WriteOptions::default()).unwrap();
+    assert_eq!(run_scan(&database).unwrap().updated, 1);
+    assert_eq!(run_scan(&database).unwrap().updated, 0);
+
+    for color in [64, 128] {
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            2,
+            2,
+            image::Rgb([color, 0, 0]),
+        ))
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .unwrap();
+        files.write("cover.png", &bytes.into_inner());
+        let result = run_scan(&database).unwrap();
+        assert_eq!((result.added, result.updated, result.failed), (0, 2, 0));
+        assert_eq!(run_scan(&database).unwrap().updated, 0);
+    }
+    fs::remove_file(files.0.join("cover.png")).unwrap();
+    assert_eq!(run_scan(&database).unwrap().updated, 2);
+    assert_eq!(run_scan(&database).unwrap().updated, 0);
 }
 
 #[test]
@@ -286,7 +339,7 @@ fn scanning_promotes_existing_external_ids_and_only_reports_missing_library_trac
     let first = run_scan(&database).unwrap();
     assert_eq!((first.added, first.updated, first.failed), (1, 0, 1));
     let second = run_scan(&database).unwrap();
-    assert_eq!((second.added, second.updated, second.failed), (0, 1, 1));
+    assert_eq!((second.added, second.updated, second.failed), (0, 0, 1));
     assert_eq!(
         serde_json::to_value(database.list_playlist_tracks(playlist).unwrap()).unwrap(),
         item

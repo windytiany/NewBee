@@ -69,14 +69,14 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
             .get_pixel(32, 16)
             .0
     };
-    let scan = || {
+    let scan = |updated| {
         let result = tauri::async_runtime::block_on(scan_music_library(
             None,
             app.handle().clone(),
             app.state(),
         ))
         .unwrap();
-        assert_eq!(serde_json::to_value(result).unwrap()["updated"], 2);
+        assert_eq!(serde_json::to_value(result).unwrap()["updated"], updated);
     };
     let shared_red = read(1);
     assert_color(color(&shared_red), [255, 0, 0, 255]);
@@ -106,7 +106,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     assert_color(color(&read(1)), [0, 0, 255, 255]);
     assert_eq!(read(2), shared_red);
     assert_eq!(app.state::<Database>().artwork_decode_count(), 2);
-    scan();
+    scan(0);
     assert_color(color(&read(1)), [0, 0, 255, 255]);
     assert_eq!(app.state::<Database>().artwork_decode_count(), 2);
 
@@ -114,13 +114,13 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     let tag = tagged.primary_tag_mut().unwrap();
     tag.remove_picture(0);
     tag.save_to_path(&one, WriteOptions::default()).unwrap();
-    scan();
+    scan(1);
     assert_eq!(read(1), shared_red);
     assert_eq!(app.state::<Database>().artwork_decode_count(), 2);
 
     // Directory replacement affects both associations, but generates only once.
     std::fs::write(&cover, &green).unwrap();
-    scan();
+    scan(2);
     let shared_green = read(1);
     assert_color(color(&shared_green), [0, 255, 0, 255]);
     assert_eq!(read(2), shared_green);
@@ -152,7 +152,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     }
     assert_eq!(std::fs::read(&cover).unwrap(), b"broken image");
     std::fs::remove_file(&cover).unwrap();
-    scan();
+    scan(2);
     assert!(read(1).is_empty());
     assert!(read(2).is_empty());
     assert!(invoke(
@@ -166,7 +166,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     std::fs::write(&cover, &green).unwrap();
     assert!(read(1).is_empty());
     assert!(read(2).is_empty());
-    scan();
+    scan(2);
     assert_color(color(&read(1)), [0, 255, 0, 255]);
     assert_eq!(read(1), read(2));
     assert_eq!(std::fs::read(&cover).unwrap(), green);

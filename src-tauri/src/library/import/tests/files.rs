@@ -68,7 +68,7 @@ fn imports_and_rescans_numbers_and_totals_from_combined_tags() {
 }
 
 #[test]
-fn skips_duplicate_selections_and_updates_existing_tracks_without_changing_ids() {
+fn skips_duplicate_selections_and_preserves_unchanged_tracks_and_ids() {
     let files = TestFiles::new();
     let path = files.wav("song.wav");
     let database = Database::open(":memory:").unwrap();
@@ -77,7 +77,7 @@ fn skips_duplicate_selections_and_updates_existing_tracks_without_changing_ids()
     let playlist = database.create_playlist("playlist").unwrap();
     database.append_playlist_tracks(playlist, vec![1]).unwrap();
     let result = run_import(&database, &[path]);
-    assert_eq!((result.added, result.updated), (0, 1));
+    assert_eq!((result.added, result.updated), (0, 0));
     assert!(database.get_track(1).unwrap().is_some());
     assert!(database.get_track(2).unwrap().is_none());
     assert_eq!(

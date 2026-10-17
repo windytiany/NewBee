@@ -69,6 +69,7 @@ export const libraryMessages: Record<string, string> = {
   "扫描完成，{count} 首失败（详情见日志）": "Scan complete; {count} tracks failed (see logs)",
   "扫描完成：新增 {added} 首，更新 {updated} 首":
     "Scan complete: {added} tracks added, {updated} updated",
+  未发现变化: "No changes found",
   扫描文件夹: "Scan folders",
   扫描说明: "Scan help",
   "拖动重排第 {count} 首": "Drag to reorder track {count}",

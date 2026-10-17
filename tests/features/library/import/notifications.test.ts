@@ -79,6 +79,26 @@ describe("scan notifications", () => {
     expect(scan.isScanning.value).toBe(false);
   });
 
+  it("reports no changes when no tracks were added or updated", async () => {
+    const scan = createScan(async () => ({ added: 0, updated: 0, skipped: 4, failed: 0 }));
+    await scan.scanMusicLibrary();
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "success",
+      message: "未发现变化",
+    });
+    expect(events).toEqual(["newbee:library-changed"]);
+  });
+
+  it("reports failures even when no tracks changed", async () => {
+    const scan = createScan(async () => ({ added: 0, updated: 0, skipped: 0, failed: 1 }));
+    await scan.scanMusicLibrary();
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      message: "扫描完成，1 首失败（详情见日志）",
+    });
+  });
+
   it("reports partial failures as a recoverable warning", async () => {
     const scan = createScan(async () => ({ added: 2, updated: 0, skipped: 0, failed: 1 }));
     await scan.scanMusicLibrary();

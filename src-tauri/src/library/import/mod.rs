@@ -22,6 +22,7 @@ pub(crate) fn import_track(database: &Database, path: &Path, result: &mut Import
     {
         Ok(TrackWriteOutcome::Added) => result.added += 1,
         Ok(TrackWriteOutcome::Updated) => result.updated += 1,
+        Ok(TrackWriteOutcome::Unchanged) => {}
         Err(error) => record_failure(database, result, path, &error),
     }
 }

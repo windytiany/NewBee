@@ -50,10 +50,12 @@ export function useLibraryScan() {
         type: result.failed > 0 ? "warning" : "success",
         message: result.failed
           ? t("扫描完成，{count} 首失败（详情见日志）", { count: result.failed })
-          : t("扫描完成：新增 {added} 首，更新 {updated} 首", {
-              added: result.added,
-              updated: result.updated,
-            }),
+          : result.added === 0 && result.updated === 0
+            ? t("未发现变化")
+            : t("扫描完成：新增 {added} 首，更新 {updated} 首", {
+                added: result.added,
+                updated: result.updated,
+              }),
         key: "library-scan",
       });
       reportLibraryImport(result);

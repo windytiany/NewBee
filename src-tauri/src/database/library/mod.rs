@@ -1,4 +1,5 @@
 mod paths;
+mod state;
 #[cfg(test)]
 use super::model::TrackWriteInput;
 
@@ -134,7 +135,19 @@ impl Database {
                 |row| row.get(0),
             )
             .map_err(|error| error.to_string())?;
+        let before = if existing {
+            Some(state::State::read(&transaction, &snapshot.track.path)?)
+        } else {
+            None
+        };
         let id = crate::tracks::scanning::persist(&transaction, snapshot)?;
+        let outcome = match before {
+            Some(before) if before == state::State::read(&transaction, &snapshot.track.path)? => {
+                TrackWriteOutcome::Unchanged
+            }
+            Some(_) => TrackWriteOutcome::Updated,
+            None => TrackWriteOutcome::Added,
+        };
         transaction
             .execute("UPDATE tracks SET in_library = 1 WHERE id = ?1", [id])
             .map_err(|error| error.to_string())?;
@@ -142,11 +155,7 @@ impl Database {
             .execute("DELETE FROM inbox WHERE track_id = ?1", [id])
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
-        Ok(if existing {
-            TrackWriteOutcome::Updated
-        } else {
-            TrackWriteOutcome::Added
-        })
+        Ok(outcome)
     }
 
     pub fn list_artists(&self, grouping: LibraryGrouping) -> Result<Vec<ArtistSummary>, String> {

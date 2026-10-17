@@ -19,7 +19,7 @@ fn scan_caches_lyrics_preserves_empty_marks_and_clears_marks_when_lyrics_appear(
     assert!(save_track(&database, 1, &[], LyricsMarkAction::Mark, None).database_updated);
     assert_eq!(
         run_import(&database, std::slice::from_ref(&path)).updated,
-        1
+        0
     );
     assert!(database.get_lyrics(1).unwrap().no_lyrics);
     let text = "  [00:01.00]Imported lyrics\n\n";
@@ -33,6 +33,10 @@ fn scan_caches_lyrics_preserves_empty_marks_and_clears_marks_when_lyrics_appear(
     let snapshot = database.get_lyrics(1).unwrap();
     assert_eq!(snapshot.text.as_deref(), Some(text));
     assert!(!snapshot.no_lyrics);
+    assert_eq!(
+        run_import(&database, std::slice::from_ref(&path)).updated,
+        0
+    );
     std::fs::remove_file(&path).unwrap();
     // Reading the cache and confirmation status must work without the audio file.
     assert_eq!(database.get_lyrics(1).unwrap().text.as_deref(), Some(text));

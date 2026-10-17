@@ -24,4 +24,5 @@ pub struct TrackWriteInput {
 pub enum TrackWriteOutcome {
     Added,
     Updated,
+    Unchanged,
 }
