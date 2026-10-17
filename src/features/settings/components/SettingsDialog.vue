@@ -5,6 +5,7 @@ import { notify } from "@/shared/notifications/center";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
 import { computed, onUnmounted, ref } from "vue";
+import { RotateCcw, Undo2 } from "@lucide/vue";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
 import type { Settings } from "@/features/settings/types";
 import { BINDING_GROUPS } from "@/features/shortcuts/groups";
@@ -84,7 +85,6 @@ const neteaseEnabled = ref(true);
 const neteaseLyricsMode = ref<Settings["neteaseLyricsMode"]>("original");
 const shortcuts = ref(cloneShortcuts(DEFAULT_SHORTCUTS));
 const selectedShortcutAction = ref<ShortcutAction>("previous");
-const selectedBinding = computed(() => shortcuts.value[selectedShortcutAction.value]);
 const shortcutLabels = Object.fromEntries(
   SHORTCUT_ACTIONS.map((action) => [action, SHORTCUT_DEFINITIONS[action].label]),
 ) as Record<ShortcutAction, string>;
@@ -92,7 +92,14 @@ function resetShortcuts() {
   shortcuts.value = cloneShortcuts(DEFAULT_SHORTCUTS);
 }
 
-function recordShortcut(event: InstanceType<typeof globalThis.KeyboardEvent>) {
+function resetShortcut(action: ShortcutAction) {
+  shortcuts.value[action] = { ...DEFAULT_SHORTCUTS[action] };
+}
+
+function recordShortcut(
+  event: InstanceType<typeof globalThis.KeyboardEvent>,
+  action: ShortcutAction = selectedShortcutAction.value,
+) {
   if (event.isComposing || event.key === "Tab") return;
   event.preventDefault();
   event.stopPropagation();
@@ -103,11 +110,11 @@ function recordShortcut(event: InstanceType<typeof globalThis.KeyboardEvent>) {
     !event.shiftKey &&
     !event.metaKey
   ) {
-    selectedBinding.value.shortcut = "";
+    shortcuts.value[action].shortcut = "";
     return;
   }
   const shortcut = shortcutFromEvent(event);
-  if (shortcut !== null) selectedBinding.value.shortcut = shortcut;
+  if (shortcut !== null) shortcuts.value[action].shortcut = shortcut;
 }
 
 const isLoading = ref(false);
@@ -305,6 +312,16 @@ defineExpose({ show });
             <h3 id="settings-category-title" class="text-base font-semibold">
               {{ t(categories[selectedCategory]) }}
             </h3>
+            <button
+              v-if="selectedCategory === 'shortcuts'"
+              type="button"
+              :aria-label="t('恢复默认')"
+              :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+              class="focus-visible:outline-app-accent ml-auto rounded-lg p-2 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+              @click="resetShortcuts"
+            >
+              <RotateCcw :size="16" aria-hidden="true" />
+            </button>
             <HelpDialog
               v-if="selectedCategory !== 'shortcuts' && selectedCategory !== 'backup'"
               :key="selectedCategory"
@@ -509,23 +526,21 @@ defineExpose({ show });
           <fieldset
             v-else-if="selectedCategory === 'shortcuts'"
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
-            class="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-3"
+            class="flex min-h-0 min-w-0 flex-1 flex-col"
           >
             <legend class="sr-only">{{ t("快捷键") }}</legend>
-            <button
-              type="button"
-              class="justify-self-start rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
-              @click="resetShortcuts"
-            >
-              {{ t("恢复默认") }}
-            </button>
             <div class="min-h-0 overflow-auto rounded-lg border border-white/10">
               <table class="w-full min-w-96 table-fixed text-left text-sm">
                 <thead class="text-app-muted bg-app-surface sticky top-0 z-10">
                   <tr>
-                    <th scope="col" class="w-2/5 px-3 py-2 font-medium">{{ t("操作") }}</th>
-                    <th scope="col" class="w-2/5 px-3 py-2 font-medium">{{ t("快捷键") }}</th>
-                    <th scope="col" class="w-1/5 px-3 py-2 font-medium">{{ t("全局") }}</th>
+                    <th scope="col" class="w-32 px-3 py-2 font-medium">{{ t("操作") }}</th>
+                    <th scope="col" class="px-3 py-2 font-medium">{{ t("快捷键") }}</th>
+                    <th scope="col" class="w-16 px-3 py-2 text-center font-medium">
+                      {{ t("全局") }}
+                    </th>
+                    <th scope="col" class="w-12 px-2 py-2">
+                      <span class="sr-only">{{ t("恢复默认") }}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody
@@ -535,7 +550,7 @@ defineExpose({ show });
                 >
                   <tr>
                     <th
-                      colspan="3"
+                      colspan="4"
                       scope="rowgroup"
                       class="text-app-muted bg-white/5 px-3 pt-4 pb-2 text-xs font-semibold"
                     >
@@ -549,54 +564,50 @@ defineExpose({ show });
                     :class="
                       selectedShortcutAction === action ? 'bg-app-accent/15' : 'hover:bg-white/5'
                     "
-                    @click="selectedShortcutAction = action"
                   >
-                    <td class="px-3 py-2">
-                      <button
-                        type="button"
-                        :aria-pressed="selectedShortcutAction === action"
-                        class="focus-visible:outline-app-accent w-full text-left focus-visible:outline-2"
+                    <td class="px-3 py-2">{{ t(shortcutLabels[action]) }}</td>
+                    <td class="px-1 py-1">
+                      <input
+                        :aria-label="`${t(shortcutLabels[action])} ${t('快捷键')}`"
+                        autocomplete="off"
+                        :name="`shortcut-${action}`"
+                        :value="formatShortcut(shortcuts[action].shortcut)"
+                        data-shortcut-recorder
+                        type="text"
+                        readonly
+                        class="focus-visible:outline-app-accent w-full min-w-0 cursor-pointer rounded-lg bg-transparent px-2 py-1 text-sm text-white focus:bg-white/5 focus-visible:outline-2"
+                        @focus="selectedShortcutAction = action"
                         @click="selectedShortcutAction = action"
+                        @keydown="recordShortcut($event, action)"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                      <input
+                        v-if="allowsGlobalShortcut(action)"
+                        v-model="shortcuts[action].global"
+                        :aria-label="`${t(shortcutLabels[action])} ${t('全局')}`"
+                        :name="`shortcuts-global-${action}`"
+                        type="checkbox"
+                        class="accent-app-accent cursor-pointer"
+                      />
+                    </td>
+                    <td class="px-2 py-1">
+                      <button
+                        v-if="
+                          shortcuts[action].shortcut !== DEFAULT_SHORTCUTS[action].shortcut ||
+                          shortcuts[action].global !== DEFAULT_SHORTCUTS[action].global
+                        "
+                        type="button"
+                        :aria-label="`${t('恢复默认')} ${t(shortcutLabels[action])}`"
+                        class="text-app-muted focus-visible:outline-app-accent rounded-lg p-2 hover:bg-white/10 hover:text-white focus-visible:outline-2"
+                        @click="resetShortcut(action)"
                       >
-                        {{ t(shortcutLabels[action]) }}
+                        <Undo2 :size="16" aria-hidden="true" />
                       </button>
                     </td>
-                    <td class="truncate px-3 py-2 whitespace-nowrap">
-                      {{ formatShortcut(shortcuts[action].shortcut) }}
-                    </td>
-                    <td class="px-3 py-2">{{ shortcuts[action].global ? t("全局") : "" }}</td>
                   </tr>
                 </tbody>
               </table>
-            </div>
-            <div class="shrink-0 space-y-2 border-t border-white/10 pt-3">
-              <h4 class="text-sm font-semibold">{{ t(shortcutLabels[selectedShortcutAction]) }}</h4>
-              <label for="shortcut-recorder" class="sr-only">{{ t("快捷键") }}</label>
-              <div class="flex items-center gap-2">
-                <input
-                  id="shortcut-recorder"
-                  autocomplete="off"
-                  name="shortcut-recorder"
-                  :value="formatShortcut(selectedBinding.shortcut)"
-                  data-shortcut-recorder
-                  type="text"
-                  readonly
-                  class="bg-app-interactive focus-visible:outline-app-accent min-w-0 flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white focus-visible:outline-2"
-                  @keydown="recordShortcut($event)"
-                />
-                <label
-                  class="flex shrink-0 cursor-pointer items-center gap-2 pl-4 text-sm font-semibold whitespace-nowrap"
-                >
-                  <input
-                    v-model="selectedBinding.global"
-                    name="shortcuts-global"
-                    :disabled="!allowsGlobalShortcut(selectedShortcutAction)"
-                    type="checkbox"
-                    class="accent-app-accent"
-                  />
-                  {{ t("全局生效") }}
-                </label>
-              </div>
             </div>
           </fieldset>
           <BackupOptions v-else-if="selectedCategory === 'backup'" @busy="isBackingUp = $event" />
