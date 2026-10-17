@@ -1,5 +1,5 @@
 mod fingerprint;
-mod scanning;
+pub(crate) mod scanning;
 
 use super::{record_failure, ImportResult};
 use crate::database::Database;

@@ -196,6 +196,7 @@ async function createComponent(source: string) {
     "@/features/lyrics/download/LyricsDownloadDialog.vue": defaultModule(passiveComponent),
     "@/features/metadata/releases/components/ReleaseTagDialog.vue": defaultModule(passiveComponent),
     "@/shared/notifications/NotificationHost.vue": defaultModule(passiveComponent),
+    "@/features/library/monitoring/MonitoringDialog.vue": defaultModule(passiveComponent),
     "@/features/import/useDropImport": {
       useDropImport: () => ({ highlight: dropHighlight }),
     },

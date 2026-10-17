@@ -1,5 +1,6 @@
 export const settingsMessages: Record<string, string> = {
   设置: "Settings",
+  监视文件夹: "Watched folders",
   备份: "Backup",
   导出备份: "Export backup",
   导入备份: "Import backup",

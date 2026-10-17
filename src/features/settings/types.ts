@@ -1,3 +1,4 @@
+import type { MonitoringFolder } from "@/features/library/monitoring/types";
 import type { Locale } from "@/shared/i18n/locale";
 import type { LyricsProvider } from "@/features/lyrics/types";
 import type { ShortcutAction } from "@/features/shortcuts/bindings";
@@ -21,6 +22,7 @@ export type Settings = {
   playingCoverBackground: boolean;
   closeBehavior: "tray" | "exit";
   showPlaybackStatistics: boolean;
+  monitoringFolders: MonitoringFolder[];
   albumSortBy: "name" | "year";
   albumSortOrder: "ascending" | "descending";
   lyricsProviders: LyricsProvider[];

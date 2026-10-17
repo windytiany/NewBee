@@ -10,8 +10,8 @@ pub(crate) mod tests;
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {
-    added: u64,
-    updated: u64,
+    pub(crate) added: u64,
+    pub(crate) updated: u64,
     skipped: u64,
     pub(crate) failed: u64,
 }

@@ -230,6 +230,10 @@ const appModules: Record<string, unknown> = {
     default: passiveComponent,
   },
   "@/shared/notifications/NotificationHost.vue": { __esModule: true, default: passiveComponent },
+  "@/features/library/monitoring/MonitoringDialog.vue": {
+    __esModule: true,
+    default: passiveComponent,
+  },
   "@/app/pages": { usePersistentActivePage: () => ({ activePage }) },
   "@/features/import/useDropImport": { useDropImport: () => ({ label: Vue.ref("") }) },
   "@/features/library/browser/useBrowser": { useLibraryBrowser: emptyLibraryPage },

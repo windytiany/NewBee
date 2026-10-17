@@ -22,8 +22,8 @@ class HostNode {
     this.open = false;
   }
 }
-type Directory = { id: number; path: string; displayPath: string };
-const directory: Directory = { id: 1, path: "/Music", displayPath: "/Music" };
+type Directory = { id: number; path: string };
+const directory: Directory = { id: 1, path: "/Music" };
 
 const scanOutput = transpileScript(
   await Bun.file(
@@ -139,6 +139,27 @@ afterEach(() => {
 });
 
 describe("library scan dialog", () => {
+  for (const [path, display] of [
+    [String.raw`\\?\D:\Music`, String.raw`D:\Music`],
+    [String.raw`\\?\UNC\server\music`, String.raw`\\server\music`],
+    ["/Music", "/Music"],
+  ]) {
+    it(`formats the saved directory ${path} on the frontend without changing its real path`, async () => {
+      const saved = { id: 7, path };
+      const dialog = mountDialog(idleScan(), async () => [saved]);
+      await settle();
+      const label = find(
+        dialog.root,
+        (node) => node.type === "span" && node.props.title === display,
+      );
+      expect(label).not.toBeNull();
+      expect(textContent(label!)).toBe(display);
+      expect(
+        find(dialog.root, (node) => node.props["aria-label"] === `移除目录 ${display}`),
+      ).not.toBeNull();
+      expect(saved.path).toBe(path);
+    });
+  }
   it("keeps the empty state short and shows scan instructions only on demand", async () => {
     const dialog = mountDialog(idleScan(), async () => []);
     await settle();
@@ -181,11 +202,11 @@ describe("library scan dialog", () => {
     await settle();
     click(button(dialog.root, "添加目录"));
     await settle();
-    expect(textContent(dialog.root)).toContain(directory.displayPath);
+    expect(textContent(dialog.root)).toContain(directory.path);
     expect(notifications.items.value).toEqual([]);
     click(button(dialog.root, "移除"));
     await settle();
-    expect(textContent(dialog.root)).not.toContain(directory.displayPath);
+    expect(textContent(dialog.root)).not.toContain(directory.path);
     expect(notifications.items.value).toEqual([]);
   });
 
@@ -197,7 +218,7 @@ describe("library scan dialog", () => {
     await settle();
     click(button(dialog.root, "添加目录"));
     await settle();
-    expect(textContent(dialog.root)).toContain(directory.displayPath);
+    expect(textContent(dialog.root)).toContain(directory.path);
     expect(textContent(dialog.root)).not.toContain("目录已添加");
     expect(notifications.items.value).toEqual([]);
   });
@@ -225,7 +246,7 @@ describe("library scan dialog", () => {
       type: "error",
       message: "移除目录失败，请查看日志",
     });
-    expect(textContent(dialog.root)).toContain(directory.displayPath);
+    expect(textContent(dialog.root)).toContain(directory.path);
   });
 
   it("notifies directory read failures without empty-state or retry controls", async () => {

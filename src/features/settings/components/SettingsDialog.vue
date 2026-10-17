@@ -26,6 +26,8 @@ import {
 import { applyAppearance } from "@/features/settings/appearance";
 import HelpDialog from "@/shared/components/HelpDialog.vue";
 import BackupOptions from "@/features/backup/components/BackupOptions.vue";
+import MonitoringOptions from "@/features/library/monitoring/MonitoringOptions.vue";
+import type { MonitoringFolder } from "@/features/library/monitoring/types";
 
 const isBackingUp = ref(false);
 
@@ -58,6 +60,7 @@ const categories = {
   general: "常规",
   appearance: "外观",
   library: "媒体库",
+  monitoring: "监视文件夹",
   lyrics: "歌词",
   shortcuts: "快捷键",
   diagnostics: "诊断",
@@ -74,6 +77,7 @@ const layoutDensity = ref<Settings["layoutDensity"]>("regular");
 const albumCoverBackground = ref(false);
 const playingCoverBackground = ref(false);
 const showPlaybackStatistics = ref(true);
+const monitoringFolders = ref<MonitoringFolder[]>([]);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
 const neteaseEnabled = ref(true);
@@ -163,6 +167,7 @@ async function show() {
     albumCoverBackground.value = settings.albumCoverBackground;
     playingCoverBackground.value = settings.playingCoverBackground;
     showPlaybackStatistics.value = settings.showPlaybackStatistics;
+    monitoringFolders.value = (settings.monitoringFolders ?? []).map((folder) => ({ ...folder }));
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
     neteaseEnabled.value = settings.lyricsProviders.includes("netease");
@@ -210,6 +215,7 @@ async function save() {
       albumCoverBackground: albumCoverBackground.value,
       playingCoverBackground: playingCoverBackground.value,
       showPlaybackStatistics: showPlaybackStatistics.value,
+      monitoringFolders: monitoringFolders.value.map((folder) => ({ ...folder })),
       albumSortBy: albumSortBy.value,
       albumSortOrder: albumSortOrder.value,
       lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
@@ -286,10 +292,13 @@ defineExpose({ show });
           aria-labelledby="settings-category-title"
           class="min-h-0 min-w-0 p-5 sm:p-6"
           :class="
-            selectedCategory === 'shortcuts' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
+            selectedCategory === 'shortcuts' || selectedCategory === 'monitoring'
+              ? 'flex flex-col overflow-hidden'
+              : 'overflow-y-auto'
           "
         >
           <div
+            v-if="selectedCategory !== 'monitoring'"
             class="flex shrink-0 items-center gap-2"
             :class="selectedCategory === 'shortcuts' ? 'mb-3' : 'mb-6'"
           >
@@ -610,6 +619,20 @@ defineExpose({ show });
               />
               {{ t("详细日志（下次启动恢复默认）") }}
             </label>
+          </fieldset>
+          <fieldset
+            v-else-if="selectedCategory === 'monitoring'"
+            class="flex min-h-0 min-w-0 flex-1 flex-col"
+            :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+          >
+            <legend class="sr-only">{{ t("监视文件夹") }}</legend>
+            <MonitoringOptions v-model="monitoringFolders">
+              <template #heading>
+                <h3 id="settings-category-title" class="mr-auto text-base font-semibold">
+                  {{ t("监视文件夹") }}
+                </h3>
+              </template>
+            </MonitoringOptions>
           </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
             <legend class="sr-only">{{ t("媒体库") }}</legend>

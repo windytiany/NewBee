@@ -38,13 +38,13 @@
           >
             <span
               class="min-w-0 flex-1 truncate text-sm text-white/80"
-              :title="directory.displayPath"
+              :title="formatPathForDisplay(directory.path)"
             >
-              {{ directory.displayPath }}
+              {{ formatPathForDisplay(directory.path) }}
             </span>
             <button
               class="focus-visible:outline-app-accent text-app-muted shrink-0 rounded px-2 py-1 text-xs hover:bg-white/10 hover:text-white focus-visible:outline-2 disabled:opacity-50"
-              :aria-label="t('移除目录 {path}', { path: directory.displayPath })"
+              :aria-label="t('移除目录 {path}', { path: formatPathForDisplay(directory.path) })"
               :disabled="!isTauriApp || isScanning"
               type="button"
               @click="removeDirectory(directory)"
@@ -88,6 +88,7 @@
 
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
+import { formatPathForDisplay } from "@/shared/filesystem/presentation";
 import { isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
 import { useLibraryScan } from "@/features/library/import/useScan";

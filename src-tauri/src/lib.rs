@@ -23,6 +23,7 @@ pub fn run() {
         .manage(locking::write::WriteState::default())
         .manage(artwork::artist::LookupState::default())
         .manage(backup::BackupState::default())
+        .manage(library::monitoring::MonitoringState::default())
         .manage(lyrics::batch::LyricsBatchState::default())
         .setup(|app| {
             use tauri::Manager;
@@ -55,6 +56,8 @@ pub fn run() {
                 app.manage(settings::SettingsState::load(
                     app_data_dir.join("settings.json"),
                 )?);
+                stage = "library_monitoring";
+                library::monitoring::initialize(app.handle())?;
                 stage = "playback_statistics";
                 playback::statistics::initialize(app.handle());
                 stage = "playback_session";
@@ -98,6 +101,8 @@ pub fn run() {
             window::show_main_window,
             settings::get_settings,
             settings::save_settings,
+            library::monitoring::get_library_monitoring,
+            library::monitoring::resolve_library_monitoring,
             backup::export_backup,
             backup::inspect_backup,
             backup::restore_backup,
@@ -192,6 +197,7 @@ pub fn run() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
+                app.state::<library::monitoring::MonitoringState>().stop();
                 app.state::<tracks::scheduling::SchedulingState>().stop();
             }
         });

@@ -15,6 +15,23 @@ fn database(paths: &[&str]) -> Database {
     database
 }
 
+#[test]
+fn directory_responses_preserve_real_paths_without_presentation_fields() {
+    let database = database(&[]);
+    let saved = [r"\\?\D:\Music", r"\\?\UNC\server\music", "/Music"];
+    for path in &saved {
+        database.add_music_library_directory(path).unwrap();
+    }
+    let directories = database.list_music_library_directories().unwrap();
+    for (index, (directory, path)) in directories.iter().zip(saved).enumerate() {
+        assert_eq!(directory.path, path);
+        assert_eq!(
+            serde_json::to_value(directory).unwrap(),
+            serde_json::json!({ "id": index + 1, "path": path })
+        );
+    }
+}
+
 fn paths(database: &Database) -> Vec<String> {
     let connection = database.connection().unwrap();
     let mut statement = connection

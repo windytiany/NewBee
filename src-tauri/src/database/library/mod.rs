@@ -54,11 +54,7 @@ impl Database {
             .query_map([], |row| {
                 let id = row.get(0)?;
                 let path: String = row.get(1)?;
-                Ok(MusicLibraryDirectory {
-                    id,
-                    display_path: display_directory_path(&path),
-                    path,
-                })
+                Ok(MusicLibraryDirectory { id, path })
             })
             .map_err(|error| format!("Failed to list library directories: {error}"))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -350,27 +346,4 @@ fn import_snapshot(
         .execute("DELETE FROM inbox WHERE track_id = ?1", [id])
         .map_err(|error| error.to_string())?;
     Ok(outcome)
-}
-
-fn display_directory_path(path: &str) -> String {
-    #[cfg(windows)]
-    {
-        const EXTENDED_UNC_PREFIX: &str = r"\\?\UNC\";
-        const EXTENDED_PATH_PREFIX: &str = r"\\?\";
-
-        if let Some(unc_path) = path.strip_prefix(EXTENDED_UNC_PREFIX) {
-            return format!("\\\\{unc_path}");
-        }
-        if let Some(drive_path) = path.strip_prefix(EXTENDED_PATH_PREFIX) {
-            let bytes = drive_path.as_bytes();
-            if bytes.len() >= 3
-                && bytes[0].is_ascii_alphabetic()
-                && bytes[1] == b':'
-                && matches!(bytes[2], b'\\' | b'/')
-            {
-                return drive_path.to_owned();
-            }
-        }
-    }
-    path.to_owned()
 }

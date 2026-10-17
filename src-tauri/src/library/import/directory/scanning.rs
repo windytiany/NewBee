@@ -49,7 +49,7 @@ impl Directory {
     }
 }
 
-pub(super) fn run(
+pub(crate) fn run(
     database: &Database,
     files: &[PathBuf],
     result: &mut ImportResult,

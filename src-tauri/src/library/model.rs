@@ -43,5 +43,4 @@ pub struct AlbumSummary {
 pub struct MusicLibraryDirectory {
     pub(crate) id: i64,
     pub(crate) path: String,
-    pub(crate) display_path: String,
 }

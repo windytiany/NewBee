@@ -27,7 +27,14 @@ import type { NotificationInput } from "@/shared/notifications/center";
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
   selectedCategory: Vue.Ref<
-    "general" | "appearance" | "library" | "lyrics" | "shortcuts" | "diagnostics" | "backup"
+    | "general"
+    | "appearance"
+    | "library"
+    | "monitoring"
+    | "lyrics"
+    | "shortcuts"
+    | "diagnostics"
+    | "backup"
   >;
   shortcuts: Vue.Ref<Settings["shortcuts"]>;
   selectedShortcutAction: Vue.Ref<ShortcutAction>;
@@ -45,6 +52,7 @@ type DialogBindings = {
   albumCoverBackground: Vue.Ref<boolean>;
   playingCoverBackground: Vue.Ref<boolean>;
   showPlaybackStatistics: Vue.Ref<boolean>;
+  monitoringFolders: Vue.Ref<Settings["monitoringFolders"]>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
   isLoaded: Vue.Ref<boolean>;
@@ -65,6 +73,7 @@ const defaults: Settings = {
   playingCoverBackground: false,
   closeBehavior: "tray",
   showPlaybackStatistics: true,
+  monitoringFolders: [],
   albumSortBy: "name",
   albumSortOrder: "ascending",
   lyricsProviders: ["netease"],
@@ -102,6 +111,9 @@ function createDialog(
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/shared/components/HelpDialog.vue": HelpDialog,
     "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
+    "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
+      template: "<div />",
+    }),
     "@tauri-apps/api/core": {
       invoke: async (command: string, args?: unknown) => {
         if (command === "set_shortcuts_suspended") {
@@ -150,6 +162,33 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("keeps monitoring folders as a draft and saves them independently of scan directories", async () => {
+    const persisted: Settings = {
+      ...defaults,
+      monitoringFolders: [{ path: "D:/Music", mode: "startup", enabled: true }],
+    };
+    const calls: string[] = [];
+    let saved: Settings | undefined;
+    const { bindings } = createDialog(async (command, args) => {
+      calls.push(command);
+      if (command === "get_settings") return persisted;
+      if (command === "save_settings") saved = (args as { settings: Settings }).settings;
+    });
+    await bindings.show();
+    bindings.selectedCategory.value = "monitoring";
+    bindings.monitoringFolders.value[0]!.mode = "continuous";
+    expect(persisted.monitoringFolders[0]!.mode).toBe("startup");
+    bindings.close();
+    await bindings.show();
+    expect(bindings.monitoringFolders.value).toEqual(persisted.monitoringFolders);
+    bindings.monitoringFolders.value = [{ path: "D:/Other", mode: "continuous", enabled: false }];
+    await bindings.save();
+    expect(saved?.monitoringFolders).toEqual([
+      { path: "D:/Other", mode: "continuous", enabled: false },
+    ]);
+    expect(calls).not.toContain("add_music_library_directory");
+    expect(calls).not.toContain("scan_music_library");
+  });
   it("restores the draft immediately, discards it on cancel and persists only on save", async () => {
     const persisted = { ...defaults, shortcuts: cloneShortcuts({}) };
     const saved: Settings[] = [];
@@ -375,6 +414,9 @@ describe("settings dialog", () => {
       },
       "@/shared/components/HelpDialog.vue": HelpDialog,
       "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({
+        template: "<div />",
+      }),
+      "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
         template: "<div />",
       }),
       "@tauri-apps/api/core": {
@@ -1032,6 +1074,7 @@ describe("settings dialog", () => {
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      monitoringFolders: [],
       showPlaybackStatistics: false,
       layoutDensity: "regular",
       locale: "zh-CN",
@@ -1150,6 +1193,7 @@ describe("settings dialog", () => {
           playingCoverBackground: false,
           closeBehavior: "exit",
           showPlaybackStatistics: true,
+          monitoringFolders: [],
           albumSortBy: "year",
           albumSortOrder: "descending",
           lyricsProviders: ["netease"],
@@ -1301,6 +1345,7 @@ describe("settings dialog", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls).toBe(2);
     first.resolve({
+      monitoringFolders: [],
       showPlaybackStatistics: false,
       layoutDensity: "regular",
       locale: "zh-CN",

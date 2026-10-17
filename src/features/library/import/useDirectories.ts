@@ -8,7 +8,6 @@ import { logger } from "@/shared/logging/logger";
 type LibraryDirectory = {
   id: number;
   path: string;
-  displayPath: string;
 };
 
 export function useDirectories() {

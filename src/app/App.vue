@@ -14,6 +14,7 @@ import InboxPage from "@/features/inbox/pages/InboxPage.vue";
 import NowPlayingPage from "@/features/playback/pages/NowPlayingPage.vue";
 import PlaybackBar from "@/features/playback/controls/PlaybackBar.vue";
 import NotificationHost from "@/shared/notifications/NotificationHost.vue";
+import MonitoringDialog from "@/features/library/monitoring/MonitoringDialog.vue";
 import LyricsDownloadDialog from "@/features/lyrics/download/LyricsDownloadDialog.vue";
 import TagEditorDialog from "@/features/metadata/manual/components/TagEditorDialog.vue";
 import ReleaseTagDialog from "@/features/metadata/releases/components/ReleaseTagDialog.vue";
@@ -82,6 +83,7 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
     <LyricsDownloadDialog />
     <ReleaseTagDialog />
     <NotificationHost />
+    <MonitoringDialog />
     <div
       v-if="dropHighlight"
       data-drop-import

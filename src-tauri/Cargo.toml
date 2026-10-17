@@ -37,6 +37,7 @@ webp = { version = "0.3.1", default-features = false }
 sha2 = "0.10.9"
 tempfile = "3.27.0"
 tauri-plugin-global-shortcut = "2.4.0"
+notify = "8.1.0"
 
 [dev-dependencies]
 tauri = { version = "~2.12.1", features = ["test"] }

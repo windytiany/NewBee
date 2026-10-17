@@ -76,6 +76,7 @@ pub struct Settings {
     pub playing_cover_background: bool,
     pub close_behavior: CloseBehavior,
     pub show_playback_statistics: bool,
+    pub(crate) monitoring_folders: Vec<crate::library::monitoring::configuration::Folder>,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
     #[serde(default = "crate::lyrics::default_providers")]
@@ -96,6 +97,7 @@ impl Default for Settings {
             playing_cover_background: false,
             close_behavior: CloseBehavior::default(),
             show_playback_statistics: true,
+            monitoring_folders: Vec::new(),
             album_sort_by: AlbumSortBy::default(),
             album_sort_order: AlbumSortOrder::default(),
             lyrics_providers: crate::lyrics::default_providers(),
@@ -147,6 +149,10 @@ impl SettingsState {
             .settings
             .lock()
             .map_err(|error| format!("Could not update settings: {error}"))?;
+        crate::library::monitoring::configuration::normalize(
+            &mut settings.monitoring_folders,
+            &current.monitoring_folders,
+        )?;
         let data = serde_json::to_vec_pretty(&settings)
             .map_err(|error| format!("Could not serialize settings: {error}"))?;
         let temporary = self.path.with_extension("json.tmp");
