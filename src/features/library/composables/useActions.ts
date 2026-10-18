@@ -1,6 +1,7 @@
 import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { ref } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import type { Ref } from "vue";
 import type { LibraryInvoker } from "@/features/library/api";
 import { createLibraryApi } from "@/features/library/api";
@@ -28,6 +29,7 @@ export function useLibraryActions(
   const libraryApi = createLibraryApi(invokeCommand);
   const playlistApi = createPlaylistApi(invokeCommand);
   const isTrackActionPending = ref(false);
+  watchActivity(isTrackActionPending);
   const trackActionError = ref("");
   const trackActionMessage = ref("");
   const trackActionMessageType = ref<"success" | "warning">("success");

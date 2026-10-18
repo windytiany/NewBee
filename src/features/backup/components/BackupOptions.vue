@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { captureInterfaceState } from "@/features/backup/interface";
@@ -8,6 +9,7 @@ import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 
 const busy = ref(false);
+watchActivity(busy);
 const backupCurrent = ref(true);
 const confirmationDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 let resolveConfirmation: ((confirmed: boolean) => void) | undefined;

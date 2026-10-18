@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ref } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { usePlaybackSession } from "@/features/playback/session";
 import { notify } from "@/shared/notifications/center";
@@ -7,6 +8,7 @@ import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
 
 const pending = ref(false);
+watchActivity(pending);
 
 export function useTrackReread() {
   const synchronization = createTrackSynchronization(usePlaybackSession(), invoke);

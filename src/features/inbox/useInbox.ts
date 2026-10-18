@@ -1,4 +1,5 @@
 import { computed, onScopeDispose, reactive, ref, watch } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import type { Ref } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { createInboxApi, INBOX_CHANGED_EVENT } from "@/features/inbox/api";
@@ -24,6 +25,7 @@ type InboxOptions = {
 };
 export function createInbox(options: InboxOptions) {
   const pending = ref(false);
+  watchActivity(pending);
   const state = reactive({
     tracks: [] as InboxTrack[],
     loading: false,

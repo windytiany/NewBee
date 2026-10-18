@@ -3,6 +3,7 @@ import { logger, operationId } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ref } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { notifications, notify } from "@/shared/notifications/center";
 import { reportLibraryImport } from "@/features/library/events";
 import type { IngestResult } from "@/features/library/types";
@@ -10,6 +11,7 @@ import type { IngestResult } from "@/features/library/types";
 type ScanProgress = { operationId: string; completed: number; total: number };
 const TASK_KEY = "library-scan";
 const isScanning = ref(false);
+watchActivity(isScanning);
 const scanResult = ref<IngestResult | null>(null);
 const scanError = ref("");
 

@@ -99,6 +99,8 @@ pub fn run() {
             logging::open_logs_directory,
             logging::set_detailed_logging,
             window::show_main_window,
+            window::lightweight::advance_lightweight,
+            window::lightweight::cancel_lightweight,
             settings::get_settings,
             settings::save_settings,
             library::monitoring::get_library_monitoring,
@@ -195,6 +197,28 @@ pub fn run() {
     result
         .expect("error while running tauri application")
         .run(|app, event| {
+            // Releasing the last WebView must not stop backend playback or the tray.
+            // Explicit exit/restart requests carry an exit code and remain unchanged.
+            if let tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } = &event
+            {
+                if window::lightweight::keep_alive(app) {
+                    api.prevent_exit();
+                }
+            }
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::Destroyed,
+                ..
+            } = &event
+            {
+                if label == "main" {
+                    // Tauri has removed the old label before this callback, so it
+                    // is now safe to honor a restore queued during destruction.
+                    window::lightweight::destroyed(app);
+                }
+            }
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
                 app.state::<library::monitoring::MonitoringState>().stop();

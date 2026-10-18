@@ -1,4 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -30,6 +31,7 @@ export function useDropImport() {
     appendLocal(paths, { kind: "playlist", playlistId }),
   );
   const pending = ref(false);
+  watchActivity(pending);
   const hasFiles = ref(false);
   const hasDirectories = ref(false);
   const modalOpen = ref(false);

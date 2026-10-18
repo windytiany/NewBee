@@ -1,6 +1,7 @@
 import { t } from "@/shared/i18n/locale";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ref } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 
@@ -8,6 +9,7 @@ export function usePathMigration() {
   const oldPath = ref("");
   const newPath = ref("");
   const isMigrating = ref(false);
+  watchActivity(isMigrating);
   const isTauriApp = isTauri();
 
   async function migrate() {

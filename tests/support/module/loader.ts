@@ -4,6 +4,13 @@ import * as i18n from "@/shared/i18n/locale";
 const sharedDependencies = {
   ...loggingDependencies,
   "@/shared/i18n/locale": i18n,
+  // Window destruction is tested with explicit lifecycle adapters.
+  "@/shared/lifecycle/activity": {
+    watchActivity: () => () => {},
+    beforeRelease: () => () => {},
+    waitForIdle: async () => {},
+  },
+  "@tauri-apps/plugin-dialog": { ask: async () => false },
   // Host-renderer component tests have no DOM. Exercise scroll hooks with event targets separately.
   "@/shared/interaction/scroll/persistence": { vPersistentScroll: {} },
 };

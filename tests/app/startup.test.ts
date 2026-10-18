@@ -21,8 +21,13 @@ afterEach(() => {
   }
 });
 
-function start(isTauriApp = true, restored: Promise<void> = Promise.resolve()) {
+function start(
+  isTauriApp = true,
+  restored: Promise<void> = Promise.resolve(),
+  lifecycle: Promise<boolean | void> = Promise.resolve(true),
+) {
   const events: string[] = [];
+  const invocations: Array<[string, unknown]> = [];
   const frames: Array<() => void> = [];
   let finishRendering!: () => void;
   const rendered = new Promise<void>((resolve) => {
@@ -42,6 +47,7 @@ function start(isTauriApp = true, restored: Promise<void> = Promise.resolve()) {
       nextTick: () => rendered,
     },
     "@/app/logging": { installErrorLogging: () => {} },
+    "@/app/window/lightweight": { initializeLightweightMode: () => lifecycle },
     "@/shared/notifications/center": { notify: () => events.push("restore-error") },
     "@/features/backup/interface": {
       restoreInterfaceState: async () => {
@@ -57,13 +63,14 @@ function start(isTauriApp = true, restored: Promise<void> = Promise.resolve()) {
     },
     "@tauri-apps/api/core": {
       isTauri: () => isTauriApp,
-      invoke: async (command: string) => {
+      invoke: async (command: string, args: unknown) => {
         events.push(command);
+        invocations.push([command, args]);
       },
     },
   };
   evaluateSource(output, modules);
-  return { events, frames, finishRendering };
+  return { events, invocations, frames, finishRendering };
 }
 
 async function settle() {
@@ -149,6 +156,34 @@ describe("startup window visibility", () => {
       "restore-preferences",
       "show_main_window",
     ]);
+  });
+
+  it("registers window lifecycle listeners before declaring the frontend ready", async () => {
+    let ready!: () => void;
+    const lifecycle = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const startup = start(true, Promise.resolve(), lifecycle);
+    startup.finishRendering();
+    await settle();
+    expect(startup.frames).toHaveLength(0);
+    expect(startup.events).not.toContain("show_main_window");
+    ready();
+    await settle();
+    startup.frames.shift()?.();
+    startup.frames.shift()?.();
+    await settle();
+    expect(startup.events).toContain("show_main_window");
+  });
+
+  it("shows the app with lightweight mode disabled when listener registration fails", async () => {
+    const startup = start(true, Promise.resolve(), Promise.resolve(false));
+    startup.finishRendering();
+    await settle();
+    startup.frames.shift()?.();
+    startup.frames.shift()?.();
+    await settle();
+    expect(startup.invocations).toEqual([["show_main_window", { lightweightReady: false }]]);
   });
 
   it("keeps browser preview independent of desktop window APIs", async () => {

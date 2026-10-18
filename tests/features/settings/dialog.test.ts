@@ -46,6 +46,7 @@ type DialogBindings = {
   neteaseLyricsMode: Vue.Ref<Settings["neteaseLyricsMode"]>;
   selectedLocale: Vue.Ref<Settings["locale"]>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
+  lightweightOnClose: Vue.Ref<boolean>;
   accentColor: Vue.Ref<Settings["accentColor"]>;
   reducedMotion: Vue.Ref<boolean>;
   layoutDensity: Vue.Ref<Settings["layoutDensity"]>;
@@ -72,6 +73,7 @@ const defaults: Settings = {
   albumCoverBackground: false,
   playingCoverBackground: false,
   closeBehavior: "tray",
+  lightweightOnClose: false,
   showPlaybackStatistics: true,
   monitoringFolders: [],
   albumSortBy: "name",
@@ -98,7 +100,9 @@ afterEach(() => {
 function createDialog(
   invoke: (command: string, args?: unknown) => Promise<unknown>,
   suspend: (suspended: boolean) => Promise<void> = async () => {},
+  lifecycle: { confirm?: () => Promise<boolean>; idle?: () => Promise<void> } = {},
 ) {
+  let releaseGuard: ((signal: AbortSignal) => Promise<boolean>) | undefined;
   const events: string[] = [];
   const suspensions: boolean[] = [];
   const feedback: NotificationInput[] = [];
@@ -111,6 +115,15 @@ function createDialog(
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@lucide/vue": icons,
+    "@tauri-apps/plugin-dialog": { ask: lifecycle.confirm ?? (async () => false) },
+    "@/shared/lifecycle/activity": {
+      watchActivity: () => () => {},
+      beforeRelease: (guard: typeof releaseGuard) => {
+        releaseGuard = guard;
+        return () => {};
+      },
+      waitForIdle: lifecycle.idle ?? (async () => {}),
+    },
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
     "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
@@ -152,7 +165,16 @@ function createDialog(
     },
   };
   bindings.dialogElement.value = element;
-  return { bindings, element, events, appliedColors, appliedMotion, feedback, suspensions };
+  return {
+    bindings,
+    element,
+    events,
+    appliedColors,
+    appliedMotion,
+    feedback,
+    suspensions,
+    prepareRelease: (signal = new AbortController().signal) => releaseGuard!(signal),
+  };
 }
 
 function deferred<Value>() {
@@ -164,6 +186,69 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("defaults lightweight mode off for legacy settings and persists the explicit preference", async () => {
+    let saved: Settings | undefined;
+    const { bindings } = createDialog(async (command, args) => {
+      if (command === "get_settings") return { ...defaults, lightweightOnClose: undefined };
+      if (command === "save_settings") saved = (args as { settings: Settings }).settings;
+    });
+    await bindings.show();
+    expect(bindings.lightweightOnClose.value).toBe(false);
+    bindings.lightweightOnClose.value = true;
+    await bindings.save();
+    expect(saved?.lightweightOnClose).toBe(true);
+  });
+
+  it("requires confirmation before discarding settings for lightweight mode", async () => {
+    let confirmations = 0;
+    let discard = false;
+    const dialog = createDialog(async () => defaults, undefined, {
+      confirm: async () => {
+        confirmations++;
+        return discard;
+      },
+    });
+    await dialog.bindings.show();
+    dialog.bindings.lightweightOnClose.value = true;
+    expect(await dialog.prepareRelease()).toBe(false);
+    expect(dialog.element.open).toBe(true);
+    discard = true;
+    expect(await dialog.prepareRelease()).toBe(true);
+    expect(dialog.element.open).toBe(false);
+    expect(confirmations).toBe(2);
+    expect(dialog.suspensions[dialog.suspensions.length - 1]).toBe(false);
+  });
+
+  it("closes an unchanged settings dialog without a discard warning", async () => {
+    let confirmations = 0;
+    const dialog = createDialog(async () => defaults, undefined, {
+      confirm: async () => {
+        confirmations++;
+        return true;
+      },
+    });
+    await dialog.bindings.show();
+    expect(await dialog.prepareRelease()).toBe(true);
+    expect(confirmations).toBe(0);
+    expect(dialog.element.open).toBe(false);
+  });
+
+  it("keeps the settings draft when the window reopens during confirmation", async () => {
+    const confirmation = deferred<boolean>();
+    const dialog = createDialog(async () => defaults, undefined, {
+      confirm: () => confirmation.promise,
+    });
+    await dialog.bindings.show();
+    dialog.bindings.lightweightOnClose.value = true;
+    const controller = new AbortController();
+    const preparing = dialog.prepareRelease(controller.signal);
+    await Promise.resolve();
+    controller.abort();
+    confirmation.resolve(true);
+    expect(await preparing).toBe(false);
+    expect(dialog.element.open).toBe(true);
+  });
+
   it("keeps monitoring folders as a draft and saves them independently of scan directories", async () => {
     const persisted: Settings = {
       ...defaults,
@@ -1122,6 +1207,7 @@ describe("settings dialog", () => {
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      lightweightOnClose: false,
       monitoringFolders: [],
       showPlaybackStatistics: false,
       layoutDensity: "regular",
@@ -1240,6 +1326,7 @@ describe("settings dialog", () => {
           albumCoverBackground: true,
           playingCoverBackground: false,
           closeBehavior: "exit",
+          lightweightOnClose: false,
           showPlaybackStatistics: true,
           monitoringFolders: [],
           albumSortBy: "year",
@@ -1393,6 +1480,7 @@ describe("settings dialog", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls).toBe(2);
     first.resolve({
+      lightweightOnClose: false,
       monitoringFolders: [],
       showPlaybackStatistics: false,
       layoutDensity: "regular",

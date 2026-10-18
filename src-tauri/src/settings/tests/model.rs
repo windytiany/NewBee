@@ -83,6 +83,36 @@ fn statistics_visibility_defaults_to_enabled_and_persists() {
 }
 
 #[test]
+fn lightweight_mode_is_opt_in_and_persists() {
+    assert!(!Settings::default().lightweight_on_close);
+    assert!(
+        !serde_json::from_str::<Settings>("{}")
+            .unwrap()
+            .lightweight_on_close
+    );
+    assert!(serde_json::from_str::<Settings>(r#"{"lightweightOnClose":"true"}"#).is_err());
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    let state = SettingsState::load(path.clone()).unwrap();
+    for enabled in [true, false] {
+        state
+            .save(Settings {
+                lightweight_on_close: enabled,
+                ..Settings::default()
+            })
+            .unwrap();
+        assert_eq!(
+            SettingsState::load(path.clone())
+                .unwrap()
+                .get()
+                .unwrap()
+                .lightweight_on_close,
+            enabled
+        );
+    }
+}
+
+#[test]
 fn defaults_to_background_playback() {
     assert_eq!(Settings::default().close_behavior, CloseBehavior::Tray);
 }

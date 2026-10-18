@@ -21,6 +21,7 @@ export type Settings = {
   albumCoverBackground: boolean;
   playingCoverBackground: boolean;
   closeBehavior: "tray" | "exit";
+  lightweightOnClose: boolean;
   showPlaybackStatistics: boolean;
   monitoringFolders: MonitoringFolder[];
   albumSortBy: "name" | "year";

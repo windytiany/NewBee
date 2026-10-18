@@ -1,3 +1,5 @@
+mod window;
+
 use crate::artwork::model::TrackArtwork;
 use crate::database::Database;
 use std::sync::Mutex;
@@ -17,16 +19,16 @@ pub struct SystemMedia {
     controls: Mutex<SystemMediaTransportControls>,
     button_token: i64,
     diagnostics: Mutex<crate::logging::RepeatedFailure>,
+    _window: window::MediaWindow,
 }
 
 pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or("Main window is unavailable")?;
+    // No WebView: this HWND must outlive every rebuild of the main UI.
+    let window = window::MediaWindow::new()?;
     let interop: ISystemMediaTransportControlsInterop =
         factory::<SystemMediaTransportControls, ISystemMediaTransportControlsInterop>()?;
-    // The main window owns the HWND for the lifetime of these controls.
-    let hwnd = windows::Win32::Foundation::HWND(window.hwnd()?.0);
+    // The hidden native window owns the HWND for the lifetime of these controls.
+    let hwnd = window.hwnd();
     let controls: SystemMediaTransportControls = unsafe { interop.GetForWindow(hwnd) }?;
     controls.SetIsPlayEnabled(true)?;
     controls.SetIsPauseEnabled(true)?;
@@ -55,6 +57,7 @@ pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         controls: Mutex::new(controls),
         button_token,
         diagnostics: Mutex::new(crate::logging::RepeatedFailure::default()),
+        _window: window,
     });
     Ok(())
 }

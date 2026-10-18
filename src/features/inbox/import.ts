@@ -1,12 +1,14 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { createInboxApi, INBOX_CHANGED_EVENT } from "@/features/inbox/api";
 import { reportLibraryMembershipChanged } from "@/features/library/events";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
 const pending = ref(false);
+watchActivity(pending);
 export function useInboxImport() {
   async function runImport(directory: boolean, droppedPaths?: string[]) {
     if (pending.value || !isTauri()) return;

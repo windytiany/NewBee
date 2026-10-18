@@ -1,5 +1,6 @@
 import { t } from "@/shared/i18n/locale";
 import { reactive } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { notify } from "@/shared/notifications/center";
 import { logger, operationId } from "@/shared/logging/logger";
 import type { MetadataSaveResult } from "@/features/metadata/types";
@@ -43,6 +44,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
     error: "",
     synchronizationError: "",
   });
+  watchActivity(() => state.saving);
   const pendingSynchronization = new Set<number>();
 
   function reset() {

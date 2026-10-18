@@ -4,6 +4,8 @@ import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createSettingsApi } from "@/features/settings/api";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { beforeRelease, waitForIdle, watchActivity } from "@/shared/lifecycle/activity";
 import { computed, onUnmounted, ref } from "vue";
 import { RotateCcw, Undo2 } from "@lucide/vue";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
@@ -70,6 +72,7 @@ const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const selectedLocale = ref<Settings["locale"]>(locale.value);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
+const lightweightOnClose = ref(false);
 const accentColor = ref(DEFAULT_ACCENT_COLOR);
 const normalizedAccentColor = computed(() => normalizeAccentColor(accentColor.value));
 const reducedMotion = ref(false);
@@ -122,6 +125,46 @@ const isSaving = ref(false);
 const isTauriApp = isTauri();
 let loadRequestSequence = 0;
 let suspensionUpdates = Promise.resolve();
+let loadedDraft = "";
+watchActivity(
+  () => isLoading.value || isSaving.value || isBackingUp.value || isChangingLogging.value,
+);
+
+function draft(): Settings {
+  return {
+    shortcuts: cloneShortcuts(shortcuts.value),
+    locale: selectedLocale.value,
+    closeBehavior: closeBehavior.value,
+    lightweightOnClose: lightweightOnClose.value,
+    accentColor: accentColor.value,
+    reducedMotion: reducedMotion.value,
+    layoutDensity: layoutDensity.value,
+    albumCoverBackground: albumCoverBackground.value,
+    playingCoverBackground: playingCoverBackground.value,
+    showPlaybackStatistics: showPlaybackStatistics.value,
+    monitoringFolders: monitoringFolders.value.map((folder) => ({ ...folder })),
+    albumSortBy: albumSortBy.value,
+    albumSortOrder: albumSortOrder.value,
+    lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
+    neteaseLyricsMode: neteaseLyricsMode.value,
+  };
+}
+
+const removeReleaseGuard = beforeRelease(async (signal) => {
+  if (!dialogElement.value?.open) return true;
+  await waitForIdle(signal);
+  if (signal.aborted) return false;
+  if (isLoaded.value && JSON.stringify(draft()) !== loadedDraft) {
+    const discard = await ask(t("放弃未保存的设置并进入轻量模式？"), {
+      title: t("设置"),
+      kind: "warning",
+    });
+    if (!discard || signal.aborted) return false;
+  }
+  close();
+  await suspensionUpdates;
+  return !signal.aborted;
+});
 
 function setShortcutsSuspended(suspended: boolean) {
   const update = suspensionUpdates
@@ -147,6 +190,7 @@ function onDialogClosed() {
 }
 
 onUnmounted(() => {
+  removeReleaseGuard();
   ++loadRequestSequence;
   restoreShortcuts();
 });
@@ -167,6 +211,7 @@ async function show() {
     if (requestId !== loadRequestSequence) return;
     selectedLocale.value = settings.locale;
     closeBehavior.value = settings.closeBehavior;
+    lightweightOnClose.value = settings.lightweightOnClose ?? false;
     accentColor.value = settings.accentColor;
     reducedMotion.value = settings.reducedMotion;
     layoutDensity.value = settings.layoutDensity;
@@ -179,6 +224,7 @@ async function show() {
     neteaseEnabled.value = settings.lyricsProviders.includes("netease");
     neteaseLyricsMode.value = settings.neteaseLyricsMode;
     shortcuts.value = cloneShortcuts(settings.shortcuts);
+    loadedDraft = JSON.stringify(draft());
     isLoaded.value = true;
   } catch (reason) {
     if (requestId === loadRequestSequence) {
@@ -211,22 +257,7 @@ async function save() {
   }
   isSaving.value = true;
   try {
-    await api.save({
-      shortcuts: cloneShortcuts(shortcuts.value),
-      locale: selectedLocale.value,
-      closeBehavior: closeBehavior.value,
-      accentColor: color,
-      reducedMotion: reducedMotion.value,
-      layoutDensity: layoutDensity.value,
-      albumCoverBackground: albumCoverBackground.value,
-      playingCoverBackground: playingCoverBackground.value,
-      showPlaybackStatistics: showPlaybackStatistics.value,
-      monitoringFolders: monitoringFolders.value.map((folder) => ({ ...folder })),
-      albumSortBy: albumSortBy.value,
-      albumSortOrder: albumSortOrder.value,
-      lyricsProviders: neteaseEnabled.value ? ["netease"] : [],
-      neteaseLyricsMode: neteaseLyricsMode.value,
-    });
+    await api.save({ ...draft(), accentColor: color });
     setLocale(selectedLocale.value);
     accentColor.value = color;
     applyAppearance({
@@ -450,6 +481,16 @@ defineExpose({ show });
                 value="exit"
               />
               <span class="text-sm">{{ t("直接退出") }}</span>
+            </label>
+            <label class="mt-5 flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                v-model="lightweightOnClose"
+                :disabled="closeBehavior !== 'tray'"
+                type="checkbox"
+                name="lightweight-on-close"
+                class="accent-app-accent mt-1"
+              />
+              <span>{{ t("关闭到托盘时进入轻量模式") }}</span>
             </label>
           </fieldset>
           <fieldset

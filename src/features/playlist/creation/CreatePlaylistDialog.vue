@@ -56,6 +56,7 @@ import { t } from "@/shared/i18n/locale";
 import { invoke } from "@tauri-apps/api/core";
 import { createPlaylistApi } from "@/features/playlist/api";
 import { ref, useId } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { notify } from "@/shared/notifications/center";
 import { usePlaylistCreation } from "@/features/playlist/creation/useCreation";
 
@@ -72,6 +73,7 @@ const nameInput = ref<InstanceType<typeof globalThis.HTMLInputElement> | null>(n
 const name = ref("");
 const invalidName = ref(false);
 const isCreating = ref(false);
+watchActivity(isCreating);
 
 function show(loadTracks: () => Promise<readonly number[]> = async () => []) {
   if (dialogElement.value?.open || isCreating.value) return;

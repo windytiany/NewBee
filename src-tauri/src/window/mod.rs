@@ -1,3 +1,6 @@
+pub(crate) mod lightweight;
+#[cfg(windows)]
+mod placement;
 pub(crate) mod tray;
 
 use crate::settings::{CloseBehavior, SettingsState};
@@ -23,6 +26,7 @@ pub struct WindowLifecycle {
 
 pub fn initialize(app: &AppHandle) {
     let (save_requests, receiver) = mpsc::channel();
+    app.manage(lightweight::LightweightState::default());
     app.manage(WindowLifecycle {
         ready: AtomicBool::new(false),
         save_requests,
@@ -58,17 +62,13 @@ pub fn is_ready<R: tauri::Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 pub fn restore_main_window(app: &AppHandle) -> Result<(), String> {
-    if !is_ready(app) {
-        return Ok(());
-    }
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "Main window is unavailable".to_owned())?;
-    window
-        .show()
-        .and_then(|_| window.unminimize())
-        .and_then(|_| window.set_focus())
-        .map_err(|error| format!("Could not restore main window: {error}"))
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        if let Err(error) = lightweight::restore(&handle) {
+            lightweight::report_error(&handle, &error);
+        }
+    })
+    .map_err(|error| error.to_string())
 }
 
 fn should_hide(visible: bool, minimized: bool) -> bool {
@@ -76,6 +76,9 @@ fn should_hide(visible: bool, minimized: bool) -> bool {
 }
 
 pub fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
+    if app.get_webview_window("main").is_none() {
+        return restore_main_window(app);
+    }
     if !is_ready(app) {
         return Ok(());
     }
@@ -108,23 +111,39 @@ fn save_state(app: &AppHandle) {
 pub async fn show_main_window(
     window: WebviewWindow,
     lifecycle: State<'_, WindowLifecycle>,
+    lightweight_ready: Option<bool>,
 ) -> Result<(), String> {
     if window.label() != "main" || lifecycle.ready.load(Ordering::Acquire) {
         return Ok(());
     }
     // On Windows, restoring maximization can show even an initially hidden window.
     // Only restore after the frontend has completed its first painted frame.
+    if !lightweight::restore_placement(&window)? {
+        window
+            .restore_state(STATE_FLAGS)
+            .map_err(|error| format!("Could not restore main window state: {error}"))?;
+    }
     window
-        .restore_state(STATE_FLAGS)
-        .and_then(|_| window.show())
+        .show()
+        .and_then(|_| window.unminimize())
         .and_then(|_| window.set_focus())
         .map_err(|error| format!("Could not restore and show main window: {error}"))?;
+    window
+        .state::<lightweight::LightweightState>()
+        .enabled
+        .store(lightweight_ready.unwrap_or(false), Ordering::Release);
     lifecycle.ready.store(true, Ordering::Release);
     Ok(())
 }
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
-    if window.label() != "main" || !is_ready(window.app_handle()) {
+    if window.label() != "main" {
+        return;
+    }
+    if matches!(event, WindowEvent::Destroyed) {
+        return;
+    }
+    if !is_ready(window.app_handle()) {
         return;
     }
     match event {
@@ -139,9 +158,21 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             save_state(window.app_handle());
             match window.state::<SettingsState>().close_behavior() {
                 CloseBehavior::Tray => {
-                    // Keep the existing UI state when closing to the tray.
-                    if let Err(error) = window.hide() {
-                        log::warn!("Could not hide main window: {error}");
+                    let lightweight = window
+                        .state::<SettingsState>()
+                        .get()
+                        .map(|settings| settings.lightweight_on_close)
+                        .unwrap_or_else(|error| {
+                            log::warn!("Could not read lightweight setting: {error}");
+                            false
+                        });
+                    let result = if lightweight {
+                        lightweight::request(window.app_handle())
+                    } else {
+                        window.hide().map_err(|error| error.to_string())
+                    };
+                    if let Err(error) = result {
+                        lightweight::report_error(window.app_handle(), &error);
                     }
                 }
                 CloseBehavior::Exit => window.app_handle().exit(0),

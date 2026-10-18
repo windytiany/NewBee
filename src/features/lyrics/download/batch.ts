@@ -1,6 +1,7 @@
 import { t } from "@/shared/i18n/locale";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { reactive, toRef } from "vue";
+import { watchActivity } from "@/shared/lifecycle/activity";
 import { createLyricsApi } from "@/features/lyrics/api";
 import { createLyricsBatchCooperation } from "@/features/lyrics/download/cooperation";
 import type { LyricsBatchCooperationOptions } from "@/features/lyrics/download/cooperation";
@@ -33,6 +34,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
     instrumental: 0,
     failed: 0,
   });
+  watchActivity(() => state.running);
   let requestCancellation: (() => void) | null = null;
 
   function cancel() {

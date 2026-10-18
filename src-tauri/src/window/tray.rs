@@ -11,22 +11,48 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-fn menu_labels(locale: Locale) -> [&'static str; 5] {
+fn menu_labels(locale: Locale) -> [&'static str; 6] {
     match locale {
-        Locale::ZhCn => ["显示 NewBee", "上一首", "播放/暂停", "下一首", "退出"],
-        Locale::En => ["Show NewBee", "Previous", "Play/Pause", "Next", "Quit"],
+        Locale::ZhCn => [
+            "显示 NewBee",
+            "进入轻量模式",
+            "上一首",
+            "播放/暂停",
+            "下一首",
+            "退出",
+        ],
+        Locale::En => [
+            "Show NewBee",
+            "Enter lightweight mode",
+            "Previous",
+            "Play/Pause",
+            "Next",
+            "Quit",
+        ],
     }
 }
 
 fn create_menu<R: tauri::Runtime>(app: &AppHandle<R>, locale: Locale) -> tauri::Result<Menu<R>> {
-    let [show, previous, toggle, next, exit] = menu_labels(locale);
+    let [show, lightweight, previous, toggle, next, exit] = menu_labels(locale);
     let show = MenuItem::with_id(app, "show", show, true, None::<&str>)?;
+    let lightweight = MenuItem::with_id(app, "lightweight", lightweight, true, None::<&str>)?;
     let previous = MenuItem::with_id(app, "previous", previous, true, None::<&str>)?;
     let toggle = MenuItem::with_id(app, "toggle", toggle, true, None::<&str>)?;
     let next = MenuItem::with_id(app, "next", next, true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let exit = MenuItem::with_id(app, "exit", exit, true, None::<&str>)?;
-    Menu::with_items(app, &[&show, &previous, &toggle, &next, &separator, &exit])
+    Menu::with_items(
+        app,
+        &[
+            &show,
+            &lightweight,
+            &previous,
+            &toggle,
+            &next,
+            &separator,
+            &exit,
+        ],
+    )
 }
 
 pub fn update_locale<R: tauri::Runtime>(app: &AppHandle<R>, locale: Locale) -> tauri::Result<()> {
@@ -49,6 +75,11 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
             "exit" => app.exit(0),
+            "lightweight" => {
+                if let Err(error) = super::lightweight::request(app) {
+                    super::lightweight::report_error(app, &error);
+                }
+            }
             command @ ("previous" | "toggle" | "next") => {
                 crate::playback::session::system_command(app, command);
             }
@@ -81,11 +112,25 @@ mod tests {
     fn tray_menu_labels_follow_locale() {
         assert_eq!(
             menu_labels(Locale::ZhCn),
-            ["显示 NewBee", "上一首", "播放/暂停", "下一首", "退出"]
+            [
+                "显示 NewBee",
+                "进入轻量模式",
+                "上一首",
+                "播放/暂停",
+                "下一首",
+                "退出"
+            ]
         );
         assert_eq!(
             menu_labels(Locale::En),
-            ["Show NewBee", "Previous", "Play/Pause", "Next", "Quit"]
+            [
+                "Show NewBee",
+                "Enter lightweight mode",
+                "Previous",
+                "Play/Pause",
+                "Next",
+                "Quit"
+            ]
         );
     }
 }
