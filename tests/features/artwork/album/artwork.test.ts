@@ -161,7 +161,7 @@ describe("共享专辑封面和背景", () => {
     expect(canvasCount).toBe(1);
     expect(detail.artwork.background.value).toEqual({
       imageUrl: "data:image/png;base64,background",
-      color: "rgb(102, 102, 102)",
+      color: "rgb(255, 255, 255)",
     });
     detail.dispose();
     await settle();

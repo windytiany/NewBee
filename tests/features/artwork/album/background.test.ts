@@ -16,7 +16,7 @@ function channel(pixels: Uint8ClampedArray, x: number, y: number, offset: number
 }
 
 describe("专辑封面低频背景", () => {
-  it("单色封面生成均匀的深色背景，不污染原始像素", () => {
+  it("单色封面保留原始亮度，不污染原始像素", () => {
     const source = artworkPixels(() => [20, 60, 240, 255]);
     const copy = source.slice();
     const { pixels, color } = createAlbumBackgroundPixels(source, 32, 32);
@@ -36,7 +36,7 @@ describe("专辑封面低频背景", () => {
     expect(channel(pixels, 31, 16, 2)).toBeGreaterThan(channel(pixels, 31, 16, 0));
     expect(channel(pixels, 15, 16, 0)).toBeGreaterThan(10);
     expect(channel(pixels, 15, 16, 2)).toBeGreaterThan(10);
-    expect(Math.abs(channel(pixels, 15, 16, 0) - channel(pixels, 16, 16, 0))).toBeLessThan(10);
+    expect(Math.abs(channel(pixels, 15, 16, 0) - channel(pixels, 16, 16, 0))).toBeLessThan(25);
   });
 
   it("去掉高频棋盘纹理", () => {
@@ -48,16 +48,14 @@ describe("专辑封面低频背景", () => {
     expect(Math.abs(channel(pixels, 15, 16, 0) - channel(pixels, 16, 16, 0))).toBeLessThan(2);
   });
 
-  it("高亮封面压暗到次要文字仍可读的范围", () => {
+  it("高亮封面不预先压暗，亮暗适配交给展示层", () => {
     const { pixels, color } = createAlbumBackgroundPixels(
       artworkPixels(() => [255, 255, 255, 255]),
       32,
       32,
     );
-    expect(color).toBe("rgb(102, 102, 102)");
+    expect(color).toBe("rgb(255, 255, 255)");
     expect(channel(pixels, 0, 0, 3)).toBe(255);
-    const linear = (value: number) => ((value / 255 + 0.055) / 1.055) ** 2.4;
-    expect((linear(229) + 0.05) / (linear(102) + 0.05)).toBeGreaterThan(4.5);
   });
 
   it("透明像素不引入隐藏的亮色", () => {

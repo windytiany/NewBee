@@ -1,7 +1,7 @@
 <template>
   <article
-    class="bg-app-interactive relative rounded-lg px-5 py-5 text-white shadow-xl ring-1 ring-white/10 sm:px-7"
-    :class="props.background ? '[--app-muted:#e5e7eb] [--app-text:#fff]' : ''"
+    class="bg-app-interactive relative rounded-lg px-5 py-5 text-white shadow-sm ring-1 ring-white/10 sm:px-7"
+    :class="props.background ? '[--app-muted:var(--app-cover-muted)]' : ''"
   >
     <div
       aria-hidden="true"
@@ -315,7 +315,7 @@ function activatePlayback() {
 
 const backgroundStyle = computed(() => ({
   backgroundImage: props.background
-    ? `linear-gradient(to bottom, ${props.background.color}, transparent 48px), url("${props.background.imageUrl}")`
+    ? `linear-gradient(var(--app-cover-overlay), var(--app-cover-overlay)), linear-gradient(to bottom, ${props.background.color}, transparent 48px), url("${props.background.imageUrl}")`
     : undefined,
   backgroundSize: "100% 100%",
 }));

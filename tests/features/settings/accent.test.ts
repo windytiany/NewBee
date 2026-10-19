@@ -51,11 +51,12 @@ describe("application accent color", () => {
     }
   });
 
-  it("keeps a single fixed dark palette with the default accent", async () => {
+  it("keeps the default accent across light and dark palettes", async () => {
     const css = await Bun.file("src/app/styles/themes.css").text();
     expect(css).toContain(`--app-accent: ${DEFAULT_ACCENT_COLOR}`);
     expect(css).toContain("--app-base: #121212");
-    expect(css).not.toContain("data-theme");
+    expect(css).toContain("--app-base: #f5f5f5");
+    expect(css.match(/--app-accent:/g)).toHaveLength(1);
   });
 });
 

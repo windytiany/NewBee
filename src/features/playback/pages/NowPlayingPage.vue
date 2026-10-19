@@ -2,8 +2,8 @@
   <section
     data-focus-region
     :aria-label="t('正在播放')"
-    class="relative isolate grid h-full min-h-0 w-full min-w-0 place-items-center"
-    :class="displayedBackground ? '[--app-muted:#e5e7eb] [--app-text:#fff]' : ''"
+    class="relative isolate grid h-full min-h-0 w-full min-w-0 place-items-center text-white"
+    :class="displayedBackground ? '[--app-muted:var(--app-cover-muted)]' : ''"
   >
     <!-- The outgoing layer stays opaque until the incoming background covers it. -->
     <Transition
@@ -119,7 +119,7 @@ watch(
 );
 const backgroundStyle = computed(() => ({
   backgroundImage: displayedBackground.value
-    ? `linear-gradient(to bottom, ${displayedBackground.value.color}, transparent 48px), url("${displayedBackground.value.imageUrl}")`
+    ? `linear-gradient(var(--app-cover-overlay), var(--app-cover-overlay)), linear-gradient(to bottom, ${displayedBackground.value.color}, transparent 48px), url("${displayedBackground.value.imageUrl}")`
     : undefined,
 }));
 const {

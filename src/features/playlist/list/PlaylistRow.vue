@@ -16,12 +16,7 @@
       @keydown="handleContextMenuKeydown"
     >
       <TrackArtwork :track-id="coverTrackId" alt="" class="mr-2 size-10 shrink-0 rounded-md">
-        <div
-          aria-hidden="true"
-          class="grid h-full w-full place-items-center rounded-md bg-linear-to-br from-violet-800 via-indigo-950 to-slate-950"
-        >
-          <DiscAlbum aria-hidden="true" class="size-5 text-white/75" stroke-width="1.25" />
-        </div>
+        <PlaylistPlaceholder />
       </TrackArtwork>
       <span class="text-app-muted min-w-0 flex-1 truncate text-base">
         {{ name }}
@@ -31,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { DiscAlbum } from "@lucide/vue";
+import PlaylistPlaceholder from "@/features/playlist/artwork/PlaylistPlaceholder.vue";
 import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
 
 const props = defineProps<{

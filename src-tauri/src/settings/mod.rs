@@ -43,6 +43,15 @@ pub enum LayoutDensity {
     Compact,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum ThemeMode {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 fn validate_accent_color(color: &str) -> Result<(), String> {
     if color.len() == 7
         && color.starts_with('#')
@@ -67,6 +76,7 @@ where
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
     pub locale: Locale,
+    pub theme_mode: ThemeMode,
     pub shortcuts: crate::shortcuts::ShortcutSettings,
     #[serde(deserialize_with = "deserialize_accent_color")]
     pub accent_color: String,
@@ -90,6 +100,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             locale: Locale::default(),
+            theme_mode: ThemeMode::default(),
             shortcuts: crate::shortcuts::ShortcutSettings::default(),
             accent_color: "#1ed760".to_owned(),
             reduced_motion: false,

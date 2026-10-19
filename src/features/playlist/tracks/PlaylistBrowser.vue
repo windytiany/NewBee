@@ -8,7 +8,7 @@
   >
     <template v-if="props.playlist">
       <header
-        class="to-app-base from-app-header via-app-header-middle shrink-0 bg-linear-to-b px-5 py-6 sm:px-8 sm:py-8"
+        class="from-app-accent/20 via-app-accent/5 to-app-base shrink-0 bg-linear-to-b px-5 py-6 sm:px-8 sm:py-8"
       >
         <div class="flex items-end gap-5">
           <TrackArtwork
@@ -17,12 +17,7 @@
             alt=""
             class="size-28 shrink-0 rounded-md sm:size-36"
           >
-            <div
-              aria-hidden="true"
-              class="from-app-accent/30 via-app-header-middle to-app-surface grid h-full w-full place-items-center rounded-md bg-linear-to-br"
-            >
-              <DiscAlbum class="size-12 text-white/75 sm:size-16" stroke-width="1.25" />
-            </div>
+            <PlaylistPlaceholder />
           </TrackArtwork>
           <div class="min-w-0 flex-1 pb-1">
             <p class="mb-2 text-xs font-semibold tracking-wide text-white/75 uppercase">
@@ -223,7 +218,8 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
-import { DiscAlbum, Files, Play } from "@lucide/vue";
+import { Files, Play } from "@lucide/vue";
+import PlaylistPlaceholder from "@/features/playlist/artwork/PlaylistPlaceholder.vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";

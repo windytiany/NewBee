@@ -27,11 +27,36 @@ describe("application appearance", () => {
       },
     });
     setLocale("en");
-    applyAppearance({ accentColor: "#abcdef", reducedMotion: true, layoutDensity: "compact" });
+    applyAppearance({
+      themeMode: "light",
+      accentColor: "#abcdef",
+      reducedMotion: true,
+      layoutDensity: "compact",
+    });
     expect(locale.value).toBe("en");
     expect(styles).toEqual({ "--app-accent": "#abcdef" });
-    expect(dataset).toEqual({ reducedMotion: "true", layoutDensity: "compact" });
-    applyAppearance({ accentColor: "#abcdef", reducedMotion: false, layoutDensity: "regular" });
-    expect(dataset).toEqual({ reducedMotion: "false", layoutDensity: "regular" });
+    expect(dataset).toEqual({
+      themeMode: "light",
+      reducedMotion: "true",
+      layoutDensity: "compact",
+    });
+    applyAppearance({
+      themeMode: "dark",
+      accentColor: "#abcdef",
+      reducedMotion: false,
+      layoutDensity: "regular",
+    });
+    expect(dataset).toEqual({
+      themeMode: "dark",
+      reducedMotion: "false",
+      layoutDensity: "regular",
+    });
+    applyAppearance({
+      themeMode: "system",
+      accentColor: "#abcdef",
+      reducedMotion: false,
+      layoutDensity: "regular",
+    });
+    expect(dataset.themeMode).toBe("system");
   });
 });

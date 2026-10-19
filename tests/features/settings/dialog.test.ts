@@ -40,6 +40,7 @@ type DialogBindings = {
   selectedLocale: Vue.Ref<Settings["locale"]>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   lightweightOnClose: Vue.Ref<boolean>;
+  themeMode: Vue.Ref<Settings["themeMode"]>;
   accentColor: Vue.Ref<Settings["accentColor"]>;
   reducedMotion: Vue.Ref<boolean>;
   layoutDensity: Vue.Ref<Settings["layoutDensity"]>;
@@ -59,6 +60,7 @@ type DialogBindings = {
   recordShortcut: (event: KeyboardEvent) => void;
 };
 const defaults: Settings = {
+  themeMode: "system",
   locale: "zh-CN",
   accentColor: AccentColor.DEFAULT_ACCENT_COLOR,
   reducedMotion: false,
@@ -99,6 +101,7 @@ function createDialog(
   const events: string[] = [];
   const suspensions: boolean[] = [];
   const feedback: NotificationInput[] = [];
+  const appliedThemes: Settings["themeMode"][] = [];
   const appliedColors: Settings["accentColor"][] = [];
   const appliedMotion: boolean[] = [];
   Object.defineProperty(globalThis, "window", {
@@ -140,6 +143,7 @@ function createDialog(
     "@/features/settings/accent": AccentColor,
     "@/features/settings/appearance": {
       applyAppearance: (settings: Settings) => {
+        appliedThemes.push(settings.themeMode);
         appliedColors.push(settings.accentColor);
         appliedMotion.push(settings.reducedMotion);
       },
@@ -163,6 +167,7 @@ function createDialog(
     bindings,
     element,
     events,
+    appliedThemes,
     appliedColors,
     appliedMotion,
     feedback,
@@ -778,6 +783,13 @@ describe("settings dialog", () => {
         const help = findNode(panel, (node) => node.props["aria-label"] === `${category}设置说明`);
         expect(help).toBeNull();
         if (category === "外观") {
+          const themeSelect = findNode(panel, (node) => node.props.name === "theme-mode");
+          expect(themeSelect?.type).toBe("select");
+          expect(themeSelect?.children.map((node) => node.props.value)).toEqual([
+            "system",
+            "light",
+            "dark",
+          ]);
           const layoutSelect = findNode(panel, (node) => node.props.name === "layout-density");
           expect(layoutSelect?.type).toBe("select");
           expect(layoutSelect?.children.map((node) => node.props.value)).toEqual([
@@ -1269,6 +1281,23 @@ describe("settings dialog", () => {
     }
   });
 
+  for (const themeMode of ["system", "light", "dark"] as const) {
+    it(`persists and applies ${themeMode} theme only after saving`, async () => {
+      const saved: unknown[] = [];
+      const { bindings, appliedThemes } = createDialog(async (command, args) => {
+        if (command === "get_settings") return { ...defaults, themeMode: "dark" };
+        saved.push(args);
+      });
+      await bindings.show();
+      expect(bindings.themeMode.value).toBe("dark");
+      bindings.themeMode.value = themeMode;
+      expect(appliedThemes).toEqual([]);
+      await bindings.save();
+      expect(saved).toEqual([{ settings: { ...defaults, themeMode } }]);
+      expect(appliedThemes).toEqual([themeMode]);
+    });
+  }
+
   for (const option of AccentColor.ACCENT_COLORS) {
     it(`persists and applies ${option.value} only after saving`, async () => {
       const calls: unknown[] = [];
@@ -1331,6 +1360,7 @@ describe("settings dialog", () => {
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      themeMode: "dark",
       lightweightOnClose: false,
       monitoringFolders: [],
       showPlaybackStatistics: false,
@@ -1354,6 +1384,8 @@ describe("settings dialog", () => {
     await bindings.show();
     expect(bindings.closeBehavior.value).toBe("exit");
     expect(bindings.accentColor.value).toBe("#60a5fa");
+    expect(bindings.themeMode.value).toBe("dark");
+    bindings.themeMode.value = "system";
     expect(bindings.albumCoverBackground.value).toBe(true);
     expect(bindings.playingCoverBackground.value).toBe(true);
     expect(bindings.showPlaybackStatistics.value).toBe(false);
@@ -1443,6 +1475,7 @@ describe("settings dialog", () => {
     expect(saved).toEqual([
       {
         settings: {
+          themeMode: "system",
           locale: "zh-CN",
           layoutDensity: "regular",
           accentColor: "#60a5fa",
@@ -1604,6 +1637,7 @@ describe("settings dialog", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls).toBe(2);
     first.resolve({
+      themeMode: "light",
       lightweightOnClose: false,
       monitoringFolders: [],
       showPlaybackStatistics: false,

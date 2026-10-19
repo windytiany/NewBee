@@ -107,7 +107,7 @@ it("按曲目读取封面并生成背景，更新封面后重新生成", async (
   await settle();
   expect(artwork.background.value).toEqual({
     imageUrl: "data:image/png;base64,background-1",
-    color: "rgb(102, 102, 102)",
+    color: "rgb(255, 255, 255)",
   });
   invalidateTrackArtworkCache([91]);
   await settle();

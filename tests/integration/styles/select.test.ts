@@ -10,7 +10,7 @@ describe("global select styles", () => {
   test("insets the arrow and reserves room without changing the control background color", () => {
     expect(selectRule).toContain("appearance: none;");
     expect(selectRule).toContain("padding-right: 2.5rem;");
-    expect(selectRule).toContain("background-image: url(");
+    expect(selectRule).toContain("background-image: var(--app-select-arrow);");
     expect(selectRule).toContain("background-repeat: no-repeat;");
     expect(selectRule).toContain("background-position: right 0.75rem center;");
     expect(selectRule).toContain("background-size: 1rem;");

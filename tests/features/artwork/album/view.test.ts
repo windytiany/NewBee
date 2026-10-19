@@ -150,7 +150,7 @@ function mountBrowser() {
 function panel(root: HostNode) {
   const node = findNode(
     root,
-    (entry) => entry.type === "article" && String(entry.props.class).includes("shadow-xl"),
+    (entry) => entry.type === "article" && String(entry.props.class).includes("bg-app-interactive"),
   );
   if (!node) throw new Error("Missing album detail");
   return node;
@@ -190,7 +190,7 @@ describe("专辑背景展示", () => {
     await Vue.nextTick();
     expect(Vue.toValue(selection)?.album).toBe("Album");
     expect(detail.children[0]?.props.class).toContain("opacity-100");
-    expect(detail.props.class).toContain("[--app-muted:#e5e7eb]");
+    expect(detail.props.class).toContain("[--app-muted:var(--app-cover-muted)]");
 
     backgroundEnabled.value = false;
     await Vue.nextTick();
@@ -206,20 +206,25 @@ describe("专辑背景展示", () => {
     const decoration = detail.children[0];
     if (!decoration || !detail.parent) throw new Error("Missing background layer");
     expect(detail.props.class).toContain("bg-app-interactive");
+    expect(detail.props.class).toContain("shadow-sm");
+    expect(detail.props.class).not.toContain("shadow-xl");
     expect(decoration.props.class).toContain("opacity-0");
     background.value = { imageUrl: "data:image/png;base64,test", color: "rgb(10, 20, 40)" };
     await Vue.nextTick();
     expect(decoration.props.class).toContain("opacity-100");
-    expect(detail.props.class).toContain("[--app-muted:#e5e7eb]");
-    expect(detail.props.class).toContain("[--app-text:#fff]");
+    expect(detail.props.class).toContain("[--app-muted:var(--app-cover-muted)]");
+    expect(detail.props.class).not.toContain("[--app-text:#fff]");
     expect(decoration.props.class).toContain("motion-reduce:transition-none");
     expect(decoration.props["aria-hidden"]).toBe("true");
     expect(decoration.props.style).toEqual({
       backgroundImage:
-        'linear-gradient(to bottom, rgb(10, 20, 40), transparent 48px), url("data:image/png;base64,test")',
+        'linear-gradient(var(--app-cover-overlay), var(--app-cover-overlay)), linear-gradient(to bottom, rgb(10, 20, 40), transparent 48px), url("data:image/png;base64,test")',
       backgroundSize: "100% 100%",
     });
-    expect(detail.parent.props.style).toEqual({ "--album-background-color": "rgb(10, 20, 40)" });
+    expect(detail.parent.props.style).toEqual({
+      "--album-background-color":
+        "color-mix(in srgb, var(--app-cover-tint) var(--app-cover-mix), rgb(10, 20, 40))",
+    });
     const pointer = findNode(detail.parent, (node) =>
       String(node.props.class).includes("border-b-12"),
     );
@@ -262,7 +267,7 @@ describe("专辑背景展示", () => {
     await Vue.nextTick();
     const details: HostNode[] = [];
     visit(root, (node) => {
-      if (node.type === "article" && String(node.props.class).includes("shadow-xl"))
+      if (node.type === "article" && String(node.props.class).includes("bg-app-interactive"))
         details.push(node);
     });
     expect(details).toEqual([]);

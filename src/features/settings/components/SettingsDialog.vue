@@ -73,6 +73,7 @@ const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | nu
 const selectedLocale = ref<Settings["locale"]>(locale.value);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
 const lightweightOnClose = ref(false);
+const themeMode = ref<Settings["themeMode"]>("system");
 const accentColor = ref(DEFAULT_ACCENT_COLOR);
 const normalizedAccentColor = computed(() => normalizeAccentColor(accentColor.value));
 const reducedMotion = ref(false);
@@ -136,6 +137,7 @@ function draft(): Settings {
     locale: selectedLocale.value,
     closeBehavior: closeBehavior.value,
     lightweightOnClose: lightweightOnClose.value,
+    themeMode: themeMode.value,
     accentColor: accentColor.value,
     reducedMotion: reducedMotion.value,
     layoutDensity: layoutDensity.value,
@@ -212,6 +214,7 @@ async function show() {
     selectedLocale.value = settings.locale;
     closeBehavior.value = settings.closeBehavior;
     lightweightOnClose.value = settings.lightweightOnClose ?? false;
+    themeMode.value = settings.themeMode;
     accentColor.value = settings.accentColor;
     reducedMotion.value = settings.reducedMotion;
     layoutDensity.value = settings.layoutDensity;
@@ -261,6 +264,7 @@ async function save() {
     setLocale(selectedLocale.value);
     accentColor.value = color;
     applyAppearance({
+      themeMode: themeMode.value,
       accentColor: color,
       reducedMotion: reducedMotion.value,
       layoutDensity: layoutDensity.value,
@@ -353,6 +357,18 @@ defineExpose({ show });
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           >
             <legend class="sr-only">{{ t("外观") }}</legend>
+            <label class="mb-5 flex flex-col gap-2 text-sm font-semibold">
+              {{ t("主题") }}
+              <select
+                v-model="themeMode"
+                name="theme-mode"
+                class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
+              >
+                <option value="system">{{ t("跟随系统") }}</option>
+                <option value="light">{{ t("亮色") }}</option>
+                <option value="dark">{{ t("暗色") }}</option>
+              </select>
+            </label>
             <label class="mb-5 flex flex-col gap-2 text-sm font-semibold">
               {{ t("布局") }}
               <select
@@ -695,7 +711,7 @@ defineExpose({ show });
         </button>
         <button
           v-if="selectedCategory !== 'about'"
-          class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black hover:bg-[#fff] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!isTauriApp || !isLoaded || isLoading || isSaving || isBackingUp"
           type="submit"
         >

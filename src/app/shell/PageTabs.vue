@@ -6,24 +6,22 @@ const emit = defineEmits<{ "update:activePage": [page: PageName] }>();
 </script>
 
 <template>
-  <nav
-    :aria-label="t('主导航')"
-    class="bg-app-interactive inline-flex items-center rounded-full p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
-  >
+  <nav :aria-label="t('主导航')" class="inline-flex h-full items-stretch border-b border-white/10">
     <button
       v-for="pageName in pageNames"
       :key="pageName"
       :aria-pressed="props.activePage === pageName"
-      class="focus-visible:outline-app-accent rounded-full px-2 py-2 text-xs font-semibold tracking-[1px] uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:px-4 sm:text-sm sm:tracking-[1.4px]"
-      :class="
-        props.activePage === pageName
-          ? 'bg-app-accent text-black'
-          : 'text-app-muted hover:text-white'
-      "
+      class="focus-visible:outline-app-accent relative px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 sm:px-5 sm:text-sm"
+      :class="props.activePage === pageName ? 'text-app-accent' : 'text-app-muted hover:text-white'"
       type="button"
       @click="emit('update:activePage', pageName)"
     >
       {{ pageLabel(pageName) }}
+      <span
+        v-if="props.activePage === pageName"
+        aria-hidden="true"
+        class="bg-app-accent absolute inset-x-3 bottom-0 h-0.5 rounded-t-full sm:inset-x-5"
+      ></span>
     </button>
   </nav>
 </template>

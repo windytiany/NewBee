@@ -98,6 +98,22 @@ it("restores resized panes after a restart without overwriting preferences on sm
   observers[0]!([{ contentRect: { width: 1400, height: 800 } }]);
   observers[1]!([{ contentRect: { width: 300, height: 800 } }]);
   await Vue.nextTick();
+  const layout = findNode(root, (node) =>
+    Boolean(
+      node.props.style &&
+      typeof node.props.style === "object" &&
+      "--three-column-layout-columns" in node.props.style,
+    ),
+  );
+  const columns = (layout?.props.style as Record<string, unknown>)["--three-column-layout-columns"];
+  expect(columns).toMatch(
+    /^minmax\(208px, [\d.]+px\) 0px minmax\(280px, 1fr\) 0px minmax\(240px, [\d.]+px\)$/,
+  );
+  for (const label of ["调整左侧栏宽度", "调整右侧栏宽度"]) {
+    const handle = findNode(root, (node) => node.props.label === label);
+    expect(handle?.props.class).toContain("-translate-x-1/2");
+    expect(handle?.props.class).toContain("z-20");
+  }
   for (const [label, value] of [
     ["调整左侧栏宽度", 300],
     ["调整右侧栏宽度", 320],

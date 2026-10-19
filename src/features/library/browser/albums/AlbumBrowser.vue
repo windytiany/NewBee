@@ -62,7 +62,11 @@
               <div
                 v-if="row.selectedAlbum"
                 class="relative"
-                :style="{ '--album-background-color': selectedArtwork.background.value?.color }"
+                :style="{
+                  '--album-background-color': selectedArtwork.background.value
+                    ? `color-mix(in srgb, var(--app-cover-tint) var(--app-cover-mix), ${selectedArtwork.background.value.color})`
+                    : undefined,
+                }"
               >
                 <div
                   aria-hidden="true"

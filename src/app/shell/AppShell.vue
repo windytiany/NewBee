@@ -9,7 +9,7 @@
     <ResizeHandle
       v-show="props.mode === 'workspace'"
       :label="t('调整左侧栏宽度')"
-      class="col-start-2 row-start-1 max-md:hidden"
+      class="z-20 col-start-2 row-start-1 -translate-x-1/2 max-md:hidden"
       orientation="vertical"
       :value="leftPaneWidth"
       :min-value="MIN_LEFT_PANE_WIDTH"
@@ -28,7 +28,7 @@
       v-show="props.mode === 'workspace'"
       :label="t('调整右侧栏宽度')"
       reverse
-      class="col-start-4 row-start-1 max-md:hidden"
+      class="z-20 col-start-4 row-start-1 -translate-x-1/2 max-md:hidden"
       orientation="vertical"
       :value="rightPaneWidth"
       :min-value="MIN_RIGHT_PANE_WIDTH"
@@ -122,7 +122,7 @@ let hasInitialSidebarHeight = false;
 const gridColumns = computed(() =>
   props.mode === "playing"
     ? "minmax(0, 1fr)"
-    : `minmax(${MIN_LEFT_PANE_WIDTH}px, ${leftPaneWidth.value}px) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_CENTER_WIDTH}px, 1fr) ${RESIZE_HANDLE_SIZE}px minmax(${MIN_RIGHT_PANE_WIDTH}px, ${rightPaneWidth.value}px)`,
+    : `minmax(${MIN_LEFT_PANE_WIDTH}px, ${leftPaneWidth.value}px) 0px minmax(${MIN_CENTER_WIDTH}px, 1fr) 0px minmax(${MIN_RIGHT_PANE_WIDTH}px, ${rightPaneWidth.value}px)`,
 );
 
 const leftPaneMaxWidth = computed(() =>
@@ -144,10 +144,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getPaneWidthBudget(width: number) {
-  return Math.max(
-    MIN_LEFT_PANE_WIDTH + MIN_RIGHT_PANE_WIDTH,
-    width - MIN_CENTER_WIDTH - RESIZE_HANDLE_SIZE * 2,
-  );
+  return Math.max(MIN_LEFT_PANE_WIDTH + MIN_RIGHT_PANE_WIDTH, width - MIN_CENTER_WIDTH);
 }
 
 function getRightTopMaxHeight(height: number) {

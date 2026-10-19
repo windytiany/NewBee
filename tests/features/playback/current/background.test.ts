@@ -149,7 +149,10 @@ describe("播放页曲目封面背景", () => {
       await settle();
       expect(backgrounds(page)).toContain("External cover");
       expect(page.layers()[0]?.props.class).toContain("pointer-events-none");
-      expect(page.page.props.class).toContain("[--app-muted:#e5e7eb]");
+      expect(page.page.props.class).toContain("text-white");
+      expect(page.page.props.class).not.toContain("[--app-text:#fff]");
+      expect(page.page.props.class).toContain("[--app-muted:var(--app-cover-muted)]");
+      expect(backgrounds(page)).toContain("var(--app-cover-overlay)");
     }
   });
   it("切歌时保留旧背景，封面加载完成后交叉过渡", async () => {

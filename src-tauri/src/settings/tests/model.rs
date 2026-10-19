@@ -25,6 +25,46 @@ fn shortcuts_default_only_for_a_missing_settings_file() {
 }
 
 #[test]
+fn theme_mode_defaults_to_system_and_persists() {
+    assert_eq!(Settings::default().theme_mode, ThemeMode::System);
+    assert_eq!(
+        serde_json::from_str::<Settings>("{}").unwrap().theme_mode,
+        ThemeMode::System
+    );
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    let state = SettingsState::load(path.clone()).unwrap();
+    for (theme_mode, name) in [
+        (ThemeMode::System, "system"),
+        (ThemeMode::Light, "light"),
+        (ThemeMode::Dark, "dark"),
+    ] {
+        let settings = Settings {
+            theme_mode,
+            ..Settings::default()
+        };
+        let data = serde_json::to_value(&settings).unwrap();
+        assert_eq!(data["themeMode"], name);
+        assert_eq!(serde_json::from_value::<Settings>(data).unwrap(), settings);
+        state.save(settings.clone()).unwrap();
+        assert_eq!(
+            SettingsState::load(path.clone()).unwrap().get().unwrap(),
+            settings
+        );
+    }
+    for value in [
+        serde_json::json!("invalid"),
+        serde_json::json!(null),
+        serde_json::json!(true),
+        serde_json::json!(1),
+    ] {
+        assert!(
+            serde_json::from_value::<Settings>(serde_json::json!({"themeMode": value})).is_err()
+        );
+    }
+}
+
+#[test]
 fn layout_density_defaults_round_trips_and_persists() {
     assert_eq!(Settings::default().layout_density, LayoutDensity::Regular);
     assert_eq!(

@@ -23,7 +23,6 @@ export function createArtworkBackground(image: HTMLImageElement): AlbumBackgroun
 const BLUR_RADIUS = 3;
 const BLUR_PASSES = 3;
 const SATURATION = 0.85;
-const BRIGHTNESS = 0.4;
 
 /** Removes artwork detail while retaining its large-scale color distribution. */
 export function createAlbumBackgroundPixels(
@@ -61,7 +60,7 @@ export function createAlbumBackgroundPixels(
       readChannel(pixels, index + 2) * 0.0722;
     for (let channel = 0; channel < 3; channel++) {
       result[index + channel] =
-        (luminance + (readChannel(pixels, index + channel) - luminance) * SATURATION) * BRIGHTNESS;
+        luminance + (readChannel(pixels, index + channel) - luminance) * SATURATION;
     }
     result[index + 3] = 255;
   }

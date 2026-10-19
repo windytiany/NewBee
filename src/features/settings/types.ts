@@ -15,6 +15,7 @@ export type ShortcutSettings = Record<ShortcutAction, ShortcutBinding>;
 export type Settings = {
   shortcuts: ShortcutSettings;
   locale: Locale;
+  themeMode: "system" | "light" | "dark";
   accentColor: string;
   reducedMotion: boolean;
   layoutDensity: "regular" | "compact";

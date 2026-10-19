@@ -16,7 +16,10 @@ afterEach(() => {
 
 function createPreferences(
   desktop: boolean,
-  settings: Pick<Settings, "accentColor" | "reducedMotion" | "locale" | "layoutDensity">,
+  settings: Pick<
+    Settings,
+    "themeMode" | "accentColor" | "reducedMotion" | "locale" | "layoutDensity"
+  >,
 ) {
   const dataset: Record<string, string> = {};
   const styles: Record<string, string> = {};
@@ -59,6 +62,7 @@ describe("application preference restoration", () => {
   for (const reducedMotion of [false, true]) {
     it(`restores accent color and reduced motion ${reducedMotion} from one settings read`, async () => {
       const test = createPreferences(true, {
+        themeMode: "light",
         locale: "zh-CN",
         accentColor: "#123abc",
         layoutDensity: "compact",
@@ -67,6 +71,7 @@ describe("application preference restoration", () => {
       await test.preferences.restorePreferences();
       expect(test.calls).toBe(1);
       expect(test.dataset).toEqual({
+        themeMode: "light",
         reducedMotion: String(reducedMotion),
         layoutDensity: "compact",
       });
@@ -78,6 +83,7 @@ describe("application preference restoration", () => {
     it(`restores language ${savedLocale} with appearance from one settings read`, async () => {
       setLocale(savedLocale === "en" ? "zh-CN" : "en");
       const test = createPreferences(true, {
+        themeMode: "dark",
         locale: savedLocale,
         layoutDensity: "regular",
         accentColor: "#123abc",
@@ -91,6 +97,7 @@ describe("application preference restoration", () => {
 
   it("does not query desktop settings in browser preview", async () => {
     const test = createPreferences(false, {
+      themeMode: "system",
       locale: "zh-CN",
       accentColor: "#1ed760",
       layoutDensity: "regular",
