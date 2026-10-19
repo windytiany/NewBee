@@ -63,7 +63,7 @@ type DialogBindings = {
   isLoaded: Vue.Ref<boolean>;
   isLoading: Vue.Ref<boolean>;
   isBackingUp: Vue.Ref<boolean>;
-  show: () => Promise<void>;
+  show: (category?: "about") => Promise<void>;
   close: () => void;
   save: () => Promise<void>;
   resetShortcuts: () => void;
@@ -198,6 +198,25 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
+  it("opens updates in About and preserves an already open settings draft", async () => {
+    let loads = 0;
+    const { bindings } = createDialog(async () => {
+      loads++;
+      return defaults;
+    });
+    await bindings.show("about");
+    expect(bindings.selectedCategory.value).toBe("about");
+    expect(loads).toBe(1);
+    bindings.selectedCategory.value = "appearance";
+    bindings.lightweightOnClose.value = true;
+    await bindings.show();
+    expect(bindings.selectedCategory.value).toBe("appearance");
+    await bindings.show("about");
+    expect(bindings.selectedCategory.value).toBe("about");
+    expect(bindings.lightweightOnClose.value).toBe(true);
+    expect(loads).toBe(1);
+  });
+
   it("defaults lightweight mode off for legacy settings and persists the explicit preference", async () => {
     let saved: Settings | undefined;
     const { bindings } = createDialog(async (command, args) => {

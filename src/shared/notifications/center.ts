@@ -6,6 +6,7 @@ export type NotificationInput = {
   message: string;
   key?: string;
   persistent?: boolean;
+  action?: { label: string; run: () => void };
 };
 export type Notification = NotificationInput & { id: number; count: number };
 export type TaskNotification = {

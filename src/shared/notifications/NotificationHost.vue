@@ -56,6 +56,17 @@
           }}<span v-if="item.count > 1" class="ml-2 text-white/60">×{{ item.count }}</span>
         </p>
         <button
+          v-if="item.action"
+          type="button"
+          class="focus-visible:outline-app-accent shrink-0 rounded px-2 py-1 hover:bg-white/10 focus-visible:outline-2"
+          @click="
+            item.action.run();
+            dismiss(item.id);
+          "
+        >
+          {{ item.action.label }}
+        </button>
+        <button
           :aria-label="t('关闭通知')"
           class="focus-visible:outline-app-accent -mr-1 shrink-0 rounded p-1 text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2"
           type="button"

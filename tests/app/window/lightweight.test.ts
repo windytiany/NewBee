@@ -44,6 +44,7 @@ function fixture(
       },
     },
     "@/shared/lifecycle/activity": { prepareRelease: async () => true, waitForIdle: () => idle },
+    "@/app/update": { waitForUpdates: async () => {} },
     "@tauri-apps/plugin-dialog": { message: async (input: unknown) => feedback.push(input) },
   });
   return { ...module, calls, events, stopped, feedback };

@@ -341,6 +341,7 @@ const appModules: Record<string, unknown> = {
   },
 };
 appModules["@/features/tracks/bridge"] = { useTrackBridge: () => {} };
+appModules["@/app/update"] = { useStartupUpdates: () => {} };
 await loadLibraryModules(appModules);
 await loadPlaylistModules(appModules);
 const appComponent = compileComponent(

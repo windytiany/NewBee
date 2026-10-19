@@ -235,6 +235,7 @@ async function createComponent(source: string) {
     useShortcuts: () => ({ bindings: Vue.ref({}), run: async () => {} }),
   };
   modules["@/app/usePageFocus"] = { usePageFocus: () => {} };
+  modules["@/app/update"] = { useStartupUpdates: () => {} };
   modules["@/features/shortcuts/CommandDialog.vue"] = defaultModule(passiveComponent);
   modules["@/features/tracks/bridge"] = { useTrackBridge: () => {} };
   await loadLibraryModules(modules);

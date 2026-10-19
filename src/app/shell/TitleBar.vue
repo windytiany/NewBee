@@ -71,8 +71,8 @@ const libraryScanDialog = ref<InstanceType<typeof ScanDialog> | null>(null);
 const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
 const pathMigrationDialog = ref<InstanceType<typeof PathMigrationDialog> | null>(null);
 
-async function showSettings() {
-  await settingsDialog.value?.show();
+async function showSettings(category?: "about") {
+  await settingsDialog.value?.show(category);
 }
 defineExpose({ showSettings });
 

@@ -205,9 +205,12 @@ onUnmounted(() => {
   restoreShortcuts();
 });
 
-async function show() {
-  if (dialogElement.value?.open) return;
-  selectedCategory.value = "general";
+async function show(category?: keyof typeof categories) {
+  if (dialogElement.value?.open) {
+    if (category) selectedCategory.value = category;
+    return;
+  }
+  selectedCategory.value = category ?? "general";
   selectedShortcutAction.value = "previous";
   dialogElement.value?.showModal();
   isLoaded.value = false;

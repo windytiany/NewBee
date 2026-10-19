@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { shallowRef } from "vue";
 import { usePageFocus } from "@/app/usePageFocus";
+import { useStartupUpdates } from "@/app/update";
 import CommandDialog from "@/features/shortcuts/CommandDialog.vue";
 import { getContextCommands } from "@/features/shortcuts/context";
 import { useTrackBridge } from "@/features/tracks/bridge";
@@ -27,6 +28,7 @@ import TitleBar from "@/app/shell/TitleBar.vue";
 useTrackBridge();
 const { activePage } = usePersistentActivePage();
 const titleBar = shallowRef<InstanceType<typeof TitleBar> | null>(null);
+useStartupUpdates(() => void titleBar.value?.showSettings("about"));
 const commandDialog = shallowRef<InstanceType<typeof CommandDialog> | null>(null);
 usePageFocus();
 const { bindings, run } = useShortcuts(

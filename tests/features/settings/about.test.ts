@@ -18,6 +18,7 @@ function mountPanel(desktop = true, open: (url: string) => Promise<void> = async
   const feedback: NotificationInput[] = [];
   const component = evaluateSource<{ default: Vue.Component }>(compileSfc(source, filename), {
     vue: Vue,
+    "@/shared/update/UpdatePanel.vue": { default: Vue.defineComponent({ render: () => null }) },
     "@tauri-apps/api/core": { isTauri: () => desktop },
     "@tauri-apps/plugin-opener": { openUrl: open },
     "../../../../src-tauri/tauri.conf.json": config,

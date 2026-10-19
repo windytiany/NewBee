@@ -143,6 +143,31 @@ afterEach(() => {
 });
 
 describe("notification host", () => {
+  it("runs a notification action and dismisses its notification", async () => {
+    mountHost();
+    let opened = 0;
+    notifications.notify({
+      type: "info",
+      message: "发现新版本 0.2.0",
+      action: {
+        label: "查看更新",
+        run: () => {
+          opened++;
+        },
+      },
+    });
+    await Vue.nextTick();
+    const action = find(
+      host(),
+      (node) => node.type === "button" && textContent(node) === "查看更新",
+    );
+    if (!action) throw new Error("Missing notification action");
+    click(action);
+    await Vue.nextTick();
+    expect(opened).toBe(1);
+    expect(notifications.items.value).toEqual([]);
+  });
+
   it("renders persistent progress with cancellation rather than a dismiss button", async () => {
     mountHost();
     let cancelled = 0;

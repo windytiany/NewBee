@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
 import { prepareRelease, waitForIdle } from "@/shared/lifecycle/activity";
 import { createWindowRelease } from "@/app/window/release";
+import { waitForUpdates } from "@/app/update";
 import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
 
@@ -17,7 +18,10 @@ async function install() {
   const release = createWindowRelease({
     prepare: prepareRelease,
     hide: (request) => invoke<boolean>("advance_lightweight", { request, release: false }),
-    idle: waitForIdle,
+    idle: async (signal) => {
+      await waitForIdle(signal);
+      await waitForUpdates(signal);
+    },
     release: async (request) => {
       await invoke("set_shortcuts_suspended", { suspended: false });
       await invoke("advance_lightweight", { request, release: true });

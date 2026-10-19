@@ -10,7 +10,8 @@ type Bindings = {
   libraryScanDialog: Vue.Ref<Dialog | null>;
   importDialog: Vue.Ref<{ show: (inbox: boolean) => void } | null>;
   pathMigrationDialog: Vue.Ref<Dialog | null>;
-  settingsDialog: Vue.Ref<Dialog | null>;
+  settingsDialog: Vue.Ref<{ show: (category?: "about") => void } | null>;
+  showSettings: (category?: "about") => Promise<void>;
   onMenuSelect: (action: AppMenuAction) => Promise<void>;
 };
 
@@ -74,4 +75,12 @@ it("routes brand menu selections to existing import and dialog actions", async (
   }
 
   expect(actions).toEqual(["import", "scan", "migrate", "settings"]);
+  let category: string | undefined;
+  bindings.settingsDialog.value = {
+    show: (selected) => {
+      category = selected;
+    },
+  };
+  await bindings.showSettings("about");
+  expect(category).toBe("about");
 });

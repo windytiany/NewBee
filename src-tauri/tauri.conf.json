@@ -26,8 +26,16 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ1QkJGRDlBMUYwMzhCRkUKUldUK2l3TWZtdjI3MWVYaERsSGdJc3BVUXFuYWVBblJBQkxxci9DODh1bVdVdzYrQXdlT1VLRUQK",
+      "endpoints": ["https://github.com/windytiany/NewBee/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "shortDescription": "本地音乐库管理与播放",
     "longDescription": "NewBee 是一款面向本地音乐收藏的桌面播放器，可扫描和管理音乐目录，按艺人和专辑浏览曲目，创建播放列表，并通过播放队列控制播放。",
