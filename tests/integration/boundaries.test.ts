@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { posix as path } from "node:path";
 import { parse } from "@vue/compiler-sfc";
 import {
@@ -44,6 +44,7 @@ for (const filename of filenames) {
         ? specifier.slice(2)
         : path.normalize(path.join(path.dirname(filename), specifier));
       if (candidate.endsWith(".css")) continue;
+      if (/\.(json|png)$/.test(candidate) && existsSync(new URL(candidate, sourceRoot))) continue;
       const target = [candidate, `${candidate}.ts`, `${candidate}.vue`].find((file) =>
         knownFiles.has(file),
       );

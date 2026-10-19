@@ -27,14 +27,7 @@ import type { NotificationInput } from "@/shared/notifications/center";
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
   selectedCategory: Vue.Ref<
-    | "general"
-    | "appearance"
-    | "library"
-    | "monitoring"
-    | "lyrics"
-    | "shortcuts"
-    | "diagnostics"
-    | "backup"
+    "general" | "appearance" | "library" | "lyrics" | "shortcuts" | "advanced" | "about"
   >;
   shortcuts: Vue.Ref<Settings["shortcuts"]>;
   selectedShortcutAction: Vue.Ref<ShortcutAction>;
@@ -126,6 +119,7 @@ function createDialog(
     },
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
+    "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({ template: "<div />" }),
     "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
       template: "<div />",
     }),
@@ -262,7 +256,7 @@ describe("settings dialog", () => {
       if (command === "save_settings") saved = (args as { settings: Settings }).settings;
     });
     await bindings.show();
-    bindings.selectedCategory.value = "monitoring";
+    bindings.selectedCategory.value = "library";
     bindings.monitoringFolders.value[0]!.mode = "continuous";
     expect(persisted.monitoringFolders[0]!.mode).toBe("startup");
     bindings.close();
@@ -329,6 +323,77 @@ describe("settings dialog", () => {
     expect(saved[0]?.shortcuts.previous).toEqual({ shortcut: "", global: true });
   });
 
+  it("preserves radio selection when close options are reordered during template updates", async () => {
+    const general = source.match(
+      /<fieldset\s+v-else-if="selectedCategory === 'general'"[\s\S]*?<\/fieldset>/,
+    )?.[0];
+    if (!general) throw new Error("Missing general settings");
+    const labels = [...general.matchAll(/<label\b[\s\S]*?<\/label>/g)].map((match) => match[0]);
+    const tray = labels.find((label) => label.includes('value="tray"'))!;
+    const exit = labels.find((label) => label.includes('value="exit"'))!;
+    const lightweight = labels.find((label) => label.includes('name="lightweight-on-close"'))!;
+    const template = `<fieldset>${[tray, lightweight, exit].join("\n")}</fieldset>`;
+    const previous = `<fieldset>${[tray, exit, lightweight].join("\n")}</fieldset>`.replace(
+      /\skey="[^"]*"/g,
+      "",
+    );
+    const before = Vue.compile(previous, { prefixIdentifiers: true });
+    const after = Vue.compile(template, { prefixIdentifiers: true });
+    const reordered = Vue.ref(false);
+    const closeBehavior = Vue.ref("tray");
+    const component = Vue.defineComponent({
+      setup: () => ({
+        closeBehavior,
+        lightweightOnClose: Vue.ref(true),
+        t: (text: string) => text,
+      }),
+      render() {
+        const vnode = Reflect.apply(reordered.value ? after : before, this, [this, []]);
+        // Template hot updates use a full diff rather than the previous template's block layout.
+        if (Vue.isVNode(vnode)) Reflect.set(vnode, "dynamicChildren", null);
+        return vnode;
+      },
+    });
+    const renderer = createHostRenderer<HostNode>(
+      (type, text = "") => {
+        const node = Object.assign(createHostNode(type, text), {
+          tagName: type.toUpperCase(),
+          checked: false,
+          value: "",
+          addEventListener(event: string, handler: (event: unknown) => void) {
+            node.props[`native-${event}`] = handler;
+          },
+        });
+        return node;
+      },
+      {
+        patchProp(node, key, _previous, next) {
+          node.props[key] = next;
+          if (key === "value") Object.assign(node, { value: next, _value: next });
+        },
+      },
+    );
+    const root = createHostNode("root");
+    const app = renderer.createApp(component);
+    app.mount(root);
+    try {
+      reordered.value = true;
+      await Vue.nextTick();
+      for (const value of ["exit", "tray", "exit"] as const) {
+        const radio = findNode(root, (node) => node.props.value === value);
+        const change = radio?.props["native-change"];
+        if (!radio || typeof change !== "function") throw new Error("Missing radio change event");
+        Reflect.set(radio, "checked", true);
+        change({ target: radio });
+        await Vue.nextTick();
+        expect(closeBehavior.value).toBe(value);
+        expect(Reflect.get(radio, "checked")).toBe(true);
+      }
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("blocks settings saving and closing while backup is pending", async () => {
     const calls: string[] = [];
     const { bindings, element } = createDialog(async (command) => {
@@ -336,7 +401,7 @@ describe("settings dialog", () => {
       return defaults;
     });
     await bindings.show();
-    bindings.selectedCategory.value = "backup";
+    bindings.selectedCategory.value = "advanced";
     bindings.isBackingUp.value = true;
     bindings.close();
     await bindings.save();
@@ -500,8 +565,11 @@ describe("settings dialog", () => {
       "@/shared/notifications/center": {
         notify: (input: NotificationInput) => feedback.push(input),
       },
+      "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({
+        setup: () => () => Vue.h("div", { "data-about": "" }, "NewBee"),
+      }),
       "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({
-        template: "<div />",
+        setup: () => () => Vue.h("button", { type: "button" }, "导出备份"),
       }),
       "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
         setup:
@@ -537,7 +605,9 @@ describe("settings dialog", () => {
           checked: false,
           selected: false,
           tagName: type.toUpperCase(),
-          addEventListener: () => {},
+          addEventListener: (event: string, handler: (event: unknown) => void) => {
+            node.props[`native-${event}`] = handler;
+          },
           removeEventListener: () => {},
           getRootNode: () => ({ activeElement: null }),
           focus() {},
@@ -588,13 +658,22 @@ describe("settings dialog", () => {
       const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类");
       if (!panel || !navigation) throw new Error("Missing settings panel or navigation");
       const categoryButtons = navigation.children.filter((node) => node.type === "button");
+      expect(categoryButtons.map((button) => getTextContent(button).trim())).toEqual([
+        "常规",
+        "外观",
+        "媒体库",
+        "歌词",
+        "快捷键",
+        "高级",
+        "关于",
+      ]);
       for (const button of categoryButtons) {
         if (typeof button.props.onClick !== "function") throw new Error("Missing category handler");
         button.props.onClick();
         await Vue.nextTick();
         const heading = findNode(panel, (node) => node.type === "h3");
         const category = getTextContent(button).trim();
-        if (category === "快捷键" || category === "监视文件夹") {
+        if (category === "快捷键") {
           expect(heading).not.toBeNull();
           expect(getTextContent(heading!)).toBe(category);
         } else {
@@ -604,12 +683,57 @@ describe("settings dialog", () => {
           findNode(panel, (node) => String(node.props["aria-label"] ?? "").endsWith("设置说明")),
         ).toBeNull();
         expect(panel.props["aria-labelledby"]).toBe(button.props.id);
+        if (category === "媒体库") {
+          expect(getTextContent(panel)).toContain("专辑排序");
+          expect(getTextContent(panel)).toContain("监视文件夹");
+        }
+        if (category === "关于") {
+          expect(findNode(panel, (node) => node.props["data-about"] === "")).not.toBeNull();
+          expect(getTextContent(footer)).not.toContain("保存");
+        }
+        if (category === "高级") {
+          expect(getTextContent(panel)).toContain("诊断");
+          expect(getTextContent(panel)).toContain("打开日志目录");
+          expect(getTextContent(panel)).toContain("备份");
+          expect(getTextContent(panel)).toContain("导出备份");
+          expect(getTextContent(footer)).toContain("保存");
+          setLocale("en");
+          await Vue.nextTick();
+          expect(getTextContent(button).trim()).toBe("Advanced");
+          setLocale("zh-CN");
+          await Vue.nextTick();
+        }
       }
       const generalButton = categoryButtons[0]!;
       if (typeof generalButton.props.onClick !== "function")
         throw new Error("Missing general handler");
       generalButton.props.onClick();
       await Vue.nextTick();
+      const lightweightOption = findNode(
+        panel,
+        (node) => node.props.name === "lightweight-on-close",
+      );
+      expect(lightweightOption?.props.disabled).toBe(false);
+      const closeOptions = ["exit", "tray", "exit", "tray"] as const;
+      for (const value of closeOptions) {
+        const radio = findNode(
+          panel,
+          (node) => node.props.name === "close-behavior" && node.props.value === value,
+        );
+        const change = radio?.props["native-change"];
+        if (!radio || typeof change !== "function") throw new Error("Missing close behavior event");
+        Reflect.set(radio, "checked", true);
+        change({ target: radio });
+        await Vue.nextTick();
+        expect(lightweightOption?.props.disabled).toBe(value !== "tray");
+        for (const option of closeOptions) {
+          const input = findNode(
+            panel,
+            (node) => node.props.name === "close-behavior" && node.props.value === option,
+          );
+          expect(Reflect.get(input!, "checked")).toBe(option === value);
+        }
+      }
       const languageSelect = findNode(panel, (node) => node.props.name === "locale");
       expect(languageSelect?.type).toBe("select");
       expect(languageSelect?.children.map((node) => getTextContent(node))).toEqual([

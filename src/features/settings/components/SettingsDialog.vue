@@ -28,6 +28,7 @@ import {
 } from "@/features/settings/accent";
 import { applyAppearance } from "@/features/settings/appearance";
 import BackupOptions from "@/features/backup/components/BackupOptions.vue";
+import AboutPanel from "@/features/settings/about/AboutPanel.vue";
 import MonitoringOptions from "@/features/library/monitoring/MonitoringOptions.vue";
 import type { MonitoringFolder } from "@/features/library/monitoring/types";
 
@@ -62,11 +63,10 @@ const categories = {
   general: "常规",
   appearance: "外观",
   library: "媒体库",
-  monitoring: "监视文件夹",
   lyrics: "歌词",
   shortcuts: "快捷键",
-  diagnostics: "诊断",
-  backup: "备份",
+  advanced: "高级",
+  about: "关于",
 } as const;
 const selectedCategory = ref<keyof typeof categories>("general");
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
@@ -330,9 +330,7 @@ defineExpose({ show });
           :aria-labelledby="`settings-category-${selectedCategory}`"
           class="min-h-0 min-w-0 p-5 sm:p-6"
           :class="
-            selectedCategory === 'shortcuts' || selectedCategory === 'monitoring'
-              ? 'flex flex-col overflow-hidden'
-              : 'overflow-y-auto'
+            selectedCategory === 'shortcuts' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
           "
         >
           <div
@@ -458,7 +456,10 @@ defineExpose({ show });
             <p id="close-behavior-description" class="mb-3 text-sm font-semibold">
               {{ t("关闭窗口时") }}
             </p>
-            <label class="flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3">
+            <label
+              key="tray"
+              class="flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
+            >
               <input
                 v-model="closeBehavior"
                 aria-describedby="close-behavior-description"
@@ -470,6 +471,21 @@ defineExpose({ show });
               <span class="text-sm">{{ t("缩小到托盘") }}</span>
             </label>
             <label
+              key="lightweight"
+              class="mt-2 ml-9 flex items-start gap-3 py-2 pr-3 text-sm"
+              :class="closeBehavior === 'tray' ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+            >
+              <input
+                v-model="lightweightOnClose"
+                :disabled="closeBehavior !== 'tray'"
+                type="checkbox"
+                name="lightweight-on-close"
+                class="accent-app-accent mt-1"
+              />
+              <span>{{ t("关闭到托盘时进入轻量模式") }}</span>
+            </label>
+            <label
+              key="exit"
               class="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
             >
               <input
@@ -481,16 +497,6 @@ defineExpose({ show });
                 value="exit"
               />
               <span class="text-sm">{{ t("直接退出") }}</span>
-            </label>
-            <label class="mt-5 flex cursor-pointer items-start gap-3 text-sm">
-              <input
-                v-model="lightweightOnClose"
-                :disabled="closeBehavior !== 'tray'"
-                type="checkbox"
-                name="lightweight-on-close"
-                class="accent-app-accent mt-1"
-              />
-              <span>{{ t("关闭到托盘时进入轻量模式") }}</span>
             </label>
           </fieldset>
           <fieldset
@@ -608,39 +614,34 @@ defineExpose({ show });
               </table>
             </div>
           </fieldset>
-          <BackupOptions v-else-if="selectedCategory === 'backup'" @busy="isBackingUp = $event" />
-          <fieldset v-else-if="selectedCategory === 'diagnostics'" :disabled="!isTauriApp">
-            <legend class="sr-only">{{ t("诊断日志") }}</legend>
-            <button
-              type="button"
-              class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
-              @click="openLogs"
-            >
-              {{ t("打开日志目录") }}
-            </button>
-            <label class="mt-5 flex items-center gap-3 text-sm">
-              <input
-                v-model="detailedLogging"
-                :disabled="isChangingLogging"
-                type="checkbox"
-                class="accent-app-accent"
-                @change="changeLogging"
-              />
-              {{ t("详细日志（下次启动恢复默认）") }}
-            </label>
-          </fieldset>
-          <fieldset
-            v-else-if="selectedCategory === 'monitoring'"
-            class="flex min-h-0 min-w-0 flex-1 flex-col"
-            :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
-          >
-            <legend class="sr-only">{{ t("监视文件夹") }}</legend>
-            <MonitoringOptions v-model="monitoringFolders">
-              <template #heading>
-                <h3 class="mr-auto self-start text-sm font-semibold">{{ t("监视文件夹") }}</h3>
-              </template>
-            </MonitoringOptions>
-          </fieldset>
+          <AboutPanel v-else-if="selectedCategory === 'about'" />
+          <template v-else-if="selectedCategory === 'advanced'">
+            <fieldset :disabled="!isTauriApp || isBackingUp">
+              <legend class="sr-only">{{ t("诊断日志") }}</legend>
+              <h4 class="mb-3 text-sm font-semibold">{{ t("诊断") }}</h4>
+              <button
+                type="button"
+                class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
+                @click="openLogs"
+              >
+                {{ t("打开日志目录") }}
+              </button>
+              <label class="mt-5 flex items-center gap-3 text-sm">
+                <input
+                  v-model="detailedLogging"
+                  :disabled="isChangingLogging"
+                  type="checkbox"
+                  class="accent-app-accent"
+                  @change="changeLogging"
+                />
+                {{ t("详细日志（下次启动恢复默认）") }}
+              </label>
+            </fieldset>
+            <div class="mt-6">
+              <h4 class="mb-3 text-sm font-semibold">{{ t("备份") }}</h4>
+              <BackupOptions @busy="isBackingUp = $event" />
+            </div>
+          </template>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
             <legend class="sr-only">{{ t("媒体库") }}</legend>
             <h4 class="mb-3 text-sm font-semibold">{{ t("专辑排序") }}</h4>
@@ -670,6 +671,13 @@ defineExpose({ show });
               <input v-model="showPlaybackStatistics" type="checkbox" class="accent-app-accent" />
               {{ t("显示播放统计") }}
             </label>
+            <div class="mt-5 flex min-h-48 min-w-0 flex-col">
+              <MonitoringOptions v-model="monitoringFolders">
+                <template #heading>
+                  <h4 class="mr-auto self-start text-sm font-semibold">{{ t("监视文件夹") }}</h4>
+                </template>
+              </MonitoringOptions>
+            </div>
           </fieldset>
         </section>
       </div>
@@ -686,7 +694,7 @@ defineExpose({ show });
           {{ t("取消") }}
         </button>
         <button
-          v-if="selectedCategory !== 'backup'"
+          v-if="selectedCategory !== 'about'"
           class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!isTauriApp || !isLoaded || isLoading || isSaving || isBackingUp"
           type="submit"
