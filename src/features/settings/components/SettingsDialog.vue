@@ -446,39 +446,39 @@ defineExpose({ show });
                 />
               </div>
             </div>
-            <label
-              class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
-            >
-              <input
-                v-model="reducedMotion"
-                class="accent-app-accent mt-1"
-                name="reduced-motion"
-                type="checkbox"
-              />
-              <span class="text-sm font-semibold">{{ t("减少动态效果") }}</span>
-            </label>
-            <label
-              class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
-            >
-              <input
-                v-model="albumCoverBackground"
-                class="accent-app-accent mt-1"
-                name="album-cover-background"
-                type="checkbox"
-              />
-              <span class="text-sm font-semibold">{{ t("专辑详情封面背景") }}</span>
-            </label>
-            <label
-              class="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3"
-            >
-              <input
-                v-model="playingCoverBackground"
-                class="accent-app-accent mt-1"
-                name="playing-cover-background"
-                type="checkbox"
-              />
-              <span class="text-sm font-semibold">{{ t("播放页封面背景") }}</span>
-            </label>
+            <div role="group" aria-labelledby="motion-label" class="mt-5 space-y-3">
+              <h4 id="motion-label" class="text-sm font-semibold">{{ t("动态效果") }}</h4>
+              <label class="flex cursor-pointer items-start gap-3">
+                <input
+                  v-model="reducedMotion"
+                  class="accent-app-accent mt-1"
+                  name="reduced-motion"
+                  type="checkbox"
+                />
+                <span class="text-sm font-semibold">{{ t("减少动态效果") }}</span>
+              </label>
+            </div>
+            <div role="group" aria-labelledby="cover-background-label" class="mt-5 space-y-3">
+              <h4 id="cover-background-label" class="text-sm font-semibold">{{ t("封面背景") }}</h4>
+              <label class="flex cursor-pointer items-start gap-3">
+                <input
+                  v-model="albumCoverBackground"
+                  class="accent-app-accent mt-1"
+                  name="album-cover-background"
+                  type="checkbox"
+                />
+                <span class="text-sm font-semibold">{{ t("专辑详情封面背景") }}</span>
+              </label>
+              <label class="flex cursor-pointer items-start gap-3">
+                <input
+                  v-model="playingCoverBackground"
+                  class="accent-app-accent mt-1"
+                  name="playing-cover-background"
+                  type="checkbox"
+                />
+                <span class="text-sm font-semibold">{{ t("播放页封面背景") }}</span>
+              </label>
+            </div>
           </fieldset>
           <fieldset
             v-else-if="selectedCategory === 'general'"
@@ -545,30 +545,35 @@ defineExpose({ show });
           <fieldset
             v-else-if="selectedCategory === 'lyrics'"
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+            aria-labelledby="netease-lyrics-label"
           >
-            <legend class="sr-only">{{ t("歌词来源") }}</legend>
-            <h4 class="mb-3 text-sm font-semibold">{{ t("歌词来源") }}</h4>
-            <label class="flex cursor-pointer items-start gap-3 rounded-lg bg-white/5 px-3 py-3">
-              <input
-                v-model="neteaseEnabled"
-                type="checkbox"
-                name="netease-lyrics"
-                class="accent-app-accent mt-1"
-              />
-              <span class="text-sm">{{ t("网易云音乐") }}</span>
-            </label>
-            <label class="mt-5 flex flex-col gap-2 text-sm font-semibold">
-              {{ t("网易云歌词内容") }}
-              <select
-                v-model="neteaseLyricsMode"
-                name="netease-lyrics-mode"
-                class="bg-app-interactive focus-visible:outline-app-accent rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
-              >
-                <option value="original">{{ t("原始歌词") }}</option>
-                <option value="translated">{{ t("翻译歌词") }}</option>
-                <option value="bilingual">{{ t("双语歌词") }}</option>
-              </select>
-            </label>
+            <legend class="sr-only">{{ t("网易云音乐") }}</legend>
+            <h4 id="netease-lyrics-label" class="mb-3 text-sm font-semibold">
+              {{ t("网易云音乐") }}
+            </h4>
+            <div>
+              <label class="flex cursor-pointer items-start gap-3 text-sm">
+                <input
+                  v-model="neteaseEnabled"
+                  type="checkbox"
+                  name="netease-lyrics"
+                  class="accent-app-accent mt-1"
+                />
+                <span class="text-sm">{{ t("启用") }}</span>
+              </label>
+              <div class="mt-3">
+                <select
+                  v-model="neteaseLyricsMode"
+                  name="netease-lyrics-mode"
+                  :aria-label="t('歌词内容')"
+                  class="bg-app-interactive focus-visible:outline-app-accent w-full min-w-0 rounded-lg border border-white/10 px-3 py-2 font-normal text-white focus-visible:outline-2"
+                >
+                  <option value="original">{{ t("原始歌词") }}</option>
+                  <option value="translated">{{ t("翻译歌词") }}</option>
+                  <option value="bilingual">{{ t("双语歌词") }}</option>
+                </select>
+              </div>
+            </div>
           </fieldset>
           <fieldset
             v-else-if="selectedCategory === 'shortcuts'"
@@ -707,6 +712,7 @@ defineExpose({ show });
             :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
           >
             <legend class="sr-only">{{ playbackLabel }}</legend>
+            <h4 id="playback-loudness-label" class="mb-3 text-sm font-semibold">{{ t("响度") }}</h4>
             <label class="flex items-center gap-3 text-sm">
               <input
                 v-model="replayGain"

@@ -1,5 +1,6 @@
 export const settingsMessages: Record<string, string> = {
   设置: "Settings",
+  响度: "Loudness",
   "ReplayGain 响度归一化": "ReplayGain normalization",
   "ReplayGain 前级增益（dB）": "ReplayGain preamp (dB)",
   "前级增益必须为 −20 至 +20 dB，步进 0.5 dB":
@@ -103,6 +104,8 @@ export const settingsMessages: Record<string, string> = {
   橙色: "Orange",
   选择自定义主题色: "Choose custom accent color",
   自定义主题色: "Custom accent color",
+  动态效果: "Motion",
+  封面背景: "Cover backgrounds",
   减少动态效果: "Reduce motion",
   专辑详情封面背景: "Album cover background",
   播放页封面背景: "Now playing cover background",
@@ -115,7 +118,7 @@ export const settingsMessages: Record<string, string> = {
   "进入轻量模式失败，请查看日志": "Could not enter lightweight mode. Check the logs.",
   歌词来源: "Lyrics sources",
   网易云音乐: "NetEase Cloud Music",
-  网易云歌词内容: "NetEase lyrics content",
+  歌词内容: "Lyrics content",
   原始歌词: "Original lyrics",
   翻译歌词: "Translated lyrics",
   双语歌词: "Bilingual lyrics",

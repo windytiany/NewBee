@@ -759,12 +759,19 @@ describe("settings dialog", () => {
           expect(findNode(panel, (node) => node.props.name === "replay-gain-preamp")).toBeNull();
         }
         if (category === "播放") {
+          const loudnessHeading = findNode(
+            panel,
+            (node) => node.type === "h4" && node.props.id === "playback-loudness-label",
+          );
+          if (!loudnessHeading) throw new Error("Missing loudness heading");
+          expect(getTextContent(loudnessHeading)).toBe("响度");
           expect(getTextContent(panel)).not.toContain("监视文件夹");
           expect(getTextContent(panel)).not.toContain("专辑排序");
           expect(findNode(panel, (node) => node.props.name === "scan-replay-gain")).toBeNull();
           setLocale("en");
           await Vue.nextTick();
           expect(getTextContent(button).trim()).toBe("Playback");
+          expect(getTextContent(loudnessHeading)).toBe("Loudness");
           setLocale("zh-CN");
           await Vue.nextTick();
           const preamp = findNode(panel, (node) => node.props.name === "replay-gain-preamp");
@@ -979,6 +986,34 @@ describe("settings dialog", () => {
             expect(Reflect.get(textInput, "value")).toBe(color);
             expect(bluePreset.props["aria-pressed"]).toBe(false);
           }
+          for (const [id, chinese, english, controls] of [
+            ["motion-label", "动态效果", "Motion", ["reduced-motion"]],
+            [
+              "cover-background-label",
+              "封面背景",
+              "Cover backgrounds",
+              ["album-cover-background", "playing-cover-background"],
+            ],
+          ] as const) {
+            const group = findNode(
+              panel,
+              (node) => node.props.role === "group" && node.props["aria-labelledby"] === id,
+            );
+            if (!group) throw new Error(`Missing appearance group ${id}`);
+            const heading = findNode(group, (node) => node.type === "h4" && node.props.id === id)!;
+            expect(getTextContent(heading)).toBe(chinese);
+            for (const name of controls) {
+              const checkbox = findNode(group, (node) => node.props.name === name);
+              expect(checkbox).not.toBeNull();
+              expect(String(checkbox?.parent?.props.class)).not.toContain("bg-");
+              expect(String(checkbox?.parent?.props.class)).not.toContain("px-");
+            }
+            setLocale("en");
+            await Vue.nextTick();
+            expect(getTextContent(heading)).toBe(english);
+            setLocale("zh-CN");
+            await Vue.nextTick();
+          }
           expect(getTextContent(panel)).toContain("减少动态效果");
           expect(findNode(panel, (node) => node.props.name === "reduced-motion")?.props.type).toBe(
             "checkbox",
@@ -993,17 +1028,52 @@ describe("settings dialog", () => {
           ).toBe("checkbox");
         }
         if (category === "歌词") {
-          expect(getTextContent(panel)).toContain("网易云歌词内容");
-          const neteaseModeSelect = findNode(
+          const providerHeading = findNode(
             panel,
+            (node) => node.type === "h4" && node.props.id === "netease-lyrics-label",
+          );
+          if (!providerHeading) throw new Error("Missing lyrics provider heading");
+          expect(getTextContent(providerHeading)).toBe("网易云音乐");
+          expect(getTextContent(panel)).not.toContain("歌词来源");
+          const providerGroup = findNode(
+            panel,
+            (node) =>
+              node.type === "fieldset" && node.props["aria-labelledby"] === "netease-lyrics-label",
+          );
+          expect(providerGroup).not.toBeNull();
+          const providerToggle = findNode(
+            providerGroup!,
+            (node) => node.props.name === "netease-lyrics",
+          );
+          const toggleLabel = providerToggle?.parent;
+          if (!toggleLabel) throw new Error("Missing lyrics provider toggle");
+          expect(getTextContent(toggleLabel).trim()).toBe("启用");
+          expect(String(toggleLabel.props.class)).not.toContain("bg-");
+          expect(String(toggleLabel.props.class)).not.toContain("px-");
+          expect(getTextContent(panel)).not.toContain("歌词内容");
+          const neteaseModeSelect = findNode(
+            providerGroup!,
             (node) => node.props.name === "netease-lyrics-mode",
           );
           expect(neteaseModeSelect?.type).toBe("select");
+          const modeRow = neteaseModeSelect?.parent;
+          if (!modeRow) throw new Error("Missing lyrics content row");
+          expect(String(modeRow.props.class)).not.toContain("ml-");
+          expect(neteaseModeSelect?.props["aria-label"]).toBe("歌词内容");
+          expect(String(neteaseModeSelect?.props.class)).toContain("font-normal");
           expect(neteaseModeSelect?.children.map((node) => node.props.value)).toEqual([
             "original",
             "translated",
             "bilingual",
           ]);
+          setLocale("en");
+          await Vue.nextTick();
+          expect(getTextContent(providerHeading)).toBe("NetEase Cloud Music");
+          expect(getTextContent(toggleLabel).trim()).toBe("Enabled");
+          expect(getTextContent(panel)).not.toContain("Lyrics content");
+          expect(neteaseModeSelect?.props["aria-label"]).toBe("Lyrics content");
+          setLocale("zh-CN");
+          await Vue.nextTick();
         }
       }
       const shortcutsButton = findNode(
