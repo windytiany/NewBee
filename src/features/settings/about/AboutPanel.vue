@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
-import UpdatePanel from "@/shared/update/UpdatePanel.vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import config from "../../../../src-tauri/tauri.conf.json";
 import logo from "../../../../src-tauri/icons/128x128.png";
@@ -43,6 +42,5 @@ async function openRepository(event: InstanceType<typeof globalThis.MouseEvent>)
         >
       </dd>
     </dl>
-    <UpdatePanel />
   </div>
 </template>

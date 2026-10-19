@@ -23,6 +23,7 @@ export type Settings = {
   playingCoverBackground: boolean;
   closeBehavior: "tray" | "exit";
   lightweightOnClose: boolean;
+  checkUpdatesOnStartup: boolean;
   showPlaybackStatistics: boolean;
   replayGain: boolean;
   replayGainPreamp: number;

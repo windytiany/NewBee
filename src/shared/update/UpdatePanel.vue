@@ -27,8 +27,6 @@ const status = computed(() => {
 
 <template>
   <section v-if="updater.supported" class="w-full max-w-sm space-y-3" :aria-label="t('应用更新')">
-    <p v-if="status" role="status" class="text-app-muted text-sm">{{ status }}</p>
-    <p v-if="error" role="alert" class="text-sm text-red-400">{{ t(error) }}</p>
     <progress
       v-if="phase === 'downloading'"
       :aria-label="t('下载进度')"
@@ -36,12 +34,12 @@ const status = computed(() => {
       :max="Math.max(1, total ?? 1)"
       class="accent-app-accent w-full"
     ></progress>
-    <div class="flex justify-center gap-3">
+    <div class="flex flex-wrap gap-3">
       <button
         v-if="phase !== 'ready' && phase !== 'installing'"
         type="button"
         :disabled="busy"
-        class="bg-app-interactive focus-visible:outline-app-accent rounded-lg px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+        class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
         @click="updater.check()"
       >
         {{ t("检查更新") }}
@@ -49,7 +47,7 @@ const status = computed(() => {
       <button
         v-if="phase === 'available'"
         type="button"
-        class="bg-app-accent focus-visible:outline-app-accent rounded-lg px-4 py-2 text-sm text-black hover:brightness-110 focus-visible:outline-2"
+        class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
         @click="updater.download()"
       >
         {{ t("更新") }}
@@ -58,11 +56,13 @@ const status = computed(() => {
         v-if="phase === 'ready' || phase === 'installing'"
         type="button"
         :disabled="busy"
-        class="bg-app-accent focus-visible:outline-app-accent rounded-lg px-4 py-2 text-sm text-black hover:brightness-110 focus-visible:outline-2 disabled:opacity-50"
+        class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
         @click="updater.install()"
       >
         {{ t("重启并更新") }}
       </button>
     </div>
+    <p v-if="status" role="status" class="text-app-muted text-sm">{{ status }}</p>
+    <p v-if="error" role="alert" class="text-sm text-red-400">{{ t(error) }}</p>
   </section>
 </template>

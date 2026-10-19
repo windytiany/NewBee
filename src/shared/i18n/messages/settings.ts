@@ -29,6 +29,7 @@ export const settingsMessages: Record<string, string> = {
   版本: "Version",
   应用更新: "Application updates",
   检查更新: "Check for updates",
+  启动时自动检查更新: "Check for updates on startup",
   更新: "Update",
   查看更新: "View update",
   重启并更新: "Restart and update",

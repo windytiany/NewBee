@@ -18,7 +18,6 @@ function mountPanel(desktop = true, open: (url: string) => Promise<void> = async
   const feedback: NotificationInput[] = [];
   const component = evaluateSource<{ default: Vue.Component }>(compileSfc(source, filename), {
     vue: Vue,
-    "@/shared/update/UpdatePanel.vue": { default: Vue.defineComponent({ render: () => null }) },
     "@tauri-apps/api/core": { isTauri: () => desktop },
     "@tauri-apps/plugin-opener": { openUrl: open },
     "../../../../src-tauri/tauri.conf.json": config,
@@ -41,6 +40,7 @@ describe("settings about", () => {
         src: "/app.png",
         alt: "NewBee",
       });
+      expect(findNode(root, (node) => node.type === "button")).toBeNull();
       expect(getTextContent(root)).toContain(config.version);
       expect(getTextContent(root)).toContain("windytiany");
       expect(getTextContent(root)).toContain("https://github.com/windytiany/NewBee");

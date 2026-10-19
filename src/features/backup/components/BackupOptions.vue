@@ -86,21 +86,21 @@ function openBackups() {
     <legend class="sr-only">{{ t("备份") }}</legend>
     <button
       type="button"
-      class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-50"
+      class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
       @click="exportBackup"
     >
       {{ t("导出备份") }}
     </button>
     <button
       type="button"
-      class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-50"
+      class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
       @click="importBackup"
     >
       {{ t("导入备份") }}
     </button>
     <button
       type="button"
-      class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-50"
+      class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
       @click="openBackups"
     >
       {{ t("打开备份目录") }}

@@ -6,8 +6,14 @@ import { evaluateSource, transpileScript } from "../support/module/loader";
 
 const output = transpileScript(await Bun.file("src/app/update.ts").text());
 
-function fixture(result: "available" | "latest" | "failed", supported = true) {
+function fixture(
+  result: "available" | "latest" | "failed",
+  supported = true,
+  autoCheck: boolean | undefined = true,
+  preferencesFail = false,
+) {
   let checks = 0;
+  let preferencesRead = 0;
   let opened = 0;
   const feedback: NotificationInput[] = [];
   const updater = createUpdater({
@@ -42,6 +48,15 @@ function fixture(result: "available" | "latest" | "failed", supported = true) {
       },
     },
     "@/shared/update/runtime": { getUpdater: () => updater },
+    "@/features/settings/api": {
+      createSettingsApi: () => ({
+        get: async () => {
+          preferencesRead++;
+          if (preferencesFail) throw new Error("settings unavailable");
+          return { checkUpdatesOnStartup: autoCheck };
+        },
+      }),
+    },
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/shared/lifecycle/activity": {
       watchActivity: (source: unknown) => {
@@ -65,6 +80,9 @@ function fixture(result: "available" | "latest" | "failed", supported = true) {
     feedback,
     get checks() {
       return checks;
+    },
+    get preferencesRead() {
+      return preferencesRead;
     },
     get opened() {
       return opened;
@@ -111,6 +129,7 @@ describe("startup updates", () => {
     await run.start();
     await run.start();
     expect(run.checks).toBe(1);
+    expect(run.preferencesRead).toBe(1);
     expect(run.feedback).toHaveLength(1);
     expect(run.feedback[0]?.message).toBe("发现新版本 0.2.0");
     run.feedback[0]?.action?.run();
@@ -126,10 +145,29 @@ describe("startup updates", () => {
     expect(run.feedback).toEqual([]);
   });
 
+  it("skips disabled startup checks without disabling manual checks", async () => {
+    const run = fixture("available", true, false);
+    await run.start();
+    expect(run.preferencesRead).toBe(1);
+    expect(run.checks).toBe(0);
+    expect(run.feedback).toEqual([]);
+    await run.updater.check();
+    expect(run.checks).toBe(1);
+    expect(run.updater.phase.value).toBe("available");
+  });
+
+  it("does not check if the saved preference cannot be read", async () => {
+    const run = fixture("available", true, true, true);
+    await run.start();
+    expect(run.checks).toBe(0);
+    expect(run.feedback).toEqual([]);
+  });
+
   it("does not check outside the supported desktop", async () => {
     const run = fixture("available", false);
     await run.start();
     expect(run.checks).toBe(0);
+    expect(run.preferencesRead).toBe(0);
     expect(run.feedback).toEqual([]);
   });
 });

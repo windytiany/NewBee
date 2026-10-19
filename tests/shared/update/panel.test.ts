@@ -68,6 +68,15 @@ describe("update panel", () => {
     await click("检查更新");
     await Vue.nextTick();
     expect(getTextContent(root)).toContain("发现新版本 0.2.0");
+    const section = findNode(root, (node) => node.type === "section")!;
+    const controls = findNode(section, (node) => node.type === "div")!;
+    const status = findNode(section, (node) => node.props.role === "status")!;
+    expect(section.children.indexOf(status)).toBeGreaterThan(section.children.indexOf(controls));
+    const buttonClass = String(button("检查更新").props.class);
+    expect(String(button("更新").props.class)).toBe(buttonClass);
+    expect(buttonClass).toContain("bg-white/10");
+    expect(buttonClass).toContain("hover:bg-white/20");
+    expect(buttonClass).not.toContain("bg-app-accent");
     const downloading = click("更新");
     await Vue.nextTick();
     expect(button("检查更新").props.disabled).toBe(true);
@@ -76,7 +85,7 @@ describe("update panel", () => {
     finish();
     await downloading;
     await Vue.nextTick();
-    expect(button("重启并更新")).toBeDefined();
+    expect(String(button("重启并更新").props.class)).toBe(buttonClass);
     expect(findNode(root, (node) => node.type === "progress")).toBeNull();
     setLocale("en");
     await Vue.nextTick();
@@ -99,6 +108,10 @@ describe("update panel", () => {
     await updater.check();
     await Vue.nextTick();
     expect(getTextContent(root)).toContain("检查更新失败，请稍后重试");
+    const section = findNode(root, (node) => node.type === "section")!;
+    const controls = findNode(section, (node) => node.type === "div")!;
+    const error = findNode(section, (node) => node.props.role === "alert")!;
+    expect(section.children.indexOf(error)).toBeGreaterThan(section.children.indexOf(controls));
     expect(getTextContent(root)).not.toContain("已是最新版本");
     fail = false;
     await updater.check();

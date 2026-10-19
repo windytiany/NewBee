@@ -47,6 +47,7 @@ type DialogBindings = {
   selectedLocale: Vue.Ref<Settings["locale"]>;
   closeBehavior: Vue.Ref<Settings["closeBehavior"]>;
   lightweightOnClose: Vue.Ref<boolean>;
+  checkUpdatesOnStartup: Vue.Ref<boolean>;
   themeMode: Vue.Ref<Settings["themeMode"]>;
   accentColor: Vue.Ref<Settings["accentColor"]>;
   reducedMotion: Vue.Ref<boolean>;
@@ -79,6 +80,7 @@ const defaults: Settings = {
   playingCoverBackground: false,
   closeBehavior: "tray",
   lightweightOnClose: false,
+  checkUpdatesOnStartup: true,
   showPlaybackStatistics: true,
   replayGain: true,
   replayGainPreamp: 0,
@@ -136,6 +138,7 @@ function createDialog(
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
     "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({ template: "<div />" }),
+    "@/shared/update/UpdatePanel.vue": Vue.defineComponent({ render: () => null }),
     "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
       template: "<div />",
     }),
@@ -198,7 +201,27 @@ function deferred<Value>() {
 }
 
 describe("settings dialog", () => {
-  it("opens updates in About and preserves an already open settings draft", async () => {
+  it("defaults legacy startup checks to enabled and persists the user's choice", async () => {
+    let persisted: Settings = { ...defaults };
+    Reflect.deleteProperty(persisted, "checkUpdatesOnStartup");
+    const { bindings } = createDialog(async (command, args) => {
+      if (command === "get_settings") return persisted;
+      if (command === "save_settings") persisted = (args as { settings: Settings }).settings;
+    });
+    await bindings.show();
+    expect(bindings.checkUpdatesOnStartup.value).toBe(true);
+    bindings.checkUpdatesOnStartup.value = false;
+    await bindings.save();
+    expect(persisted.checkUpdatesOnStartup).toBe(false);
+    await bindings.show();
+    expect(bindings.checkUpdatesOnStartup.value).toBe(false);
+    bindings.checkUpdatesOnStartup.value = true;
+    bindings.close();
+    await bindings.show();
+    expect(bindings.checkUpdatesOnStartup.value).toBe(false);
+  });
+
+  it("opens About and preserves an already open settings draft", async () => {
     let loads = 0;
     const { bindings } = createDialog(async () => {
       loads++;
@@ -212,7 +235,7 @@ describe("settings dialog", () => {
     await bindings.show();
     expect(bindings.selectedCategory.value).toBe("appearance");
     await bindings.show("about");
-    expect(bindings.selectedCategory.value).toBe("about");
+    expect(String(bindings.selectedCategory.value)).toBe("about");
     expect(bindings.lightweightOnClose.value).toBe(true);
     expect(loads).toBe(1);
   });
@@ -605,6 +628,9 @@ describe("settings dialog", () => {
       "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({
         setup: () => () => Vue.h("div", { "data-about": "" }, "NewBee"),
       }),
+      "@/shared/update/UpdatePanel.vue": Vue.defineComponent({
+        setup: () => () => Vue.h("section", { "data-update": "" }, "检查更新"),
+      }),
       "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({
         setup: () => () => Vue.h("button", { type: "button" }, "导出备份"),
       }),
@@ -690,6 +716,8 @@ describe("settings dialog", () => {
       expect(findNode(header, (node) => node.type === "button")).toBeNull();
       expect(getTextContent(footer)).toContain("取消");
       expect(getTextContent(footer)).toContain("保存");
+      expect(findNode(root, (node) => node.props.name === "check-updates-on-startup")).toBeNull();
+      expect(findNode(root, (node) => node.props["data-update"] === "")).toBeNull();
 
       const panel = findNode(root, (node) => node.props.id === "settings-category-panel");
       const navigation = findNode(root, (node) => node.props["aria-label"] === "设置分类");
@@ -775,11 +803,25 @@ describe("settings dialog", () => {
           await Vue.nextTick();
           expect(Reflect.get(preamp, "value")).toBe(0);
         }
+        const startupCheck = findNode(
+          panel,
+          (node) => node.props.name === "check-updates-on-startup",
+        );
+        const updatePanel = findNode(panel, (node) => node.props["data-update"] === "");
+        if (category !== "高级") {
+          expect(startupCheck).toBeNull();
+          expect(updatePanel).toBeNull();
+        }
         if (category === "关于") {
           expect(findNode(panel, (node) => node.props["data-about"] === "")).not.toBeNull();
           expect(getTextContent(footer)).not.toContain("保存");
         }
         if (category === "高级") {
+          expect(startupCheck?.props.type).toBe("checkbox");
+          expect(startupCheck && Reflect.get(startupCheck, "checked")).toBe(true);
+          expect(getTextContent(panel)).toContain("启动时自动检查更新");
+          expect(updatePanel).not.toBeNull();
+          expect(getTextContent(panel)).toContain("检查更新");
           expect(getTextContent(panel)).toContain("诊断");
           expect(getTextContent(panel)).toContain("打开日志目录");
           expect(getTextContent(panel)).toContain("备份");
@@ -1506,6 +1548,7 @@ describe("settings dialog", () => {
       scanReplayGain: false,
       themeMode: "dark",
       lightweightOnClose: false,
+      checkUpdatesOnStartup: true,
       monitoringFolders: [],
       showPlaybackStatistics: false,
       layoutDensity: "regular",
@@ -1628,6 +1671,7 @@ describe("settings dialog", () => {
           playingCoverBackground: false,
           closeBehavior: "exit",
           lightweightOnClose: false,
+          checkUpdatesOnStartup: true,
           showPlaybackStatistics: true,
           replayGain: true,
           replayGainPreamp: 0,
@@ -1789,6 +1833,7 @@ describe("settings dialog", () => {
       scanReplayGain: false,
       themeMode: "light",
       lightweightOnClose: false,
+      checkUpdatesOnStartup: true,
       monitoringFolders: [],
       showPlaybackStatistics: false,
       layoutDensity: "regular",

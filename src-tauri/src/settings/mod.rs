@@ -103,6 +103,7 @@ pub struct Settings {
     pub playing_cover_background: bool,
     pub close_behavior: CloseBehavior,
     pub lightweight_on_close: bool,
+    pub check_updates_on_startup: bool,
     pub show_playback_statistics: bool,
     pub replay_gain: bool,
     #[serde(deserialize_with = "deserialize_replay_gain_preamp")]
@@ -130,6 +131,7 @@ impl Default for Settings {
             playing_cover_background: false,
             close_behavior: CloseBehavior::default(),
             lightweight_on_close: false,
+            check_updates_on_startup: true,
             show_playback_statistics: true,
             replay_gain: true,
             replay_gain_preamp: 0.0,

@@ -29,6 +29,7 @@ import {
 import { applyAppearance } from "@/features/settings/appearance";
 import BackupOptions from "@/features/backup/components/BackupOptions.vue";
 import AboutPanel from "@/features/settings/about/AboutPanel.vue";
+import UpdatePanel from "@/shared/update/UpdatePanel.vue";
 import MonitoringOptions from "@/features/library/monitoring/MonitoringOptions.vue";
 import type { MonitoringFolder } from "@/features/library/monitoring/types";
 
@@ -75,6 +76,7 @@ const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | nu
 const selectedLocale = ref<Settings["locale"]>(locale.value);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
 const lightweightOnClose = ref(false);
+const checkUpdatesOnStartup = ref(true);
 const themeMode = ref<Settings["themeMode"]>("system");
 const accentColor = ref(DEFAULT_ACCENT_COLOR);
 const normalizedAccentColor = computed(() => normalizeAccentColor(accentColor.value));
@@ -142,6 +144,7 @@ function draft(): Settings {
     locale: selectedLocale.value,
     closeBehavior: closeBehavior.value,
     lightweightOnClose: lightweightOnClose.value,
+    checkUpdatesOnStartup: checkUpdatesOnStartup.value,
     themeMode: themeMode.value,
     accentColor: accentColor.value,
     reducedMotion: reducedMotion.value,
@@ -225,6 +228,7 @@ async function show(category?: keyof typeof categories) {
     selectedLocale.value = settings.locale;
     closeBehavior.value = settings.closeBehavior;
     lightweightOnClose.value = settings.lightweightOnClose ?? false;
+    checkUpdatesOnStartup.value = settings.checkUpdatesOnStartup ?? true;
     themeMode.value = settings.themeMode;
     accentColor.value = settings.accentColor;
     reducedMotion.value = settings.reducedMotion;
@@ -655,12 +659,29 @@ defineExpose({ show });
           </fieldset>
           <AboutPanel v-else-if="selectedCategory === 'about'" />
           <template v-else-if="selectedCategory === 'advanced'">
+            <fieldset
+              :disabled="!isTauriApp || !isLoaded || isLoading || isSaving || isBackingUp"
+              class="mb-6"
+            >
+              <legend class="sr-only">{{ t("应用更新") }}</legend>
+              <h4 class="mb-3 text-sm font-semibold">{{ t("应用更新") }}</h4>
+              <label class="mb-4 flex cursor-pointer items-center gap-3 text-sm">
+                <input
+                  v-model="checkUpdatesOnStartup"
+                  type="checkbox"
+                  name="check-updates-on-startup"
+                  class="accent-app-accent"
+                />
+                {{ t("启动时自动检查更新") }}
+              </label>
+              <UpdatePanel />
+            </fieldset>
             <fieldset :disabled="!isTauriApp || isBackingUp">
               <legend class="sr-only">{{ t("诊断日志") }}</legend>
               <h4 class="mb-3 text-sm font-semibold">{{ t("诊断") }}</h4>
               <button
                 type="button"
-                class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
+                class="focus-visible:outline-app-accent rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 focus-visible:outline-2 disabled:opacity-50"
                 @click="openLogs"
               >
                 {{ t("打开日志目录") }}

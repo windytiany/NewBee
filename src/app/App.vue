@@ -28,7 +28,7 @@ import TitleBar from "@/app/shell/TitleBar.vue";
 useTrackBridge();
 const { activePage } = usePersistentActivePage();
 const titleBar = shallowRef<InstanceType<typeof TitleBar> | null>(null);
-useStartupUpdates(() => void titleBar.value?.showSettings("about"));
+useStartupUpdates(() => void titleBar.value?.showSettings("advanced"));
 const commandDialog = shallowRef<InstanceType<typeof CommandDialog> | null>(null);
 usePageFocus();
 const { bindings, run } = useShortcuts(

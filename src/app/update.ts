@@ -1,5 +1,7 @@
 import { onMounted, onUnmounted, watch } from "vue";
 import { getUpdater } from "@/shared/update/runtime";
+import { createSettingsApi } from "@/features/settings/api";
+import { logger } from "@/shared/logging/logger";
 import { watchActivity } from "@/shared/lifecycle/activity";
 import { notify } from "@/shared/notifications/center";
 import { t } from "@/shared/i18n/locale";
@@ -39,6 +41,13 @@ export function useStartupUpdates(openSettings: () => void) {
   onMounted(async () => {
     if (started || !updater.supported) return;
     started = true;
+    try {
+      const settings = await createSettingsApi().get();
+      if (settings.checkUpdatesOnStartup === false) return;
+    } catch (error) {
+      logger.warn("update", "startup_preferences_failed", error);
+      return;
+    }
     await updater.check();
     if (updater.phase.value !== "available") return;
     notify({

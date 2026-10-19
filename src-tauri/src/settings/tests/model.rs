@@ -123,6 +123,46 @@ fn statistics_visibility_defaults_to_enabled_and_persists() {
 }
 
 #[test]
+fn startup_update_checks_default_to_enabled_and_persist() {
+    assert!(Settings::default().check_updates_on_startup);
+    assert!(
+        serde_json::from_str::<Settings>("{}")
+            .unwrap()
+            .check_updates_on_startup
+    );
+    for value in [
+        serde_json::json!("false"),
+        serde_json::json!(null),
+        serde_json::json!(0),
+    ] {
+        assert!(serde_json::from_value::<Settings>(
+            serde_json::json!({"checkUpdatesOnStartup": value})
+        )
+        .is_err());
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    let state = SettingsState::load(path.clone()).unwrap();
+    assert!(state.get().unwrap().check_updates_on_startup);
+    for enabled in [false, true] {
+        state
+            .save(Settings {
+                check_updates_on_startup: enabled,
+                ..Settings::default()
+            })
+            .unwrap();
+        assert_eq!(
+            SettingsState::load(path.clone())
+                .unwrap()
+                .get()
+                .unwrap()
+                .check_updates_on_startup,
+            enabled
+        );
+    }
+}
+
+#[test]
 fn lightweight_mode_is_opt_in_and_persists() {
     assert!(!Settings::default().lightweight_on_close);
     assert!(
