@@ -24,6 +24,9 @@ export type Settings = {
   closeBehavior: "tray" | "exit";
   lightweightOnClose: boolean;
   showPlaybackStatistics: boolean;
+  replayGain: boolean;
+  replayGainPreamp: number;
+  scanReplayGain: boolean;
   monitoringFolders: MonitoringFolder[];
   albumSortBy: "name" | "year";
   albumSortOrder: "ascending" | "descending";

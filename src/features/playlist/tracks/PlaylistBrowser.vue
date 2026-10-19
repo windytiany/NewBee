@@ -160,16 +160,28 @@
           :disabled="props.isPlaylistActionPending"
           @close="closeContextMenu(true)"
         />
-        <DownloadMenuItem
-          :track-ids="contextTargetTrackIds"
-          :disabled="props.isPlaylistActionPending"
-          @close="closeContextMenu(true)"
-        />
-        <RereadMenuItem
-          :track-ids="contextTargetTrackIds"
-          :disabled="props.isPlaylistActionPending"
-          @close="closeContextMenu(true)"
-        />
+        <UpdateMenuItem :disabled="props.isPlaylistActionPending">
+          <DownloadMenuItem
+            :track-ids="contextTargetTrackIds"
+            :disabled="props.isPlaylistActionPending"
+            @close="closeContextMenu(true)"
+          />
+          <AnalysisMenuItem
+            :track-ids="contextTargetTrackIds"
+            :disabled="props.isPlaylistActionPending"
+            @close="closeContextMenu(true)"
+          />
+          <RestoreMenuItem
+            :track-ids="contextTargetTrackIds"
+            :disabled="props.isPlaylistActionPending"
+            @close="closeContextMenu(true)"
+          />
+          <RereadMenuItem
+            :track-ids="contextTargetTrackIds"
+            :disabled="props.isPlaylistActionPending"
+            @close="closeContextMenu(true)"
+          />
+        </UpdateMenuItem>
         <div class="my-1 border-t border-white/10" role="separator"></div>
         <button
           class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
@@ -231,7 +243,10 @@ import type { PlaylistSummary, PlaylistTrackSummary } from "@/features/playlist/
 import PlaylistTrack from "@/features/playlist/tracks/PlaylistTrack.vue";
 import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
+import AnalysisMenuItem from "@/features/loudness/AnalysisMenuItem.vue";
+import RestoreMenuItem from "@/features/loudness/RestoreMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
 import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";

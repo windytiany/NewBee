@@ -62,6 +62,7 @@ async function openLogs() {
 const categories = {
   general: "常规",
   appearance: "外观",
+  playback: "播放",
   library: "媒体库",
   lyrics: "歌词",
   shortcuts: "快捷键",
@@ -69,6 +70,7 @@ const categories = {
   about: "关于",
 } as const;
 const selectedCategory = ref<keyof typeof categories>("general");
+const playbackLabel = computed(() => (locale.value === "en" ? "Playback" : "播放"));
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const selectedLocale = ref<Settings["locale"]>(locale.value);
 const closeBehavior = ref<Settings["closeBehavior"]>("tray");
@@ -81,6 +83,9 @@ const layoutDensity = ref<Settings["layoutDensity"]>("regular");
 const albumCoverBackground = ref(false);
 const playingCoverBackground = ref(false);
 const showPlaybackStatistics = ref(true);
+const replayGain = ref(true);
+const replayGainPreamp = ref(0);
+const scanReplayGain = ref(false);
 const monitoringFolders = ref<MonitoringFolder[]>([]);
 const albumSortBy = ref<Settings["albumSortBy"]>("name");
 const albumSortOrder = ref<Settings["albumSortOrder"]>("ascending");
@@ -144,6 +149,9 @@ function draft(): Settings {
     albumCoverBackground: albumCoverBackground.value,
     playingCoverBackground: playingCoverBackground.value,
     showPlaybackStatistics: showPlaybackStatistics.value,
+    replayGain: replayGain.value,
+    replayGainPreamp: replayGainPreamp.value,
+    scanReplayGain: scanReplayGain.value,
     monitoringFolders: monitoringFolders.value.map((folder) => ({ ...folder })),
     albumSortBy: albumSortBy.value,
     albumSortOrder: albumSortOrder.value,
@@ -221,6 +229,9 @@ async function show() {
     albumCoverBackground.value = settings.albumCoverBackground;
     playingCoverBackground.value = settings.playingCoverBackground;
     showPlaybackStatistics.value = settings.showPlaybackStatistics;
+    replayGain.value = settings.replayGain ?? true;
+    replayGainPreamp.value = settings.replayGainPreamp ?? 0;
+    scanReplayGain.value = settings.scanReplayGain ?? false;
     monitoringFolders.value = (settings.monitoringFolders ?? []).map((folder) => ({ ...folder }));
     albumSortBy.value = settings.albumSortBy;
     albumSortOrder.value = settings.albumSortOrder;
@@ -249,6 +260,15 @@ function close() {
 async function save() {
   if (!isTauriApp || !isLoaded.value || isLoading.value || isSaving.value || isBackingUp.value)
     return;
+  const preamp = replayGainPreamp.value;
+  if (!Number.isFinite(preamp) || preamp < -20 || preamp > 20 || (preamp * 2) % 1 !== 0) {
+    notify({
+      type: "error",
+      message: t("前级增益必须为 −20 至 +20 dB，步进 0.5 dB"),
+      key: "settings-replay-gain-preamp",
+    });
+    return;
+  }
   const color = normalizedAccentColor.value;
   if (!color) {
     notify({
@@ -326,7 +346,7 @@ defineExpose({ show });
             type="button"
             @click="selectedCategory = category"
           >
-            {{ t(label) }}
+            {{ category === "playback" ? playbackLabel : t(label) }}
           </button>
         </nav>
         <section
@@ -658,9 +678,64 @@ defineExpose({ show });
               <BackupOptions @busy="isBackingUp = $event" />
             </div>
           </template>
+          <fieldset
+            v-else-if="selectedCategory === 'playback'"
+            :disabled="!isTauriApp || !isLoaded || isLoading || isSaving"
+          >
+            <legend class="sr-only">{{ playbackLabel }}</legend>
+            <label class="flex items-center gap-3 text-sm">
+              <input
+                v-model="replayGain"
+                name="replay-gain"
+                type="checkbox"
+                class="accent-app-accent"
+              />
+              {{ t("ReplayGain 响度归一化") }}
+            </label>
+            <div class="mt-3 ml-7 flex items-center gap-3 text-sm">
+              <label for="replay-gain-preamp">{{ t("ReplayGain 前级增益（dB）") }}</label>
+              <input
+                id="replay-gain-preamp"
+                v-model.number="replayGainPreamp"
+                name="replay-gain-preamp"
+                type="number"
+                min="-20"
+                max="20"
+                step="0.5"
+                required
+                :disabled="!replayGain"
+                class="bg-app-interactive focus-visible:outline-app-accent w-24 rounded-lg border border-white/10 px-3 py-2 text-white focus-visible:outline-2 disabled:opacity-50"
+              />
+              <button
+                type="button"
+                :aria-label="t('恢复默认')"
+                :disabled="!replayGain"
+                class="focus-visible:outline-app-accent rounded-lg p-2 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+                @click="replayGainPreamp = 0"
+              >
+                <RotateCcw :size="16" aria-hidden="true" />
+              </button>
+            </div>
+          </fieldset>
           <fieldset v-else :disabled="!isTauriApp || !isLoaded || isLoading || isSaving">
             <legend class="sr-only">{{ t("媒体库") }}</legend>
-            <h4 class="mb-3 text-sm font-semibold">{{ t("专辑排序") }}</h4>
+            <div class="flex min-h-48 min-w-0 flex-col">
+              <MonitoringOptions v-model="monitoringFolders">
+                <template #heading>
+                  <h4 class="mr-auto self-start text-sm font-semibold">{{ t("监视文件夹") }}</h4>
+                </template>
+              </MonitoringOptions>
+            </div>
+            <label class="mt-5 flex items-center gap-3 text-sm">
+              <input
+                v-model="scanReplayGain"
+                name="scan-replay-gain"
+                type="checkbox"
+                class="accent-app-accent"
+              />
+              {{ t("扫描时补齐 ReplayGain 标签") }}
+            </label>
+            <h4 class="mt-5 mb-3 text-sm font-semibold">{{ t("专辑排序") }}</h4>
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="text-app-muted flex flex-col gap-2 text-sm">
                 {{ t("排序依据") }}
@@ -687,13 +762,6 @@ defineExpose({ show });
               <input v-model="showPlaybackStatistics" type="checkbox" class="accent-app-accent" />
               {{ t("显示播放统计") }}
             </label>
-            <div class="mt-5 flex min-h-48 min-w-0 flex-col">
-              <MonitoringOptions v-model="monitoringFolders">
-                <template #heading>
-                  <h4 class="mr-auto self-start text-sm font-semibold">{{ t("监视文件夹") }}</h4>
-                </template>
-              </MonitoringOptions>
-            </div>
           </fieldset>
         </section>
       </div>

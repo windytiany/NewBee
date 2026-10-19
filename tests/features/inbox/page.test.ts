@@ -180,6 +180,24 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
           getTracks: async (ids: readonly number[]) => ids.map(track),
         }),
       },
+      "@/features/loudness/RestoreMenuItem.vue": Vue.defineComponent({
+        props: ["trackIds"],
+        setup: (props) => () =>
+          Vue.h(
+            "button",
+            { role: "menuitem", "data-restoration-targets": JSON.stringify(props.trackIds) },
+            "恢复原始响度",
+          ),
+      }),
+      "@/features/loudness/AnalysisMenuItem.vue": Vue.defineComponent({
+        props: ["trackIds"],
+        setup: (props) => () =>
+          Vue.h(
+            "button",
+            { role: "menuitem", "data-loudness-targets": JSON.stringify(props.trackIds) },
+            "分析响度",
+          ),
+      }),
       "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
         props: ["trackIds"],
         setup: (props) => () =>
@@ -212,6 +230,7 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
       }),
       "@/shared/notifications/center": { notify: (message: unknown) => messages.push(message) },
       "@lucide/vue": {
+        ChevronRight: Vue.defineComponent(() => () => null),
         ChevronDown: Vue.defineComponent(() => () => null),
         Check: Vue.defineComponent(() => () => null),
       },
@@ -299,7 +318,9 @@ function menuButton(root: Scene, label: string) {
   const button = findNode(
     root,
     (node) =>
-      node.type === "button" && node.props.role === "menuitem" && getTextContent(node) === label,
+      node.type === "button" &&
+      node.props.role === "menuitem" &&
+      getTextContent(node).trim() === label,
   );
   if (!button) throw new Error(`Missing menu action ${label}`);
   return button;
@@ -339,6 +360,8 @@ describe("Inbox workspace", () => {
     expect(context.scans).toEqual([[1, 2, 3]]);
     dispatch(pane, "onContextmenu");
     await settle();
+    dispatch(menuButton(context.root, "根据曲目更新标签"), "onMouseenter");
+    await settle();
     dispatch(menuButton(context.root, "重新读取标签"), "onClick");
     await settle();
     expect(context.scans).toEqual([
@@ -347,6 +370,8 @@ describe("Inbox workspace", () => {
     ]);
     clickRow(context.root, context.rows()[1]);
     dispatch(context.rows()[1], "onContextmenu");
+    await settle();
+    dispatch(menuButton(context.root, "根据曲目更新标签"), "onMouseenter");
     await settle();
     dispatch(menuButton(context.root, "重新读取标签"), "onClick");
     await settle();
@@ -362,8 +387,8 @@ describe("Inbox workspace", () => {
     dispatch(pane, "onKeydown", { key: "F5" });
     dispatch(pane, "onContextmenu");
     await settle();
-    expect(menuButton(context.root, "重新读取标签").props.disabled).toBe(true);
-    dispatch(menuButton(context.root, "重新读取标签"), "onClick");
+    expect(menuButton(context.root, "根据曲目更新标签").props.disabled).toBe(true);
+    dispatch(menuButton(context.root, "根据曲目更新标签"), "onClick");
     await settle();
     expect(context.scans).toEqual([]);
   });
@@ -389,7 +414,7 @@ describe("Inbox workspace", () => {
     const menu = findNode(context.root, (node) => node.props.id === "inbox-context-menu");
     if (!menu) throw new Error("Missing Inbox menu");
     visit(menu, (node) => {
-      if (node.props.role === "menuitem") items.push(getTextContent(node));
+      if (node.props.role === "menuitem") items.push(getTextContent(node).trim());
       if (node.props.role === "separator") items.push("|");
     });
     expect(items).toEqual([
@@ -402,12 +427,23 @@ describe("Inbox workspace", () => {
       "|",
       "编辑",
       "根据专辑更新标签",
-      "更新缺少的歌词",
-      "重新读取标签",
+      "根据曲目更新标签",
       "|",
       "从 Inbox 移除",
     ]);
-    for (const key of ["lyrics", "skip", "append"]) {
+    dispatch(menuButton(context.root, "根据曲目更新标签"), "onMouseenter");
+    await settle();
+    const submenu = findNode(
+      context.root,
+      (node) => node.props["aria-label"] === "根据曲目更新标签",
+    );
+    if (!submenu) throw new Error("Missing tag update submenu");
+    const actions: string[] = [];
+    visit(submenu, (node) => {
+      if (node.props.role === "menuitem") actions.push(getTextContent(node).trim());
+    });
+    expect(actions).toEqual(["更新缺少的歌词", "分析响度", "恢复原始响度", "重新读取标签"]);
+    for (const key of ["lyrics", "skip", "append", "loudness", "restoration"]) {
       expect(
         findNode(context.root, (node) => `data-${key}-targets` in node.props)?.props[
           `data-${key}-targets`
@@ -430,6 +466,8 @@ describe("Inbox workspace", () => {
     dispatch(context.rows()[1], "onContextmenu");
     await settle();
     expect(menuButton(context.root, "添加到播放列表").props["data-append-targets"]).toBe("[1,2,3]");
+    dispatch(menuButton(context.root, "根据曲目更新标签"), "onMouseenter");
+    await settle();
     expect(menuButton(context.root, "更新缺少的歌词").props["data-lyrics-targets"]).toBe("[1,2,3]");
     expect(context.inbox.state.tracks).toHaveLength(3);
     expect(context.ingestedIds).toEqual([]);

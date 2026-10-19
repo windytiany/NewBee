@@ -22,6 +22,8 @@ const passiveComponent = { __esModule: true, default: icon };
 const dependencies: Record<string, unknown> = {
   vue: Vue,
   "@/features/metadata/releases/components/ReleaseMenuItem.vue": passiveComponent,
+  "@/features/loudness/AnalysisMenuItem.vue": passiveComponent,
+  "@/features/loudness/RestoreMenuItem.vue": passiveComponent,
   "@/features/artwork/artist/PhotoEditor.vue": Vue.defineComponent({
     props: ["artist"],
     setup: (props) => () => Vue.h("photo", { "data-artist": props.artist }),

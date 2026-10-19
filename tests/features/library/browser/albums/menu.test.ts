@@ -41,11 +41,6 @@ const modules: Record<string, unknown> = {
     setup: (props) => () =>
       Vue.h("button", { "data-update-album": JSON.stringify(props.album) }, "根据专辑更新标签"),
   }),
-  "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
-    props: ["album"],
-    setup: (props) => () =>
-      Vue.h("button", { "data-lyrics-album": JSON.stringify(props.album) }, "更新缺少的歌词"),
-  }),
   "@/features/metadata/manual/components/EditMenuItem.vue": Vue.defineComponent({
     props: ["album"],
     setup: (props) => () =>
@@ -185,11 +180,11 @@ describe("album context menu", () => {
       "|",
       "编辑",
       "根据专辑更新标签",
-      "更新缺少的歌词",
       "|",
       "从库中删除",
     ]);
-    for (const key of ["data-edit-album", "data-update-album", "data-lyrics-album"]) {
+    expect(findNodes(container, (node) => node.text.includes("更新缺少的歌词"))).toEqual([]);
+    for (const key of ["data-edit-album", "data-update-album"]) {
       expect(findNodes(container, (node) => key in node.props)[0]?.props[key]).toBe(
         JSON.stringify(album),
       );

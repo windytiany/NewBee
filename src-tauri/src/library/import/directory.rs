@@ -33,7 +33,7 @@ pub async fn scan_music_library<R: tauri::Runtime>(
             use tauri::Manager;
             let database = app.state::<Database>();
             let mut last_update = std::time::Instant::now();
-            let result = run_scan(&database, |completed, total| {
+            let progress = |completed, total| {
                 if completed != 0
                     && completed != total
                     && last_update.elapsed() < std::time::Duration::from_millis(100)
@@ -51,7 +51,18 @@ pub async fn scan_music_library<R: tauri::Runtime>(
                 ) {
                     log::warn!("Failed to publish library scan progress: {error}");
                 }
-            });
+            };
+            // No settings means no consent to write tags.
+            let fill_replay_gain = app
+                .try_state::<crate::settings::SettingsState>()
+                .map(|state| state.get().map(|settings| settings.scan_replay_gain))
+                .transpose()?
+                .unwrap_or(false);
+            let result = if fill_replay_gain {
+                run_scan_with_replay_gain(&database, true, progress)
+            } else {
+                run_scan(&database, progress)
+            };
             log::info!("event=import_completed operationId={operation_id:?}");
             result
         })
@@ -62,6 +73,14 @@ pub async fn scan_music_library<R: tauri::Runtime>(
 
 pub(super) fn run_scan(
     database: &Database,
+    progress: impl FnMut(usize, usize),
+) -> Result<ImportResult, String> {
+    run_scan_with_replay_gain(database, false, progress)
+}
+
+pub(super) fn run_scan_with_replay_gain(
+    database: &Database,
+    fill_replay_gain: bool,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<ImportResult, String> {
     let directories = database.list_music_library_directories()?;
@@ -81,7 +100,11 @@ pub(super) fn run_scan(
         );
     }
 
-    scanning::run(database, &files, &mut result, &mut progress)?;
+    if fill_replay_gain {
+        scanning::run_with_replay_gain(database, &files, &mut result, true, &mut progress)?;
+    } else {
+        scanning::run(database, &files, &mut result, &mut progress)?;
+    }
 
     for path in database.library_track_paths()? {
         let path = PathBuf::from(path);

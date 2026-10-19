@@ -6,6 +6,7 @@ mod inbox;
 mod library;
 mod locking;
 mod logging;
+mod loudness;
 pub mod lyrics;
 mod metadata;
 mod playback;
@@ -56,6 +57,9 @@ pub fn run() {
                 app.manage(settings::SettingsState::load(
                     app_data_dir.join("settings.json"),
                 )?);
+                let settings = app.state::<settings::SettingsState>().get()?;
+                app.state::<playback::PlaybackState>()
+                    .set_replay_gain(settings.replay_gain, settings.replay_gain_preamp);
                 stage = "library_monitoring";
                 library::monitoring::initialize(app.handle())?;
                 stage = "playback_statistics";
@@ -158,6 +162,8 @@ pub fn run() {
             tracks::commands::get_tracks,
             tracks::commands::register_local_tracks,
             tracks::commands::reread_track_tags,
+            loudness::commands::analyze_track_loudness,
+            loudness::commands::restore_track_loudness,
             tracks::commands::is_track_metadata_pending,
             tracks::commands::get_track_presentation,
             artwork::get_track_artwork,

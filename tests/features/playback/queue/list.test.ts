@@ -130,6 +130,7 @@ async function mount(selected: string[] = [], registered = true) {
     compileSfc(source, "QueueList.vue"),
     {
       vue: Vue,
+      "@lucide/vue": { ChevronRight: Vue.defineComponent({ setup: () => () => null }) },
       "@/shared/interaction/item/useSelection": {
         useItemSelection: () => ({
           isSelected: (key: string) => selection.isSelected(scope, key),
@@ -143,6 +144,8 @@ async function mount(selected: string[] = [], registered = true) {
       "@/features/playback/queue/components/SkipMenuItem.vue": item("跳过"),
       "@/features/metadata/manual/components/EditMenuItem.vue": item("编辑"),
       "@/features/tracks/presentation/RereadMenuItem.vue": item("重新读取标签"),
+      "@/features/loudness/AnalysisMenuItem.vue": item("分析响度"),
+      "@/features/loudness/RestoreMenuItem.vue": item("恢复原始响度"),
     },
   ).default;
   const root = new Scene("root");
@@ -178,10 +181,18 @@ it("groups actions and immediately plays the selected queue occurrence rather th
   if (!menu) throw new Error("Missing queue menu");
   const labels: string[] = [];
   visit(menu, (node) => {
-    if (node.props.role === "menuitem") labels.push(getTextContent(node));
+    if (node.props.role === "menuitem") labels.push(getTextContent(node).trim());
     if (node.props.role === "separator") labels.push("|");
   });
-  expect(labels).toEqual(["立刻播放", "跳过", "|", "编辑", "重新读取标签", "|", "从播放队列移除"]);
+  expect(labels).toEqual([
+    "立刻播放",
+    "跳过",
+    "|",
+    "编辑",
+    "根据曲目更新标签",
+    "|",
+    "从播放队列移除",
+  ]);
   expect(String(menu.props.class).split(/\s+/)).toContain("w-56");
   expect(menu.props.style).toEqual({ left: "576px", top: "360px" });
   const play = context.button("立刻播放");
@@ -214,6 +225,16 @@ it("supports immediate playback of a single path-backed row and collapses unsele
   const play = context.button("立刻播放");
   if (!play) throw new Error("Missing immediate playback");
   expect(context.button("跳过")).toBeNull();
+  const update = findNode(context.root, (node) => node.props["aria-haspopup"] === "menu");
+  if (!update) throw new Error("Missing tag update submenu");
+  dispatch(update, "onMouseenter");
+  await settle();
+  const analysis = context.button("分析响度");
+  expect(analysis?.props.paths).toEqual(["C:\\second.flac"]);
+  expect(analysis?.props["data-targets"]).toBe("[]");
+  const restoration = context.button("恢复原始响度");
+  expect(restoration?.props.paths).toEqual(["C:\\second.flac"]);
+  expect(restoration?.props["data-targets"]).toBe("[]");
   dispatch(play, "onClick");
   await settle();
   expect(context.played).toEqual(["second"]);

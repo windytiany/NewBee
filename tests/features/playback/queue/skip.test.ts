@@ -66,10 +66,13 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
           contextMenuTargets: (_rowKey: string, keys: string[]) => keys,
         }),
       },
+      "@lucide/vue": { ChevronRight: Vue.defineComponent({ setup: () => () => null }) },
       "@/shared/notifications/useNotification": { useNotification: () => {} },
       "@/features/tracks/format": { formatTrackDuration: () => "1:00" },
       "@/features/playback/queue/components/QueueRow.vue": row,
       "@/features/metadata/manual/components/EditMenuItem.vue": menu,
+      "@/features/loudness/AnalysisMenuItem.vue": Vue.defineComponent({ setup: () => () => null }),
+      "@/features/loudness/RestoreMenuItem.vue": Vue.defineComponent({ setup: () => () => null }),
       "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
         props: ["trackIds"],
         setup: (props) => () =>
@@ -81,7 +84,18 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
   const skippedIds = Vue.ref([7]);
   const root = createHostNode("root");
   const app = createHostRenderer<HostNode>((type, text) =>
-    Object.assign(createHostNode(type, text), { focus() {}, querySelector: () => null }),
+    Object.assign(createHostNode(type, text), {
+      focus() {},
+      querySelector: () => null,
+      getBoundingClientRect: () => ({
+        left: 0,
+        top: 0,
+        right: 200,
+        bottom: 200,
+        width: 200,
+        height: 200,
+      }),
+    }),
   ).createApp(
     Vue.defineComponent({
       setup: () => () =>
@@ -122,6 +136,9 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
       "data-skip-targets"
     ],
   ).toBe("[7,7,8]");
+  const update = findNode(root, (node) => node.props["aria-haspopup"] === "menu")!;
+  await (update.props.onMouseenter as () => Promise<void>)();
+  await Vue.nextTick();
   expect(
     findNode(root, (node) => node.props["data-reread-targets"] !== undefined)?.props[
       "data-reread-targets"

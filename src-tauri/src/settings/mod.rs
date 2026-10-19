@@ -72,6 +72,23 @@ where
     Ok(color)
 }
 
+fn validate_replay_gain_preamp(value: f64) -> Result<(), String> {
+    if value.is_finite() && (-20.0..=20.0).contains(&value) && (value * 2.0).fract() == 0.0 {
+        Ok(())
+    } else {
+        Err("ReplayGain preamp must be between -20 and 20 dB in 0.5 dB steps".to_owned())
+    }
+}
+
+fn deserialize_replay_gain_preamp<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = f64::deserialize(deserializer)?;
+    validate_replay_gain_preamp(value).map_err(serde::de::Error::custom)?;
+    Ok(value)
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
@@ -87,6 +104,10 @@ pub struct Settings {
     pub close_behavior: CloseBehavior,
     pub lightweight_on_close: bool,
     pub show_playback_statistics: bool,
+    pub replay_gain: bool,
+    #[serde(deserialize_with = "deserialize_replay_gain_preamp")]
+    pub replay_gain_preamp: f64,
+    pub scan_replay_gain: bool,
     pub(crate) monitoring_folders: Vec<crate::library::monitoring::configuration::Folder>,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
@@ -110,6 +131,9 @@ impl Default for Settings {
             close_behavior: CloseBehavior::default(),
             lightweight_on_close: false,
             show_playback_statistics: true,
+            replay_gain: true,
+            replay_gain_preamp: 0.0,
+            scan_replay_gain: false,
             monitoring_folders: Vec::new(),
             album_sort_by: AlbumSortBy::default(),
             album_sort_order: AlbumSortOrder::default(),
@@ -149,6 +173,7 @@ impl SettingsState {
 
     pub(crate) fn save(&self, mut settings: Settings) -> Result<(), String> {
         validate_accent_color(&settings.accent_color)?;
+        validate_replay_gain_preamp(settings.replay_gain_preamp)?;
         settings.accent_color.make_ascii_lowercase();
         let mut providers = std::collections::HashSet::new();
         if settings
@@ -210,9 +235,13 @@ async fn save_settings_for_app<R: tauri::Runtime>(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let locale = settings.locale;
+        let replay_gain = settings.replay_gain;
+        let replay_gain_preamp = settings.replay_gain_preamp;
         crate::shortcuts::save_configuration(&app, &settings.shortcuts.clone(), || {
             app.state::<SettingsState>().save(settings)
         })?;
+        app.state::<crate::playback::PlaybackState>()
+            .set_replay_gain(replay_gain, replay_gain_preamp);
         if let Err(error) = crate::window::tray::update_locale(&app, locale) {
             log::warn!("Could not update tray menu language: {error}");
         }

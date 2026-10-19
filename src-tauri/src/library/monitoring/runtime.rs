@@ -123,10 +123,11 @@ impl Work {
         let exhausted = self.attempts >= MAX_ATTEMPTS;
         if !exhausted {
             self.attempts += 1;
-            scanning::run(
+            scanning::run_with_replay_gain(
                 &database,
                 &inventory::audio(&inventory),
                 &mut result,
+                app.state::<SettingsState>().get()?.scan_replay_gain,
                 |_, _| {},
             )?;
         }

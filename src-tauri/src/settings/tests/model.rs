@@ -248,6 +248,7 @@ fn accent_color_persists_normalized_and_loads_from_disk() {
     assert_eq!(state.get().unwrap().accent_color, "#1ed760");
     let app = tauri::test::mock_builder()
         .manage(state)
+        .manage(crate::playback::PlaybackState::default())
         .manage(crate::shortcuts::ShortcutsState::default())
         .build(tauri::generate_context!())
         .unwrap();
@@ -454,6 +455,7 @@ fn reduced_motion_persists_and_loads_from_disk() {
     assert!(!state.get().unwrap().reduced_motion);
     let app = tauri::test::mock_builder()
         .manage(state)
+        .manage(crate::playback::PlaybackState::default())
         .manage(crate::shortcuts::ShortcutsState::default())
         .build(tauri::generate_context!())
         .unwrap();
@@ -508,6 +510,7 @@ fn locale_persists_and_loads_from_disk() {
     let state = SettingsState::load(path.clone()).unwrap();
     let app = tauri::test::mock_builder()
         .manage(state)
+        .manage(crate::playback::PlaybackState::default())
         .manage(crate::shortcuts::ShortcutsState::default())
         .build(tauri::generate_context!())
         .unwrap();

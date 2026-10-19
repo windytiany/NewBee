@@ -10,7 +10,10 @@ import ArtistList from "@/features/artists/navigation/ArtistList.vue";
 import TrackRow from "@/features/tracks/presentation/TrackRow.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
+import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
+import AnalysisMenuItem from "@/features/loudness/AnalysisMenuItem.vue";
+import RestoreMenuItem from "@/features/loudness/RestoreMenuItem.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
 import AppendMenuItem from "@/features/playlist/tracks/AppendMenuItem.vue";
 import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDialog.vue";
@@ -275,20 +278,24 @@ watch(keys, (keys) => {
         :disabled="!trackIds.length || state.pending"
         @close="menu.close(true)"
       />
-      <DownloadMenuItem
-        :track-ids="trackIds"
-        :disabled="!trackIds.length || state.pending"
-        @close="menu.close(true)"
-      />
-      <button
-        role="menuitem"
-        type="button"
-        :disabled="scanBlocked"
-        class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        @click="action(trackIds.length ? 'reread' : 'refresh')"
-      >
-        {{ t("重新读取标签") }}
-      </button>
+      <UpdateMenuItem :disabled="scanBlocked">
+        <DownloadMenuItem
+          :track-ids="trackIds"
+          :disabled="!trackIds.length || state.pending"
+          @close="menu.close(true)"
+        />
+        <AnalysisMenuItem :track-ids="trackIds" :disabled="scanBlocked" @close="menu.close(true)" />
+        <RestoreMenuItem :track-ids="trackIds" :disabled="scanBlocked" @close="menu.close(true)" />
+        <button
+          role="menuitem"
+          type="button"
+          :disabled="scanBlocked"
+          class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
+          @click="action(trackIds.length ? 'reread' : 'refresh')"
+        >
+          {{ t("重新读取标签") }}
+        </button>
+      </UpdateMenuItem>
       <div class="my-1 border-t border-white/10" role="separator" />
       <button
         role="menuitem"

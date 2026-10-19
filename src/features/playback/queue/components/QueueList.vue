@@ -85,11 +85,23 @@
         :track-ids="contextTargetTrackIds"
         @close="closeQueueContextMenu(true)"
       />
-      <RereadMenuItem
-        v-if="contextRegisteredTrackIds.length"
-        :track-ids="contextRegisteredTrackIds"
-        @close="closeQueueContextMenu(true)"
-      />
+      <UpdateMenuItem v-if="contextRegisteredTrackIds.length || contextPaths.length">
+        <AnalysisMenuItem
+          :track-ids="contextRegisteredTrackIds"
+          :paths="contextPaths"
+          @close="closeQueueContextMenu(true)"
+        />
+        <RestoreMenuItem
+          :track-ids="contextRegisteredTrackIds"
+          :paths="contextPaths"
+          @close="closeQueueContextMenu(true)"
+        />
+        <RereadMenuItem
+          v-if="contextRegisteredTrackIds.length"
+          :track-ids="contextRegisteredTrackIds"
+          @close="closeQueueContextMenu(true)"
+        />
+      </UpdateMenuItem>
       <div class="my-1 border-t border-white/10" role="separator" />
       <button
         class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2"
@@ -116,7 +128,10 @@ import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { formatTrackDuration } from "@/features/tracks/format";
 import QueueRow from "@/features/playback/queue/components/QueueRow.vue";
 import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
+import AnalysisMenuItem from "@/features/loudness/AnalysisMenuItem.vue";
+import RestoreMenuItem from "@/features/loudness/RestoreMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
 
 type Track = PlaybackDisplayTrack;
@@ -181,6 +196,12 @@ const contextTargetTrackIds = computed(() => {
 const contextRegisteredTrackIds = computed(() =>
   contextTargetTrackIds.value.filter((target): target is number => typeof target === "number"),
 );
+const contextPaths = computed(() => {
+  const rowKeys = new Set(contextMenu.value?.payload.targetRowKeys ?? []);
+  return props.tracks
+    .filter((track) => rowKeys.has(track.rowKey) && track.trackId === null)
+    .flatMap((track) => (track.path ? [track.path] : []));
+});
 
 watch(visibleRowKeys, (rowKeys) => queueFocus.syncVisibleItems(rowKeys), { immediate: true });
 

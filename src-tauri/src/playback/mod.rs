@@ -1,4 +1,5 @@
 mod continuous;
+mod gain;
 #[cfg(windows)]
 pub(crate) mod media;
 mod persistence;
@@ -18,7 +19,7 @@ use spectrum::{SpectrumCapture, SpectrumSource, BAND_COUNT};
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{Manager, State};
@@ -28,6 +29,8 @@ pub struct PlaybackState {
     output: Mutex<Option<MixerDeviceSink>>,
     volume: Mutex<u8>,
     next_playback_id: AtomicU64,
+    replay_gain: Arc<AtomicBool>,
+    replay_gain_preamp: Arc<AtomicU64>,
 }
 
 impl Default for PlaybackState {
@@ -37,7 +40,17 @@ impl Default for PlaybackState {
             output: Mutex::new(None),
             volume: Mutex::new(100),
             next_playback_id: AtomicU64::new(0),
+            replay_gain: Arc::new(AtomicBool::new(true)),
+            replay_gain_preamp: Arc::new(AtomicU64::new(0.0_f64.to_bits())),
         }
+    }
+}
+
+impl PlaybackState {
+    pub(crate) fn set_replay_gain(&self, enabled: bool, preamp_db: f64) {
+        self.replay_gain_preamp
+            .store(preamp_db.to_bits(), Ordering::Relaxed);
+        self.replay_gain.store(enabled, Ordering::Relaxed);
     }
 }
 
@@ -126,7 +139,7 @@ pub(crate) fn play_target(
         row_key: Some(target.row_key.clone()),
         previous_playback_id: None,
     };
-    let prepared = prepare_track(Path::new(&track.path), now_playing.clone())
+    let prepared = prepare_track(Path::new(&track.path), now_playing.clone(), state)
         .map_err(PlaybackError::into_play_command_message)?;
     start_playback(prepared, state, app).map_err(PlaybackError::into_message)?;
     #[cfg(windows)]
@@ -177,7 +190,7 @@ pub(crate) fn prepare_next_track(
         row_key: Some(target.row_key.clone()),
         previous_playback_id: Some(playback_id),
     };
-    let next = prepare_track(Path::new(&track.path), now_playing)
+    let next = prepare_track(Path::new(&track.path), now_playing, state)
         .map(|track| normalize_track(track, channels, sample_rate))
         .map_err(PlaybackError::into_play_command_message)?;
     Ok(continuous.prepare(playback_id, revision, next))
@@ -342,9 +355,19 @@ pub(crate) fn playback_status(state: &PlaybackState) -> Result<PlaybackStatus, S
     })
 }
 
-fn prepare_track(path: &Path, track: NowPlayingTrack) -> Result<PreparedTrack, PlaybackError> {
+fn prepare_track(
+    path: &Path,
+    track: NowPlayingTrack,
+    state: &PlaybackState,
+) -> Result<PreparedTrack, PlaybackError> {
     let source = open_decoder(path)?;
     let duration = source.total_duration().unwrap_or_default();
+    let source = gain::GainSource::new(
+        source,
+        path,
+        state.replay_gain.clone(),
+        state.replay_gain_preamp.clone(),
+    );
     Ok(PreparedTrack {
         track,
         duration,

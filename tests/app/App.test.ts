@@ -194,6 +194,7 @@ async function createComponent(source: string) {
     "@/shared/notifications/useNotification": { useNotification },
     "@/features/metadata/manual/components/TagEditorDialog.vue": defaultModule(passiveComponent),
     "@/features/lyrics/download/LyricsDownloadDialog.vue": defaultModule(passiveComponent),
+    "@/features/loudness/ConfirmationDialog.vue": defaultModule(passiveComponent),
     "@/features/metadata/releases/components/ReleaseTagDialog.vue": defaultModule(passiveComponent),
     "@/shared/notifications/NotificationHost.vue": defaultModule(passiveComponent),
     "@/features/library/monitoring/MonitoringDialog.vue": defaultModule(passiveComponent),

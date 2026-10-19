@@ -26,6 +26,7 @@ tauri-plugin-log = "=2.10.0"
 log = "0.4"
 regex = "1.13.1"
 lofty = "0.25.4"
+ebur128 = "0.1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "query", "native-tls"] }
@@ -49,6 +50,34 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Keep loudness measurement and audio decoding responsive in tauri dev.
+[profile.dev.package.ebur128]
+opt-level = 3
+
+[profile.dev.package.rodio]
+opt-level = 3
+
+[profile.dev.package.symphonia-core]
+opt-level = 3
+
+[profile.dev.package.symphonia-bundle-flac]
+opt-level = 3
+
+[profile.dev.package.symphonia-bundle-mp3]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-aac]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-alac]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-pcm]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-vorbis]
+opt-level = 3
 
 # Large cover decoding and thumbnail generation must stay responsive in tauri dev.
 [profile.dev.package.image]

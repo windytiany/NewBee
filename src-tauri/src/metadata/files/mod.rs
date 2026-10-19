@@ -1,6 +1,7 @@
 mod aac;
 mod flac;
 pub(crate) mod lyrics;
+pub(crate) mod replaygain;
 mod snapshot;
 use super::model::{EditingSnapshot, MetadataChange, MetadataField};
 use lofty::config::{ParseOptions, WriteOptions};
@@ -275,6 +276,7 @@ fn save_vorbis_tag(mut native: VorbisComments, tag: &Tag, file: &mut File) -> Re
     let editable = |key| {
         key == ItemKey::RecordingDate
             || key == ItemKey::ReleaseDate
+            || replaygain::is_replay_gain(key)
             || MetadataField::ALL
                 .iter()
                 .chain(MetadataField::IDENTIFIERS.iter())

@@ -225,6 +225,10 @@ const appModules: Record<string, unknown> = {
     __esModule: true,
     default: passiveComponent,
   },
+  "@/features/loudness/ConfirmationDialog.vue": {
+    __esModule: true,
+    default: passiveComponent,
+  },
   "@/features/metadata/manual/components/TagEditorDialog.vue": {
     __esModule: true,
     default: passiveComponent,

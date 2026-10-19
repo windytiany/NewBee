@@ -186,6 +186,20 @@ function createComponent(source: string) {
     "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,
     }),
+    "@/features/loudness/RestoreMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h(
+          "button",
+          { "data-restoration-targets": JSON.stringify(props.trackIds) },
+          "恢复原始响度",
+        ),
+    }),
+    "@/features/loudness/AnalysisMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h("button", { "data-loudness-targets": JSON.stringify(props.trackIds) }, "分析响度"),
+    }),
     "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
@@ -425,9 +439,23 @@ describe("专辑曲目上下文菜单目标", () => {
         "data-edit-targets"
       ],
     ).toBe("[1,3]");
+    const update = findMenuItem(root, "根据曲目更新标签");
+    if (!update) throw new Error("Missing tag update submenu");
+    await (update.props.onMouseenter as () => Promise<void>)();
+    await settle();
     expect(
       findNode(root, (node) => node.props["data-reread-targets"] !== undefined)?.props[
         "data-reread-targets"
+      ],
+    ).toBe("[1,3]");
+    expect(
+      findNode(root, (node) => node.props["data-loudness-targets"] !== undefined)?.props[
+        "data-loudness-targets"
+      ],
+    ).toBe("[1,3]");
+    expect(
+      findNode(root, (node) => node.props["data-restoration-targets"] !== undefined)?.props[
+        "data-restoration-targets"
       ],
     ).toBe("[1,3]");
     const deleteButton = findMenuItem(root, "从库中删除");

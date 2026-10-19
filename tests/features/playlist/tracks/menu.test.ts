@@ -200,9 +200,23 @@ function createComponent(source: string) {
     "@/features/playlist/creation/CreatePlaylistDialog.vue": Vue.defineComponent({
       setup: () => () => null,
     }),
-    "@lucide/vue": { DiscAlbum: icon, Play: icon, X: icon },
+    "@lucide/vue": { ChevronRight: icon, DiscAlbum: icon, Play: icon, X: icon },
     "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,
+    }),
+    "@/features/loudness/RestoreMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h(
+          "button",
+          { "data-restoration-targets": JSON.stringify(props.trackIds) },
+          "恢复原始响度",
+        ),
+    }),
+    "@/features/loudness/AnalysisMenuItem.vue": Vue.defineComponent({
+      props: ["trackIds"],
+      setup: (props) => () =>
+        Vue.h("button", { "data-loudness-targets": JSON.stringify(props.trackIds) }, "分析响度"),
     }),
     "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
@@ -467,9 +481,23 @@ describe("歌单曲目上下文菜单", () => {
         "data-edit-targets"
       ],
     ).toBe("[1,3]");
+    const update = findMenuItem(root, "根据曲目更新标签");
+    if (!update) throw new Error("Missing tag update submenu");
+    await (update.props.onMouseenter as () => Promise<void>)();
+    await settle();
     expect(
       findNode(root, (node) => node.props["data-reread-targets"] !== undefined)?.props[
         "data-reread-targets"
+      ],
+    ).toBe("[1,3]");
+    expect(
+      findNode(root, (node) => node.props["data-loudness-targets"] !== undefined)?.props[
+        "data-loudness-targets"
+      ],
+    ).toBe("[1,3]");
+    expect(
+      findNode(root, (node) => node.props["data-restoration-targets"] !== undefined)?.props[
+        "data-restoration-targets"
       ],
     ).toBe("[1,3]");
     const addButton = findMenuItem(root, "添加为下一首");

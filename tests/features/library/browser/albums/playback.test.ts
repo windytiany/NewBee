@@ -62,6 +62,8 @@ const modules: Record<string, unknown> = {
   "@/features/library/browser/albums/AlbumTrack.vue": passive,
   "@/features/metadata/manual/components/EditMenuItem.vue": passive,
   "@/features/tracks/presentation/RereadMenuItem.vue": passive,
+  "@/features/loudness/AnalysisMenuItem.vue": passive,
+  "@/features/loudness/RestoreMenuItem.vue": passive,
   "@/features/lyrics/download/DownloadMenuItem.vue": passive,
   "@/features/playback/queue/components/SkipMenuItem.vue": passive,
   "@/features/library/browser/albums/AlbumContextMenu.vue": passive,

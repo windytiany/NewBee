@@ -70,6 +70,8 @@ function createPlaylistBrowserComponent(source: string) {
     "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon, X: icon },
     "@/features/metadata/manual/components/EditMenuItem.vue": icon,
     "@/features/tracks/presentation/RereadMenuItem.vue": icon,
+    "@/features/loudness/AnalysisMenuItem.vue": icon,
+    "@/features/loudness/RestoreMenuItem.vue": icon,
     "@/features/lyrics/download/DownloadMenuItem.vue": icon,
     "@/features/playback/queue/components/SkipMenuItem.vue": icon,
     "@/shared/interaction/useContextMenu": {

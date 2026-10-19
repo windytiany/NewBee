@@ -53,6 +53,16 @@ pub(crate) fn run(
     database: &Database,
     files: &[PathBuf],
     result: &mut ImportResult,
+    progress: impl FnMut(usize, usize),
+) -> Result<(), String> {
+    run_with_replay_gain(database, files, result, false, progress)
+}
+
+pub(crate) fn run_with_replay_gain(
+    database: &Database,
+    files: &[PathBuf],
+    result: &mut ImportResult,
+    fill_replay_gain: bool,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<(), String> {
     if files.is_empty() {
@@ -81,6 +91,12 @@ pub(crate) fn run(
             && image_bytes < BATCH_IMAGE_BYTES
         {
             let path = files[completed];
+            if fill_replay_gain {
+                if let Err(error) = crate::loudness::analyze(path, false) {
+                    record_failure(database, result, path, &format!("ReplayGain：{error}"));
+                }
+                progress(completed, files.len());
+            }
             let detecting = Instant::now();
             let inspected_before = inspection;
             let prepared: Result<Option<_>, String> = (|| {

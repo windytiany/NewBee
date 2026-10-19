@@ -87,7 +87,6 @@
     <div class="my-1 border-t border-white/10" role="separator"></div>
     <EditMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
     <ReleaseMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
-    <DownloadMenuItem :album="contextMenu.payload" :disabled="pending" @close="close(true)" />
     <div class="my-1 border-t border-white/10" role="separator"></div>
     <button
       class="focus-visible:outline-app-accent w-full rounded px-2 py-2 text-left text-sm text-red-200 hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
@@ -107,7 +106,6 @@ import { nextTick, ref, watch } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
-import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
 import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import type { PlaylistSummary } from "@/features/playlist/types";

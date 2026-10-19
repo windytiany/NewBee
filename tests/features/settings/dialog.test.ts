@@ -27,7 +27,14 @@ import type { NotificationInput } from "@/shared/notifications/center";
 type DialogBindings = {
   dialogElement: Vue.Ref<{ open: boolean; showModal: () => void; close: () => void }>;
   selectedCategory: Vue.Ref<
-    "general" | "appearance" | "library" | "lyrics" | "shortcuts" | "advanced" | "about"
+    | "general"
+    | "appearance"
+    | "playback"
+    | "library"
+    | "lyrics"
+    | "shortcuts"
+    | "advanced"
+    | "about"
   >;
   shortcuts: Vue.Ref<Settings["shortcuts"]>;
   selectedShortcutAction: Vue.Ref<ShortcutAction>;
@@ -47,6 +54,9 @@ type DialogBindings = {
   albumCoverBackground: Vue.Ref<boolean>;
   playingCoverBackground: Vue.Ref<boolean>;
   showPlaybackStatistics: Vue.Ref<boolean>;
+  replayGain: Vue.Ref<boolean>;
+  replayGainPreamp: Vue.Ref<number>;
+  scanReplayGain: Vue.Ref<boolean>;
   monitoringFolders: Vue.Ref<Settings["monitoringFolders"]>;
   albumSortBy: Vue.Ref<Settings["albumSortBy"]>;
   albumSortOrder: Vue.Ref<Settings["albumSortOrder"]>;
@@ -70,6 +80,9 @@ const defaults: Settings = {
   closeBehavior: "tray",
   lightweightOnClose: false,
   showPlaybackStatistics: true,
+  replayGain: true,
+  replayGainPreamp: 0,
+  scanReplayGain: false,
   monitoringFolders: [],
   albumSortBy: "name",
   albumSortOrder: "ascending",
@@ -666,6 +679,7 @@ describe("settings dialog", () => {
       expect(categoryButtons.map((button) => getTextContent(button).trim())).toEqual([
         "常规",
         "外观",
+        "播放",
         "媒体库",
         "歌词",
         "快捷键",
@@ -689,8 +703,58 @@ describe("settings dialog", () => {
         ).toBeNull();
         expect(panel.props["aria-labelledby"]).toBe(button.props.id);
         if (category === "媒体库") {
-          expect(getTextContent(panel)).toContain("专辑排序");
-          expect(getTextContent(panel)).toContain("监视文件夹");
+          const content = getTextContent(panel);
+          const labels = ["监视文件夹", "扫描时补齐 ReplayGain 标签", "专辑排序", "显示播放统计"];
+          for (const label of labels) expect(content).toContain(label);
+          const positions = labels.map((label) => content.indexOf(label));
+          expect(positions).toEqual([...positions].sort((left, right) => left - right));
+          expect(findNode(panel, (node) => node.props.name === "replay-gain")).toBeNull();
+          expect(findNode(panel, (node) => node.props.name === "replay-gain-preamp")).toBeNull();
+        }
+        if (category === "播放") {
+          expect(getTextContent(panel)).not.toContain("监视文件夹");
+          expect(getTextContent(panel)).not.toContain("专辑排序");
+          expect(findNode(panel, (node) => node.props.name === "scan-replay-gain")).toBeNull();
+          setLocale("en");
+          await Vue.nextTick();
+          expect(getTextContent(button).trim()).toBe("Playback");
+          setLocale("zh-CN");
+          await Vue.nextTick();
+          const preamp = findNode(panel, (node) => node.props.name === "replay-gain-preamp");
+          const toggle = findNode(panel, (node) => node.props.name === "replay-gain");
+          const reset = findNode(panel, (node) => node.props["aria-label"] === "恢复默认");
+          if (!preamp || !toggle || !reset) throw new Error("Missing ReplayGain controls");
+          expect(preamp.props.type).toBe("number");
+          expect(preamp.props.min).toBe("-20");
+          expect(preamp.props.max).toBe("20");
+          expect(preamp.props.step).toBe("0.5");
+          expect(preamp.props.disabled).toBe(false);
+          const change = toggle.props["native-change"];
+          const input = preamp.props["native-input"];
+          const restore = reset.props.onClick;
+          if (
+            typeof change !== "function" ||
+            typeof input !== "function" ||
+            typeof restore !== "function"
+          )
+            throw new Error("Missing ReplayGain handlers");
+          Reflect.set(preamp, "value", "3.5");
+          input({ target: preamp });
+          await Vue.nextTick();
+          expect(Number(Reflect.get(preamp, "value"))).toBe(3.5);
+          Reflect.set(toggle, "checked", false);
+          change({ target: toggle });
+          await Vue.nextTick();
+          expect(preamp.props.disabled).toBe(true);
+          expect(reset.props.disabled).toBe(true);
+          expect(Number(Reflect.get(preamp, "value"))).toBe(3.5);
+          Reflect.set(toggle, "checked", true);
+          change({ target: toggle });
+          await Vue.nextTick();
+          expect(preamp.props.disabled).toBe(false);
+          restore();
+          await Vue.nextTick();
+          expect(Reflect.get(preamp, "value")).toBe(0);
         }
         if (category === "关于") {
           expect(findNode(panel, (node) => node.props["data-about"] === "")).not.toBeNull();
@@ -1357,9 +1421,70 @@ describe("settings dialog", () => {
     });
   }
 
+  it("loads and saves independent ReplayGain playback and opt-in scan preferences", async () => {
+    let saved: Settings | undefined;
+    const { bindings } = createDialog(async (command, args) => {
+      if (command === "get_settings")
+        return { ...defaults, replayGain: false, scanReplayGain: true };
+      saved = (args as { settings: Settings }).settings;
+    });
+    await bindings.show();
+    expect(bindings.replayGain.value).toBe(false);
+    expect(bindings.scanReplayGain.value).toBe(true);
+    bindings.replayGain.value = true;
+    bindings.scanReplayGain.value = false;
+    await bindings.save();
+    expect(saved?.replayGain).toBe(true);
+    expect(saved?.scanReplayGain).toBe(false);
+  });
+
+  it("defaults legacy preamp to zero and keeps changes as a draft until saving", async () => {
+    const saved: Settings[] = [];
+    let persisted: Partial<Settings> = { ...defaults, replayGainPreamp: -3.5 };
+    const { bindings } = createDialog(async (command, args) => {
+      if (command === "get_settings") return persisted;
+      saved.push((args as { settings: Settings }).settings);
+    });
+    await bindings.show();
+    expect(bindings.replayGainPreamp.value).toBe(-3.5);
+    bindings.replayGainPreamp.value = 6;
+    expect(saved).toEqual([]);
+    bindings.close();
+    await bindings.show();
+    expect(bindings.replayGainPreamp.value).toBe(-3.5);
+    bindings.replayGain.value = false;
+    await bindings.save();
+    expect(saved[0]).toMatchObject({ replayGain: false, replayGainPreamp: -3.5 });
+    persisted = { ...defaults, replayGainPreamp: undefined };
+    await bindings.show();
+    expect(bindings.replayGainPreamp.value).toBe(0);
+    bindings.replayGainPreamp.value = 20;
+    await bindings.save();
+    expect(saved[1]?.replayGainPreamp).toBe(20);
+  });
+
+  for (const value of [NaN, Infinity, -Infinity, -20.5, 20.5, 0.25, ""]) {
+    it(`rejects invalid preamp ${String(value)} before saving`, async () => {
+      let saves = 0;
+      const { bindings, feedback, element } = createDialog(async (command) => {
+        if (command === "get_settings") return defaults;
+        saves++;
+      });
+      await bindings.show();
+      Reflect.set(bindings.replayGainPreamp, "value", value);
+      await bindings.save();
+      expect(saves).toBe(0);
+      expect(element.open).toBe(true);
+      expect(feedback[feedback.length - 1]?.key).toBe("settings-replay-gain-preamp");
+    });
+  }
+
   it("loads and saves all settings and notifies the library after saving", async () => {
     const calls: Array<[string, unknown]> = [];
     const loaded: Settings = {
+      replayGain: true,
+      replayGainPreamp: 0,
+      scanReplayGain: false,
       themeMode: "dark",
       lightweightOnClose: false,
       monitoringFolders: [],
@@ -1485,6 +1610,9 @@ describe("settings dialog", () => {
           closeBehavior: "exit",
           lightweightOnClose: false,
           showPlaybackStatistics: true,
+          replayGain: true,
+          replayGainPreamp: 0,
+          scanReplayGain: false,
           monitoringFolders: [],
           albumSortBy: "year",
           albumSortOrder: "descending",
@@ -1637,6 +1765,9 @@ describe("settings dialog", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls).toBe(2);
     first.resolve({
+      replayGain: true,
+      replayGainPreamp: 0,
+      scanReplayGain: false,
       themeMode: "light",
       lightweightOnClose: false,
       monitoringFolders: [],
