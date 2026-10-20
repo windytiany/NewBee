@@ -23,7 +23,7 @@ const position = ref({ x: 0, y: 0 });
 
 function report(error: unknown) {
   logger.error("playlist", "append_failed", error);
-  notify({ type: "error", message: t("歌单操作失败，请重试或查看日志") });
+  notify({ type: "error", message: t("歌单操作失败") });
 }
 async function show(focus = false) {
   if (props.disabled || !props.trackIds.length) return;

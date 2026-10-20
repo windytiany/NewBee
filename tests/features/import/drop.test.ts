@@ -406,7 +406,7 @@ it("continues creating later folders after a playlist creation failure", async (
   for (let i = 0; i < 60; i++) await Promise.resolve();
   expect(drop.calls).toContainEqual(["playlistChanged", 12]);
   expect(drop.calls).toContainEqual(["register_local_tracks", { paths: ["/Good"] }]);
-  expect(drop.notices.map(({ message }) => message)).toEqual(["创建歌单失败，请查看日志"]);
+  expect(drop.notices.map(({ message }) => message)).toEqual(["创建歌单失败"]);
   drop.unmount();
 });
 

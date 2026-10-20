@@ -35,7 +35,7 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
       const message = source.value;
       if (!message) return null;
       logger.error("library", key, message);
-      return { type: "error", message: t("读取曲库失败，请查看日志"), key };
+      return { type: "error", message: t("读取曲库失败"), key };
     });
   }
   useNotification(() => {
@@ -60,22 +60,22 @@ export function useLibrary(active: Readonly<Ref<boolean>>, options: LibraryOptio
         ? inconsistent
           ? removal?.failedCount
             ? removal?.queueSyncFailed
-              ? t("已从曲库移除 {count} 首，{failed} 首移除失败，队列同步失败，请查看日志", {
+              ? t("已从曲库移除 {count} 首，{failed} 首移除失败，队列同步失败", {
                   count: removal?.deletedCount ?? 0,
                   failed: removal?.failedCount ?? 0,
                 })
-              : t("已从曲库移除 {count} 首，{failed} 首移除失败，请查看日志", {
+              : t("已从曲库移除 {count} 首，{failed} 首移除失败", {
                   count: removal?.deletedCount ?? 0,
                   failed: removal?.failedCount ?? 0,
                 })
             : removal?.queueSyncFailed
-              ? t("已从曲库移除 {count} 首，队列同步失败，请查看日志", {
+              ? t("已从曲库移除 {count} 首，队列同步失败", {
                   count: removal?.deletedCount ?? 0,
                 })
-              : t("已从曲库移除 {count} 首，请查看日志", { count: removal?.deletedCount ?? 0 })
+              : t("已从曲库移除 {count} 首", { count: removal?.deletedCount ?? 0 })
           : removal
-            ? t("曲库移除失败，请重试或查看日志")
-            : page.trackActionMessage.value || t("曲库操作失败，请重试或查看日志")
+            ? t("曲库移除失败")
+            : page.trackActionMessage.value || t("曲库操作失败")
         : message,
       persistent: inconsistent,
       key: type === "success" ? undefined : "library-action",

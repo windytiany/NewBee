@@ -2,7 +2,7 @@ use super::fingerprint;
 use crate::{
     artwork::collection::DirectoryPicture,
     database::{model::TrackWriteOutcome, Database},
-    library::import::{record_failure, ImportResult},
+    library::import::{record_failure_at, ImportResult},
     metadata::files::artwork,
     tracks::scanning::{scan_with_directory, Snapshot},
 };
@@ -93,7 +93,7 @@ pub(crate) fn run_with_replay_gain(
             let path = files[completed];
             if fill_replay_gain {
                 if let Err(error) = crate::loudness::analyze(path, false) {
-                    record_failure(database, result, path, &format!("ReplayGain：{error}"));
+                    record_failure_at(result, path, "replay_gain", &error);
                 }
             }
             let detecting = Instant::now();
@@ -133,7 +133,7 @@ pub(crate) fn run_with_replay_gain(
                     pending.push((snapshot, fingerprint));
                 }
                 Ok(None) => unchanged += 1,
-                Err(error) => record_failure(database, result, path, &error),
+                Err(error) => record_failure_at(result, path, "inspection", &error),
             }
             completed += 1;
             if fill_replay_gain {
@@ -149,9 +149,12 @@ pub(crate) fn run_with_replay_gain(
                     Ok(TrackWriteOutcome::Added) => result.added += 1,
                     Ok(TrackWriteOutcome::Updated) => result.updated += 1,
                     Ok(TrackWriteOutcome::Unchanged) => {}
-                    Err(error) => {
-                        record_failure(database, result, Path::new(&snapshot.track.path), &error)
-                    }
+                    Err(error) => record_failure_at(
+                        result,
+                        Path::new(&snapshot.track.path),
+                        "database",
+                        &error,
+                    ),
                 }
             }
         }
@@ -161,7 +164,7 @@ pub(crate) fn run_with_replay_gain(
             }
         }
     }
-    log::info!("event=scan_processed total={} unchanged={} detectionMs={} inspectionMs={} persistenceMs={} elapsedMs={}",
+    log::debug!("event=scan_processed total={} unchanged={} detectionMs={} inspectionMs={} persistenceMs={} elapsedMs={}",
         files.len(), unchanged, detection.as_millis(), inspection.as_millis(), persistence.as_millis(), started.elapsed().as_millis());
     Ok(())
 }

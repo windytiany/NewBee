@@ -66,7 +66,7 @@ export function useShortcuts(
     },
     onError: (reason) => {
       logger.error("shortcuts", "shortcut_failed", reason);
-      notify({ type: "error", message: t("快捷键操作失败，请查看日志"), key: "shortcut-error" });
+      notify({ type: "error", message: t("快捷键操作失败"), key: "shortcut-error" });
     },
   });
 

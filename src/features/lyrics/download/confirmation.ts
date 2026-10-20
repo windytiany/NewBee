@@ -60,7 +60,7 @@ export function createLyricsConfirmation(options: LyricsConfirmationOptions) {
       if (state.open && version === generation) {
         state.error = error instanceof Error ? error.message : String(error);
         logger.warn("lyrics", "download_targets_failed", error);
-        notify({ type: "warning", message: t("读取歌词下载目标失败，请查看日志") });
+        notify({ type: "warning", message: t("读取歌词下载目标失败") });
       }
     } finally {
       if (version === generation) state.loading = false;

@@ -24,15 +24,17 @@ pub async fn scan_music_library<R: tauri::Runtime>(
     operation_id: Option<String>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
-) -> Result<ImportResult, String> {
-    let guard = write.acquire()?;
+) -> Result<ImportResult, super::error::CommandError> {
+    use super::error::CommandError;
+    let guard = write.acquire().map_err(CommandError::busy)?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::logging::with_operation(operation_id.clone(), || {
             let _guard = guard;
-            log::info!("event=import_started operationId={operation_id:?}");
+            log::debug!("event=import_started");
             use tauri::Manager;
             let database = app.state::<Database>();
             let mut last_update = std::time::Instant::now();
+            let mut progress_failure = crate::logging::RepeatedFailure::default();
             let progress = |completed, total| {
                 if completed != 0
                     && completed != total
@@ -41,16 +43,16 @@ pub async fn scan_music_library<R: tauri::Runtime>(
                     return;
                 }
                 last_update = std::time::Instant::now();
-                if let Err(error) = app.emit(
+                let emitted = app.emit(
                     "library-scan-progress",
                     ScanProgress {
                         operation_id: operation_id.clone(),
                         completed,
                         total,
                     },
-                ) {
-                    log::warn!("Failed to publish library scan progress: {error}");
-                }
+                );
+                let error = emitted.err().map(|error| error.to_string());
+                progress_failure.report("library.scan.progress", error.as_deref());
             };
             // No settings means no consent to write tags.
             let fill_replay_gain = app
@@ -63,12 +65,21 @@ pub async fn scan_music_library<R: tauri::Runtime>(
             } else {
                 run_scan(&database, progress)
             };
-            log::info!("event=import_completed operationId={operation_id:?}");
+            match &result {
+                Ok(result) => log::debug!(
+                    "event=import_finished failed={} added={} updated={}",
+                    result.failed,
+                    result.added,
+                    result.updated
+                ),
+                Err(error) => log::debug!("event=import_failed error={error}"),
+            }
             result
         })
     })
     .await
-    .map_err(|error| format!("Music library scan task failed: {error}"))?
+    .map_err(|error| CommandError::scan(format!("Music library scan task failed: {error}")))?
+    .map_err(CommandError::scan)
 }
 
 pub(super) fn run_scan(
@@ -119,6 +130,7 @@ pub(super) fn run_scan_with_replay_gain(
             );
         }
     }
+    result.failures.flush();
     Ok(result)
 }
 

@@ -69,6 +69,7 @@ export function createLyricsBatchCooperation(
       targets: [{ trackId: event.trackId, path: event.path }],
       writeTrackIds: [event.trackId],
       deferSynchronization: true,
+      reportFailures: false,
       execute: async () => {
         if (!accepting || cancelling) throw new Error(t("歌词保存请求已结束或取消"));
         confirmed = await options.commitStep(event.batchId, event.stepId);

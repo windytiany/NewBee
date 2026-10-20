@@ -1,3 +1,7 @@
+pub(crate) mod aggregation;
+pub(crate) mod export;
+mod record;
+
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -63,15 +67,28 @@ pub(crate) fn redact_text(text: &str) -> String {
 fn builder(session: u128) -> tauri_plugin_log::Builder {
     tauri_plugin_log::Builder::new()
         .level(log::LevelFilter::Debug)
-        .filter(|metadata| enabled(metadata.level()) && (metadata.target().starts_with("newbee_lib") || metadata.target().starts_with("webview")))
+        .filter(|metadata| {
+            enabled(metadata.level())
+                && (metadata.target().starts_with("newbee_lib")
+                    || metadata.target().starts_with("webview"))
+        })
         .max_file_size(MAX_FILE_BYTES)
         .rotation_strategy(RotationStrategy::KeepSome(ARCHIVE_COUNT))
-        .targets([Target::new(TargetKind::LogDir { file_name: Some("newbee".into()) })])
+        .targets([Target::new(TargetKind::LogDir {
+            file_name: Some("newbee".into()),
+        })])
         .format(move |out, message, record| {
-            let message = redact_text(&message.to_string());
-            let time = TimezoneStrategy::UseUtc.get_now();
+            let time = TimezoneStrategy::UseUtc.get_now().to_string();
             OPERATION.with(|operation| {
-                out.finish(format_args!("time=\"{time}\" level={} source={} module={} sessionId={session} operationId={:?} {message}", record.level(), if record.target().starts_with("webview") { "frontend" } else { "rust" }, record.target(), operation.borrow().as_deref()));
+                let text = record::format(
+                    session,
+                    &time,
+                    record.level(),
+                    record.target(),
+                    operation.borrow().as_deref(),
+                    &message.to_string(),
+                );
+                out.finish(format_args!("{text}"));
             });
         })
 }
@@ -190,6 +207,7 @@ fn start_retention(path: std::path::PathBuf) {
 pub(crate) struct RepeatedFailure {
     last_report: Option<Instant>,
     suppressed: usize,
+    reason: Option<String>,
 }
 
 impl RepeatedFailure {
@@ -211,13 +229,26 @@ impl RepeatedFailure {
     }
 
     pub(crate) fn report(&mut self, module: &str, error: Option<&str>) {
+        if error.is_some() && error != self.reason.as_deref() {
+            if self.suppressed > 0 {
+                log::warn!(
+                    "{}",
+                    serde_json::json!({"event":"repeated_failure_summary", "module":module, "suppressed":self.suppressed, "error":self.reason})
+                );
+            }
+            self.last_report = None;
+            self.suppressed = 0;
+        }
+        self.reason = error.map(str::to_owned);
         match self.observe(error.is_some(), Instant::now()) {
             Some((true, suppressed)) => log::warn!(
-                "event=repeated_failure module={module} suppressed={suppressed} error={error:?}"
+                "{}",
+                serde_json::json!({"event":"repeated_failure", "module":module, "suppressed":suppressed, "error":error})
             ),
-            Some((false, suppressed)) => {
-                log::info!("event=recovered module={module} suppressed={suppressed}")
-            }
+            Some((false, suppressed)) => log::info!(
+                "{}",
+                serde_json::json!({"event":"recovered", "module":module, "suppressed":suppressed})
+            ),
             None => {}
         }
     }
@@ -349,10 +380,17 @@ mod tests {
         log::debug!(target: "newbee_lib::playback", "hidden-again");
         invoke_log(&webview, 2, "hidden-frontend-again");
         let text = std::fs::read_to_string(directory.0.join("newbee.log")).unwrap();
-        assert!(text.contains(
-            "source=rust module=newbee_lib::metadata sessionId=42 operationId=Some(\"save:1\")"
-        ));
-        assert!(text.contains("source=frontend module=webview::logging-test sessionId=42"));
+        let records: Vec<serde_json::Value> = text
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert!(records.iter().any(|record| record["source"] == "rust"
+            && record["module"] == "newbee_lib::metadata"
+            && record["sessionId"] == "42"
+            && record["operationId"] == "save:1"));
+        assert!(records.iter().any(|record| record["source"] == "frontend"
+            && record["module"] == "webview::logging-test"
+            && record["sessionId"] == "42"));
         assert!(text.contains("fileWritten=true databaseUpdated=false"));
         assert!(text.contains("frontend-marker"));
         assert!(text.contains("visible-debug"));
@@ -562,6 +600,17 @@ mod tests {
             Some((false, 1))
         );
         assert_eq!(failure.observe(false, now + Duration::from_secs(33)), None);
+    }
+
+    #[test]
+    fn different_repeated_failure_reasons_are_reported_immediately() {
+        let mut failure = RepeatedFailure::default();
+        failure.report("playback", Some("permission denied"));
+        failure.report("playback", Some("permission denied"));
+        assert_eq!(failure.suppressed, 1);
+        failure.report("playback", Some("device disconnected"));
+        assert_eq!(failure.suppressed, 0);
+        assert_eq!(failure.reason.as_deref(), Some("device disconnected"));
     }
 
     #[test]

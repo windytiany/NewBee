@@ -448,7 +448,7 @@ describe("lyrics batch", () => {
     expect(result.batch.state.written).toBe(1);
     expect(result.batch.state.failed).toBe(0);
     expect(result.synchronized()).toBe(1);
-    expect(result.messages[0]?.message).toBe("歌词更新失败，请查看日志");
+    expect(result.messages[0]?.message).toBe("歌词更新失败");
   });
 
   it("reconciles saves confirmed by the terminal response even when commit replies failed", async () => {
@@ -591,6 +591,6 @@ describe("lyrics batch", () => {
     await failed.batch.startTracks([1]);
     expect(failed.batch.state.running).toBe(false);
     expect(failed.tasks.size).toBe(0);
-    expect(failed.messages[0]?.message).toBe("歌词更新失败，请查看日志");
+    expect(failed.messages[0]?.message).toBe("歌词更新失败");
   });
 });

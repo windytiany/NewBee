@@ -84,11 +84,11 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
     else state.error = text;
     logger.error("metadata", event, error);
     const failures: Record<string, string> = {
-      release_editor_load_failed: t("读取本地标签失败，请查看日志"),
-      release_search_failed: t("搜索发行版本失败，请查看日志"),
-      release_load_failed: t("读取发行版本失败，请查看日志"),
-      release_covers_failed: t("读取封面列表失败，请查看日志"),
-      release_cover_failed: t("读取封面失败，请查看日志"),
+      release_editor_load_failed: t("读取本地标签失败"),
+      release_search_failed: t("搜索发行版本失败"),
+      release_load_failed: t("读取发行版本失败"),
+      release_covers_failed: t("读取封面列表失败"),
+      release_cover_failed: t("读取封面失败"),
     };
     notify({ type: "error", message: failures[event] ?? text, key: "tags-release" });
   }

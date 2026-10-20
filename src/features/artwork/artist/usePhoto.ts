@@ -40,7 +40,7 @@ export function usePhoto(artist: MaybeRefOrGetter<string | null>) {
             },
             (error) => {
               logger.warn("artwork.artist", "read_failed", error);
-              const message = t("读取演出者照片失败，请查看日志");
+              const message = t("读取演出者照片失败");
               notify({ type: "warning", message, key: "artist-photo-read" });
               return message;
             },

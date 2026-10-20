@@ -238,7 +238,7 @@ describe("library scan dialog", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "添加目录失败，请查看日志",
+      message: "添加目录失败",
     });
     notifications.clear();
     click(button(dialog.root, "移除"));
@@ -247,7 +247,7 @@ describe("library scan dialog", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "移除目录失败，请查看日志",
+      message: "移除目录失败",
     });
     expect(textContent(dialog.root)).toContain(directory.path);
   });
@@ -260,7 +260,7 @@ describe("library scan dialog", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "读取已保存目录失败，请查看日志",
+      message: "读取已保存目录失败",
     });
     expect(textContent(dialog.root)).not.toContain("无目录");
     expect(textContent(dialog.root)).not.toContain("重试");
@@ -320,7 +320,7 @@ describe("library scan dialog", () => {
     await settle();
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "扫描失败，请查看日志",
+      message: "database unavailable",
     });
     expect(events).toEqual([]);
   });

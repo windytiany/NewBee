@@ -35,8 +35,8 @@ export function usePlaylistCreation(api: ReturnType<typeof createPlaylistApi>) {
         type: playlistId.value === null ? "error" : "warning",
         message:
           playlistId.value === null
-            ? t("创建歌单失败，请查看日志")
-            : t("歌单已创建，已添加 {count} 首，剩余歌曲添加失败，请查看日志", {
+            ? t("创建歌单失败")
+            : t("歌单已创建，已添加 {count} 首，剩余歌曲添加失败", {
                 count: addedCount.value,
               }),
         key: "playlist-create",

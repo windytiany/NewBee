@@ -163,11 +163,7 @@ impl Work {
         state.reconcile(&self.folder.path, &database.library_track_paths()?);
         let failed = result.failed > 0 || exhausted;
         if failed {
-            state.status(
-                &self.folder.path,
-                "error",
-                Some("部分文件读取失败，请查看日志".into()),
-            );
+            state.status(&self.folder.path, "error", Some("部分文件读取失败".into()));
         } else if let Some(error) = &self.watch_error {
             state.status(&self.folder.path, "error", Some(error.clone()));
         } else {

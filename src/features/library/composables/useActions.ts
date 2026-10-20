@@ -222,7 +222,7 @@ export function useLibraryActions(
 
     trackActionMessageType.value = failures.length ? "warning" : "success";
     trackActionMessage.value = failures.length
-      ? t("已添加 {count} 首，{failed} 首失败（详情见日志）", {
+      ? t("已添加 {count} 首，{failed} 首失败", {
           count: successfulTrackIds.length,
           failed: failures.length,
         })
@@ -261,7 +261,7 @@ export function useLibraryActions(
       queueResult = await libraryApi.removeTrack(trackId);
     } catch (error) {
       logger.error("library", "remove_failed", error, { trackId });
-      const message = "从曲库移除失败，请重试或查看日志";
+      const message = "从曲库移除失败";
       trackActionError.value = message;
       return { status: "not-deleted", message };
     }
@@ -388,7 +388,7 @@ export function useLibraryActions(
         queueSyncFailed,
       };
       trackActionError.value = failures.length
-        ? `已从曲库移除 ${deletedTrackIds.length} 首${failedCount ? `，${failedCount} 首移除失败` : ""}${queueSyncFailed ? "，队列同步失败" : ""}，请重试或查看日志`
+        ? `已从曲库移除 ${deletedTrackIds.length} 首${failedCount ? `，${failedCount} 首移除失败` : ""}${queueSyncFailed ? "，队列同步失败" : ""}`
         : "";
       trackActionMessageType.value = "success";
       trackActionMessage.value = failures.length

@@ -145,7 +145,7 @@ describe("path migration dialog", () => {
     });
     await bindings.migrate();
     expect(notices).toHaveLength(1);
-    expect(notices[0]).toMatchObject({ type: "error", message: "路径迁移失败，请查看日志" });
+    expect(notices[0]).toMatchObject({ type: "error", message: "路径迁移失败" });
     expect(element.open).toBe(true);
     expect(bindings.isMigrating.value).toBe(false);
     expect(bindings.newPath.value).toBe("D:\\Music\\");

@@ -139,6 +139,7 @@ function createDialog(
     "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
     "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({ template: "<div />" }),
     "@/shared/update/UpdatePanel.vue": Vue.defineComponent({ render: () => null }),
+    "@/shared/logging/DiagnosticsPanel.vue": Vue.defineComponent({ render: () => null }),
     "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
       template: "<div />",
     }),
@@ -592,14 +593,14 @@ describe("settings dialog", () => {
     await bindings.openLogs();
     expect(feedback[feedback.length - 1]).toMatchObject({
       type: "error",
-      message: "打开日志目录失败，请查看日志",
+      message: "打开日志目录失败",
     });
     bindings.detailedLogging.value = true;
     await bindings.changeLogging();
     expect(bindings.detailedLogging.value).toBe(false);
     expect(feedback[feedback.length - 1]).toMatchObject({
       type: "error",
-      message: "切换日志级别失败，请查看日志",
+      message: "切换日志级别失败",
     });
     expect(bindings.isChangingLogging.value).toBe(false);
     fail = false;
@@ -1867,9 +1868,7 @@ describe("settings dialog", () => {
     });
     await bindings.show();
     await bindings.save();
-    expect(feedback).toEqual([
-      { type: "error", message: "读取设置失败，请查看日志", key: "settings-load" },
-    ]);
+    expect(feedback).toEqual([{ type: "error", message: "读取设置失败", key: "settings-load" }]);
     expect(bindings.isLoaded.value).toBe(false);
     expect(element.open).toBe(true);
     expect(calls).toEqual(["get_settings"]);

@@ -16,7 +16,7 @@ async function openRepository(event: InstanceType<typeof globalThis.MouseEvent>)
     await openUrl(repository);
   } catch (reason) {
     logger.error("settings", "open_repository_failed", reason);
-    notify({ type: "error", message: t("打开仓库失败，请查看日志"), key: "settings-repository" });
+    notify({ type: "error", message: t("打开仓库失败"), key: "settings-repository" });
   }
 }
 </script>

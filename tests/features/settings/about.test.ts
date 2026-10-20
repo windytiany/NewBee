@@ -76,7 +76,7 @@ describe("settings about", () => {
       expect(opened).toEqual(["https://github.com/windytiany/NewBee"]);
       fail = true;
       await click(event);
-      expect(feedback[0]).toMatchObject({ type: "error", message: "打开仓库失败，请查看日志" });
+      expect(feedback[0]).toMatchObject({ type: "error", message: "打开仓库失败" });
     } finally {
       app.unmount();
     }

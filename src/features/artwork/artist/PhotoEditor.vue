@@ -106,7 +106,7 @@ watch(
         if (current === menuGeneration) clipboardAvailable.value = available;
       },
       (error: unknown) => {
-        if (current === menuGeneration) reportFailure(error, t("读取剪贴板失败，请查看日志"));
+        if (current === menuGeneration) reportFailure(error, t("读取剪贴板失败"));
       },
     );
   },
@@ -161,7 +161,7 @@ async function savePhoto(artist: string, load: () => Promise<number[]>) {
     await saveArtistPhoto(artist, data);
     refreshArtistPhoto(artist);
   } catch (error) {
-    reportFailure(error, t("保存演出者照片失败，请查看日志"));
+    reportFailure(error, t("保存演出者照片失败"));
   } finally {
     pending.value = false;
   }
@@ -193,7 +193,7 @@ async function searchPhoto() {
   try {
     await searchArtistPhoto(artist);
   } catch (error) {
-    reportFailure(error, t("打开图片搜索失败，请查看日志"));
+    reportFailure(error, t("打开图片搜索失败"));
   } finally {
     pending.value = false;
   }

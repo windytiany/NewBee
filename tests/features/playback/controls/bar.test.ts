@@ -404,7 +404,7 @@ describe("playback bar button", () => {
     expect(playButton(root).props.disabled).toBe(true);
     expect(isDimmed(playButton(root))).toBe(true);
     expect(notifications.items.value).toHaveLength(1);
-    expect(notifications.items.value[0].message).toBe("播放操作失败，请重试或查看日志");
+    expect(notifications.items.value[0].message).toBe("播放操作失败");
     expect(findNode(root, (node) => node.props.role === "alert")).toBeNull();
   });
 
@@ -417,7 +417,7 @@ describe("playback bar button", () => {
     expect(notifications.items.value[0]?.count).toBe(1);
     fixture.emit({
       isCommandPending: true,
-      playbackError: "播放操作失败，请重试或查看日志",
+      playbackError: "播放操作失败",
     });
     await settle();
     fixture.emit({ isCommandPending: false, playbackError: "" });

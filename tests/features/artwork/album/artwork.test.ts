@@ -217,9 +217,7 @@ describe("共享专辑封面和背景", () => {
     await settle();
     expect(artwork.status.value).toBe("fallback");
     expect(artwork.error.value).toContain("IPC unavailable");
-    expect(feedback).toEqual([
-      { type: "warning", message: "封面加载失败，已显示占位图，请查看日志", key: "artwork-read" },
-    ]);
+    expect(feedback).toEqual([{ type: "warning", message: "封面加载失败", key: "artwork-read" }]);
   });
 
   it("背景生成失败不影响封面，保留错误并使用默认背景", async () => {
@@ -232,7 +230,7 @@ describe("共享专辑封面和背景", () => {
     expect(artwork.background.value).toBeNull();
     expect(artwork.error.value).toContain("Canvas 2D");
     expect(feedback).toEqual([
-      { type: "warning", message: "生成专辑背景失败，请查看日志", key: "artwork-background" },
+      { type: "warning", message: "生成专辑背景失败", key: "artwork-background" },
     ]);
   });
 

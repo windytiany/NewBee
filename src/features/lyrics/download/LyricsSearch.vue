@@ -64,7 +64,7 @@ async function loadSettings() {
       logger.warn("lyrics", "settings_failed", error);
       notify({
         type: "warning",
-        message: t("读取歌词设置失败，请查看日志"),
+        message: t("读取歌词设置失败"),
         key: "lyrics-settings-failed",
       });
     }

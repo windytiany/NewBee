@@ -109,13 +109,9 @@ afterEach(() => {
 
 describe("媒体库 workspace", () => {
   for (const [failedCount, queueSyncFailed, expected] of [
-    [1, false, "Removed 2 tracks; 1 removals failed. Check the logs."],
-    [0, true, "Removed 2 tracks, but queue synchronization failed. Check the logs."],
-    [
-      1,
-      true,
-      "Removed 2 tracks; 1 removals failed and queue synchronization failed. Check the logs.",
-    ],
+    [1, false, "Removed 2 tracks; 1 removals failed"],
+    [0, true, "Removed 2 tracks, but queue synchronization failed"],
+    [1, true, "Removed 2 tracks; 1 removals failed and queue synchronization failed"],
   ] as const) {
     it(`localizes partial removal counts with ${failedCount} failures and queue sync ${queueSyncFailed}`, async () => {
       setLocale("en");
@@ -188,7 +184,7 @@ describe("媒体库 workspace", () => {
 
   it("does not infer removal or persistence from error text or playlist partial success", async () => {
     createWorkspace();
-    page.trackActionMessage.value = "已添加 2 首，1 首失败（详情见日志）";
+    page.trackActionMessage.value = "已添加 2 首，1 首失败";
     page.trackActionMessageType.value = "warning";
     await Vue.nextTick();
     expect(notifications.items.value[0]?.message).toContain("已添加 2 首");
@@ -196,7 +192,7 @@ describe("媒体库 workspace", () => {
     notifications.clear();
     page.trackActionError.value = "已删除是底层错误中的文本";
     await Vue.nextTick();
-    expect(notifications.items.value[0]?.message).toBe("已添加 2 首，1 首失败（详情见日志）");
+    expect(notifications.items.value[0]?.message).toBe("已添加 2 首，1 首失败");
     expect(notifications.items.value[0]?.message).not.toContain("已从曲库移除");
     expect(notifications.items.value[0]?.persistent).toBe(false);
   });
@@ -207,20 +203,16 @@ describe("媒体库 workspace", () => {
     page.trackActionMessage.value = "已从曲库删除 0 首曲目。";
     page.trackActionError.value = "移除失败";
     await Vue.nextTick();
-    expect(notifications.items.value[0]?.message).toBe("曲库移除失败，请重试或查看日志");
+    expect(notifications.items.value[0]?.message).toBe("曲库移除失败");
     expect(notifications.items.value[0]?.persistent).toBe(false);
     page.trackActionRemoval.value = { deletedCount: 1, failedCount: 1, queueSyncFailed: false };
     await Vue.nextTick();
-    expect(notifications.items.value[0]?.message).toBe(
-      "已从曲库移除 1 首，1 首移除失败，请查看日志",
-    );
+    expect(notifications.items.value[0]?.message).toBe("已从曲库移除 1 首，1 首移除失败");
     expect(notifications.items.value[0]?.persistent).toBe(true);
     page.trackActionMessage.value = "";
     page.trackActionRemoval.value = { deletedCount: 1, failedCount: 0, queueSyncFailed: true };
     await Vue.nextTick();
-    expect(notifications.items.value[0]?.message).toBe(
-      "已从曲库移除 1 首，队列同步失败，请查看日志",
-    );
+    expect(notifications.items.value[0]?.message).toBe("已从曲库移除 1 首，队列同步失败");
     expect(notifications.items.value[0]?.type).toBe("warning");
     expect(notifications.items.value[0]?.persistent).toBe(true);
   });

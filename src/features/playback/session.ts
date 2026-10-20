@@ -237,7 +237,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       return (await request(command, pending)).applied;
     } catch (error) {
       logger.error("playback", "command_failed", error);
-      adapterError.value = t("播放操作失败，请重试或查看日志");
+      adapterError.value = t("播放操作失败");
       await refreshPlaybackStatus();
       return false;
     }
@@ -368,7 +368,7 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
       } finally {
         requestsPending.value -= 1;
         await refreshPlaybackStatus();
-        if (cleanupFailed) adapterError.value = t("播放操作失败，请重试或查看日志");
+        if (cleanupFailed) adapterError.value = t("播放操作失败");
       }
     }
   }

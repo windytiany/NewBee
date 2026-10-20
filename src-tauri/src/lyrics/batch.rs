@@ -393,11 +393,12 @@ impl LyricsBatchState {
         };
         let task = &lease.task;
         crate::logging::with_operation(Some(task.operation_id.clone()), || {
-            log::info!(
+            log::debug!(
                 "event=lyrics_batch_started batchId={} count={}",
                 task.id,
                 ids.len()
             );
+            let mut failures = crate::logging::aggregation::Failures::new("lyrics.download");
             let mut summary = BatchSummary {
                 batch_id: task.id,
                 status: BatchStatus::Completed,
@@ -479,7 +480,15 @@ impl LyricsBatchState {
                             }
                         }
                     };
-                    log::info!("event=lyrics_track_completed batchId={} trackId={} kind={:?} fileWritten={} databaseUpdated={} error={:?}", task.id, track_id, outcome.kind, outcome.result.as_ref().is_some_and(|result| result.file_written), outcome.result.as_ref().is_some_and(|result| result.database_updated), outcome.error.as_ref().or_else(|| outcome.result.as_ref().and_then(|result| result.error.as_ref())));
+                    if let Some(error) = outcome.error.as_ref().or_else(|| {
+                        outcome
+                            .result
+                            .as_ref()
+                            .and_then(|result| result.error.as_ref())
+                    }) {
+                        failures.record("lyrics.download", error, &track_id.to_string());
+                    }
+                    log::debug!("event=lyrics_track_completed batchId={} trackId={} kind={:?} fileWritten={} databaseUpdated={}", task.id, track_id, outcome.kind, outcome.result.as_ref().is_some_and(|result| result.file_written), outcome.result.as_ref().is_some_and(|result| result.database_updated));
                     summary.results.push(outcome.clone());
                     send(BatchEvent::TrackCompleted {
                         batch_id: task.id,
@@ -497,8 +506,23 @@ impl LyricsBatchState {
             } else if task.cancelled.load(Ordering::Acquire) {
                 summary.status = BatchStatus::Cancelled;
             }
-            log::info!(
-                "event=lyrics_batch_completed batchId={} cancelled={} count={} error={:?}",
+            failures.flush();
+            let level = if summary.error.is_some() {
+                log::Level::Error
+            } else if summary.results.iter().any(|outcome| {
+                outcome.error.is_some()
+                    || outcome
+                        .result
+                        .as_ref()
+                        .is_some_and(|result| result.error.is_some())
+            }) {
+                log::Level::Warn
+            } else {
+                log::Level::Info
+            };
+            log::log!(
+                level,
+                "event=lyrics_batch_finished batchId={} cancelled={} count={} error={:?}",
                 task.id,
                 task.cancelled.load(Ordering::Acquire),
                 summary.results.len(),

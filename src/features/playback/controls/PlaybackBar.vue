@@ -314,7 +314,7 @@ watch(
 const hasPlaybackFailure = computed(() => Boolean(playbackFailure.value));
 useNotification(() => {
   if (!hasPlaybackFailure.value) return null;
-  return { type: "error", message: t("播放操作失败，请重试或查看日志"), key: "playback" };
+  return { type: "error", message: t("播放操作失败"), key: "playback" };
 });
 const progressPercent = computed(() =>
   playbackStatus.value.durationMs > 0

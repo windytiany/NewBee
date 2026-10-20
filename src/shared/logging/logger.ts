@@ -4,6 +4,13 @@ import { debug, info, warn, error } from "@tauri-apps/plugin-log";
 export type LogLevel = "debug" | "info" | "warn" | "error";
 const FIELD_NAMES = [
   "suppressed",
+  "code",
+  "stage",
+  "attempts",
+  "affected",
+  "sinceLastReport",
+  "omittedSamples",
+  "phase",
   "operationId",
   "trackId",
   "playbackId",
@@ -32,8 +39,8 @@ const FIELD_NAMES = [
 ] as const;
 export type LogFields = Partial<
   Record<(typeof FIELD_NAMES)[number], string | number | boolean | null>
->;
-const allowedFields = new Set<string>(FIELD_NAMES);
+> & { samples?: string[] };
+const allowedFields = new Set<string>([...FIELD_NAMES, "samples"]);
 type LogSink = (level: LogLevel, message: string) => Promise<void>;
 const sinks = { debug, info, warn, error };
 const MAX_TEXT_LENGTH = 2_000;
@@ -62,27 +69,36 @@ export function describeError(reason: unknown): string {
       ? reason.message
       : typeof reason === "string"
         ? reason
-        : "Unknown error";
+        : reason &&
+            typeof reason === "object" &&
+            "code" in reason &&
+            typeof reason.code === "string" &&
+            "message" in reason &&
+            typeof reason.message === "string"
+          ? "detail" in reason && typeof reason.detail === "string"
+            ? reason.detail
+            : reason.message
+          : "Unknown error";
   return redactText(text).slice(0, MAX_TEXT_LENGTH);
 }
 
 export function createLogger(sink: LogSink, now = Date.now) {
   const recent = new Map<string, { time: number; suppressed: number }>();
+  const scopeKey = (level: string, module: string, event: string, fields: LogFields) =>
+    JSON.stringify([level, module, event, fields.operationId, fields.trackId, fields.path]) + ":";
   function write(level: LogLevel, module: string, event: string, fields: LogFields = {}) {
     try {
-      const key = `${level}:${module}:${event}:${fields.operationId ?? ""}:${fields.trackId ?? ""}`;
+      const key =
+        scopeKey(level, module, event, fields) + JSON.stringify([fields.code, fields.error]);
       const time = now();
       const previous = recent.get(key);
-      if (
-        (level === "warn" || level === "error") &&
-        previous &&
-        time - previous.time < REPEAT_WINDOW_MS
-      ) {
+      const repeated = (level === "warn" || level === "error") && !fields.phase;
+      if (repeated && previous && time - previous.time < REPEAT_WINDOW_MS) {
         previous.suppressed++;
         return;
       }
       const suppressed = previous?.suppressed ?? 0;
-      if (level === "warn" || level === "error") {
+      if (repeated) {
         recent.delete(key);
         if (recent.size >= MAX_REPEAT_KEYS) {
           const oldest = recent.keys().next().value;
@@ -95,11 +111,19 @@ export function createLogger(sink: LogSink, now = Date.now) {
           .filter(
             ([name, value]) =>
               allowedFields.has(name) &&
-              (value == null || ["string", "number", "boolean"].includes(typeof value)),
+              (value == null ||
+                ["string", "number", "boolean"].includes(typeof value) ||
+                (name === "samples" &&
+                  Array.isArray(value) &&
+                  value.every((item) => typeof item === "string"))),
           )
           .map(([name, value]) => [
             name,
-            typeof value === "string" ? redactText(value).slice(0, MAX_TEXT_LENGTH) : value,
+            typeof value === "string"
+              ? redactText(value).slice(0, MAX_TEXT_LENGTH)
+              : Array.isArray(value)
+                ? value.slice(0, 3).map((item) => redactText(item).slice(0, MAX_TEXT_LENGTH))
+                : value,
           ]),
       );
       const message = JSON.stringify({
@@ -120,21 +144,39 @@ export function createLogger(sink: LogSink, now = Date.now) {
     recovered: (module: string, event: string, fields: LogFields = {}) => {
       let suppressed = 0;
       for (const level of ["warn", "error"]) {
-        const key = `${level}:${module}:${event}:${fields.operationId ?? ""}:${fields.trackId ?? ""}`;
-        suppressed += recent.get(key)?.suppressed ?? 0;
-        recent.delete(key);
+        const prefix = scopeKey(level, module, event, fields);
+        for (const [key, value] of recent) {
+          if (key.startsWith(prefix)) {
+            suppressed += value.suppressed;
+            recent.delete(key);
+          }
+        }
       }
       write("info", module, `${event}_recovered`, { ...fields, suppressed });
     },
     error: (module: string, event: string, reason?: unknown, fields: LogFields = {}) =>
       write("error", module, event, {
         ...fields,
+        code:
+          reason &&
+          typeof reason === "object" &&
+          "code" in reason &&
+          typeof reason.code === "string"
+            ? reason.code
+            : fields.code,
         error: describeError(reason),
         stack: reason instanceof Error ? reason.stack : undefined,
       }),
     warn: (module: string, event: string, reason?: unknown, fields: LogFields = {}) =>
       write("warn", module, event, {
         ...fields,
+        code:
+          reason &&
+          typeof reason === "object" &&
+          "code" in reason &&
+          typeof reason.code === "string"
+            ? reason.code
+            : fields.code,
         error: describeError(reason),
         stack: reason instanceof Error ? reason.stack : undefined,
       }),

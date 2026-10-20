@@ -554,7 +554,7 @@ describe("歌单 workspace 管理", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "重命名歌单失败，请查看日志",
+      message: "重命名歌单失败",
     });
     expect(findNode(root, (node) => node.type === "dialog" && node.open)).not.toBeNull();
     expect(selectedPlaylistId.value).toBe(firstPlaylist.id);
@@ -612,7 +612,7 @@ describe("歌单 workspace 管理", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "删除歌单失败，请查看日志",
+      message: "删除歌单失败",
       count: 1,
     });
   });

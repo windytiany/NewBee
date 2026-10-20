@@ -44,7 +44,7 @@ export function usePathMigration() {
       logger.error("library", "path_migration_failed", reason);
       notify({
         type: "error",
-        message: t("路径迁移失败，请查看日志"),
+        message: t("路径迁移失败"),
         key: "library-path-migration",
       });
     } finally {

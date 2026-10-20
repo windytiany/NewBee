@@ -20,7 +20,7 @@ async function start() {
     await restoreInterfaceState();
   } catch (error) {
     logger.error("backup", "interface_restore_failed", error);
-    notify({ type: "error", message: t("恢复界面状态失败，请查看日志"), key: "backup-restore" });
+    notify({ type: "error", message: t("恢复界面状态失败"), key: "backup-restore" });
   }
   const { default: App } = await import("@/app/App.vue");
   const app = createApp(App);

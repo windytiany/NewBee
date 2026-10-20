@@ -1,5 +1,6 @@
 import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
+import { errorMessage, commandFailure } from "@/shared/notifications/error";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { computed, ref } from "vue";
@@ -44,16 +45,16 @@ export function useLibraryScan() {
           total: payload.total || undefined,
         });
       });
-      logger.info("library", "import_started", { operationId: id });
+      logger.debug("library", "import_started", { operationId: id });
       scanResult.value = await invoke<IngestResult>("scan_music_library", { operationId: id });
       const result = scanResult.value;
-      logger.info("library", "import_completed", {
+      logger.write(result.failed ? "warn" : "info", "library", "import_completed", {
         operationId: id,
         elapsedMs: Math.round(performance.now() - started),
         ...result,
       });
       const message = result.failed
-        ? t("扫描完成，{count} 首失败（详情见日志）", { count: result.failed })
+        ? t("扫描完成，{count} 首失败", { count: result.failed })
         : result.added === 0 && result.updated === 0
           ? t("未发现变化")
           : t("扫描完成：新增 {added} 首，更新 {updated} 首", {
@@ -64,9 +65,10 @@ export function useLibraryScan() {
       notify({ type: outcome?.type ?? "success", message, key: TASK_KEY });
       reportLibraryImport(result);
     } catch (error) {
-      scanError.value = error instanceof Error ? error.message : String(error);
-      logger.error("library", "scan_failed", error, { operationId: id });
-      outcome = { type: "error", message: t("扫描失败，请查看日志") };
+      scanError.value = errorMessage(error, t("扫描失败"));
+      const busy = commandFailure(error)?.code === "write_busy";
+      logger[busy ? "warn" : "error"]("library", "scan_failed", error, { operationId: id });
+      outcome = { type: busy ? "warning" : "error", message: scanError.value };
       notify({ ...outcome, key: TASK_KEY });
     } finally {
       unlisten?.();

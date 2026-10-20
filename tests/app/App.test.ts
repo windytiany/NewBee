@@ -448,7 +448,7 @@ describe("App track deletion confirmation", () => {
     expect(findByTestId(root, "delete-dialog")).toBeNull();
     expect(findByTestId(root, "library-error")).toBeNull();
     expect(notifications.items.value[0]).toMatchObject({
-      message: "已从曲库移除 1 首，队列同步失败，请查看日志",
+      message: "已从曲库移除 1 首，队列同步失败",
       persistent: true,
     });
     expect(removalCalls).toBe(1);

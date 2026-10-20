@@ -544,7 +544,7 @@ describe("library album actions", () => {
     const result = await page.removeAlbumFromLibrary(selection);
     expect(result.completed).toBe(false);
     expect(result.deletedCount).toBe(0);
-    expect(result.message).toBe("已从曲库移除 0 首，2 首移除失败，请重试或查看日志");
+    expect(result.message).toBe("已从曲库移除 0 首，2 首移除失败");
     expect(page.trackActionRemoval.value).toEqual({
       deletedCount: 0,
       failedCount: 2,
@@ -577,7 +577,7 @@ describe("library album actions", () => {
       queueSyncFailed: false,
     });
     expect(page.trackActionMessage.value).toBe("已从曲库删除 2 首曲目。");
-    expect(result.message).toBe("已从曲库移除 2 首，1 首移除失败，请重试或查看日志");
+    expect(result.message).toBe("已从曲库移除 2 首，1 首移除失败");
     expect(queueRemovalCalls).toEqual([track.id, thirdTrack.id]);
   });
 
@@ -624,7 +624,7 @@ describe("library track actions", () => {
         },
       ],
     });
-    expect(page.trackActionMessage.value).toBe("已添加 2 首，1 首失败（详情见日志）");
+    expect(page.trackActionMessage.value).toBe("已添加 2 首，1 首失败");
   });
 
   it("keeps deletion failure separate and does not clean the playback queue", async () => {
@@ -636,13 +636,13 @@ describe("library track actions", () => {
 
     expect(result).toEqual({
       status: "not-deleted",
-      message: "从曲库移除失败，请重试或查看日志",
+      message: "从曲库移除失败",
     });
     expect(queueRemovalCalls).toEqual([]);
     expect(invokeCalls.filter((command) => command === "remove_track_from_library")).toHaveLength(
       1,
     );
-    expect(page.trackActionError.value).toBe("从曲库移除失败，请重试或查看日志");
+    expect(page.trackActionError.value).toBe("从曲库移除失败");
     expect(invokeCalls.filter((command) => command === "list_artists")).toHaveLength(1);
   });
 

@@ -43,7 +43,7 @@ pub(crate) async fn get_artwork_write_plan<R: tauri::Runtime>(
                         error: None,
                     },
                     Err(error) => {
-                        log::warn!("event=artwork_plan_failed trackId={id} error={error}");
+                        log::debug!("event=artwork_plan_failed trackId={id} error={error}");
                         WritePlan {
                             track_id: id,
                             file_write_required: false,

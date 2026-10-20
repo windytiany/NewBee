@@ -50,7 +50,7 @@ pub(crate) fn scan_with_directory(
         })
     })();
     if let Err(error) = &outcome {
-        log::warn!(
+        log::debug!(
             "Full scan '{}' failed during inspection: {error}",
             path.display()
         );

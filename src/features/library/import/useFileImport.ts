@@ -1,5 +1,6 @@
 import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
+import { errorMessage, commandFailure } from "@/shared/notifications/error";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
@@ -24,12 +25,12 @@ export function useLibraryFileImport() {
         ? await invoke<string[]>("readable_audio_files", { paths: droppedPaths })
         : await pickFiles();
       if (!paths || paths.length === 0) {
-        logger.info("library", "file_import_cancelled", { operationId: id });
+        logger.debug("library", "file_import_cancelled", { operationId: id });
         return;
       }
-      logger.info("library", "import_started", { operationId: id });
+      logger.debug("library", "import_started", { operationId: id });
       const result = await invoke<IngestResult>("import_music_files", { paths, operationId: id });
-      logger.info("library", "import_completed", {
+      logger.write(result.failed ? "warn" : "info", "library", "import_completed", {
         operationId: id,
         elapsedMs: Math.round(performance.now() - started),
         ...result,
@@ -38,7 +39,7 @@ export function useLibraryFileImport() {
         notify({
           type: result.failed > 0 ? "warning" : "success",
           message: result.failed
-            ? t("导入完成，{count} 首失败（详情见日志）", { count: result.failed })
+            ? t("导入完成，{count} 首失败", { count: result.failed })
             : t("导入完成：新增 {added} 首，更新 {updated} 首", {
                 added: result.added,
                 updated: result.updated,
@@ -47,8 +48,13 @@ export function useLibraryFileImport() {
         });
       reportLibraryImport(result);
     } catch (reason) {
-      logger.error("library", "file_import_failed", reason, { operationId: id });
-      notify({ type: "error", message: t("导入失败，请查看日志"), key: "library-file-import" });
+      const busy = commandFailure(reason)?.code === "write_busy";
+      logger[busy ? "warn" : "error"]("library", "file_import_failed", reason, { operationId: id });
+      notify({
+        type: busy ? "warning" : "error",
+        message: errorMessage(reason, t("导入失败")),
+        key: "library-file-import",
+      });
     } finally {
       isImporting.value = false;
     }

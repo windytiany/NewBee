@@ -273,7 +273,7 @@ describe("创建歌单对话框", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "创建歌单失败，请查看日志",
+      message: "创建歌单失败",
     });
     expect(dialog.dialog.open).toBe(true);
     expect(dialog.input.value).toBe("Retry");

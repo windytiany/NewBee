@@ -1,5 +1,6 @@
 import { expect, it } from "bun:test";
 import * as Vue from "vue";
+import { describeError } from "@/shared/logging/logger";
 import type { createLyricsBatch } from "@/features/lyrics/download/batch";
 import type { LyricsBatchEvent } from "@/features/lyrics/types";
 import type { MetadataSaveResult } from "@/features/metadata/types";
@@ -8,7 +9,7 @@ import { evaluateSource, transpileScript } from "../../../../support/module/load
 it("wires the production batch through a Channel and round commands without frontend begin/fetch/finish or snapshot reads", async () => {
   const calls: Array<[string, Record<string, unknown> | undefined]> = [];
   const edits: number[][] = [];
-  const logs: Array<{ event: string; fields: Record<string, unknown> }> = [];
+  const logs: Array<{ level: string; event: string; fields: Record<string, unknown> }> = [];
   let resolveCompletion!: () => void;
   const completion = new Promise<void>((resolve) => {
     resolveCompletion = resolve;
@@ -29,16 +30,15 @@ it("wires the production batch through a Channel and round commands without fron
     {
       vue: Vue,
       "@/shared/logging/logger": {
+        describeError,
         operationId: () => "lyrics-shared:1",
         logger: {
+          debug: (_module: string, event: string, fields: Record<string, unknown>) =>
+            logs.push({ level: "debug", event, fields }),
           info: (_module: string, event: string, fields: Record<string, unknown>) =>
-            logs.push({ event, fields }),
-          write: (
-            _level: string,
-            _module: string,
-            event: string,
-            fields: Record<string, unknown>,
-          ) => logs.push({ event, fields }),
+            logs.push({ level: "info", event, fields }),
+          write: (level: string, _module: string, event: string, fields: Record<string, unknown>) =>
+            logs.push({ level, event, fields }),
           warn: () => {},
           error: () => {},
         },
@@ -106,6 +106,14 @@ it("wires the production batch through a Channel and round commands without fron
   expect(calls[0]?.[1]?.trackIds).toEqual([7, 8]);
   expect(calls[0]?.[1]?.operationId).toBe("lyrics-shared:1");
   expect(logs.every(({ fields }) => fields.operationId === "lyrics-shared:1")).toBe(true);
+  expect(
+    logs
+      .filter(
+        ({ event }) =>
+          event === "save_result" || event === "save_completed" || event.startsWith("download_"),
+      )
+      .every(({ level }) => level === "debug"),
+  ).toBe(true);
   expect(
     logs
       .filter(({ event }) => event === "save_result")

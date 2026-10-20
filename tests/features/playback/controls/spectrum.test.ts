@@ -198,7 +198,7 @@ describe("实时音频频谱轮询", () => {
     expect(spectrum.error.value).toContain("IPC unavailable");
     expect(spectrum.bands.value).toEqual(Array(8).fill(0));
     expect(feedback).toEqual([
-      { type: "warning", message: "实时频谱不可用，请查看日志", key: "playback-spectrum" },
+      { type: "warning", message: "实时频谱不可用", key: "playback-spectrum" },
     ]);
     expect(warnings).toHaveLength(1);
     advancePoll();

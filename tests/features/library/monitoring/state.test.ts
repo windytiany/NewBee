@@ -55,7 +55,7 @@ it("retains a failed background scan without marking an already-viewed result un
   };
   await state.refreshMonitoring();
   expect(tasks.active.value).toEqual([]);
-  expect(tasks.items.value[0]?.result).toEqual({ type: "error", message: "扫描失败，请查看日志" });
+  expect(tasks.items.value[0]?.result).toEqual({ type: "error", message: "扫描失败" });
   expect(tasks.unread.value).toBe(true);
   tasks.acknowledge();
   await state.refreshMonitoring();

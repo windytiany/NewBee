@@ -135,7 +135,7 @@ describe("lyrics editor actions", () => {
       throw new Error("settings unavailable");
     });
     await Vue.nextTick();
-    expect(notifications.items.value[0]?.message).toBe("读取歌词设置失败，请查看日志");
+    expect(notifications.items.value[0]?.message).toBe("读取歌词设置失败");
     await bindings.automatic();
     expect(calls).not.toContain("find_track_lyrics");
   });

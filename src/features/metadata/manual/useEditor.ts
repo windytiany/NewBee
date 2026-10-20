@@ -62,7 +62,7 @@ export function createTagEditor(options: TagEditorOptions) {
     logger.error("metadata", event, error);
     notify({
       type: "error",
-      message: event === "editor_load_failed" ? t("读取标签失败，请查看日志") : state.error,
+      message: event === "editor_load_failed" ? t("读取标签失败") : state.error,
       key: "tags-editor",
     });
   }

@@ -25,7 +25,7 @@ const stops: UnlistenFn[] = [];
 
 function reportError(error: unknown) {
   logger.error("library/monitoring", "synchronization_failed", error);
-  notify({ type: "error", message: t("文件夹同步失败，请查看日志"), key: "library-monitoring" });
+  notify({ type: "error", message: t("文件夹同步失败"), key: "library-monitoring" });
 }
 function showPending() {
   if (disposed || pending.value || dialog.value?.open || !monitoringSnapshot.value.missing.length)

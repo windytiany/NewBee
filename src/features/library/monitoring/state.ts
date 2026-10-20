@@ -23,7 +23,7 @@ export async function refreshMonitoring() {
     tasks.finish(
       "library-monitoring",
       snapshot.statuses.some((status) => status.phase === "error" || status.phase === "unavailable")
-        ? { type: "error", message: t("扫描失败，请查看日志") }
+        ? { type: "error", message: t("扫描失败") }
         : undefined,
     );
   }

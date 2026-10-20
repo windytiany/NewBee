@@ -59,9 +59,9 @@ describe("lyrics search", () => {
     await search.select(candidate);
     await search.automatic(1);
     expect(notifications.items.value.map(({ message }) => message)).toEqual([
-      "歌词搜索失败，请查看日志",
-      "歌词预览失败，请查看日志",
-      "自动获取歌词失败，请查看日志",
+      "歌词搜索失败",
+      "歌词预览失败",
+      "自动获取歌词失败",
     ]);
     expect(applied).toEqual([]);
   });

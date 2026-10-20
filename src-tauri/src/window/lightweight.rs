@@ -72,8 +72,8 @@ pub fn report_error(app: &AppHandle, error: &str) {
         .unwrap_or_default();
     app.dialog()
         .message(match locale {
-            Locale::ZhCn => "窗口操作失败，请查看日志",
-            Locale::En => "Window operation failed. Check the logs.",
+            Locale::ZhCn => "窗口操作失败",
+            Locale::En => "Window operation failed",
         })
         .title("NewBee")
         .show(|_| {});

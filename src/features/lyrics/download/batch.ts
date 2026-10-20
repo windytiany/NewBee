@@ -59,7 +59,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
   async function run(trackIds: readonly number[]) {
     if (state.running) return;
     const id = operationId("lyrics-download");
-    logger.info("lyrics", "download_started", { operationId: id, count: trackIds.length });
+    logger.debug("lyrics", "download_started", { operationId: id, count: trackIds.length });
     synchronization.reset();
     Object.assign(state, {
       running: true,
@@ -92,24 +92,19 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       report();
     }
     function logOutcome(outcome: LyricsBatchOutcome, final = false) {
-      logger.write(
-        outcome.error || outcome.result?.error ? "warn" : "info",
-        "lyrics",
-        final ? "download_final_result" : "download_result",
-        {
-          operationId: id,
-          trackId: outcome.trackId,
-          kind: outcome.kind,
-          error: outcome.error || outcome.result?.error,
-          fileWritten: outcome.result?.fileWritten,
-          databaseUpdated: outcome.result?.databaseUpdated,
-        },
-      );
+      logger.write("debug", "lyrics", final ? "download_final_result" : "download_result", {
+        operationId: id,
+        trackId: outcome.trackId,
+        kind: outcome.kind,
+        error: outcome.error || outcome.result?.error,
+        fileWritten: outcome.result?.fileWritten,
+        databaseUpdated: outcome.result?.databaseUpdated,
+      });
     }
     const cooperation = createLyricsBatchCooperation(options, {
       operationId: id,
       started: (total, batchId) => {
-        logger.info("lyrics", "batch_started", { operationId: id, batchId, count: total });
+        logger.debug("lyrics", "batch_started", { operationId: id, batchId, count: total });
         state.total = total;
         report();
       },
@@ -145,12 +140,13 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         operationId: id,
         targets: results.map(({ trackId, path }) => ({ trackId, path })),
         writeTrackIds: [],
+        reportFailures: false,
         execute: async () => results,
       });
       if (state.synchronizationError)
         failure = [failure, state.synchronizationError].filter(Boolean).join("\n");
       const inconsistent = results.some((result) => result.fileWritten && !result.databaseUpdated);
-      logger.info("lyrics", "download_completed", {
+      logger.debug("lyrics", "download_completed", {
         operationId: id,
         cancelled: state.cancelling,
         written: state.written,
@@ -163,20 +159,20 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         type: failure || state.failed ? ("warning" as const) : ("success" as const),
         persistent: inconsistent || Boolean(state.synchronizationError),
         message: state.synchronizationError
-          ? t("歌词已保存，但界面刷新失败，请查看日志")
+          ? t("歌词已保存，但界面刷新失败")
           : inconsistent
             ? t("歌词已写入，但曲库更新失败，请重新扫描")
             : failure
-              ? t("歌词更新失败，请查看日志")
+              ? t("歌词更新失败")
               : state.cancelling
                 ? state.failed
-                  ? t("歌词更新已取消：写入 {count} 首，{failed} 首失败（详情见日志）", {
+                  ? t("歌词更新已取消：写入 {count} 首，{failed} 首失败", {
                       count: state.written,
                       failed: state.failed,
                     })
                   : t("歌词更新已取消：写入 {count} 首", { count: state.written })
                 : state.failed
-                  ? t("歌词更新完成：写入 {count} 首，{failed} 首失败（详情见日志）", {
+                  ? t("歌词更新完成：写入 {count} 首，{failed} 首失败", {
                       count: state.written,
                       failed: state.failed,
                     })
@@ -204,7 +200,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
           options.notifications.notify({
             type: "warning",
             persistent: true,
-            message: t("歌词已保存，但界面刷新仍失败，请查看日志"),
+            message: t("歌词已保存，但界面刷新仍失败"),
             key: TASK_KEY,
           });
       } finally {

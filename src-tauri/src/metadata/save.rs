@@ -158,13 +158,13 @@ fn persist_track(
     })();
     result.error = outcome.err();
     if result.database_updated {
-        log::info!(
+        log::debug!(
             "event=metadata_saved trackId={track_id} path={:?} fileWritten={} databaseUpdated=true",
             result.path,
             result.file_written
         );
     } else {
-        log::warn!("event=metadata_save_failed trackId={track_id} path={:?} fileWritten={} databaseUpdated=false error={:?}", result.path, result.file_written, result.error);
+        log::debug!("event=metadata_save_failed trackId={track_id} path={:?} fileWritten={} databaseUpdated=false error={:?}", result.path, result.file_written, result.error);
     }
     result
 }

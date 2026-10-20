@@ -103,6 +103,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             logging::open_logs_directory,
             logging::set_detailed_logging,
+            logging::export::export_diagnostics,
             window::show_main_window,
             window::lightweight::advance_lightweight,
             window::lightweight::cancel_lightweight,

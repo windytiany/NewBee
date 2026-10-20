@@ -69,7 +69,7 @@ describe("tag business notifications", () => {
   for (const outcome of ["success", "failure", "interrupted"] as const) {
     it(`reports only failures for ${outcome}, retaining results and logging details`, async () => {
       notifications.clear();
-      const log = spyOn(logger, "write");
+      const log = spyOn(logger, "debug");
       try {
         const save = createMetadataSave({
           notifyResult: true,
@@ -108,8 +108,8 @@ describe("tag business notifications", () => {
           expect(saved[1]?.error).toBe("request failed");
           expect(save.state.synchronizationError).toContain("refresh failed");
         }
-        expect(log.mock.calls.filter((call) => call[2] === "save_result")).toHaveLength(2);
-        expect(log.mock.calls.some((call) => call[3]?.path === first.path)).toBe(true);
+        expect(log.mock.calls.filter((call) => call[1] === "save_result")).toHaveLength(2);
+        expect(log.mock.calls.some((call) => call[2]?.path === first.path)).toBe(true);
       } finally {
         log.mockRestore();
       }
@@ -159,7 +159,7 @@ describe("tag business notifications", () => {
       await editor.openTracks([1]);
       expect(editor.state.error).toBe("read failed");
       expect(notifications.items.value).toHaveLength(1);
-      expect(notifications.items.value[0]?.message).toBe("读取标签失败，请查看日志");
+      expect(notifications.items.value[0]?.message).toBe("读取标签失败");
       expect(log).toHaveBeenCalledWith("metadata", "editor_load_failed", error);
     } finally {
       log.mockRestore();
@@ -180,7 +180,7 @@ describe("tag business notifications", () => {
       notifications.items.value.filter(({ message }) => message.includes("数量不一致")),
     ).toHaveLength(1);
     expect(
-      notifications.items.value.filter(({ message }) => message === "读取封面列表失败，请查看日志"),
+      notifications.items.value.filter(({ message }) => message === "读取封面列表失败"),
     ).toHaveLength(1);
     expect(editor.state.coverError).toBe("cover network failed");
     expect("retryCovers" in editor).toBe(false);

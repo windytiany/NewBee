@@ -3,6 +3,7 @@ import { reactive } from "vue";
 import { watchActivity } from "@/shared/lifecycle/activity";
 import { notify } from "@/shared/notifications/center";
 import { logger, operationId } from "@/shared/logging/logger";
+import { createFailures } from "@/shared/logging/aggregation";
 import type { MetadataSaveResult } from "@/features/metadata/types";
 
 export function metadataSaved(result: MetadataSaveResult): boolean {
@@ -27,6 +28,7 @@ type SaveRequest = {
     operationId: string,
   ) => Promise<MetadataSaveResult[]>;
   deferSynchronization?: boolean;
+  reportFailures?: boolean;
 };
 type MetadataSaveOptions = {
   editFiles: MetadataFileEditor;
@@ -79,7 +81,8 @@ export function createMetadataSave(options: MetadataSaveOptions) {
   async function run(request: SaveRequest) {
     if (state.saving) throw new Error(t("元数据保存尚未完成，请稍后重试。"));
     const id = request.operationId ?? operationId("metadata-save");
-    logger.info("metadata", "save_started", { operationId: id, count: request.targets.length });
+    logger.debug("metadata", "save_started", { operationId: id, count: request.targets.length });
+    const failures = createFailures("metadata", "save_failure", id);
     const targets = new Map(request.targets.map((target) => [target.trackId, target]));
     const results = new Map(state.results.map((result) => [result.trackId, result]));
     const reported = new Map<number, MetadataSaveResult>();
@@ -96,6 +99,22 @@ export function createMetadataSave(options: MetadataSaveOptions) {
         fileWritten: result.fileWritten || (results.get(result.trackId)?.fileWritten ?? false),
       };
       results.set(result.trackId, result);
+      const previous = reported.get(result.trackId);
+      if (
+        request.reportFailures !== false &&
+        !metadataSaved(result) &&
+        (previous?.error !== result.error || previous?.databaseUpdated !== result.databaseUpdated)
+      ) {
+        failures.record(
+          result.error || "Metadata save failed",
+          result.path || String(result.trackId),
+          {
+            stage: result.fileWritten ? "database" : "write",
+            fileWritten: result.fileWritten,
+            databaseUpdated: result.databaseUpdated,
+          },
+        );
+      }
       reported.set(result.trackId, result);
       state.results = [...results.values()];
       state.completed = reported.size;
@@ -124,7 +143,18 @@ export function createMetadataSave(options: MetadataSaveOptions) {
           databaseUpdated: false,
           error: state.error || t("保存未返回结果，请重试或重新扫描。"),
         };
-        logger.write(metadataSaved(result) ? "info" : "warn", "metadata", "save_result", {
+        if (
+          request.reportFailures !== false &&
+          !reported.has(target.trackId) &&
+          !metadataSaved(result)
+        ) {
+          failures.record(result.error, result.path || String(result.trackId), {
+            stage: result.fileWritten ? "database" : "write",
+            fileWritten: result.fileWritten,
+            databaseUpdated: result.databaseUpdated,
+          });
+        }
+        logger.debug("metadata", "save_result", {
           operationId: id,
           trackId: result.trackId,
           path: result.path,
@@ -141,13 +171,28 @@ export function createMetadataSave(options: MetadataSaveOptions) {
       state.results = [...results.values()];
       state.completed = targets.size;
       if (!request.deferSynchronization) await synchronize(id);
-      logger.info("metadata", "save_completed", {
-        operationId: id,
-        count: reported.size,
-        refreshFailed: Boolean(state.synchronizationError),
-      });
+      failures.flush();
       const succeeded = [...reported.values()].filter((result) => metadataSaved(result)).length;
       const failed = reported.size - succeeded;
+      logger.write(
+        state.error
+          ? "error"
+          : state.synchronizationError
+            ? "warn"
+            : request.reportFailures === false
+              ? "debug"
+              : failed
+                ? "warn"
+                : "info",
+        "metadata",
+        "save_completed",
+        {
+          operationId: id,
+          count: reported.size,
+          failed,
+          refreshFailed: Boolean(state.synchronizationError),
+        },
+      );
       if (options.notifyResult && (failed || state.synchronizationError))
         notify({
           type: succeeded ? "warning" : "error",

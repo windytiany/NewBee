@@ -82,7 +82,7 @@ describe("lyrics download confirmation", () => {
     await confirmation.openTracks([1, 2]);
     expect(confirmation.state.error).toContain("不匹配");
     expect(notifications.items.value).toHaveLength(1);
-    expect(notifications.items.value[0]?.message).toBe("读取歌词下载目标失败，请查看日志");
+    expect(notifications.items.value[0]?.message).toBe("读取歌词下载目标失败");
     await confirmation.confirm();
     expect(started).toEqual([]);
   });

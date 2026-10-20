@@ -60,7 +60,7 @@ export function usePlaybackSpectrum(
         logger.warn("playback", "spectrum_read_failed", reason, { playbackId: id });
         notify({
           type: "warning",
-          message: t("实时频谱不可用，请查看日志"),
+          message: t("实时频谱不可用"),
           key: "playback-spectrum",
         });
       }

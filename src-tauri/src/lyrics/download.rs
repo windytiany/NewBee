@@ -46,7 +46,10 @@ fn search(
         result.is_ok()
     );
     if let Err(error) = &result {
-        log::warn!("event=lyrics_search_failed error={error}");
+        log::debug!(
+            "event=lyrics_search_failed provider={} error={error}",
+            provider.identifier()
+        );
     }
     result
 }
@@ -67,7 +70,10 @@ fn lyrics(
         result.is_ok()
     );
     if let Err(error) = &result {
-        log::warn!("event=lyrics_fetch_failed error={error}");
+        log::debug!(
+            "event=lyrics_fetch_failed provider={} candidateId={id} error={error}",
+            provider.identifier()
+        );
     }
     result
 }

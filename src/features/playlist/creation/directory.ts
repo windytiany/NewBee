@@ -21,8 +21,8 @@ export function createDirectoryPlaylists(
           type: playlistId === null ? "error" : "warning",
           message:
             playlistId === null
-              ? t("创建歌单失败，请查看日志")
-              : t("歌单已创建，已添加 {count} 首，剩余歌曲添加失败，请查看日志", { count: 0 }),
+              ? t("创建歌单失败")
+              : t("歌单已创建，已添加 {count} 首，剩余歌曲添加失败", { count: 0 }),
         });
       } finally {
         if (playlistId !== null) reportPlaylistChanged(playlistId);

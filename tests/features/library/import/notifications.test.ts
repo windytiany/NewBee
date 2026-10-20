@@ -119,7 +119,7 @@ describe("scan notifications", () => {
     await scan.scanMusicLibrary();
     expect(notifications.items.value[0]).toMatchObject({
       type: "warning",
-      message: "扫描完成，1 首失败（详情见日志）",
+      message: "扫描完成，1 首失败",
     });
   });
 
@@ -132,6 +132,35 @@ describe("scan notifications", () => {
     expect(scan.scanResult.value?.failed).toBe(1);
   });
 
+  it("shows a busy command's actual reason as a warning", async () => {
+    const scan = createScan(async () => {
+      throw {
+        code: "write_busy",
+        message: "数据写入或备份任务正在运行",
+        detail: "write lock held",
+      };
+    });
+    await scan.scanMusicLibrary();
+    expect(notifications.items.value[0]).toMatchObject({
+      type: "warning",
+      message: "数据写入或备份任务正在运行",
+    });
+    expect(events).toEqual([]);
+    expect(tasks.active.value).toEqual([]);
+  });
+
+  it("uses the concise command message rather than internal diagnostic details", async () => {
+    const scan = createScan(async () => {
+      throw {
+        code: "scan_failed",
+        message: "扫描失败",
+        detail: "SELECT private FROM internal\nstack",
+      };
+    });
+    await scan.scanMusicLibrary();
+    expect(notifications.items.value[0]?.message).toBe("扫描失败");
+  });
+
   it("injected backend errors produce one toast without a library change", async () => {
     const scan = createScan(async () => {
       throw new Error("permission denied");
@@ -140,7 +169,7 @@ describe("scan notifications", () => {
     expect(notifications.items.value).toHaveLength(1);
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "扫描失败，请查看日志",
+      message: "permission denied",
     });
     expect(events).toEqual([]);
     expect(scan.isScanning.value).toBe(false);

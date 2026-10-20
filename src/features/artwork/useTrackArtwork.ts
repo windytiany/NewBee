@@ -77,7 +77,7 @@ export function useTrackArtwork(
             logger.warn("artwork", "background_generation_failed", cause, { trackId: nextTrackId });
             notify({
               type: "warning",
-              message: t("生成专辑背景失败，请查看日志"),
+              message: t("生成专辑背景失败"),
               key: "artwork-background",
             });
             error.value = `生成背景失败：${cause instanceof Error ? cause.message : String(cause)}`;
@@ -133,7 +133,7 @@ function subscribeToTrackArtwork(
           logger.warn("artwork", "read_failed", error, { trackId });
           notify({
             type: "warning",
-            message: t("封面加载失败，已显示占位图，请查看日志"),
+            message: t("封面加载失败"),
             key: "artwork-read",
           });
           return `读取封面失败，已显示占位图：${message}`;

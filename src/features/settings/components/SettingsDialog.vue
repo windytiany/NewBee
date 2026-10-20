@@ -31,6 +31,7 @@ import BackupOptions from "@/features/backup/components/BackupOptions.vue";
 import AboutPanel from "@/features/settings/about/AboutPanel.vue";
 import UpdatePanel from "@/shared/update/UpdatePanel.vue";
 import MonitoringOptions from "@/features/library/monitoring/MonitoringOptions.vue";
+import DiagnosticsPanel from "@/shared/logging/DiagnosticsPanel.vue";
 import type { MonitoringFolder } from "@/features/library/monitoring/types";
 
 const isBackingUp = ref(false);
@@ -46,7 +47,7 @@ async function changeLogging() {
   } catch (reason) {
     logger.error("settings", "logging_level_change_failed", reason);
     detailedLogging.value = !detailedLogging.value;
-    notify({ type: "error", message: t("切换日志级别失败，请查看日志"), key: "settings-logging" });
+    notify({ type: "error", message: t("切换日志级别失败"), key: "settings-logging" });
   } finally {
     isChangingLogging.value = false;
   }
@@ -56,7 +57,7 @@ async function openLogs() {
     await invoke<void>("open_logs_directory");
   } catch (reason) {
     logger.error("settings", "open_logs_failed", reason);
-    notify({ type: "error", message: t("打开日志目录失败，请查看日志"), key: "settings-logs" });
+    notify({ type: "error", message: t("打开日志目录失败"), key: "settings-logs" });
   }
 }
 
@@ -191,7 +192,7 @@ function restoreShortcuts() {
   if (!isTauriApp) return;
   void setShortcutsSuspended(false).catch((reason: unknown) => {
     logger.error("settings", "shortcuts_restore_failed", reason);
-    notify({ type: "error", message: t("恢复快捷键失败，请查看日志"), key: "settings-shortcuts" });
+    notify({ type: "error", message: t("恢复快捷键失败"), key: "settings-shortcuts" });
   });
 }
 
@@ -250,7 +251,7 @@ async function show(category?: keyof typeof categories) {
   } catch (reason) {
     if (requestId === loadRequestSequence) {
       logger.error("settings", "load_failed", reason);
-      notify({ type: "error", message: t("读取设置失败，请查看日志"), key: "settings-load" });
+      notify({ type: "error", message: t("读取设置失败"), key: "settings-load" });
       restoreShortcuts();
     }
   } finally {
@@ -305,7 +306,7 @@ async function save() {
       reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "";
     notify({
       type: "error",
-      message: detail ? `${t("保存设置失败")}: ${detail}` : t("保存设置失败，请查看日志"),
+      message: detail ? `${t("保存设置失败")}: ${detail}` : t("保存设置失败"),
       key: "settings-save",
     });
   } finally {
@@ -699,8 +700,9 @@ defineExpose({ show });
                   class="accent-app-accent"
                   @change="changeLogging"
                 />
-                {{ t("详细日志（下次启动恢复默认）") }}
+                {{ t("详细日志") }}
               </label>
+              <DiagnosticsPanel />
             </fieldset>
             <div class="mt-6">
               <h4 class="mb-3 text-sm font-semibold">{{ t("备份") }}</h4>

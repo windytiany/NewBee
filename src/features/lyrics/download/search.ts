@@ -105,8 +105,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       searchedProvider = provider;
       if (!state.candidates.length) report(t("未找到候选曲目。"), "search_empty");
     } catch (error) {
-      if (generation === searchGeneration)
-        report(t("歌词搜索失败，请查看日志"), "search_failed", error);
+      if (generation === searchGeneration) report(t("歌词搜索失败"), "search_failed", error);
     } finally {
       if (generation === searchGeneration) state.searching = false;
     }
@@ -134,8 +133,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
         report(contentMessage(content), "preview_unavailable");
       }
     } catch (error) {
-      if (generation === previewGeneration)
-        report(t("歌词预览失败，请查看日志"), "preview_failed", error);
+      if (generation === previewGeneration) report(t("歌词预览失败"), "preview_failed", error);
     } finally {
       if (generation === previewGeneration) state.previewing = false;
     }
@@ -154,7 +152,7 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
       }
     } catch (error) {
       if (generation === automaticGeneration)
-        report(t("自动获取歌词失败，请查看日志"), "automatic_failed", error);
+        report(t("自动获取歌词失败"), "automatic_failed", error);
     } finally {
       if (generation === automaticGeneration) state.automatic = false;
     }

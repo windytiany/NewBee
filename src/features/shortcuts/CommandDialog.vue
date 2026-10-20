@@ -65,7 +65,7 @@ async function execute(action: ShortcutAction) {
     await props.run(action, context);
   } catch (reason) {
     logger.error("shortcuts", "command_failed", reason);
-    notify({ type: "error", message: t("快捷键操作失败，请查看日志"), key: "shortcut-error" });
+    notify({ type: "error", message: t("快捷键操作失败"), key: "shortcut-error" });
   }
 }
 function onKeydown(event: globalThis.KeyboardEvent) {

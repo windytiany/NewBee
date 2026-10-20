@@ -29,7 +29,7 @@ async function install() {
     cancel: (request, fallback = false) => invoke("cancel_lightweight", { request, fallback }),
     failed: (error) => {
       logger.error("window", "lightweight_failed", error);
-      void message(t("进入轻量模式失败，请查看日志"), { title: "NewBee", kind: "error" }).catch(
+      void message(t("进入轻量模式失败"), { title: "NewBee", kind: "error" }).catch(
         (reason: unknown) => {
           logger.error("window", "lightweight_error_dialog_failed", reason);
         },

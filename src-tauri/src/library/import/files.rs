@@ -13,21 +13,27 @@ pub async fn import_music_files<R: tauri::Runtime>(
     operation_id: Option<String>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
-) -> Result<ImportResult, String> {
-    let guard = write.acquire()?;
+) -> Result<ImportResult, super::error::CommandError> {
+    use super::error::CommandError;
+    let guard = write.acquire().map_err(CommandError::busy)?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::logging::with_operation(operation_id.clone(), || {
             let _guard = guard;
-            log::info!("event=import_started operationId={operation_id:?}");
+            log::debug!("event=import_started");
             use tauri::Manager;
             let database = app.state::<Database>();
             let result = run_import(&database, &paths);
-            log::info!("event=import_completed operationId={operation_id:?}");
+            log::debug!(
+                "event=import_finished failed={} added={} updated={}",
+                result.failed,
+                result.added,
+                result.updated
+            );
             result
         })
     })
     .await
-    .map_err(|error| format!("Music file import task failed: {error}"))
+    .map_err(|error| CommandError::import(format!("Music file import task failed: {error}")))
 }
 
 pub(super) fn run_import(database: &Database, paths: &[String]) -> ImportResult {
@@ -56,5 +62,6 @@ pub(super) fn run_import(database: &Database, paths: &[String]) -> ImportResult 
         }
         import_track(database, &canonical, &mut result);
     }
+    result.failures.flush();
     result
 }

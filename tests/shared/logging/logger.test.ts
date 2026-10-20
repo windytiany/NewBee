@@ -138,6 +138,32 @@ describe("diagnostic logging", () => {
     expect(String(records[0]?.fields.context)).toHaveLength(2_000);
   });
 
+  it("does not suppress distinct reasons or paths within the same operation", () => {
+    const { logger, records } = fixture();
+    logger.warn("library", "scan_failed", "permission denied", {
+      operationId: "scan:1",
+      path: "a",
+    });
+    logger.warn("library", "scan_failed", "disk full", { operationId: "scan:1", path: "a" });
+    logger.warn("library", "scan_failed", "permission denied", {
+      operationId: "scan:1",
+      path: "b",
+    });
+    expect(records).toHaveLength(3);
+  });
+
+  it("records structured command codes and details without arbitrary object serialization", () => {
+    const { logger, records } = fixture();
+    logger.warn("library", "scan_failed", {
+      code: "write_busy",
+      message: "任务正在运行",
+      detail: "lock held",
+      private: "secret",
+    });
+    expect(records[0]?.fields).toMatchObject({ code: "write_busy", error: "lock held" });
+    expect(JSON.stringify(records)).not.toContain("secret");
+  });
+
   it("reports the first repeated failure then a periodic suppression count", () => {
     const { logger, records, advance } = fixture();
     logger.warn("playback", "status_failed", "IPC unavailable");
