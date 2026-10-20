@@ -31,6 +31,10 @@
   body {
     background-color: var(--app-base);
     color: var(--app-text);
+  }
+
+  body,
+  dialog {
     user-select: none;
   }
 
