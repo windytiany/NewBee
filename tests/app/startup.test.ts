@@ -80,7 +80,7 @@ async function settle() {
 describe("startup window visibility", () => {
   it("creates the main window hidden with a dark webview background", () => {
     expect(config.app.windows[0].visible).toBe(false);
-    expect(config.app.windows[0].backgroundColor).toBe("#121212");
+    expect(config.app.windows[0].backgroundColor).toBe("#1e1e2e");
   });
 
   it("restores interface before mounting and shows only after DOM updates and the first painted frame", async () => {

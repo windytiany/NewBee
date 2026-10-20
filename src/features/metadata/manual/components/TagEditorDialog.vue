@@ -302,7 +302,7 @@
       <button
         type="submit"
         form="metadata-editor-form"
-        class="focus-visible:outline-app-accent bg-app-accent rounded px-5 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
+        class="focus-visible:outline-app-accent bg-app-accent text-app-on-accent rounded px-5 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         :disabled="!canSave"
       >
         {{ t("保存") }}

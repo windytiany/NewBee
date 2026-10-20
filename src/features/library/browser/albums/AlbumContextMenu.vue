@@ -33,7 +33,7 @@
     <button
       ref="playlistTriggerElement"
       class="focus-visible:outline-app-accent flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm focus-visible:outline-2 disabled:opacity-50"
-      :class="isPlaylistMenuOpen ? 'bg-app-accent text-black' : 'hover:bg-white/10'"
+      :class="isPlaylistMenuOpen ? 'bg-app-accent text-app-on-accent' : 'hover:bg-white/10'"
       role="menuitem"
       aria-haspopup="menu"
       :aria-expanded="isPlaylistMenuOpen"

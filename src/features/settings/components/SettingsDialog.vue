@@ -347,7 +347,7 @@ defineExpose({ show });
             class="focus-visible:outline-app-accent mb-1 w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
             :class="
               selectedCategory === category
-                ? 'bg-app-accent text-black'
+                ? 'bg-app-accent text-app-on-accent'
                 : 'text-app-muted hover:bg-white/5 hover:text-white'
             "
             type="button"
@@ -416,7 +416,7 @@ defineExpose({ show });
                   type="button"
                   :aria-label="t(`${color.label}色`)"
                   :aria-pressed="normalizedAccentColor === color.value"
-                  :style="{ backgroundColor: color.value }"
+                  :style="{ backgroundColor: `light-dark(${color.light}, ${color.value})` }"
                   class="focus-visible:outline-app-accent size-8 rounded-full border-2 focus-visible:outline-2 focus-visible:outline-offset-4"
                   :class="
                     normalizedAccentColor === color.value ? 'border-white' : 'border-transparent'
@@ -809,7 +809,7 @@ defineExpose({ show });
         </button>
         <button
           v-if="selectedCategory !== 'about'"
-          class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black hover:bg-[#fff] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          class="bg-app-accent text-app-on-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!isTauriApp || !isLoaded || isLoading || isSaving || isBackingUp"
           type="submit"
         >

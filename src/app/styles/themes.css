@@ -1,61 +1,66 @@
 :root {
   color-scheme: dark;
   font-synthesis: none;
-  --app-base: #121212;
-  --app-surface: #181818;
-  --app-interactive: #1f1f1f;
-  --app-accent: #1ed760;
-  --app-text: #ffffff;
-  --app-muted: #b3b3b3;
-  --app-track: #4d4d4d;
-  --app-highlight: #282828;
-  --app-header: #1e1b4b;
-  --app-header-middle: #211a30;
-  --app-cover-muted: #e5e7eb;
+  --app-base: #1e1e2e;
+  --app-surface: #181825;
+  --app-interactive: #313244;
+  --app-accent: #a6e3a1;
+  --app-on-accent: #000000;
+  --app-text: #cdd6f4;
+  --app-muted: #bac2de;
+  --app-track: #585b70;
+  --app-highlight: #45475a;
+  --app-header: #313244;
+  --app-header-middle: #181825;
+  --app-cover-muted: #cdd6f4;
   --app-cover-tint: #000000;
-  --app-cover-mix: 60%;
-  --app-cover-overlay: rgb(0 0 0 / 60%);
-  --app-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --app-cover-mix: 70%;
+  --app-cover-overlay: rgb(0 0 0 / 70%);
+  --app-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23cdd6f4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme-mode="dark"]):not([data-theme-mode="light"]) {
     color-scheme: light;
-    --app-base: #f5f5f5;
-    --app-surface: #ffffff;
-    --app-interactive: #ededed;
-    --app-text: #171717;
-    --app-muted: #606060;
-    --app-track: #b8b8b8;
-    --app-highlight: #e4e4e4;
-    --app-header: #e8e5fa;
-    --app-header-middle: #f0e8f2;
-    --app-cover-muted: #242424;
+    --app-base: #eff1f5;
+    --app-surface: color-mix(in srgb, #eff1f5 70%, #ffffff);
+    --app-interactive: color-mix(in srgb, #eff1f5 45%, #ffffff);
+    --app-accent: #40a02b;
+    --app-on-accent: #000000;
+    --app-text: #4c4f69;
+    --app-muted: #5c5f77;
+    --app-track: #acb0be;
+    --app-highlight: #e6e9ef;
+    --app-header: color-mix(in srgb, var(--app-accent) 5%, var(--app-base));
+    --app-header-middle: #eff1f5;
+    --app-cover-muted: #4c4f69;
     --app-cover-tint: var(--app-base);
-    --app-cover-mix: 60%;
+    --app-cover-mix: 80%;
     --app-cover-overlay: color-mix(
       in srgb,
       var(--app-cover-tint) var(--app-cover-mix),
       transparent
     );
-    --app-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23171717' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --app-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234c4f69' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 }
 
 :root[data-theme-mode="light"] {
   color-scheme: light;
-  --app-base: #f5f5f5;
-  --app-surface: #ffffff;
-  --app-interactive: #ededed;
-  --app-text: #171717;
-  --app-muted: #606060;
-  --app-track: #b8b8b8;
-  --app-highlight: #e4e4e4;
-  --app-header: #e8e5fa;
-  --app-header-middle: #f0e8f2;
-  --app-cover-muted: #242424;
+  --app-base: #eff1f5;
+  --app-surface: color-mix(in srgb, #eff1f5 70%, #ffffff);
+  --app-interactive: color-mix(in srgb, #eff1f5 45%, #ffffff);
+  --app-accent: #40a02b;
+  --app-on-accent: #000000;
+  --app-text: #4c4f69;
+  --app-muted: #5c5f77;
+  --app-track: #acb0be;
+  --app-highlight: #e6e9ef;
+  --app-header: color-mix(in srgb, var(--app-accent) 5%, var(--app-base));
+  --app-header-middle: #eff1f5;
+  --app-cover-muted: #4c4f69;
   --app-cover-tint: var(--app-base);
-  --app-cover-mix: 60%;
+  --app-cover-mix: 80%;
   --app-cover-overlay: color-mix(in srgb, var(--app-cover-tint) var(--app-cover-mix), transparent);
-  --app-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23171717' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --app-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234c4f69' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }

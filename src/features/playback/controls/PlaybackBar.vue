@@ -18,7 +18,7 @@
         </button>
         <button
           :aria-label="displayedIsPlaying ? t('暂停') : t('播放')"
-          class="bg-app-accent focus-visible:outline-app-accent grid size-8 place-items-center rounded-full text-black transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
+          class="text-app-muted focus-visible:outline-app-accent grid size-8 place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 enabled:hover:text-white disabled:cursor-not-allowed"
           :class="{ 'opacity-50': !currentTrack && !canStartRestoredQueue }"
           :disabled="
             isPlaybackCommandPending || isSeeking || (!currentTrack && !canStartRestoredQueue)
@@ -26,8 +26,8 @@
           type="button"
           @click="togglePlayback"
         >
-          <Pause v-if="displayedIsPlaying" aria-hidden="true" class="size-5 fill-current" />
-          <Play v-else aria-hidden="true" class="size-5 fill-current" />
+          <Pause v-if="displayedIsPlaying" aria-hidden="true" class="size-5" />
+          <Play v-else aria-hidden="true" class="size-5" />
         </button>
         <button
           :aria-label="t('下一首')"

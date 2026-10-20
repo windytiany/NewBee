@@ -253,7 +253,7 @@ void loadSettings();
           state.previewing ||
           (!state.preview.trim() && !state.previewInstrumental)
         "
-        class="bg-app-accent focus-visible:outline-app-accent rounded px-4 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
+        class="bg-app-accent focus-visible:outline-app-accent text-app-on-accent rounded px-4 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         @click="search.usePreview"
       >
         {{ state.previewInstrumental ? t("标记为无歌词") : t("使用此歌词") }}
@@ -286,7 +286,7 @@ void loadSettings();
       <button
         type="button"
         :disabled="props.disabled"
-        class="bg-app-accent focus-visible:outline-app-accent rounded px-4 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
+        class="bg-app-accent focus-visible:outline-app-accent text-app-on-accent rounded px-4 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         @click="confirmReplace"
       >
         {{ t("替换") }}

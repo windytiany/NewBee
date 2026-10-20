@@ -75,7 +75,7 @@ describe("application preference restoration", () => {
         reducedMotion: String(reducedMotion),
         layoutDensity: "compact",
       });
-      expect(test.styles).toEqual({ "--app-accent": "#123abc" });
+      expect(test.styles).toEqual({ "--app-accent": "#123abc", "--app-on-accent": "#ffffff" });
     });
   }
 

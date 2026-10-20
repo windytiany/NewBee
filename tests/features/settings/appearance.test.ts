@@ -34,7 +34,7 @@ describe("application appearance", () => {
       layoutDensity: "compact",
     });
     expect(locale.value).toBe("en");
-    expect(styles).toEqual({ "--app-accent": "#abcdef" });
+    expect(styles).toEqual({ "--app-accent": "#abcdef", "--app-on-accent": "#000000" });
     expect(dataset).toEqual({
       themeMode: "light",
       reducedMotion: "true",

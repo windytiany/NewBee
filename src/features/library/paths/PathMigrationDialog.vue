@@ -73,7 +73,7 @@ defineExpose({ show });
           {{ t("取消") }}
         </button>
         <button
-          class="bg-app-accent focus-visible:outline-app-accent rounded-full px-5 py-2 text-sm font-semibold text-black hover:bg-[#fff] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          class="bg-app-accent focus-visible:outline-app-accent text-app-on-accent rounded-full px-5 py-2 text-sm font-semibold hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!isTauriApp || isMigrating || !oldPath.trim() || !newPath.trim()"
           type="submit"
         >

@@ -77,7 +77,7 @@ watch(
                   state.included.includes(row.trackId),
               )
             "
-            class="bg-app-accent rounded px-3 py-1 text-xs font-semibold text-black disabled:opacity-50"
+            class="bg-app-accent text-app-on-accent rounded px-3 py-1 text-xs font-semibold disabled:opacity-50"
             @click="editor.prepareSave()"
           >
             {{ t("应用") }}
@@ -132,7 +132,7 @@ watch(
       </button>
       <button
         type="button"
-        class="bg-app-accent rounded px-3 py-2 font-semibold text-black"
+        class="bg-app-accent text-app-on-accent rounded px-3 py-2 font-semibold"
         @click="editor.save()"
       >
         {{ t("确认写入") }}

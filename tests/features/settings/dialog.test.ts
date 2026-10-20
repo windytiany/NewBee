@@ -944,7 +944,16 @@ describe("settings dialog", () => {
           setLocale("en");
           await Vue.nextTick();
           expect(getTextContent(panel)).toContain("Accent color");
-          for (const label of ["Green", "Blue", "Purple", "Pink", "Orange"]) {
+          for (const label of [
+            "Green",
+            "Blue",
+            "Purple",
+            "Pink",
+            "Orange",
+            "Yellow",
+            "Red",
+            "Teal",
+          ]) {
             expect(findNode(panel, (node) => node.props["aria-label"] === label)?.type).toBe(
               "button",
             );
@@ -972,8 +981,8 @@ describe("settings dialog", () => {
           expect(textInput?.props.maxlength).toBe("7");
           expect(textInput?.props.required).toBe("");
           if (!picker || !textInput) throw new Error("Missing custom accent color inputs");
-          expect(Reflect.get(picker, "value")).toBe("#60a5fa");
-          expect(Reflect.get(textInput, "value")).toBe("#60a5fa");
+          expect(Reflect.get(picker, "value")).toBe("#89b4fa");
+          expect(Reflect.get(textInput, "value")).toBe("#89b4fa");
           for (const [input, color] of [
             [picker, "#123456"],
             [textInput, "#ABCDEF"],

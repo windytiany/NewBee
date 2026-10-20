@@ -111,7 +111,7 @@ function toggle(id: number, event: InstanceType<typeof globalThis.Event>) {
       <button
         type="button"
         :disabled="!confirmation.canConfirm.value"
-        class="focus-visible:outline-app-accent bg-app-accent rounded px-5 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
+        class="focus-visible:outline-app-accent bg-app-accent text-app-on-accent rounded px-5 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         @click="confirmation.confirm()"
       >
         {{ t("开始更新") }}

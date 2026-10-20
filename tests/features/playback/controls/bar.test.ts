@@ -268,6 +268,24 @@ afterEach(() => {
 });
 
 describe("playback bar button", () => {
+  it("uses slightly larger transport icons without a filled background", async () => {
+    const fixture = playbackFixture();
+    await fixture.session.ready;
+    const root = mountBar(fixture.session);
+    const button = playButton(root);
+    const classes = String(button.props.class).split(" ");
+    expect(classes).toContain("text-app-muted");
+    expect(classes.some((name) => name.startsWith("bg-"))).toBe(false);
+    const icon = findNode(button, (node) => node.type === "svg");
+    expect(String(icon?.props.class).split(" ")).toContain("size-5");
+    expect(String(icon?.props.class).split(" ")).not.toContain("fill-current");
+    await startQueue(fixture.session);
+    await Vue.nextTick();
+    const pauseIcon = findNode(playButton(root), (node) => node.type === "svg");
+    expect(String(pauseIcon?.props.class).split(" ")).toContain("size-5");
+    expect(String(pauseIcon?.props.class).split(" ")).not.toContain("fill-current");
+  });
+
   it("keeps an active progress drag enabled while beginSeeking is pending", async () => {
     const fixture = playbackFixture();
     await fixture.session.ready;

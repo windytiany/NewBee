@@ -54,7 +54,7 @@ function scrollResult(event: InstanceType<typeof globalThis.WheelEvent>) {
       <button
         type="submit"
         :disabled="disabled || state.searching"
-        class="bg-app-accent h-6 rounded px-3 text-xs font-semibold text-black disabled:opacity-50"
+        class="bg-app-accent text-app-on-accent h-6 rounded px-3 text-xs font-semibold disabled:opacity-50"
       >
         {{ state.searching ? t("查找中…") : t("查找") }}
       </button>

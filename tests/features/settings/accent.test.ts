@@ -13,8 +13,8 @@ afterEach(() => {
 });
 
 describe("application accent color", () => {
-  it("defaults to Spotify green and applies presets and custom colors at the root", () => {
-    expect(DEFAULT_ACCENT_COLOR).toBe("#1ed760");
+  it("defaults to Catppuccin green and adapts presets while preserving custom colors", () => {
+    expect(DEFAULT_ACCENT_COLOR).toBe("#a6e3a1");
     const styles: Record<string, string> = {};
     Object.defineProperty(globalThis, "document", {
       configurable: true,
@@ -28,10 +28,20 @@ describe("application accent color", () => {
         },
       },
     });
-    for (const color of [...ACCENT_COLORS.map(({ value }) => value), "#123456", "#ABCDEF"]) {
-      applyAccentColor(color);
-      expect(styles).toEqual({ "--app-accent": color.toLowerCase() });
+    expect(ACCENT_COLORS).toHaveLength(8);
+    for (const preset of ACCENT_COLORS) {
+      applyAccentColor(preset.value);
+      expect(styles["--app-accent"]).toBe(`light-dark(${preset.light}, ${preset.value})`);
+      expect(styles["--app-on-accent"]).toMatch(/^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/);
     }
+    for (const color of ["#123456", "#ABCDEF", "#1ed760"]) {
+      applyAccentColor(color);
+      expect(styles["--app-accent"]).toBe(color.toLowerCase());
+    }
+    applyAccentColor("#000000");
+    expect(styles["--app-on-accent"]).toBe("#ffffff");
+    applyAccentColor("#ffffff");
+    expect(styles["--app-on-accent"]).toBe("#000000");
   });
 
   it("normalizes custom colors and rejects unsupported or unsafe CSS values", () => {
@@ -51,12 +61,12 @@ describe("application accent color", () => {
     }
   });
 
-  it("keeps the default accent across light and dark palettes", async () => {
+  it("provides the matching default green for Latte and Mocha", async () => {
     const css = await Bun.file("src/app/styles/themes.css").text();
     expect(css).toContain(`--app-accent: ${DEFAULT_ACCENT_COLOR}`);
-    expect(css).toContain("--app-base: #121212");
-    expect(css).toContain("--app-base: #f5f5f5");
-    expect(css.match(/--app-accent:/g)).toHaveLength(1);
+    expect(css).toContain("--app-accent: #40a02b");
+    expect(css).toContain("--app-base: #1e1e2e");
+    expect(css).toContain("--app-base: #eff1f5");
   });
 });
 

@@ -12,6 +12,7 @@
   --color-app-surface: var(--app-surface);
   --color-app-interactive: var(--app-interactive);
   --color-app-accent: var(--app-accent);
+  --color-app-on-accent: var(--app-on-accent);
   --color-app-muted: var(--app-muted);
   --color-app-track: var(--app-track);
   --color-app-highlight: var(--app-highlight);

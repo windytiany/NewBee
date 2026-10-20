@@ -243,7 +243,7 @@ fn accent_color_defaults_and_round_trips() {
         Settings::default(),
         serde_json::from_str::<Settings>("{}").unwrap(),
     ] {
-        assert_eq!(settings.accent_color, "#1ed760");
+        assert_eq!(settings.accent_color, "#a6e3a1");
     }
     for color in ["#000000", "#ffffff", "#1ed760", "#AbCdEf"] {
         let settings = Settings {
@@ -285,7 +285,7 @@ fn accent_color_rejects_invalid_values() {
 fn accent_color_persists_normalized_and_loads_from_disk() {
     let path = std::env::temp_dir().join(format!("newbee-accent-{}.json", std::process::id()));
     let state = SettingsState::load(path.clone()).unwrap();
-    assert_eq!(state.get().unwrap().accent_color, "#1ed760");
+    assert_eq!(state.get().unwrap().accent_color, "#a6e3a1");
     let app = tauri::test::mock_builder()
         .manage(state)
         .manage(crate::playback::PlaybackState::default())

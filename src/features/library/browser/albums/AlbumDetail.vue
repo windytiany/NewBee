@@ -21,7 +21,7 @@
           </h2>
           <button
             :aria-label="playbackButtonLabel"
-            class="focus-visible:outline-app-accent bg-app-accent grid size-9 shrink-0 place-items-center rounded-full text-black focus-visible:outline-2"
+            class="text-app-accent focus-visible:outline-app-accent grid size-9 shrink-0 place-items-center rounded-full transition-transform focus-visible:outline-2"
             :class="
               playbackButtonDisabled
                 ? 'cursor-not-allowed opacity-50'
@@ -135,7 +135,9 @@
       <button
         ref="playlistMenuTriggerElement"
         class="focus-visible:outline-app-accent flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm focus-visible:outline-2"
-        :class="isPlaylistMenuOpen ? 'bg-app-accent text-black' : 'text-white hover:bg-white/10'"
+        :class="
+          isPlaylistMenuOpen ? 'bg-app-accent text-app-on-accent' : 'text-white hover:bg-white/10'
+        "
         role="menuitem"
         aria-haspopup="menu"
         :aria-expanded="isPlaylistMenuOpen"

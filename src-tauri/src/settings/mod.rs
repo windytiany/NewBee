@@ -124,7 +124,7 @@ impl Default for Settings {
             locale: Locale::default(),
             theme_mode: ThemeMode::default(),
             shortcuts: crate::shortcuts::ShortcutSettings::default(),
-            accent_color: "#1ed760".to_owned(),
+            accent_color: "#a6e3a1".to_owned(),
             reduced_motion: false,
             layout_density: LayoutDensity::default(),
             album_cover_background: false,

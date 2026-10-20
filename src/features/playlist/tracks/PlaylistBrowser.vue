@@ -34,7 +34,7 @@
           </div>
           <button
             :aria-label="t('播放歌单')"
-            class="focus-visible:outline-app-accent bg-app-accent grid size-11 shrink-0 place-items-center rounded-full text-black transition-transform focus-visible:outline-2"
+            class="focus-visible:outline-app-accent bg-app-accent text-app-on-accent grid size-11 shrink-0 place-items-center rounded-full transition-transform focus-visible:outline-2"
             :class="
               props.isLoadingTracks || props.tracks.length === 0
                 ? 'cursor-not-allowed opacity-50'
@@ -202,7 +202,7 @@
       >
         <Files aria-hidden="true" class="text-app-accent size-5" />
         <span
-          class="bg-app-accent absolute -top-1 -right-1 grid min-h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] leading-none font-bold text-black"
+          class="bg-app-accent text-app-on-accent absolute -top-1 -right-1 grid min-h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] leading-none font-bold"
         >
           {{ dragPreview.movingItemIds.length }}
         </span>

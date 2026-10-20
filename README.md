@@ -46,8 +46,6 @@ bun run tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts"
 
 开发版与安装版使用独立数据目录，但对同一音乐文件的修改仍会相互影响。
 
-发布更新需配置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；GitHub Actions 使用同名 Secrets，并生成签名产物。
-
 <details>
 <summary>检查</summary>
 

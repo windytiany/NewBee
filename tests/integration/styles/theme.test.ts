@@ -28,9 +28,9 @@ describe("theme palettes", () => {
     const light = declarations(':root[data-theme-mode="light"]');
     expect(system).toEqual(light);
     expect(light["color-scheme"]).toBe("light");
-    expect(light["--app-base"]).toBe("#f5f5f5");
-    expect(light["--app-text"]).toBe("#171717");
-    expect(light["--app-select-arrow"]).toContain("%23171717");
+    expect(light["--app-base"]).toBe("#eff1f5");
+    expect(light["--app-text"]).toBe("#4c4f69");
+    expect(light["--app-select-arrow"]).toContain("%234c4f69");
   });
 
   it("retains visible cover variation through the light overlay", () => {
@@ -39,7 +39,7 @@ describe("theme palettes", () => {
     const sample = (value: number) =>
       createAlbumBackgroundPixels(new Uint8ClampedArray([value, value, value, 255]), 1, 1)
         .pixels[0]!;
-    expect((sample(255) - sample(0)) * (1 - mix)).toBeGreaterThan(80);
+    expect((sample(255) - sample(0)) * (1 - mix)).toBeGreaterThan(40);
   });
 
   it("keeps cover text readable over the darkest light and brightest dark backgrounds", () => {
@@ -60,31 +60,40 @@ describe("theme palettes", () => {
     expect(contrast(255 * (1 - darkMix), darkMuted)).toBeGreaterThan(4.5);
   });
 
-  it("softens cover backgrounds in light mode while preserving the dark rendering", () => {
+  it("uses palette text over sufficiently softened cover backgrounds", () => {
     const dark = declarations(":root");
     const light = declarations(':root[data-theme-mode="light"]');
-    expect(dark["--app-cover-overlay"]).toBe("rgb(0 0 0 / 60%)");
+    expect(dark["--app-cover-overlay"]).toBe("rgb(0 0 0 / 70%)");
     expect(dark["--app-cover-tint"]).toBe("#000000");
-    expect(dark["--app-cover-mix"]).toBe("60%");
-    expect(dark["--app-cover-muted"]).toBe("#e5e7eb");
+    expect(dark["--app-cover-mix"]).toBe("70%");
+    expect(dark["--app-cover-muted"]).toBe("#cdd6f4");
     expect(light["--app-cover-overlay"]).toBe(
       "color-mix(in srgb, var(--app-cover-tint) var(--app-cover-mix), transparent)",
     );
     expect(light["--app-cover-tint"]).toBe("var(--app-base)");
-    expect(light["--app-cover-mix"]).toBe("60%");
-    expect(light["--app-cover-muted"]).toBe("#242424");
+    expect(light["--app-cover-mix"]).toBe("80%");
+    expect(light["--app-cover-muted"]).toBe("#4c4f69");
   });
 
-  it("retains the dark palette and supplies all corresponding light colors", () => {
+  it("pairs the Mocha surfaces with their corresponding Latte colors", () => {
     const dark = declarations(":root");
     const light = declarations(':root[data-theme-mode="light"]');
     expect(dark["color-scheme"]).toBe("dark");
-    expect(dark["--app-base"]).toBe("#121212");
-    expect(dark["--app-text"]).toBe("#ffffff");
+    expect(dark["--app-base"]).toBe("#1e1e2e");
+    expect(dark["--app-text"]).toBe("#cdd6f4");
+    expect(dark["--app-surface"]).toBe("#181825");
+    expect(light["--app-surface"]).toBe("color-mix(in srgb, #eff1f5 70%, #ffffff)");
+    expect(dark["--app-interactive"]).toBe("#313244");
+    expect(light["--app-interactive"]).toBe("color-mix(in srgb, #eff1f5 45%, #ffffff)");
+    expect(light["--app-highlight"]).toBe("#e6e9ef");
+    expect(light["--app-header"]).toBe("color-mix(in srgb, var(--app-accent) 5%, var(--app-base))");
+    expect(light["--app-header-middle"]).toBe(light["--app-base"]);
+    expect(dark["--app-accent"]).toBe("#a6e3a1");
+    expect(light["--app-accent"]).toBe("#40a02b");
     for (const key of Object.keys(dark)) {
       if (!key.startsWith("--app-") || key === "--app-accent") continue;
       expect(light[key]).toBeDefined();
-      if (key !== "--app-cover-mix") expect(light[key]).not.toBe(dark[key]);
+      if (key !== "--app-on-accent") expect(light[key]).not.toBe(dark[key]);
     }
   });
 });

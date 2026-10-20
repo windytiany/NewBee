@@ -65,7 +65,7 @@ defineExpose({ show });
         ><button
           type="submit"
           :disabled="library.isImporting.value || inbox.pending.value"
-          class="focus-visible:outline-app-accent bg-app-accent rounded px-4 py-2 text-sm font-semibold text-black focus-visible:outline-2 disabled:opacity-50"
+          class="focus-visible:outline-app-accent bg-app-accent text-app-on-accent rounded px-4 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         >
           {{ t("导入") }}
         </button>

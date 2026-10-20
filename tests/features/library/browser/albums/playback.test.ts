@@ -245,6 +245,14 @@ describe("library album keyboard with expanded detail", () => {
 });
 
 describe("library album cover playback", () => {
+  it("uses an accent-colored playback icon without a button background", () => {
+    const browser = mountBrowser(true, { tracks: albumTracks, tracksLoading: false });
+    const classes = String(browser.playbackButton().props.class).split(" ");
+    expect(classes).toContain("text-app-accent");
+    expect(classes.some((name) => name.startsWith("bg-"))).toBe(false);
+    expect(classes).not.toContain("text-app-on-accent");
+  });
+
   for (const selected of [false, true]) {
     it(`plays a ${selected ? "selected" : "collapsed"} album on double click and keeps detail open`, async () => {
       const browser = mountBrowser(selected);
