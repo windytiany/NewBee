@@ -1,5 +1,7 @@
 <template>
   <article
+    ref="detailElement"
+    :style="{ minHeight: props.tracksLoading ? loadingMinHeight : undefined }"
     class="bg-app-interactive relative rounded-lg px-5 py-5 text-white shadow-sm ring-1 ring-white/10 sm:px-7"
     :class="props.background ? '[--app-muted:var(--app-cover-muted)]' : ''"
   >
@@ -305,6 +307,18 @@ const emit = defineEmits<{
   createPlaylistWithTracks: [trackIds: number[]];
   deleteTrack: [trackId: number];
 }>();
+
+const detailElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
+const loadingMinHeight = ref<string>();
+
+watch(
+  () => props.tracksLoading,
+  (loading) => {
+    if (loading && detailElement.value) {
+      loadingMinHeight.value = `${detailElement.value.getBoundingClientRect().height}px`;
+    }
+  },
+);
 
 const isCurrentAlbum = computed(() =>
   props.tracks.some((track) => track.id === props.currentTrackId),

@@ -26,7 +26,7 @@ async function settle() {
   await Vue.nextTick();
 }
 
-function mountBrowser() {
+function mountBrowser(extraAlbums: AlbumSummary[] = []) {
   const window = Object.assign(new EventTarget(), { innerWidth: 800 });
   Object.defineProperty(globalThis, "window", { configurable: true, value: window });
   Object.defineProperty(globalThis, "localStorage", {
@@ -36,10 +36,11 @@ function mountBrowser() {
   const artist = { artist: "Artist", albumCount: 1 };
   const album = { albumArtist: "Artist", album: "Album", year: 2024 };
   const replacement = { albumArtist: "Artist", album: "New album", year: 2025 };
-  let availableAlbums: AlbumSummary[] = [album];
+  let availableAlbums: AlbumSummary[] = [album, ...extraAlbums];
   const requests: string[] = [];
   const lifecycle = { browserMounts: 0, browserUnmounts: 0, cardMounts: 0, cardUnmounts: 0 };
   const covers = { subscriptions: 0, unsubscriptions: 0 };
+  const detailLifecycle = { mounts: 0, unmounts: 0 };
   const placeholder = Vue.defineComponent({ render: () => null });
   const dependencies: Record<string, unknown> = {
     vue: Vue,
@@ -70,7 +71,14 @@ function mountBrowser() {
     },
     "@/features/library/browser/albums/AlbumDetail.vue": {
       __esModule: true,
-      default: placeholder,
+      default: Vue.defineComponent({
+        props: ["album"],
+        setup(props) {
+          Vue.onMounted(() => detailLifecycle.mounts++);
+          Vue.onUnmounted(() => detailLifecycle.unmounts++);
+          return () => Vue.h("div", { "data-album-detail": true }, props.album.album);
+        },
+      }),
     },
     "@/features/library/browser/albums/AlbumContextMenu.vue": {
       __esModule: true,
@@ -160,6 +168,7 @@ function mountBrowser() {
     requests,
     lifecycle,
     covers,
+    detailLifecycle,
     window,
     root,
     changeLibrary: () => {
@@ -208,6 +217,84 @@ it("keeps real album cards and cover subscriptions mounted across inactive/activ
     expect(fixture.covers).toEqual({ subscriptions: 1, unsubscriptions: 0 });
     expect(fixture.requests).toEqual(["list_artists", "list_albums", "get_album_artwork"]);
   }
+});
+
+it("replaces album detail content without remounting within or across album rows", async () => {
+  const second = { albumArtist: "Artist", album: "Second", year: 2024 };
+  const third = { albumArtist: "Artist", album: "Third", year: 2024 };
+  const fourth = { albumArtist: "Artist", album: "Fourth", year: 2024 };
+  const fifth = { albumArtist: "Artist", album: "Fifth", year: 2024 };
+  const fixture = mountBrowser([second, third, fourth, fifth]);
+  await settle();
+  fixture.browser.selectArtist(fixture.artist);
+  await settle();
+  fixture.browser.selectAlbum(fixture.album);
+  await settle();
+  const detail = findNode(fixture.root, (node) => node.props["data-album-detail"] === true);
+  expect(detail).not.toBeNull();
+
+  for (const album of [second, fifth, fixture.album]) {
+    fixture.browser.selectAlbum(album);
+    await settle();
+    expect(findNode(fixture.root, (node) => node.props["data-album-detail"] === true)).toBe(detail);
+    expect(detail?.text).toBe(album.album);
+    expect(fixture.detailLifecycle).toEqual({ mounts: 1, unmounts: 0 });
+    expect(detail?.parent?.props.style).toMatchObject({
+      gridColumn: "1 / -1",
+      order: album === fifth ? 15 : 7,
+    });
+  }
+
+  fixture.window.innerWidth = 400;
+  fixture.window.dispatchEvent(new Event("resize"));
+  await settle();
+  expect(findNode(fixture.root, (node) => node.props["data-album-detail"] === true)).toBe(detail);
+  expect(detail?.parent?.props.style).toMatchObject({ gridColumn: "1 / -1", order: 3 });
+  expect(fixture.detailLifecycle).toEqual({ mounts: 1, unmounts: 0 });
+
+  fixture.browser.selectAlbum(null);
+  await settle();
+  expect(findNode(fixture.root, (node) => node.props["data-album-detail"] === true)).toBeNull();
+  expect(fixture.detailLifecycle).toEqual({ mounts: 1, unmounts: 1 });
+});
+
+it("positions the selected album row at the top of the actual browser scroll area", async () => {
+  const extras = Array.from({ length: 8 }, (_, index) => ({
+    albumArtist: "Artist",
+    album: `Album ${index + 1}`,
+    year: 2024,
+  }));
+  const fixture = mountBrowser(extras);
+  await settle();
+  fixture.browser.selectArtist(fixture.artist);
+  await settle();
+  const viewportNode = findNode(fixture.root, (node) =>
+    String(node.props.class).includes("overflow-y-auto"),
+  );
+  const grid = findNode(fixture.root, (node) =>
+    String(node.props.class).includes("grid gap-4 px-4"),
+  );
+  if (!viewportNode || !grid) throw new Error("Missing album scroll area");
+  const geometry = { scrollTop: 100, clientHeight: 600, scrollHeight: 1200 };
+  const viewport = Object.assign(viewportNode, geometry, {
+    getBoundingClientRect: () => ({ top: 80 }),
+  });
+  Object.assign(grid, {
+    getBoundingClientRect: () => ({ bottom: 1280 - Number(viewport.scrollTop) }),
+    querySelectorAll: () =>
+      Array.from({ length: 9 }, (_, index) => ({
+        getBoundingClientRect: () => ({
+          top: 92 + Math.floor(index / 4) * 216 - Number(viewport.scrollTop),
+        }),
+      })),
+  });
+  fixture.browser.selectAlbum(extras[3]!);
+  await settle();
+  expect(viewport.scrollTop).toBe(216);
+  fixture.browser.selectAlbum(fixture.album);
+  await settle();
+  expect(viewport.scrollTop).toBe(0);
+  expect(viewport.props.class).toContain("[overflow-anchor:none]");
 });
 
 it("reserves scrollbar space and only adds an outer ring when opening or closing an album", async () => {

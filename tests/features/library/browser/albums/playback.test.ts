@@ -157,6 +157,11 @@ function mountBrowser(selected = false, initialState: Partial<PlaybackState> = {
   });
   app.mount(root);
   apps.push(app);
+  const detail = findNode(
+    root,
+    (node) => node.type === "article" && findNode(node, (child) => child.type === "h2") !== null,
+  );
+  if (detail) Object.assign(detail, { getBoundingClientRect: () => ({ height: 240 }) });
   const cover = findNode(root, (node) => node.type === "span" && !!node.props.onDblclick);
   if (!cover) throw new Error("Missing album cover");
   function dispatch(name: string, detail: number, timeStamp = globalThis.performance.now()) {

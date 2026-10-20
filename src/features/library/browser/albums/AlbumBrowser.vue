@@ -27,8 +27,8 @@
       <div class="flex min-h-0 flex-1">
         <div
           ref="albumsElement"
-          v-persistent-scroll="JSON.stringify(['library', grouping, artist?.artist, selectedAlbum])"
-          class="sidebar-scrollbars min-h-0 min-w-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto"
+          v-persistent-scroll="albumListScope"
+          class="sidebar-scrollbars min-h-0 min-w-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto [overflow-anchor:none]"
         >
           <p
             v-if="!props.albumsLoading && !props.albumsError && props.albums.length === 0"
@@ -38,76 +38,77 @@
           </p>
           <div
             v-else-if="!props.albumsLoading && !props.albumsError"
-            class="flex flex-col gap-4 px-4 pt-3 pb-6 sm:px-5"
+            ref="albumGridElement"
+            class="grid gap-4 px-4 pt-3 pb-6 sm:gap-x-6 sm:px-5"
+            :style="{ gridTemplateColumns }"
           >
-            <template v-for="row in albumRows" :key="row.id">
-              <div class="grid gap-x-4 sm:gap-x-6" :style="{ gridTemplateColumns }">
-                <AlbumCard
-                  v-for="(album, index) in row.albums"
-                  :key="getAlbumKey(album)"
-                  :album="album"
-                  :album-artist="album.albumArtist"
-                  :cover-index="row.startIndex + index"
-                  :is-selected="isSelectedAlbum(album)"
-                  :is-focused="albumFocus.isFocused(getAlbumKey(album))"
-                  :is-context-menu-open="
-                    albumMenu?.contextMenu?.payload.album === album.album &&
-                    albumMenu?.contextMenu?.payload.albumArtist === album.albumArtist
-                  "
-                  @select="toggleAlbum(album)"
-                  @play="playAlbum(album)"
-                  @context-menu="openAlbumContextMenu(album, $event)"
-                />
-              </div>
+            <AlbumCard
+              v-for="(album, index) in props.albums"
+              :key="getAlbumKey(album)"
+              :album="album"
+              :style="{ order: index * 2 }"
+              :album-artist="album.albumArtist"
+              :cover-index="index"
+              :is-selected="isSelectedAlbum(album)"
+              :is-focused="albumFocus.isFocused(getAlbumKey(album))"
+              :is-context-menu-open="
+                albumMenu?.contextMenu?.payload.album === album.album &&
+                albumMenu?.contextMenu?.payload.albumArtist === album.albumArtist
+              "
+              @select="toggleAlbum(album)"
+              @play="playAlbum(album)"
+              @context-menu="openAlbumContextMenu(album, $event)"
+            />
+            <div
+              v-if="selectedAlbum"
+              class="relative"
+              :style="{
+                gridColumn: '1 / -1',
+                order: (Math.floor(selectedAlbumIndex / columnCount) + 1) * columnCount * 2 - 1,
+                '--album-background-color': selectedArtwork.background.value
+                  ? `color-mix(in srgb, var(--app-cover-tint) var(--app-cover-mix), ${selectedArtwork.background.value.color})`
+                  : undefined,
+              }"
+            >
               <div
-                v-if="row.selectedAlbum"
-                class="relative"
-                :style="{
-                  '--album-background-color': selectedArtwork.background.value
-                    ? `color-mix(in srgb, var(--app-cover-tint) var(--app-cover-mix), ${selectedArtwork.background.value.color})`
-                    : undefined,
-                }"
+                aria-hidden="true"
+                class="pointer-events-none absolute inset-x-0 top-px z-10 grid gap-x-4 sm:gap-x-6"
+                :style="{ gridTemplateColumns }"
               >
-                <div
-                  aria-hidden="true"
-                  class="pointer-events-none absolute inset-x-0 top-px z-10 grid gap-x-4 sm:gap-x-6"
-                  :style="{ gridTemplateColumns }"
-                >
-                  <span
-                    class="border-b-app-interactive -translate-y-full justify-self-center border-x-12 border-b-12 border-x-transparent"
-                    :style="{
-                      gridColumn: row.albums.findIndex(isSelectedAlbum) + 1,
-                      borderBottomColor: 'var(--album-background-color, var(--app-interactive))',
-                    }"
-                  ></span>
-                </div>
-                <AlbumDetail
-                  :album="row.selectedAlbum"
-                  :background="selectedArtwork.background.value"
-                  :album-artist="row.selectedAlbum.albumArtist"
-                  :tracks="props.tracks"
-                  :current-track-id="props.currentTrackId"
-                  :is-playing="props.isPlaying"
-                  :playback-command-pending="props.playbackCommandPending"
-                  :tracks-loading="props.tracksLoading"
-                  :tracks-error="props.tracksError"
-                  :playlists="props.playlists"
-                  :playlists-loading="props.playlistsLoading"
-                  :playlists-error="props.playlistsError"
-                  :track-action-pending="props.trackActionPending"
-                  @close="closeAlbum(row.selectedAlbum)"
-                  @play-track="emit('playTrack', $event)"
-                  @play-album="playAlbum(row.selectedAlbum)"
-                  @toggle-playback="emit('togglePlayback')"
-                  @refresh-playlists="emit('refreshPlaylists')"
-                  @add-tracks-to-next="emit('addTracksToNext', $event)"
-                  @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
-                  @add-tracks-to-playlist="addTracksToPlaylist"
-                  @create-playlist-with-tracks="createPlaylistWithTracks"
-                  @delete-track="emit('deleteTrack', $event)"
-                />
+                <span
+                  class="border-b-app-interactive -translate-y-full justify-self-center border-x-12 border-b-12 border-x-transparent"
+                  :style="{
+                    gridColumn: (selectedAlbumIndex % columnCount) + 1,
+                    borderBottomColor: 'var(--album-background-color, var(--app-interactive))',
+                  }"
+                ></span>
               </div>
-            </template>
+              <AlbumDetail
+                :album="selectedAlbum"
+                :background="selectedArtwork.background.value"
+                :album-artist="selectedAlbum.albumArtist"
+                :tracks="props.tracks"
+                :current-track-id="props.currentTrackId"
+                :is-playing="props.isPlaying"
+                :playback-command-pending="props.playbackCommandPending"
+                :tracks-loading="props.tracksLoading"
+                :tracks-error="props.tracksError"
+                :playlists="props.playlists"
+                :playlists-loading="props.playlistsLoading"
+                :playlists-error="props.playlistsError"
+                :track-action-pending="props.trackActionPending"
+                @close="closeAlbum(selectedAlbum)"
+                @play-track="emit('playTrack', $event)"
+                @play-album="playAlbum(selectedAlbum)"
+                @toggle-playback="emit('togglePlayback')"
+                @refresh-playlists="emit('refreshPlaylists')"
+                @add-tracks-to-next="emit('addTracksToNext', $event)"
+                @add-tracks-to-queue-end="emit('addTracksToQueueEnd', $event)"
+                @add-tracks-to-playlist="addTracksToPlaylist"
+                @create-playlist-with-tracks="createPlaylistWithTracks"
+                @delete-track="emit('deleteTrack', $event)"
+              />
+            </div>
           </div>
         </div>
         <LibraryStatistics :albums="props.albumsLoading || props.albumsError ? [] : props.albums" />
@@ -144,6 +145,7 @@ import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
 import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
 import LibraryStatistics from "@/features/library/statistics/LibraryStatistics.vue";
 import { ALBUM_COLUMN_WIDTH } from "@/features/library/browser/albums/layout";
+import { useAlbumScroll } from "@/features/library/browser/albums/scroll";
 import { layoutDensity } from "@/features/settings/layout";
 import type {
   LibraryAlbumSelection,
@@ -160,13 +162,6 @@ import AlbumCard from "@/features/library/browser/albums/AlbumCard.vue";
 import AlbumContextMenu from "@/features/library/browser/albums/AlbumContextMenu.vue";
 import { createLibraryApi } from "@/features/library/api";
 import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDialog.vue";
-
-type AlbumBrowserRow = {
-  id: string;
-  startIndex: number;
-  albums: AlbumSummary[];
-  selectedAlbum: AlbumSummary | null;
-};
 
 const props = defineProps<{
   artist: ArtistSummary | null;
@@ -282,23 +277,17 @@ function handleAlbumKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>
 
 watch(albumItemKeys, (itemKeys) => albumFocus.syncVisibleItems(itemKeys), { immediate: true });
 
-const albumRows = computed(() => {
-  const rows: AlbumBrowserRow[] = [];
+const selectedAlbumIndex = computed(() => props.albums.findIndex(isSelectedAlbum));
+const selectedAlbum = computed(() => props.albums[selectedAlbumIndex.value] ?? null);
+const albumGridElement = ref<InstanceType<typeof globalThis.HTMLElement> | null>(null);
 
-  for (let startIndex = 0; startIndex < props.albums.length; startIndex += columnCount.value) {
-    const rowAlbums = props.albums.slice(startIndex, startIndex + columnCount.value);
-    const firstAlbum = rowAlbums[0];
-    if (!firstAlbum) continue;
-
-    rows.push({
-      id: getAlbumKey(firstAlbum),
-      startIndex,
-      albums: rowAlbums,
-      selectedAlbum: rowAlbums.find(isSelectedAlbum) ?? null,
-    });
-  }
-
-  return rows;
+useAlbumScroll({
+  viewport: albumsElement,
+  grid: albumGridElement,
+  selectedIndex: selectedAlbumIndex,
+  columns: columnCount,
+  albumCount: computed(() => props.albums.length),
+  loading: computed(() => props.albumsLoading || props.tracksLoading),
 });
 
 function updateColumnCount() {

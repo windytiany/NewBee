@@ -186,7 +186,7 @@ describe("专辑背景展示", () => {
     expect(Vue.toValue(selection)).toBeNull();
     expect(detail.children[0]?.props.class).toContain("opacity-0");
     expect(detail.props.class).not.toContain("[--app-muted:");
-    expect(detail.parent?.props.style).toEqual({ "--album-background-color": undefined });
+    expect(detail.parent?.props.style).toMatchObject({ "--album-background-color": undefined });
 
     backgroundEnabled.value = true;
     await Vue.nextTick();
@@ -199,7 +199,7 @@ describe("专辑背景展示", () => {
     expect(Vue.toValue(selection)).toBeNull();
     expect(detail.children[0]?.props.class).toContain("opacity-0");
     expect(detail.props.class).not.toContain("[--app-muted:");
-    expect(detail.parent?.props.style).toEqual({ "--album-background-color": undefined });
+    expect(detail.parent?.props.style).toMatchObject({ "--album-background-color": undefined });
   });
 
   it("背景加载前使用默认底色，加载后面板与三角同步颜色", async () => {
@@ -223,7 +223,7 @@ describe("专辑背景展示", () => {
         'linear-gradient(var(--app-cover-overlay), var(--app-cover-overlay)), linear-gradient(to bottom, rgb(10, 20, 40), transparent 48px), url("data:image/png;base64,test")',
       backgroundSize: "100% 100%",
     });
-    expect(detail.parent.props.style).toEqual({
+    expect(detail.parent.props.style).toMatchObject({
       "--album-background-color":
         "color-mix(in srgb, var(--app-cover-tint) var(--app-cover-mix), rgb(10, 20, 40))",
     });
