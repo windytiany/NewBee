@@ -70,7 +70,7 @@ pub(super) fn format(
     value.to_string()
 }
 
-pub(super) fn redact(value: &mut Value) {
+fn redact(value: &mut Value) {
     match value {
         Value::String(text) => *text = super::redact_text(text),
         Value::Array(values) => values.iter_mut().for_each(redact),

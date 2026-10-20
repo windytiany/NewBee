@@ -139,7 +139,6 @@ function createDialog(
     "@/features/backup/components/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
     "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({ template: "<div />" }),
     "@/shared/update/UpdatePanel.vue": Vue.defineComponent({ render: () => null }),
-    "@/shared/logging/DiagnosticsPanel.vue": Vue.defineComponent({ render: () => null }),
     "@/features/library/monitoring/MonitoringOptions.vue": Vue.defineComponent({
       template: "<div />",
     }),

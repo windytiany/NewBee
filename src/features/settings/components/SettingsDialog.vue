@@ -31,7 +31,6 @@ import BackupOptions from "@/features/backup/components/BackupOptions.vue";
 import AboutPanel from "@/features/settings/about/AboutPanel.vue";
 import UpdatePanel from "@/shared/update/UpdatePanel.vue";
 import MonitoringOptions from "@/features/library/monitoring/MonitoringOptions.vue";
-import DiagnosticsPanel from "@/shared/logging/DiagnosticsPanel.vue";
 import type { MonitoringFolder } from "@/features/library/monitoring/types";
 
 const isBackingUp = ref(false);
@@ -702,7 +701,6 @@ defineExpose({ show });
                 />
                 {{ t("详细日志") }}
               </label>
-              <DiagnosticsPanel />
             </fieldset>
             <div class="mt-6">
               <h4 class="mb-3 text-sm font-semibold">{{ t("备份") }}</h4>
