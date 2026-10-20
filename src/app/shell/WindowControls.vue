@@ -6,11 +6,7 @@ const emit = defineEmits<{ minimize: []; maximize: []; close: [] }>();
 </script>
 
 <template>
-  <div
-    :aria-label="t('窗口控制')"
-    class="absolute inset-y-0 right-0 flex h-full items-center"
-    role="group"
-  >
+  <div :aria-label="t('窗口控制')" class="flex h-full shrink-0 items-center" role="group">
     <button
       :aria-label="t('最小化窗口')"
       class="text-app-muted focus-visible:outline-app-accent grid h-full w-10 place-items-center transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2"

@@ -22,13 +22,16 @@
       @update:active-page="emit('update:activePage', $event)"
     />
 
-    <WindowControls
-      v-if="isTauriApp"
-      :maximized="isMaximized"
-      @minimize="minimizeWindow"
-      @maximize="toggleMaximizeWindow"
-      @close="closeWindow"
-    />
+    <div class="absolute inset-y-0 right-0 flex items-center gap-2">
+      <TaskEntry />
+      <WindowControls
+        v-if="isTauriApp"
+        :maximized="isMaximized"
+        @minimize="minimizeWindow"
+        @maximize="toggleMaximizeWindow"
+        @close="closeWindow"
+      />
+    </div>
   </header>
 </template>
 
@@ -37,6 +40,7 @@ import { ref } from "vue";
 import { useWindow } from "@/app/shell/useWindow";
 import PageTabs from "@/app/shell/PageTabs.vue";
 import WindowControls from "@/app/shell/WindowControls.vue";
+import TaskEntry from "@/shared/tasks/TaskEntry.vue";
 import AppMenu from "@/app/shell/AppMenu.vue";
 import ScanDialog from "@/features/library/import/ScanDialog.vue";
 import ImportDialog from "@/features/import/ImportDialog.vue";

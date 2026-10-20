@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { transpileScript, evaluateSource } from "../../../support/module/loader";
 
 import { notifications, notify } from "@/shared/notifications/center";
+import { tasks } from "@/shared/tasks/state";
 import type { useLibraryScan } from "@/features/library/import/useScan";
 
 type ScanResult = { added: number; updated: number; skipped: number; failed: number };
@@ -40,6 +41,7 @@ function createScan(invoke: () => Promise<ScanResult>) {
       },
     },
     "@/shared/notifications/center": { notifications, notify },
+    "@/shared/tasks/state": { tasks },
     "@/features/library/events": {
       reportLibraryImport: () => {
         globalThis.window.dispatchEvent(new Event("newbee:library-changed"));
@@ -56,6 +58,8 @@ beforeEach(() => {
   monitoringSnapshot.value = { progress: null };
   unlistened = false;
   notifications.clear();
+  tasks.acknowledge();
+  tasks.clearFinished();
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
@@ -142,7 +146,8 @@ describe("scan notifications", () => {
     expect(scan.isScanning.value).toBe(false);
     notifications.dismiss(notifications.items.value[0].id);
     expect(scan.scanError.value).toBe("permission denied");
-    expect(notifications.tasks.value).toEqual([]);
+    expect(tasks.active.value).toEqual([]);
+    expect(tasks.items.value[0]?.result).toMatchObject({ type: "error" });
     expect(unlistened).toBe(true);
   });
 
@@ -160,15 +165,15 @@ describe("scan notifications", () => {
     expect(calls).toBe(1);
     expect(notifications.items.value).toEqual([]);
     expect(scan.isScanning.value).toBe(true);
-    expect(notifications.tasks.value).toHaveLength(1);
-    expect(notifications.tasks.value[0].total).toBeUndefined();
+    expect(tasks.items.value).toHaveLength(1);
+    expect(tasks.items.value[0].total).toBeUndefined();
     receiveProgress({ payload: { operationId: "other", completed: 9, total: 10 } });
-    expect(notifications.tasks.value[0].completed).toBe(0);
+    expect(tasks.items.value[0].completed).toBe(0);
     receiveProgress({ payload: { operationId: activeOperation, completed: 3, total: 10 } });
-    expect(notifications.tasks.value[0]).toMatchObject({ completed: 3, total: 10 });
+    expect(tasks.items.value[0]).toMatchObject({ completed: 3, total: 10 });
     resolveScan({ added: 1, updated: 0, skipped: 0, failed: 0 });
     await pending;
-    expect(notifications.tasks.value).toEqual([]);
+    expect(tasks.items.value).toEqual([]);
     expect(unlistened).toBe(true);
     expect(notifications.items.value).toHaveLength(1);
     expect(scan.isScanning.value).toBe(false);

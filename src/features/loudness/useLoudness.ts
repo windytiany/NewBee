@@ -6,7 +6,8 @@ import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { usePlaybackSession } from "@/features/playback/session";
 import { watchActivity } from "@/shared/lifecycle/activity";
 import { logger } from "@/shared/logging/logger";
-import { notifications, notify } from "@/shared/notifications/center";
+import { notify } from "@/shared/notifications/center";
+import { tasks, type TaskResult } from "@/shared/tasks/state";
 import { t } from "@/shared/i18n/locale";
 
 const pending = ref(false);
@@ -48,9 +49,10 @@ export function useLoudness() {
     const config = operations[operation];
     const taskKey = config.taskKey;
     pending.value = true;
+    let outcome: TaskResult | undefined;
     try {
       if (!(await confirmation.ask(config.title, config.confirmation))) return;
-      notifications.updateTask({
+      tasks.update({
         key: taskKey,
         message: t(config.progress),
         completed: 0,
@@ -59,7 +61,7 @@ export function useLoudness() {
       const results = await config.update(
         ids,
         (progress) => {
-          notifications.updateTask({ key: taskKey, message: t(config.progress), ...progress });
+          tasks.update({ key: taskKey, message: t(config.progress), ...progress });
         },
         files,
       );
@@ -82,20 +84,20 @@ export function useLoudness() {
         refreshFailed = true;
         logger.error("loudness", "refresh_failed", error);
       }
-      notify({
-        type: failed.length || refreshFailed ? "warning" : "success",
-        message: failed.length
-          ? t(config.partial, { count: failed.length })
-          : refreshFailed
-            ? t("曲目信息刷新失败")
-            : t(config.success),
-      });
+      const message = failed.length
+        ? t(config.partial, { count: failed.length })
+        : refreshFailed
+          ? t("曲目信息刷新失败")
+          : t(config.success);
+      if (failed.length || refreshFailed) outcome = { type: "warning", message };
+      notify({ type: outcome?.type ?? "success", message });
       return results;
     } catch (error) {
       logger.error("loudness", `${operation}_failed`, error);
-      notify({ type: "error", message: t(config.failure) });
+      outcome = { type: "error", message: t(config.failure) };
+      notify(outcome);
     } finally {
-      notifications.removeTask(taskKey);
+      tasks.finish(taskKey, outcome);
       pending.value = false;
     }
   }

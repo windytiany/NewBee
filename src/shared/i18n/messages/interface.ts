@@ -1,5 +1,10 @@
 export const interfaceMessages: Record<string, string> = {
   通知: "Notifications",
+  后台任务: "Background tasks",
+  任务异常: "Task issues",
+  进行中: "In progress",
+  清除: "Clear",
+  收起: "Collapse",
   任务进度: "Task progress",
   "已处理 {completed} / {total}": "Processed {completed} / {total}",
   "正在取消…": "Cancelling…",

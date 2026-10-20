@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { computed, ref } from "vue";
 import { watchActivity } from "@/shared/lifecycle/activity";
-import { notifications, notify } from "@/shared/notifications/center";
+import { notify } from "@/shared/notifications/center";
+import { tasks, type TaskResult } from "@/shared/tasks/state";
 import { reportLibraryImport } from "@/features/library/events";
 import { monitoringSnapshot } from "@/features/library/monitoring/state";
 import type { IngestResult } from "@/features/library/types";
@@ -27,7 +28,8 @@ export function useLibraryScan() {
     const id = operationId("library-import");
     const started = performance.now();
     let unlisten: UnlistenFn | undefined;
-    notifications.updateTask({
+    let outcome: TaskResult | undefined;
+    tasks.update({
       key: TASK_KEY,
       message: t("正在扫描…"),
       completed: 0,
@@ -35,7 +37,7 @@ export function useLibraryScan() {
     try {
       unlisten = await listen<ScanProgress>("library-scan-progress", ({ payload }) => {
         if (payload.operationId !== id) return;
-        notifications.updateTask({
+        tasks.update({
           key: TASK_KEY,
           message: t("正在扫描…"),
           completed: payload.completed,
@@ -50,26 +52,25 @@ export function useLibraryScan() {
         elapsedMs: Math.round(performance.now() - started),
         ...result,
       });
-      notify({
-        type: result.failed > 0 ? "warning" : "success",
-        message: result.failed
-          ? t("扫描完成，{count} 首失败（详情见日志）", { count: result.failed })
-          : result.added === 0 && result.updated === 0
-            ? t("未发现变化")
-            : t("扫描完成：新增 {added} 首，更新 {updated} 首", {
-                added: result.added,
-                updated: result.updated,
-              }),
-        key: "library-scan",
-      });
+      const message = result.failed
+        ? t("扫描完成，{count} 首失败（详情见日志）", { count: result.failed })
+        : result.added === 0 && result.updated === 0
+          ? t("未发现变化")
+          : t("扫描完成：新增 {added} 首，更新 {updated} 首", {
+              added: result.added,
+              updated: result.updated,
+            });
+      if (result.failed > 0) outcome = { type: "warning", message };
+      notify({ type: outcome?.type ?? "success", message, key: TASK_KEY });
       reportLibraryImport(result);
     } catch (error) {
       scanError.value = error instanceof Error ? error.message : String(error);
       logger.error("library", "scan_failed", error, { operationId: id });
-      notify({ type: "error", message: t("扫描失败，请查看日志"), key: "library-scan" });
+      outcome = { type: "error", message: t("扫描失败，请查看日志") };
+      notify({ ...outcome, key: TASK_KEY });
     } finally {
       unlisten?.();
-      notifications.removeTask(TASK_KEY);
+      tasks.finish(TASK_KEY, outcome);
       isScanning.value = false;
     }
   }

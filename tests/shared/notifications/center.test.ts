@@ -39,33 +39,6 @@ function createClock() {
 afterEach(() => notifications.clear());
 
 describe("notification center", () => {
-  it("keeps task progress outside toast lifetimes and updates it in place", () => {
-    const { clock, advance } = createClock();
-    const center = createNotificationCenter(clock);
-    let cancelled = 0;
-    const task = {
-      key: "lyrics",
-      message: "下载中",
-      completed: 1,
-      total: 10,
-      cancelling: false,
-      cancel: () => {
-        cancelled++;
-      },
-    };
-    center.updateTask(task);
-    for (let index = 0; index < 4; index++) center.notify({ type: "info", message: String(index) });
-    advance(60_000);
-    expect(center.tasks.value).toHaveLength(1);
-    center.updateTask({ ...task, completed: 5 });
-    expect(center.tasks.value).toHaveLength(1);
-    expect(center.tasks.value[0]?.completed).toBe(5);
-    center.tasks.value[0]?.cancel?.();
-    expect(cancelled).toBe(1);
-    center.removeTask("lyrics");
-    expect(center.tasks.value).toEqual([]);
-  });
-
   it("timed messages expire, explicitly persistent warnings and errors remain dismissable", () => {
     const { clock, advance } = createClock();
     const center = createNotificationCenter(clock);

@@ -5,6 +5,7 @@ import { compileSfc, transpileScript, evaluateSource } from "../../../support/mo
 import { createHostRenderer } from "../../../support/host/renderer";
 import { HelpDialog } from "../../../support/help/dialog";
 import { notifications, notify } from "@/shared/notifications/center";
+import { tasks } from "@/shared/tasks/state";
 import type { useLibraryScan } from "@/features/library/import/useScan";
 import type { IngestResult } from "@/features/library/types";
 
@@ -47,6 +48,7 @@ function createScan(invoke: () => Promise<IngestResult>) {
     "@tauri-apps/api/core": { invoke },
     "@tauri-apps/api/event": { listen: async () => () => {} },
     "@/shared/notifications/center": { notifications, notify },
+    "@/shared/tasks/state": { tasks },
     "@/features/library/events": {
       reportLibraryImport: () => {
         globalThis.window.dispatchEvent(new Event("newbee:library-changed"));
@@ -281,7 +283,7 @@ describe("library scan dialog", () => {
     expect(element?.open).toBe(false);
     expect(scan.isScanning.value).toBe(true);
     expect(notifications.items.value).toEqual([]);
-    expect(notifications.tasks.value).toHaveLength(1);
+    expect(tasks.active.value).toHaveLength(1);
     dialog.unmount();
     await settle();
     resolveScan({ added: 2, updated: 1, skipped: 0, failed: 0 });

@@ -5,6 +5,7 @@ import { compileSfc, evaluateSource } from "../../support/module/loader";
 
 import { createHostRenderer } from "../../support/host/renderer";
 import { notifications } from "@/shared/notifications/center";
+import { tasks } from "@/shared/tasks/state";
 
 class TestElement {
   props: Record<string, unknown> = {};
@@ -168,53 +169,15 @@ describe("notification host", () => {
     expect(notifications.items.value).toEqual([]);
   });
 
-  it("renders persistent progress with cancellation rather than a dismiss button", async () => {
+  it("does not render background progress as a toast", async () => {
     mountHost();
-    let cancelled = 0;
-    notifications.updateTask({
-      key: "lyrics",
-      message: "正在更新缺少的歌词",
-      completed: 3,
-      total: 10,
-      cancelling: false,
-      cancel: () => {
-        cancelled++;
-      },
-    });
+    tasks.update({ key: "scan", message: "正在扫描…", completed: 4, total: 10 });
     try {
       await Vue.nextTick();
-      const task = find(host(), (node) => node.props["data-task-notification"] !== undefined);
-      if (!task) throw new Error("Missing task notification");
-      expect(find(task, (node) => node.type === "progress")?.props.value).toBe(3);
-      const button = task.querySelector("button");
-      if (!button) throw new Error("Missing cancel button");
-      expect(button.props["aria-label"]).not.toBe("关闭通知");
-      click(button);
-      expect(cancelled).toBe(1);
-      notifications.removeTask("lyrics");
-      await Vue.nextTick();
-      expect(find(host(), (node) => node.props["data-task-notification"] !== undefined)).toBeNull();
+      expect(host().querySelector("progress")).toBeNull();
+      expect(textContent(host())).not.toContain("正在扫描");
     } finally {
-      notifications.removeTask("lyrics");
-    }
-  });
-
-  it("shows indeterminate then measured progress without cancellation", async () => {
-    mountHost();
-    notifications.updateTask({ key: "scan", message: "正在扫描…", completed: 0 });
-    try {
-      await Vue.nextTick();
-      const task = find(host(), (node) => node.props["data-task-notification"] !== undefined);
-      if (!task) throw new Error("Missing scan progress");
-      expect(task.querySelector("progress")?.props.value).toBeUndefined();
-      expect(task.querySelector("button")).toBeNull();
-      notifications.updateTask({ key: "scan", message: "正在扫描…", completed: 4, total: 10 });
-      await Vue.nextTick();
-      expect(task.querySelector("progress")?.props.value).toBe(4);
-      expect(task.querySelector("progress")?.props.max).toBe(10);
-      expect(textContent(task)).toContain("已处理 4 / 10");
-    } finally {
-      notifications.removeTask("scan");
+      tasks.finish("scan");
     }
   });
 

@@ -2,7 +2,8 @@ import { expect, it } from "bun:test";
 import * as Vue from "vue";
 import type { LoudnessProgress, LoudnessResult } from "@/features/loudness/api";
 import type { useLoudness } from "@/features/loudness/useLoudness";
-import type { NotificationInput, TaskNotification } from "@/shared/notifications/center";
+import type { NotificationInput } from "@/shared/notifications/center";
+import type { TaskProgress, TaskResult } from "@/shared/tasks/state";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 
 const output = transpileScript(await Bun.file("src/features/loudness/useLoudness.ts").text());
@@ -16,7 +17,8 @@ function setup(
   options: { results?: LoudnessResult[]; confirm?: () => Promise<boolean>; fail?: boolean } = {},
 ) {
   const calls: Array<[string, unknown]> = [];
-  const tasks: TaskNotification[] = [];
+  const tasks: TaskProgress[] = [];
+  const outcomes: Array<TaskResult | undefined> = [];
   const removed: string[] = [];
   const notices: NotificationInput[] = [];
   let confirmations = 0;
@@ -51,11 +53,16 @@ function setup(
     },
     "@/features/tracks/events": { reportTracksChanged: () => {} },
     "@/shared/logging/logger": { logger: { error: () => {} } },
-    "@/shared/notifications/center": {
-      notifications: {
-        updateTask: (task: TaskNotification) => tasks.push(task),
-        removeTask: (key: string) => removed.push(key),
+    "@/shared/tasks/state": {
+      tasks: {
+        update: (task: TaskProgress) => tasks.push(task),
+        finish: (key: string, result?: TaskResult) => {
+          removed.push(key);
+          outcomes.push(result);
+        },
       },
+    },
+    "@/shared/notifications/center": {
       notify: (notice: NotificationInput) => notices.push(notice),
     },
   });
@@ -64,6 +71,7 @@ function setup(
     calls,
     tasks,
     removed,
+    outcomes,
     notices,
     confirmations: () => confirmations,
   };
@@ -125,9 +133,11 @@ it("reports individual failures while refreshing successful results and always r
   await test.action.analyze([7, 9]);
   expect(test.calls[1]).toEqual(["get_tracks", { trackIds: [7] }]);
   expect(test.notices[0]?.message).toBe("1 首曲目响度分析失败");
+  expect(test.outcomes).toEqual([{ type: "warning", message: "1 首曲目响度分析失败" }]);
   const failed = setup({ fail: true });
   await failed.action.analyze([7]);
   expect(failed.notices[0]?.message).toBe("响度分析失败");
+  expect(failed.outcomes).toEqual([{ type: "error", message: "响度分析失败" }]);
   expect(failed.action.pending.value).toBe(false);
   expect(failed.removed).toEqual(["loudness-analysis"]);
 });

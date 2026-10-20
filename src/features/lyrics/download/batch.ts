@@ -8,6 +8,7 @@ import type { LyricsBatchCooperationOptions } from "@/features/lyrics/download/c
 import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { createMetadataSave } from "@/features/metadata/save";
 import { notifications } from "@/shared/notifications/center";
+import { tasks } from "@/shared/tasks/state";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { LyricsBatchEvent, LyricsBatchOutcome } from "@/features/lyrics/types";
 
@@ -16,7 +17,8 @@ import { logger, operationId } from "@/shared/logging/logger";
 const TASK_KEY = "lyrics-download";
 export type LyricsBatchOptions = LyricsBatchCooperationOptions & {
   synchronize: (ids: number[]) => void | Promise<void>;
-  notifications: Pick<typeof notifications, "notify" | "updateTask" | "removeTask">;
+  notifications: Pick<typeof notifications, "notify">;
+  tasks: Pick<typeof tasks, "update" | "finish">;
 };
 
 export function createLyricsBatch(options: LyricsBatchOptions) {
@@ -44,7 +46,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
     report();
   }
   function report() {
-    options.notifications.updateTask({
+    options.tasks.update({
       key: TASK_KEY,
       message: t("正在更新缺少的歌词 · 已写入 {count} 首", { count: state.written }),
       completed: state.completed,
@@ -157,9 +159,8 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
         failed: state.failed,
       });
       if (failure) logger.warn("lyrics", "download_failed", failure, { operationId: id });
-      options.notifications.removeTask(TASK_KEY);
-      options.notifications.notify({
-        type: failure || state.failed ? "warning" : "success",
+      const notice = {
+        type: failure || state.failed ? ("warning" as const) : ("success" as const),
         persistent: inconsistent || Boolean(state.synchronizationError),
         message: state.synchronizationError
           ? t("歌词已保存，但界面刷新失败，请查看日志")
@@ -180,7 +181,12 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
                       failed: state.failed,
                     })
                   : t("歌词更新完成：写入 {count} 首", { count: state.written }),
-      });
+      };
+      options.tasks.finish(
+        TASK_KEY,
+        notice.type === "warning" ? { type: notice.type, message: notice.message } : undefined,
+      );
+      options.notifications.notify(notice);
       state.running = false;
     }
   }
@@ -225,6 +231,7 @@ export function useLyricsBatch() {
     cancel: api.cancel,
     synchronize: createTrackSynchronization(session, invoke).refresh,
     notifications,
+    tasks,
   });
   return sharedBatch;
 }

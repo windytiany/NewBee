@@ -11,7 +11,8 @@ import type {
   LyricsContent,
 } from "@/features/lyrics/types";
 import type { MetadataSaveResult } from "@/features/metadata/types";
-import type { NotificationInput, TaskNotification } from "@/shared/notifications/center";
+import type { NotificationInput } from "@/shared/notifications/center";
+import type { TaskProgress, TaskResult } from "@/shared/tasks/state";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -53,7 +54,8 @@ function setup(
   const completed: Array<[number, string | null]> = [];
   const cancelled: number[] = [];
   const messages: NotificationInput[] = [];
-  const tasks = new Map<string, TaskNotification>();
+  const tasks = new Map<string, TaskProgress>();
+  const outcomes: Array<TaskResult | undefined> = [];
   let synchronized = 0;
   let cancelling = false;
   let current: {
@@ -133,11 +135,14 @@ function setup(
         messages.push(input);
         return 1;
       },
-      updateTask: (task) => {
+    },
+    tasks: {
+      update: (task) => {
         tasks.set(task.key, task);
       },
-      removeTask: (key) => {
+      finish: (key, result) => {
         tasks.delete(key);
+        outcomes.push(result);
       },
     },
     ...overrides,
@@ -150,6 +155,7 @@ function setup(
     cancelled,
     messages,
     tasks,
+    outcomes,
     synchronized: () => synchronized,
   };
 }
@@ -179,6 +185,7 @@ describe("lyrics batch", () => {
     lookup.resolve({ kind: "available", text: "原始歌词" });
     await running;
     expect(result.messages[0]?.message).toBe("Lyrics update complete: 1 tracks written");
+    expect(result.outcomes).toEqual([undefined]);
     expect(result.batch.state.written).toBe(1);
     expect(result.committed).toEqual([1]);
     expect(result.tasks.size).toBe(0);
@@ -260,6 +267,7 @@ describe("lyrics batch", () => {
     expect(result.batch.state.failed).toBe(1);
     expect(result.batch.state.instrumental).toBe(1);
     expect(result.messages[0]?.message).toContain("1 首失败");
+    expect(result.outcomes).toEqual([{ type: "warning", message: result.messages[0]?.message }]);
   });
 
   it("rejects playback preparation explicitly without committing and continues later requests", async () => {

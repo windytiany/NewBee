@@ -87,7 +87,10 @@ it("wires the production batch through a Channel and round commands without fron
         }),
       },
       "@/shared/notifications/center": {
-        notifications: { notify: () => 1, updateTask: () => {}, removeTask: () => {} },
+        notifications: { notify: () => 1 },
+      },
+      "@/shared/tasks/state": {
+        tasks: { update: () => {}, finish: () => {} },
       },
     },
   );
