@@ -77,7 +77,7 @@ defineExpose({ show });
           :disabled="!isTauriApp || isMigrating || !oldPath.trim() || !newPath.trim()"
           type="submit"
         >
-          {{ isMigrating ? t("正在迁移…") : t("迁移路径") }}
+          {{ isMigrating ? t("正在迁移…") : t("迁移") }}
         </button>
       </footer>
     </form>

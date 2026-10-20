@@ -128,14 +128,14 @@ watch(
         class="rounded px-3 py-2 hover:bg-white/10"
         @click="state.confirmSave = false"
       >
-        {{ t("返回核对") }}
+        {{ t("返回") }}
       </button>
       <button
         type="button"
         class="bg-app-accent text-app-on-accent rounded px-3 py-2 font-semibold"
         @click="editor.save()"
       >
-        {{ t("确认写入") }}
+        {{ t("确认") }}
       </button>
     </div>
   </dialog>
@@ -157,7 +157,7 @@ watch(
       >
         {{ t("取消") }}</button
       ><button type="button" class="rounded bg-red-500 px-3 py-2" @click="editor.confirmDiscard()">
-        {{ t("丢弃调整") }}
+        {{ t("丢弃") }}
       </button>
     </div>
   </dialog>

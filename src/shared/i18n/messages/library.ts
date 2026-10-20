@@ -16,15 +16,13 @@ export const libraryMessages: Record<string, string> = {
   选择文件夹失败: "Could not choose folder",
   "文件夹同步失败，请查看日志": "Folder sync failed. Check the logs.",
   清理已移除文件: "Clean up removed files",
-  "有 {count} 个文件已移除，是否从音乐库清理？":
-    "{count} files were removed. Remove them from the library?",
+  "{count} 个文件已移除。": "{count} files were removed.",
   保留: "Keep",
   清理: "Clean up",
   "正在处理…": "Working…",
   "{count} 声道": "{count} channels",
   "{count} 张专辑": "{count} albums",
-  "不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。":
-    "Files will not be deleted. The track will be removed from all playlists and the current queue. Scan again to reimport it.",
+  "不删除磁盘文件。": "Files will not be deleted.",
   最常播放曲目: "Most played tracks",
   调整统计栏宽度: "Resize statistics pane",
   暂无播放记录: "No plays yet",
@@ -57,12 +55,9 @@ export const libraryMessages: Record<string, string> = {
   "创建歌单失败，请查看日志": "Could not create playlist. Check the logs.",
   删除歌单: "Delete playlist",
   "删除歌单失败，请查看日志": "Could not delete playlist. Check the logs.",
-  "删除此专辑中当前演出者的曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。":
-    "This artist's tracks in this album will be removed from the library, all playlists, and the current queue. Files will not be deleted. Scan again to reimport them.",
-  "删除此专辑的全部曲目索引，不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。":
-    "All tracks in this album will be removed from the library, all playlists, and the current queue. Files will not be deleted. Scan again to reimport them.",
-  "删除此歌单无法撤销。不会删除曲库歌曲或磁盘文件，也不会改变当前播放队列。":
-    "Deleting this playlist cannot be undone. Library tracks, files, and the current queue will not be changed.",
+  "仅移除此演出者的曲目，不删除磁盘文件。":
+    "Only this artist's tracks will be removed. Files will not be deleted.",
+  "此操作无法撤销。": "This action cannot be undone.",
   单声道: "Mono",
   原路径: "Old path",
   取消: "Cancel",
@@ -86,7 +81,7 @@ export const libraryMessages: Record<string, string> = {
   "已添加 {count} 首，{failed} 首失败（详情见日志）":
     "Added {count} tracks; {failed} failed (see logs)",
   年份未知: "Unknown year",
-  开始扫描: "Start scan",
+  扫描: "Scan",
   "扫描失败，请查看日志": "Scan failed. Check the logs.",
   "扫描完成，{count} 首失败（详情见日志）": "Scan complete; {count} tracks failed (see logs)",
   "扫描完成：新增 {added} 首，更新 {updated} 首":
@@ -141,14 +136,10 @@ export const libraryMessages: Record<string, string> = {
   添加到队尾: "Add to queue",
   添加目录: "Add directory",
   "添加目录失败，请查看日志": "Could not add directory. Check the logs.",
-  "添加音乐目录后，扫描其中支持的音频文件。":
-    "Add music directories to scan them for supported audio files.",
   确认: "Confirm",
-  确认删除: "Confirm deletion",
   移除: "Remove",
   "移除目录 {path}": "Remove directory {path}",
-  "移除目录只会移除扫描配置，不会删除已入库歌曲。":
-    "Removing a directory only removes its scan configuration. Imported tracks are not deleted.",
+  "移除目录不会删除已入库歌曲。": "Removing a directory does not delete imported tracks.",
   "移除目录失败，请查看日志": "Could not remove directory. Check the logs.",
   立体声: "Stereo",
   "第 {count} 碟": "Disc {count}",
@@ -162,7 +153,7 @@ export const libraryMessages: Record<string, string> = {
   "读取歌单失败，请查看日志": "Could not load playlists. Check the logs.",
   路径迁移: "Migrate paths",
   "路径迁移失败，请查看日志": "Path migration failed. Check the logs.",
-  迁移路径: "Migrate paths",
+  迁移: "Migrate",
   选择目标歌单: "Select target playlist",
   选择音乐库目录: "Select music library directory",
   重命名: "Rename",

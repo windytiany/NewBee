@@ -130,14 +130,16 @@ describe("album tag views", () => {
     expect(getTextContent(root)).toContain("2 tracks");
     expect(getTextContent(root)).toContain("Title");
     expect(getTextContent(root)).toContain("Album artist");
-    expect(getTextContent(root)).toContain("Confirm write");
+    expect(getTextContent(root)).toContain("Confirm");
+    expect(getTextContent(root)).not.toContain("Confirm write");
     expect(
       findNode(root, (entry) => entry.props["aria-label"] === "Confirm tag overwrite"),
     ).not.toBeNull();
     setLocale("zh-CN");
     await settle();
     expect(getTextContent(root)).toContain("标题");
-    expect(getTextContent(root)).toContain("确认写入");
+    expect(getTextContent(root)).toContain("确认");
+    expect(getTextContent(root)).not.toContain("确认写入");
   });
   it("updates cover empty states and field accessibility labels while keeping release data intact", async () => {
     const editor = fixture();
@@ -505,7 +507,7 @@ describe("album tag views", () => {
     expect(confirmation.open).toBe(true);
     const confirm = node(
       confirmation,
-      (entry) => entry.type === "button" && getTextContent(entry).trim() === "确认写入",
+      (entry) => entry.type === "button" && getTextContent(entry).trim() === "确认",
     );
     event(confirm, "onClick");
     await settle();
@@ -538,7 +540,7 @@ describe("album tag views", () => {
     );
     event(save, "onClick");
     await settle();
-    expect(getTextContent(root)).toContain("确认写入");
+    expect(getTextContent(root)).toContain("确认");
     expect(getTextContent(root)).not.toContain("保存后不可撤销");
     expect(editor.state.confirmSave).toBe(true);
     const confirmation = node(

@@ -18,7 +18,7 @@
       <div class="px-5 py-4">
         <p class="font-medium">{{ props.track.title ?? t("未知曲目") }}</p>
         <p id="delete-track-dialog-description" class="text-app-muted mt-3 text-sm leading-6">
-          {{ t("不删除磁盘文件；会从所有歌单和当前队列移除；重新扫描可再次收录。") }}
+          {{ t("不删除磁盘文件。") }}
         </p>
       </div>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -36,7 +36,7 @@
           type="button"
           @click="confirmDeletion"
         >
-          {{ props.isDeleting ? t("正在删除…") : t("确认删除") }}
+          {{ props.isDeleting ? t("正在删除…") : t("确认") }}
         </button>
       </footer>
     </section>

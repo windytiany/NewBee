@@ -20,6 +20,9 @@ for (const path of [
   "artists/navigation/ArtistRow.vue",
   "library/browser/albums/AlbumTrack.vue",
   "playlist/tracks/PlaylistTrack.vue",
+  "library/components/dialogs/DeleteAlbumDialog.vue",
+  "library/components/dialogs/DeleteTrackDialog.vue",
+  "playlist/components/dialogs/DeletePlaylistDialog.vue",
 ]) {
   const filename = `src/features/${path}`;
   const source = readFileSync(filename, "utf8");
@@ -63,6 +66,49 @@ function collectSources(directory: string): string[] {
 }
 
 describe("library and playlist translations", () => {
+  for (const [path, props, warning] of [
+    [
+      "library/components/dialogs/DeleteAlbumDialog.vue",
+      { album: { album: "Album", albumArtist: "Artist" }, pending: false },
+      "Files will not be deleted.",
+    ],
+    [
+      "library/components/dialogs/DeleteAlbumDialog.vue",
+      {
+        album: { album: "Album", albumArtist: "Artist", group: { grouping: "artist" } },
+        pending: false,
+      },
+      "Only this artist's tracks will be removed. Files will not be deleted.",
+    ],
+    [
+      "library/components/dialogs/DeleteTrackDialog.vue",
+      { track: { title: "Song" }, isDeleting: false },
+      "Files will not be deleted.",
+    ],
+    [
+      "playlist/components/dialogs/DeletePlaylistDialog.vue",
+      { playlist: { name: "Playlist" }, isPending: false },
+      "This action cannot be undone.",
+    ],
+  ] as const) {
+    it(`keeps ${path} concise while retaining its warning: ${warning}`, async () => {
+      const root = mount(path, props);
+      const description = findNode(root, (node) => String(node.props.id).endsWith("-description"));
+      const confirm = findNode(
+        root,
+        (node) => node.type === "button" && getTextContent(node).trim() === "确认",
+      );
+      expect(confirm).not.toBeNull();
+      expect(getTextContent(root)).not.toContain("重新扫描");
+      expect(getTextContent(root)).not.toContain("当前播放队列");
+      setLocale("en");
+      await Vue.nextTick();
+      expect(getTextContent(description!)).toBe(warning);
+      expect(getTextContent(confirm!).trim()).toBe("Confirm");
+      expect(getTextContent(root)).not.toContain("Confirm deletion");
+    });
+  }
+
   it("translates both artist grouping options when switching languages", () => {
     expect(t("专辑演出者")).toBe("专辑演出者");
     expect(t("演出者")).toBe("演出者");

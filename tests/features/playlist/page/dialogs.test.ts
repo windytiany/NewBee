@@ -604,7 +604,7 @@ describe("歌单 workspace 管理", () => {
     const root = mountApp();
     requestDelete(root, secondPlaylist.id);
     await settleApp();
-    click(findButtonByText(root, "确认删除"));
+    click(findButtonByText(root, "确认"));
     await settleApp();
     expect(playlists.value.map(({ id }) => id)).toEqual([1, 2, 3]);
     expect(findNode(root, (node) => node.type === "dialog" && node.open)).not.toBeNull();
@@ -621,7 +621,7 @@ describe("歌单 workspace 管理", () => {
     const root = mountApp();
     requestDelete(root, secondPlaylist.id);
     await settleApp();
-    click(findButtonByText(root, "确认删除"));
+    click(findButtonByText(root, "确认"));
     await settleApp();
 
     expect(playlists.value.map(({ id }) => id)).toEqual([firstPlaylist.id, thirdPlaylist.id]);
@@ -635,7 +635,7 @@ describe("歌单 workspace 管理", () => {
     const root = mountApp();
     requestDelete(root, firstPlaylist.id);
     await settleApp();
-    click(findButtonByText(root, "确认删除"));
+    click(findButtonByText(root, "确认"));
     await settleApp();
 
     expect(playlists.value.map(({ id }) => id)).toEqual([secondPlaylist.id, thirdPlaylist.id]);

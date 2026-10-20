@@ -16,7 +16,7 @@
       <div class="px-5 py-4">
         <p class="font-medium">{{ props.playlist.name }}</p>
         <p id="delete-playlist-dialog-description" class="text-app-muted mt-3 text-sm leading-6">
-          {{ t("删除此歌单无法撤销。不会删除曲库歌曲或磁盘文件，也不会改变当前播放队列。") }}
+          {{ t("此操作无法撤销。") }}
         </p>
       </div>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
@@ -35,7 +35,7 @@
           type="button"
           @click="confirmDeletion"
         >
-          {{ props.isPending ? t("正在删除…") : t("确认删除") }}
+          {{ props.isPending ? t("正在删除…") : t("确认") }}
         </button>
       </footer>
     </section>

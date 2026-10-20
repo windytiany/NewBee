@@ -54,7 +54,7 @@ onUnmounted(() => confirmation.resolve(false));
         class="bg-app-accent focus-visible:outline-app-accent text-app-on-accent rounded-full px-5 py-2 text-sm font-semibold hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
         @click="confirmation.resolve(true)"
       >
-        {{ state ? t(state.title) : "" }}
+        {{ t("确认") }}
       </button>
     </footer>
   </dialog>

@@ -75,7 +75,8 @@ it("reacts to locale changes in counts, actions and accessible labels without tr
   setLocale("en");
   await Vue.nextTick();
   expect(getTextContent(root)).toContain("Selected 1 / 3 tracks");
-  expect(getTextContent(root)).toContain("Start update");
+  expect(getTextContent(root)).toContain("Update");
+  expect(getTextContent(root)).not.toContain("Start update");
   expect(getTextContent(root)).toContain("Marked as having no lyrics");
   expect(
     findNode(root, (entry) => entry.props["aria-label"] === "Select Missing")?.props.checked,
@@ -110,7 +111,7 @@ it("opens a modal with database states without explanatory text", async () => {
   expect(started).toEqual([]);
   const start = findNode(
     root,
-    (entry) => entry.type === "button" && getTextContent(entry).trim() === "开始更新",
+    (entry) => entry.type === "button" && getTextContent(entry).trim() === "更新",
   );
   expect(start?.props.disabled).toBe(false);
   await (start?.props.onClick as () => Promise<void>)();
@@ -121,10 +122,8 @@ it("disables start for an empty selection and closes on Escape without downloadi
   confirmation.selectAll(false);
   await Vue.nextTick();
   expect(
-    findNode(
-      root,
-      (entry) => entry.type === "button" && getTextContent(entry).trim() === "开始更新",
-    )?.props.disabled,
+    findNode(root, (entry) => entry.type === "button" && getTextContent(entry).trim() === "更新")
+      ?.props.disabled,
   ).toBe(true);
   const dialog = findNode(root, (entry) => entry.type === "dialog") as DialogNode;
   (dialog.props.onCancel as (event: { preventDefault: () => void }) => void)({

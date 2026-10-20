@@ -173,8 +173,9 @@ describe("library scan dialog", () => {
     if (!help) throw new Error("Missing scan help");
     click(help);
     await settle();
-    expect(textContent(dialog.root)).toContain("移除扫描配置");
-    expect(textContent(dialog.root)).toContain("不会删除已入库歌曲");
+    expect(textContent(dialog.root)).not.toContain("添加音乐目录后");
+    expect(textContent(dialog.root)).not.toContain("移除扫描配置");
+    expect(textContent(dialog.root)).toContain("移除目录不会删除已入库歌曲。");
     const close = find(dialog.root, (node) => node.props["aria-label"] === "关闭说明");
     if (!close) throw new Error("Missing help close button");
     click(close);
@@ -276,7 +277,7 @@ describe("library scan dialog", () => {
     await settle();
     const element = find(dialog.root, (node) => node.type === "dialog");
     expect(element?.open).toBe(true);
-    click(button(dialog.root, "开始扫描"));
+    click(button(dialog.root, "扫描"));
     expect(element?.open).toBe(false);
     expect(scan.isScanning.value).toBe(true);
     expect(notifications.items.value).toEqual([]);
@@ -304,7 +305,7 @@ describe("library scan dialog", () => {
     });
     const dialog = mountDialog(scan, async () => [directory]);
     await settle();
-    click(button(dialog.root, "开始扫描"));
+    click(button(dialog.root, "扫描"));
     dialog.show();
     await settle();
     const scanButton = button(dialog.root, "正在扫描…");

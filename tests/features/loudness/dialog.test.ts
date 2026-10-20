@@ -65,7 +65,7 @@ it("shows an application modal with a warning and explicitly confirms restoratio
   expect(context.dialog.props["aria-describedby"]).toBe("loudness-confirmation-message");
   expect(getTextContent(context.root)).toContain("移除所选曲目的 ReplayGain 标签？");
   expect(context.button("取消").props.autofocus).toBeDefined();
-  (context.button("恢复原始响度").props.onClick as () => void)();
+  (context.button("确认").props.onClick as () => void)();
   expect(await context.pending).toBe(true);
   await Vue.nextTick();
   await Vue.nextTick();
@@ -98,6 +98,7 @@ it("updates the operation title and warning when the application locale changes"
   expect(getTextContent(context.root)).toContain(
     "Remove ReplayGain tags from the selected tracks?",
   );
+  expect(context.button("Confirm")).toBeDefined();
   expect(context.button("Cancel")).toBeDefined();
   (context.button("Cancel").props.onClick as () => void)();
   expect(await context.pending).toBe(false);

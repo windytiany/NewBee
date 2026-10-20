@@ -11,8 +11,7 @@
         <div class="flex items-center gap-2">
           <h2 id="scan-dialog-title" class="text-lg font-semibold">{{ t("扫描文件夹") }}</h2>
           <HelpDialog :label="t('扫描说明')">
-            <p>{{ t("添加音乐目录后，扫描其中支持的音频文件。") }}</p>
-            <p>{{ t("移除目录只会移除扫描配置，不会删除已入库歌曲。") }}</p>
+            <p>{{ t("移除目录不会删除已入库歌曲。") }}</p>
           </HelpDialog>
         </div>
       </header>
@@ -78,7 +77,7 @@
             type="button"
             @click="startScan"
           >
-            {{ isScanning ? t("正在扫描…") : t("开始扫描") }}
+            {{ isScanning ? t("正在扫描…") : t("扫描") }}
           </button>
         </div>
       </footer>

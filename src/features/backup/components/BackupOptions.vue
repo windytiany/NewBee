@@ -141,7 +141,7 @@ function openBackups() {
         class="bg-app-accent rounded-lg px-4 py-2 text-sm text-white"
         @click="finishConfirmation(true)"
       >
-        {{ t("导入并重启") }}
+        {{ t("导入") }}
       </button>
     </footer>
   </dialog>

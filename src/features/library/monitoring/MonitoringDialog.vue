@@ -119,7 +119,7 @@ onUnmounted(() => {
     </header>
     <section class="px-5 py-4">
       <p class="text-sm">
-        {{ t("有 {count} 个文件已移除，是否从音乐库清理？", { count: paths.length }) }}
+        {{ t("{count} 个文件已移除。", { count: paths.length }) }}
       </p>
       <ul class="text-app-muted mt-3 max-h-56 overflow-y-auto text-sm">
         <li v-for="path in paths" :key="path" class="py-1 break-all">

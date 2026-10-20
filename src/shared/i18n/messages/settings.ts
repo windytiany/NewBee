@@ -10,7 +10,6 @@ export const settingsMessages: Record<string, string> = {
   备份: "Backup",
   导出备份: "Export backup",
   导入备份: "Import backup",
-  导入并重启: "Import and restart",
   打开备份目录: "Open backup folder",
   备份已导出: "Backup exported",
   备份操作失败: "Backup operation failed",

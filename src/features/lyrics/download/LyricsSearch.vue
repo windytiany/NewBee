@@ -256,7 +256,7 @@ void loadSettings();
         class="bg-app-accent focus-visible:outline-app-accent text-app-on-accent rounded px-4 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         @click="search.usePreview"
       >
-        {{ state.previewInstrumental ? t("标记为无歌词") : t("使用此歌词") }}
+        {{ state.previewInstrumental ? t("标记为无歌词") : t("应用") }}
       </button>
     </footer>
   </dialog>
@@ -272,7 +272,7 @@ void loadSettings();
   >
     <h2 id="lyrics-replace-title" class="text-lg font-semibold">{{ t("替换未保存的歌词？") }}</h2>
     <p id="lyrics-replace-description" class="text-app-muted text-sm">
-      {{ t("文本框中的歌词修改将被替换，仍需保存才会写入文件。") }}
+      {{ t("未保存的歌词修改将被替换。") }}
     </p>
     <footer class="flex justify-end gap-2">
       <button
