@@ -184,6 +184,33 @@ function input(root: HostNode, id: string) {
 }
 
 describe("metadata editor views", () => {
+  it("keeps a fixed viewport-bounded layout across every tab with a scrollable content area", async () => {
+    const { editor, root } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    const dialog = findNode(
+      root,
+      (node) => node.props["aria-labelledby"] === "metadata-editor-title",
+    );
+    if (!dialog) throw new Error("Missing editor dialog");
+    const layout = String(dialog.props.class);
+    expect(layout).toContain("h-[min(37rem,90vh)]");
+    expect(layout).toContain("w-[min(48rem,calc(100vw-2rem))]");
+    expect(layout).toContain("open:grid");
+    expect(layout).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
+    expect(layout.split(" ")).not.toContain("grid");
+    const content = findNode(dialog, (node) => node.props.id === "metadata-editor-form")?.parent;
+    expect(content?.props.class).toContain("min-h-0");
+    expect(content?.props.class).toContain("overflow-y-auto");
+    expect(content?.props.class).not.toContain("max-h-");
+    for (const tab of ["properties", "tags", "additional", "artwork", "lyrics"]) {
+      const button = findNode(root, (node) => node.props.id === `metadata-tab-${tab}`);
+      (button?.props.onClick as () => void)();
+      await settle();
+      expect(button?.props["aria-selected"]).toBe(true);
+      expect(dialog.props.class).toBe(layout);
+    }
+  });
   it("disables tag autocomplete and aligns additional inputs with a shared label width", async () => {
     const { editor, root } = mountDialog();
     await editor.openTracks([1]);
@@ -565,6 +592,27 @@ describe("metadata editor views", () => {
     expect(getTextContent(root)).not.toContain("确认写入");
   });
 
+  it("fits the lyrics editor into the available tab height without a fixed textarea minimum", async () => {
+    const { editor, root } = mountDialog();
+    await editor.openTracks([1]);
+    await settle();
+    const tab = findNode(root, (node) => node.props.id === "metadata-tab-lyrics");
+    (tab?.props.onClick as () => void)();
+    await settle();
+    const panel = findNode(root, (node) => node.props.id === "metadata-panel-lyrics");
+    expect(panel?.props.class).toContain("min-h-0 flex-1 flex-col");
+    expect(panel?.parent?.props.class).toContain("flex min-h-0 flex-col gap-4");
+    const form = findNode(root, (node) => node.props.id === "metadata-editor-form") as DialogNode;
+    expect(form.style.display).toBe("none");
+    const textarea = input(root, "lyrics");
+    expect(textarea.props.class).toContain("min-h-0");
+    expect(textarea.props.class).toContain("flex-1");
+    expect(textarea.props.class).toContain("resize-none");
+    expect(textarea.props.class).not.toContain("min-h-80");
+    const actions = input(root, "no-lyrics").parent?.parent;
+    expect(actions?.props.class).toContain("shrink-0");
+  });
+
   it("places lyric search actions at the bottom right on the same row as the mark checkbox", async () => {
     const { editor, root, saved, savedActions } = mountDialog();
     await editor.openTracks([1]);
@@ -587,7 +635,7 @@ describe("metadata editor views", () => {
     expect(checkboxIndex).toBeGreaterThan(textareaIndex);
     const actionRow = checkbox.parent?.parent;
     if (!actionRow) throw new Error("Missing lyrics action row");
-    expect(actionRow.props.class).toContain("flex items-center justify-between");
+    expect(actionRow.props.class).toContain("flex shrink-0 items-center justify-between");
     const searchActions = actionRow.children.find((node) =>
       String(node.props.class).includes("ml-auto"),
     );

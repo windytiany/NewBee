@@ -2,7 +2,7 @@
   <dialog
     ref="dialogElement"
     aria-labelledby="metadata-editor-title"
-    class="bg-app-surface m-auto max-h-[90vh] w-[min(48rem,calc(100vw-2rem))] max-w-none overflow-hidden rounded-lg border border-white/15 p-0 text-white shadow-2xl backdrop:bg-black/70"
+    class="bg-app-surface m-auto h-[min(37rem,90vh)] w-[min(48rem,calc(100vw-2rem))] max-w-none grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-white/15 p-0 text-white shadow-2xl backdrop:bg-black/70 open:grid"
     @cancel.prevent="requestClose"
     @mousedown.stop
   >
@@ -114,7 +114,7 @@
       </button>
     </div>
 
-    <div class="max-h-[calc(90vh-12rem)] space-y-4 overflow-y-auto px-5 py-5">
+    <div class="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 py-5">
       <p v-if="state.loading" role="status" class="text-app-muted text-sm">{{ t("加载中…") }}</p>
 
       <section
@@ -132,7 +132,12 @@
         </dl>
       </section>
 
-      <form id="metadata-editor-form" autocomplete="off" @submit.prevent="prepareSave">
+      <form
+        v-show="activeTab === 'tags' || activeTab === 'additional'"
+        id="metadata-editor-form"
+        autocomplete="off"
+        @submit.prevent="prepareSave"
+      >
         <section
           v-for="tab in fieldTabs"
           v-show="activeTab === tab"
@@ -226,6 +231,7 @@
       <section
         v-show="activeTab === 'lyrics'"
         id="metadata-panel-lyrics"
+        :class="singleTrack ? 'flex min-h-0 flex-1 flex-col' : undefined"
         role="tabpanel"
         aria-labelledby="metadata-tab-lyrics"
       >
