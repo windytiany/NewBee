@@ -1,4 +1,4 @@
-use crate::artwork::{collection::Picture, model::ArtworkContent};
+use crate::artwork::{model::ArtworkContent, track::Picture};
 use crate::metadata::{
     files,
     tests::support::{long_aac_audio, Fixture},

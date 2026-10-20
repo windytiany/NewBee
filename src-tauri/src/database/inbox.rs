@@ -1,5 +1,5 @@
 use super::Database;
-use crate::tracks::scanning::Snapshot;
+use crate::tracks::model::Snapshot;
 
 impl Database {
     #[cfg(test)]
@@ -34,7 +34,7 @@ impl Database {
         let transaction = connection
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
-        let id = crate::tracks::scanning::persist(&transaction, snapshot)?;
+        let id = super::tracks::persistence::persist(&transaction, snapshot)?;
         transaction.execute("INSERT OR IGNORE INTO inbox(track_id, added_at) VALUES (?1, CAST(unixepoch('subsec') * 1000 AS INTEGER))", [id])
             .map_err(|error| error.to_string())?;
         transaction

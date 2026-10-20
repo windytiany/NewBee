@@ -1,7 +1,8 @@
-use super::{import_track, record_failure, ImportResult};
+use super::import_track;
 use crate::database::Database;
-use crate::locking::write::WriteState;
-use crate::tracks::discovery::has_supported_extension;
+use crate::library::model::ImportResult;
+use crate::locking::WriteState;
+use crate::tracks::has_supported_extension;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -48,11 +49,11 @@ pub(super) fn run_import(database: &Database, paths: &[String]) -> ImportResult 
         let canonical = match fs::canonicalize(path) {
             Ok(canonical) if canonical.is_file() => canonical,
             Ok(_) => {
-                record_failure(database, &mut result, path, "selected path is not a file");
+                result.record_failure(path, "discovery", "selected path is not a file");
                 continue;
             }
             Err(error) => {
-                record_failure(database, &mut result, path, &error.to_string());
+                result.record_failure(path, "discovery", &error.to_string());
                 continue;
             }
         };
@@ -62,6 +63,6 @@ pub(super) fn run_import(database: &Database, paths: &[String]) -> ImportResult 
         }
         import_track(database, &canonical, &mut result);
     }
-    result.failures.flush();
+    result.flush_failures();
     result
 }

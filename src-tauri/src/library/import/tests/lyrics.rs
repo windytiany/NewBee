@@ -1,4 +1,5 @@
-use super::{super::files::run_import, support::TestFiles};
+use super::super::files::run_import;
+use crate::fixtures::TestFiles;
 use crate::{
     database::Database,
     metadata::{model::LyricsMarkAction, save::save_track},

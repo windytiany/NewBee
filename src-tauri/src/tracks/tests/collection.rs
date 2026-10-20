@@ -1,5 +1,5 @@
 use super::*;
-use crate::artwork::collection::{Draft, DraftPicture};
+use crate::artwork::track::{Draft, DraftPicture};
 use lofty::{config::WriteOptions, file::TaggedFileExt, prelude::*};
 
 fn png(color: u8) -> Vec<u8> {
@@ -28,7 +28,7 @@ fn write_pictures(path: &Path, pictures: &[(u8, &[u8])]) {
 }
 
 fn placeholder(database: &Database, path: &Path) -> i64 {
-    match super::super::registration::register(database, &[path.to_string_lossy().into_owned()])
+    match super::super::register(database, &[path.to_string_lossy().into_owned()])
         .unwrap()
         .remove(0)
     {
@@ -52,7 +52,7 @@ fn confirmation_import_and_reread_collect_all_embedded_types_and_all_directory_c
     let lazy = Database::open(":memory:").unwrap();
     let id = placeholder(&lazy, &path);
     files::access::take(directory.path());
-    super::super::reading::reread(&lazy, id).unwrap();
+    crate::tracks::refresh::reread(&lazy, id).unwrap();
     let reads = files::access::take(directory.path());
     assert_eq!(
         reads
@@ -87,7 +87,7 @@ fn confirmation_import_and_reread_collect_all_embedded_types_and_all_directory_c
     assert_eq!(sources, 4);
 
     let imported = Database::open(":memory:").unwrap();
-    let mut result = crate::library::import::ImportResult::default();
+    let mut result = crate::library::model::ImportResult::default();
     crate::library::import::import_track(&imported, &path.canonicalize().unwrap(), &mut result);
     assert_eq!(
         serde_json::to_value(result).unwrap(),
@@ -103,7 +103,7 @@ fn confirmation_import_and_reread_collect_all_embedded_types_and_all_directory_c
         front
     );
 
-    let result = super::super::reading::reread(&lazy, id).unwrap();
+    let result = crate::tracks::refresh::reread(&lazy, id).unwrap();
     assert!(result.database_updated && result.error.is_none());
     assert_eq!(lazy.get_artwork_collection(id).unwrap().images.len(), 4);
     std::fs::remove_file(&path).unwrap();
@@ -132,7 +132,7 @@ fn reread_directory_failure_preserves_entire_snapshot_until_success() {
     std::fs::write(&source, &folder).unwrap();
     let database = Database::open(":memory:").unwrap();
     let id = placeholder(&database, &path);
-    super::super::reading::reread(&database, id).unwrap();
+    crate::tracks::refresh::reread(&database, id).unwrap();
     let mut draft = Draft::from(database.get_artwork_collection(id).unwrap());
     let DraftPicture::Existing { picture_type, .. } = &mut draft.pictures[1] else {
         panic!("existing back")
@@ -143,7 +143,7 @@ fn reread_directory_failure_preserves_entire_snapshot_until_success() {
     write_pictures(&path, &[(3, &back)]);
     files::write_file(&path, &[change(MetadataField::Title, "Reread")]).unwrap();
     std::fs::write(&source, b"corrupt image").unwrap();
-    assert!(super::super::reading::reread(&database, id).is_err());
+    assert!(crate::tracks::refresh::reread(&database, id).is_err());
     assert_eq!(database.get_track(id).unwrap().unwrap().title(), None);
     assert!(database.get_editing_snapshot(id).unwrap().issue.is_none());
     let collection = database.get_artwork_collection(id).unwrap();
@@ -158,7 +158,7 @@ fn reread_directory_failure_preserves_entire_snapshot_until_success() {
     );
     assert!(collection.images.iter().all(|image| image.error.is_none()));
     std::fs::remove_file(&source).unwrap();
-    let result = super::super::reading::reread(&database, id).unwrap();
+    let result = crate::tracks::refresh::reread(&database, id).unwrap();
     assert!(result.database_updated && result.error.is_none());
     assert_eq!(
         database.get_track(id).unwrap().unwrap().title(),
@@ -184,7 +184,7 @@ fn ordinary_tag_save_preserves_linked_deletion_addition_type_and_display_choice(
     std::fs::write(&linked, &manual).unwrap();
     let database = Database::open(":memory:").unwrap();
     let id = placeholder(&database, &path);
-    super::super::reading::reread(&database, id).unwrap();
+    crate::tracks::refresh::reread(&database, id).unwrap();
     let mut draft = Draft::from(database.get_artwork_collection(id).unwrap());
     draft.pictures.remove(2);
     draft.pictures.push(DraftPicture::Linked {
@@ -193,7 +193,7 @@ fn ordinary_tag_save_preserves_linked_deletion_addition_type_and_display_choice(
             .unwrap()
             .to_string_lossy()
             .into_owned(),
-        picture: crate::artwork::collection::Picture {
+        picture: crate::artwork::track::Picture {
             content: crate::artwork::model::ArtworkContent {
                 mime_type: "image/png".into(),
                 image: manual.clone(),
@@ -245,7 +245,7 @@ fn deleting_directory_picture_from_database_leaves_file_and_next_scan_reimports_
     std::fs::write(&source, &cover).unwrap();
     let database = Database::open(":memory:").unwrap();
     let id = placeholder(&database, &path);
-    super::super::reading::reread(&database, id).unwrap();
+    crate::tracks::refresh::reread(&database, id).unwrap();
     files::access::take(directory.path());
     database
         .save_artwork_drafts(&[(id, Draft::default())])
@@ -257,7 +257,7 @@ fn deleting_directory_picture_from_database_leaves_file_and_next_scan_reimports_
         .unwrap()
         .images
         .is_empty());
-    super::super::reading::reread(&database, id).unwrap();
+    crate::tracks::refresh::reread(&database, id).unwrap();
     assert_eq!(
         database
             .track_artwork_bytes(id, None, |_, _| panic!("original derived"))

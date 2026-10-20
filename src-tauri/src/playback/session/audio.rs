@@ -8,7 +8,7 @@ pub struct DesktopAudio(pub AppHandle);
 
 pub(super) fn register(
     database: &Database,
-    write: &crate::locking::write::WriteState,
+    write: &crate::locking::WriteState,
     tracks: &mut Vec<playback::queue::QueueTrack>,
 ) -> Result<super::identity::Registration, String> {
     let _guard = if tracks.iter().any(|track| track.path.is_some()) {
@@ -26,16 +26,16 @@ impl SessionAudio for DesktopAudio {
     ) -> Result<Vec<String>, String> {
         let registration = register(
             &self.0.state::<Database>(),
-            &self.0.state::<crate::locking::write::WriteState>(),
+            &self.0.state::<crate::locking::WriteState>(),
             tracks,
         )?;
-        crate::tracks::scheduling::schedule(&self.0, registration.pending);
+        crate::tracks::schedule(&self.0, registration.pending);
         Ok(registration.failures)
     }
     fn start(&mut self, track: &playback::queue::QueueTrack) -> Result<NowPlayingTrack, String> {
         if let Some(id) = track.track_id {
             self.0
-                .state::<crate::tracks::scheduling::SchedulingState>()
+                .state::<crate::tracks::ConfirmationState>()
                 .prioritize(id);
         }
         playback::play_target(

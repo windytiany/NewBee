@@ -1,6 +1,6 @@
 use super::super::files::run_import;
-use super::support::TestFiles;
 use crate::database::Database;
+use crate::fixtures::TestFiles;
 use std::fs;
 use std::path::Path;
 

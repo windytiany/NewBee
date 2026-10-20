@@ -4,7 +4,7 @@ mod runtime;
 #[cfg(test)]
 mod tests;
 
-use crate::{database::Database, locking::write::WriteState, settings::SettingsState};
+use crate::{database::Database, locking::WriteState, settings::SettingsState};
 use configuration::Folder;
 use serde::Serialize;
 use std::{
@@ -156,13 +156,7 @@ fn resolve(
                 .any(|folder| Path::new(path).starts_with(&folder.path))
             && inventory::missing(Path::new(path))
         {
-            let connection = database.connection()?;
-            removed += connection
-                .execute(
-                    "UPDATE tracks SET in_library = 0 WHERE path = ?1 AND in_library = 1",
-                    [path],
-                )
-                .map_err(|error| error.to_string())?;
+            removed += database.remove_library_path(path)?;
         }
         data.missing.remove(path);
         if !clean {

@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::locking::write::WriteState;
+use crate::locking::WriteState;
 use tauri::Manager;
 
 #[test]

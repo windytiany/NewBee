@@ -1,7 +1,5 @@
 use super::support::Fixture;
-use crate::{
-    database::Database, library::import::files::import_music_files, locking::write::WriteState,
-};
+use crate::{database::Database, library::import::files::import_music_files, locking::WriteState};
 use tauri::Manager;
 
 #[test]
@@ -252,7 +250,7 @@ fn every_scan_reparses_audio_without_sidecar_reads_and_clears_confirmed_removals
         .is_none());
     assert!(matches!(
         app.state::<Database>().get_track_artwork(1).unwrap(),
-        Some(crate::artwork::model::TrackArtwork::NoArtwork)
+        Some(crate::artwork::track::TrackArtwork::NoArtwork)
     ));
     assert_eq!(
         std::fs::read_to_string(&sidecar).unwrap(),

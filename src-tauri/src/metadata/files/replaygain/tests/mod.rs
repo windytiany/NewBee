@@ -4,6 +4,7 @@ mod writing;
 
 use super::*;
 use lofty::{config::WriteOptions, prelude::TagExt};
+use std::fs::File;
 
 fn measured() -> TrackGain {
     TrackGain {

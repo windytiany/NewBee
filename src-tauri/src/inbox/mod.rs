@@ -1,4 +1,4 @@
-use crate::{database::Database, locking::write::WriteState, tracks::model::TrackDetails};
+use crate::{database::Database, locking::WriteState, tracks::model::TrackDetails};
 use serde::Serialize;
 use std::path::Path;
 use tauri::{Manager, State};
@@ -48,10 +48,10 @@ pub(crate) fn register(database: &Database, paths: Vec<String>) -> Vec<FileResul
         .map(|path| {
             let outcome = (|| {
                 let canonical = std::fs::canonicalize(&path).map_err(|error| error.to_string())?;
-                if !crate::tracks::discovery::has_supported_extension(&canonical) {
+                if !crate::tracks::has_supported_extension(&canonical) {
                     return Err("不支持的音频文件".to_owned());
                 }
-                let snapshot = crate::tracks::scanning::scan(database, &canonical)?;
+                let snapshot = crate::tracks::inspect(database, &canonical)?;
                 database.save_inbox_snapshot(&snapshot)
             })();
             if let Err(error) = &outcome {
@@ -104,7 +104,7 @@ fn collect_directory(path: &Path, files: &mut Vec<String>, failures: &mut Vec<Fi
         };
         if kind.is_dir() {
             collect_directory(&entry_path, files, failures);
-        } else if kind.is_file() && crate::tracks::discovery::has_supported_extension(&entry_path) {
+        } else if kind.is_file() && crate::tracks::has_supported_extension(&entry_path) {
             files.push(entry_path.to_string_lossy().into_owned());
         }
     }
@@ -137,7 +137,7 @@ fn ingest(database: &Database, track_ids: Vec<i64>) -> Vec<FileResult> {
                     .get_track(id)?
                     .ok_or_else(|| format!("曲目 {id} 已不在数据库中"))?;
                 path = track.path;
-                let snapshot = crate::tracks::scanning::scan(database, Path::new(&path))?;
+                let snapshot = crate::tracks::inspect(database, Path::new(&path))?;
                 database.import_snapshot(&snapshot).map(|_| ())
             })();
             if let Err(error) = &outcome {

@@ -1,12 +1,12 @@
 mod artwork;
 mod backup;
 mod database;
-mod import;
+#[cfg(test)]
+mod fixtures;
 mod inbox;
 mod library;
 mod locking;
 mod logging;
-mod loudness;
 pub mod lyrics;
 mod metadata;
 mod playback;
@@ -20,8 +20,8 @@ mod window;
 pub fn run() {
     let result = tauri::Builder::default()
         .manage(playback::PlaybackState::default())
-        .manage(tracks::scheduling::SchedulingState::default())
-        .manage(locking::write::WriteState::default())
+        .manage(tracks::ConfirmationState::default())
+        .manage(locking::WriteState::default())
         .manage(artwork::artist::LookupState::default())
         .manage(backup::BackupState::default())
         .manage(library::monitoring::MonitoringState::default())
@@ -126,8 +126,8 @@ pub fn run() {
             library::commands::migrate_library_paths,
             library::import::directory::scan_music_library,
             tracks::discovery::supported_audio_extensions,
-            import::readable_audio_files,
-            import::preview_local_drop,
+            tracks::discovery::readable_audio_files,
+            tracks::discovery::preview_local_drop,
             library::import::files::import_music_files,
             lyrics::embedded::get_track_lyrics,
             lyrics::embedded::get_file_lyrics,
@@ -144,12 +144,12 @@ pub fn run() {
             lyrics::batch::cancel_lyrics_download,
             library::commands::list_artists,
             library::commands::list_albums,
-            artwork::get_album_artwork,
+            artwork::track::commands::get_album_artwork,
             library::commands::list_album_tracks,
             library::commands::list_external_track_ids,
             library::commands::remove_track_from_library,
             playlist::commands::create_playlist,
-            playlist::creation::playlist_directories,
+            playlist::discovery::playlist_directories,
             playlist::commands::rename_playlist,
             playlist::commands::delete_playlist,
             playlist::commands::append_playlist_tracks,
@@ -157,21 +157,21 @@ pub fn run() {
             playlist::commands::list_playlist_tracks,
             playlist::commands::remove_playlist_items,
             playlist::commands::reorder_playlist_items,
-            playback::queue::commands::list_skipped_track_ids,
-            playback::queue::commands::set_tracks_skipped,
+            playback::skip::list_skipped_track_ids,
+            playback::skip::set_tracks_skipped,
             tracks::commands::get_track,
             tracks::commands::get_tracks,
             tracks::commands::register_local_tracks,
             tracks::commands::reread_track_tags,
-            loudness::commands::analyze_track_loudness,
-            loudness::commands::restore_track_loudness,
+            metadata::replaygain::commands::analyze_track_loudness,
+            metadata::replaygain::commands::restore_track_loudness,
             tracks::commands::is_track_metadata_pending,
             tracks::commands::get_track_presentation,
-            artwork::get_track_artwork,
-            artwork::collection::commands::get_track_artwork_collections,
-            artwork::collection::commands::get_artwork_picture,
-            artwork::collection::linked::read_artwork_file,
-            artwork::collection::plan::get_artwork_write_plan,
+            artwork::track::commands::get_track_artwork,
+            artwork::track::commands::get_track_artwork_collections,
+            artwork::track::commands::get_artwork_picture,
+            artwork::track::linked::read_artwork_file,
+            artwork::track::plan::get_artwork_write_plan,
             artwork::artist::get_artist_photo,
             artwork::artist::find_artist_photo,
             artwork::artist::save_artist_photo,
@@ -229,7 +229,7 @@ pub fn run() {
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
                 app.state::<library::monitoring::MonitoringState>().stop();
-                app.state::<tracks::scheduling::SchedulingState>().stop();
+                app.state::<tracks::ConfirmationState>().stop();
             }
         });
 }

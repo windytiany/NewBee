@@ -1,6 +1,6 @@
 use super::super::Database;
 use super::support::insert_track;
-use crate::artwork::model::TrackArtwork;
+use crate::artwork::track::TrackArtwork;
 use crate::library::model::{LibraryGroup, LibraryGrouping};
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use rusqlite::params;

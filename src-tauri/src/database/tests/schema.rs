@@ -1,4 +1,7 @@
-use super::*;
+use crate::database::schema::{definition, initialize_schema};
+use rusqlite::Connection;
+
+const SCHEMA_VERSION: i64 = 3;
 
 #[test]
 fn initializes_new_databases_and_can_reopen_them() {

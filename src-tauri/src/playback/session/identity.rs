@@ -47,7 +47,7 @@ pub(super) fn register(
     }
     let mut registered = HashMap::new();
     if !paths.is_empty() {
-        for result in crate::tracks::registration::register(database, &paths)? {
+        for result in crate::tracks::register(database, &paths)? {
             match result {
                 TrackRegistrationResult::Registered {
                     track,

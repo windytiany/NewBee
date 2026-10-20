@@ -5,8 +5,8 @@ use super::{
 };
 use crate::{
     database::Database,
-    library::import::{directory::scanning, ImportResult},
-    locking::write::WriteState,
+    library::{model::ImportResult, scanning},
+    locking::WriteState,
     settings::SettingsState,
 };
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};

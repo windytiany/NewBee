@@ -7,7 +7,7 @@ pub(crate) struct Confirmation {
     pub(crate) id: i64,
     pub(crate) revision: i64,
     pub(crate) path: String,
-    pub(crate) snapshot: Result<crate::tracks::scanning::Snapshot, String>,
+    pub(crate) snapshot: Result<crate::tracks::model::Snapshot, String>,
 }
 
 impl Database {
@@ -70,7 +70,7 @@ impl Database {
                 let savepoint = &transaction;
                 let error = match item.snapshot {
                     Ok(snapshot) => {
-                        crate::tracks::scanning::persist(savepoint, &snapshot)?;
+                        super::persistence::persist(savepoint, &snapshot)?;
                         None
                     }
                     Err(error) => {

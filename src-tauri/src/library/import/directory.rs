@@ -1,11 +1,10 @@
-mod fingerprint;
-pub(crate) mod scanning;
+use crate::library::scanning;
 
-use super::{record_failure, ImportResult};
 use crate::database::Database;
+use crate::library::model::ImportResult;
 use crate::library::model::MusicLibraryDirectory;
-use crate::locking::write::WriteState;
-use crate::tracks::discovery::has_supported_extension;
+use crate::locking::WriteState;
+use crate::tracks::has_supported_extension;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -102,7 +101,6 @@ pub(super) fn run_scan_with_replay_gain(
 
     for directory in &directories {
         scan_directory(
-            database,
             directory,
             &mut visited_directories,
             &mut visited_files,
@@ -122,20 +120,18 @@ pub(super) fn run_scan_with_replay_gain(
         if directories.iter().any(|root| path.starts_with(&root.path))
             && !visited_files.contains(&path)
         {
-            record_failure(
-                database,
-                &mut result,
+            result.record_failure(
                 &path,
+                "discovery",
                 "previously scanned audio is unavailable",
             );
         }
     }
-    result.failures.flush();
+    result.flush_failures();
     Ok(result)
 }
 
 fn scan_directory(
-    database: &Database,
     directory: &MusicLibraryDirectory,
     visited_directories: &mut HashSet<PathBuf>,
     visited_files: &mut HashSet<PathBuf>,
@@ -146,22 +142,21 @@ fn scan_directory(
     let root = match fs::canonicalize(&configured_path) {
         Ok(root) if root == configured_path => root,
         Ok(_) => {
-            record_failure(
-                database,
-                result,
+            result.record_failure(
                 &configured_path,
+                "discovery",
                 "saved directory now resolves through a link",
             );
             return;
         }
         Err(error) => {
-            record_failure(database, result, &configured_path, &error.to_string());
+            result.record_failure(&configured_path, "discovery", &error.to_string());
             return;
         }
     };
 
     if !root.is_dir() {
-        record_failure(database, result, &root, "saved path is not a directory");
+        result.record_failure(&root, "discovery", "saved path is not a directory");
         return;
     }
 
@@ -176,7 +171,7 @@ fn scan_directory(
                 continue;
             }
             Err(error) => {
-                record_failure(database, result, &path, &error.to_string());
+                result.record_failure(&path, "discovery", &error.to_string());
                 continue;
             }
         };
@@ -187,7 +182,7 @@ fn scan_directory(
         let entries = match fs::read_dir(&canonical_path) {
             Ok(entries) => entries,
             Err(error) => {
-                record_failure(database, result, &path, &error.to_string());
+                result.record_failure(&path, "discovery", &error.to_string());
                 continue;
             }
         };
@@ -196,7 +191,7 @@ fn scan_directory(
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(error) => {
-                    record_failure(database, result, &path, &error.to_string());
+                    result.record_failure(&path, "discovery", &error.to_string());
                     continue;
                 }
             };
@@ -204,7 +199,7 @@ fn scan_directory(
             let file_type = match entry.file_type() {
                 Ok(file_type) => file_type,
                 Err(error) => {
-                    record_failure(database, result, &entry_path, &error.to_string());
+                    result.record_failure(&entry_path, "discovery", &error.to_string());
                     continue;
                 }
             };
@@ -229,7 +224,7 @@ fn scan_directory(
                         continue;
                     }
                     Err(error) => {
-                        record_failure(database, result, &entry_path, &error.to_string());
+                        result.record_failure(&entry_path, "discovery", &error.to_string());
                         continue;
                     }
                 };

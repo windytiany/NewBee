@@ -1,6 +1,15 @@
 use image::{imageops::FilterType, DynamicImage, RgbaImage};
 use std::io::Cursor;
 
+pub(crate) const SIZES: [u32; 3] = [128, 512, 2048];
+
+pub(crate) fn validate_size(size: Option<u32>) -> Result<(), String> {
+    if size.is_some_and(|size| !SIZES.contains(&size)) {
+        return Err("封面尺寸必须为 128、512 或 2048".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn thumbnail(data: &[u8], size: u32) -> Result<Vec<u8>, String> {
     let image = image::ImageReader::new(Cursor::new(data))
         .with_guessed_format()

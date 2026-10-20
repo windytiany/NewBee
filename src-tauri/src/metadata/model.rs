@@ -245,7 +245,7 @@ pub(crate) struct MetadataSaveRequest {
     pub(crate) changes: Vec<MetadataChange>,
     pub(crate) lyrics_action: LyricsMarkAction,
     #[serde(default)]
-    pub(crate) artwork_drafts: Vec<crate::artwork::collection::editing::TrackDraft>,
+    pub(crate) artwork_drafts: Vec<crate::artwork::track::editing::TrackDraft>,
 }
 
 pub(crate) fn validate_track_ids(track_ids: &[i64]) -> Result<Vec<i64>, String> {

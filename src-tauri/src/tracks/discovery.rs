@@ -4,10 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[cfg(test)]
-#[path = "discovery/tests.rs"]
-mod tests;
-
 pub(crate) const SUPPORTED_AUDIO_EXTENSIONS: &[&str] =
     &["mp3", "aac", "m4a", "ogg", "oga", "flac", "wav"];
 
@@ -141,5 +137,132 @@ fn collect_directory(
             Ok(_) => {}
             Err(error) => results.push((entry_path, Err(error.to_string()))),
         }
+    }
+}
+
+fn readable_files(paths: Vec<String>) -> Vec<String> {
+    discover(&paths)
+        .into_iter()
+        .filter_map(Result::ok)
+        .collect()
+}
+
+#[tauri::command]
+pub(crate) async fn readable_audio_files(paths: Vec<String>) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || readable_files(paths))
+        .await
+        .map_err(|error| format!("Audio file discovery task failed: {error}"))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DropPreview {
+    has_files: bool,
+    has_directories: bool,
+}
+
+fn preview_paths(paths: Vec<String>) -> DropPreview {
+    let mut preview = DropPreview {
+        has_files: false,
+        has_directories: false,
+    };
+    for input in paths {
+        let path = std::path::Path::new(&input);
+        if path.is_dir() {
+            preview.has_directories |= std::fs::read_dir(path).is_ok();
+        } else if has_supported_extension(path) {
+            preview.has_files |= std::fs::File::open(path)
+                .and_then(|file| file.metadata())
+                .is_ok_and(|metadata| metadata.is_file());
+        }
+        if preview.has_files && preview.has_directories {
+            break;
+        }
+    }
+    preview
+}
+
+#[tauri::command]
+pub(crate) async fn preview_local_drop(paths: Vec<String>) -> Result<DropPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || preview_paths(paths))
+        .await
+        .map_err(|error| format!("Drop preview task failed: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{preview_paths, readable_files};
+    use crate::fixtures::TestFiles;
+    use std::path::Path;
+
+    #[test]
+    fn previews_directories_without_searching_for_audio_or_reading_tags() {
+        let files = TestFiles::new();
+        let empty = files.0.join("empty");
+        std::fs::create_dir(&empty).unwrap();
+        let preview = preview_paths(vec![empty.to_string_lossy().into_owned()]);
+        assert!(preview.has_directories);
+        assert!(!preview.has_files);
+
+        let broken = files.write("broken.mp3", b"not audio");
+        let unsupported = files.wav("unsupported.opus");
+        let missing = files.0.join("missing.wav").to_string_lossy().into_owned();
+        let preview = preview_paths(vec![broken, unsupported.clone(), missing.clone()]);
+        assert!(preview.has_files);
+        assert!(!preview.has_directories);
+        let preview = preview_paths(vec![unsupported, missing]);
+        assert!(!preview.has_files);
+        assert!(!preview.has_directories);
+    }
+
+    #[test]
+    fn discovers_accessible_files_and_directories_without_requiring_readable_tags() {
+        let files = TestFiles::new();
+        let first = files.wav("first.WAV");
+        let last = files.wav("last.wav");
+        let unsupported = files.wav("unsupported.opus");
+        let broken = files.write("broken.mp3", b"not audio");
+        let missing = files.0.join("missing.wav").to_string_lossy().into_owned();
+        let directory = files.0.join("folder.wav");
+        std::fs::create_dir(&directory).unwrap();
+        let nested = files.wav("folder.wav/nested.wav");
+        let expected: Vec<_> = [&first, &broken, &nested, &last]
+            .into_iter()
+            .map(|path| {
+                Path::new(path)
+                    .canonicalize()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert_eq!(
+            readable_files(vec![
+                first,
+                unsupported,
+                broken,
+                missing,
+                directory.to_string_lossy().into_owned(),
+                last,
+            ]),
+            expected
+        );
+    }
+
+    use super::{has_supported_extension, supported_audio_extensions};
+
+    #[test]
+    fn exposes_the_same_extensions_used_for_backend_validation() {
+        for extension in supported_audio_extensions() {
+            assert!(has_supported_extension(Path::new(&format!(
+                "song.{extension}"
+            ))));
+            assert!(has_supported_extension(Path::new(&format!(
+                "song.{}",
+                extension.to_ascii_uppercase()
+            ))));
+        }
+        assert!(!has_supported_extension(Path::new("song.opus")));
+        assert!(!has_supported_extension(Path::new("song")));
     }
 }

@@ -2,7 +2,7 @@ use super::super::{
     configuration::{normalize, Folder, Mode},
     inventory,
 };
-use crate::library::import::tests::support::TestFiles;
+use crate::fixtures::TestFiles;
 
 #[test]
 fn legacy_folders_default_to_enabled_and_explicit_disabling_is_preserved() {

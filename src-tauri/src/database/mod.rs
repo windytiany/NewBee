@@ -9,7 +9,6 @@ mod inbox;
 mod library;
 mod lyrics;
 mod metadata;
-pub(crate) mod model;
 mod playlist;
 mod schema;
 mod skip;
@@ -39,7 +38,7 @@ fn cache_error(error: std::io::Error) -> rusqlite::Error {
 
 pub struct Database {
     connection: Mutex<Connection>,
-    pub(crate) artwork: crate::artwork::reading::State,
+    pub(crate) artwork: artwork::reading::State,
     skipped_tracks: Arc<RwLock<HashSet<i64>>>,
     #[cfg(test)]
     pub(crate) after_file_write: Mutex<Option<Box<dyn FnOnce() + Send>>>,
@@ -47,7 +46,7 @@ pub struct Database {
 
 impl Database {
     pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Self> {
-        let cache = crate::artwork::cache::Cache::temporary().map_err(cache_error)?;
+        let cache = crate::artwork::track::cache::Cache::temporary().map_err(cache_error)?;
         Self::open_cached(path, cache)
     }
 
@@ -55,13 +54,14 @@ impl Database {
         path: impl AsRef<Path>,
         cache_directory: &Path,
     ) -> rusqlite::Result<Self> {
-        let cache = crate::artwork::cache::Cache::open(cache_directory).map_err(cache_error)?;
+        let cache =
+            crate::artwork::track::cache::Cache::open(cache_directory).map_err(cache_error)?;
         Self::open_cached(path, cache)
     }
 
     fn open_cached(
         path: impl AsRef<Path>,
-        artwork_cache: crate::artwork::cache::Cache,
+        artwork_cache: crate::artwork::track::cache::Cache,
     ) -> rusqlite::Result<Self> {
         let mut connection = Connection::open(path)?;
         connection.execute_batch("PRAGMA foreign_keys = ON;")?;
@@ -74,7 +74,7 @@ impl Database {
         };
         let database = Self {
             connection: Mutex::new(connection),
-            artwork: crate::artwork::reading::State::new(artwork_cache),
+            artwork: artwork::reading::State::new(artwork_cache),
             skipped_tracks: Arc::new(RwLock::new(skipped_tracks)),
             #[cfg(test)]
             after_file_write: Mutex::new(None),

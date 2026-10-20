@@ -2,18 +2,28 @@ mod paths;
 pub(crate) mod scanning;
 mod state;
 #[cfg(test)]
-use super::model::TrackWriteInput;
+use crate::tracks::model::TrackWriteInput;
 
-use super::{model::TrackWriteOutcome, Database};
-use crate::artwork::model::TrackArtwork;
+use super::Database;
+use crate::artwork::track::TrackArtwork;
 use crate::library::model::{
     AlbumSummary, ArtistSummary, LibraryGroup, LibraryGrouping, MusicLibraryDirectory,
 };
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use crate::tracks::model::TrackSummary;
+use crate::tracks::model::TrackWriteOutcome;
 use rusqlite::{params, OptionalExtension};
 
 impl Database {
+    pub(crate) fn remove_library_path(&self, path: &str) -> Result<usize, String> {
+        self.connection()?
+            .execute(
+                "UPDATE tracks SET in_library = 0 WHERE path = ?1 AND in_library = 1",
+                [path],
+            )
+            .map_err(|error| error.to_string())
+    }
+
     pub(crate) fn external_track_ids(&self, track_ids: &[i64]) -> Result<Vec<i64>, String> {
         let connection = self.connection()?;
         let mut statement = connection
@@ -88,7 +98,7 @@ impl Database {
     pub(crate) fn upsert_track(
         &self,
         track: &TrackWriteInput,
-        scan: Option<&crate::artwork::collection::Scan>,
+        scan: Option<&crate::artwork::track::Scan>,
     ) -> Result<TrackWriteOutcome, String> {
         let mut connection = self.connection()?;
         let transaction = connection
@@ -119,7 +129,7 @@ impl Database {
 
     pub(crate) fn import_snapshot(
         &self,
-        snapshot: &crate::tracks::scanning::Snapshot,
+        snapshot: &crate::tracks::model::Snapshot,
     ) -> Result<TrackWriteOutcome, String> {
         let mut connection = self.connection()?;
         let transaction = connection
@@ -304,7 +314,7 @@ impl Database {
 
 fn import_snapshot(
     transaction: &rusqlite::Transaction<'_>,
-    snapshot: &crate::tracks::scanning::Snapshot,
+    snapshot: &crate::tracks::model::Snapshot,
 ) -> Result<TrackWriteOutcome, String> {
     let existing: bool = transaction
         .query_row(
@@ -321,7 +331,7 @@ fn import_snapshot(
     transaction
         .execute_batch("SAVEPOINT scan_content")
         .map_err(|error| error.to_string())?;
-    let id = crate::tracks::scanning::persist(transaction, snapshot)?;
+    let id = super::tracks::persistence::persist(transaction, snapshot)?;
     let outcome = match before {
         Some(before) if before == state::State::read(transaction, &snapshot.track.path)? => {
             // A changed file timestamp is not itself a metadata change.

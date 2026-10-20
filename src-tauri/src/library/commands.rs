@@ -49,7 +49,7 @@ pub async fn migrate_library_paths<R: tauri::Runtime>(
     new_path: String,
     app: tauri::AppHandle<R>,
 ) -> Result<usize, String> {
-    let guard = app.state::<crate::locking::write::WriteState>().acquire()?;
+    let guard = app.state::<crate::locking::WriteState>().acquire()?;
     blocking(app, move |database| {
         let _guard = guard;
         database.migrate_library_paths(&old_path, &new_path)

@@ -1,7 +1,7 @@
 use super::CoverData;
 use crate::{
     database::Database,
-    locking::write::WriteState,
+    locking::WriteState,
     metadata::{
         files,
         model::{

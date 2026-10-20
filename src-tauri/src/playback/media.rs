@@ -1,6 +1,6 @@
 mod window;
 
-use crate::artwork::model::TrackArtwork;
+use crate::artwork::track::TrackArtwork;
 use crate::database::Database;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};

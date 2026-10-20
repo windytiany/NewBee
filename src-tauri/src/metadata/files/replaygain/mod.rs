@@ -1,11 +1,11 @@
-use super::{read_file, verify_tag_items, write_tag, TemporaryFile};
+use super::{formats, read_file, replacement, tags::verify_tag_items};
 use lofty::{
     config::ParseOptions,
     file::{FileType, TaggedFile, TaggedFileExt},
     probe::Probe,
     tag::{ItemKey, Tag, TagExt, TagType},
 };
-use std::{fs, fs::File, io, io::Seek, path::Path};
+use std::{fs, io::Seek, path::Path};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct TrackGain {
@@ -16,19 +16,6 @@ pub(crate) struct TrackGain {
 impl TrackGain {
     pub(crate) fn complete(self) -> bool {
         self.gain_db.is_some() && self.peak.is_some()
-    }
-
-    pub(crate) fn amplitude(self, preamp_db: f64) -> f32 {
-        let Some(gain) = self.gain_db else {
-            return 1.0;
-        };
-        let requested = 10.0_f64.powf((gain + preamp_db) / 20.0);
-        let ceiling = self
-            .peak
-            .filter(|peak| *peak > 0.0)
-            .map(|peak| 1.0 / peak)
-            .unwrap_or(1.0);
-        requested.min(ceiling) as f32
     }
 }
 
@@ -217,52 +204,47 @@ fn save(
     original: &TaggedFile,
     tags: &[Tag],
 ) -> Result<(), String> {
-    let (temporary, mut destination) = TemporaryFile::create(path)?;
-    let mut source = File::open(path).map_err(|error| error.to_string())?;
-    io::copy(&mut source, &mut destination)
-        .map_err(|error| format!("创建安全副本失败：{error}"))?;
-    drop(source);
-    for tag in tags {
-        if original.tag(tag.tag_type()).is_some_and(|old| {
-            old.items().count() == tag.items().count()
-                && old
-                    .items()
-                    .all(|item| tag.items().any(|candidate| candidate == item))
-        }) {
-            continue;
-        }
-        destination.rewind().map_err(|error| error.to_string())?;
-        write_tag(&mut destination, original.file_type(), tag, false)
-            .map_err(|error| format!("写入 ReplayGain 失败，原文件未修改：{error}"))?;
-    }
-    if original.file_type() == FileType::Aac {
-        super::aac::verify(&temporary.0, &mut destination)?;
-    }
-    destination.sync_all().map_err(|error| error.to_string())?;
-    drop(destination);
-    let confirmed = read_file(&temporary.0)?;
-    for expected in tags {
-        let empty = Tag::new(expected.tag_type());
-        let actual = confirmed.tag(expected.tag_type()).unwrap_or(&empty);
-        verify_tag_items(expected, actual)?;
-        if original.tag(expected.tag_type()).is_some_and(|old| {
-            old.items()
-                .any(|item| !expected.contains(item.key()) && actual.contains(item.key()))
-        }) {
-            return Err("ReplayGain 标签移除后回读不一致，原文件未修改".to_owned());
-        }
-        if expected.pictures() != actual.pictures() {
-            return Err("写入影响了内嵌封面，原文件未修改".to_owned());
-        }
-    }
-    let current = fs::metadata(path).map_err(|error| error.to_string())?;
-    if current.len() != metadata.len() || current.modified().ok() != metadata.modified().ok() {
-        return Err("文件已变化，请重试".to_owned());
-    }
-    fs::set_permissions(&temporary.0, metadata.permissions()).map_err(|error| error.to_string())?;
-    fs::rename(&temporary.0, path)
-        .map_err(|error| format!("替换文件失败，原文件未修改：{error}"))?;
-    Ok(())
+    replacement::replace(
+        path,
+        metadata,
+        |copy, destination| {
+            for tag in tags {
+                if original.tag(tag.tag_type()).is_some_and(|old| {
+                    old.items().count() == tag.items().count()
+                        && old
+                            .items()
+                            .all(|item| tag.items().any(|candidate| candidate == item))
+                }) {
+                    continue;
+                }
+                destination.rewind().map_err(|error| error.to_string())?;
+                formats::write_tag(destination, original.file_type(), tag, false)
+                    .map_err(|error| format!("写入 ReplayGain 失败，原文件未修改：{error}"))?;
+            }
+            if original.file_type() == FileType::Aac {
+                formats::aac::verify(copy, destination)?;
+            }
+            Ok(())
+        },
+        |copy| {
+            let confirmed = read_file(copy)?;
+            for expected in tags {
+                let empty = Tag::new(expected.tag_type());
+                let actual = confirmed.tag(expected.tag_type()).unwrap_or(&empty);
+                verify_tag_items(expected, actual)?;
+                if original.tag(expected.tag_type()).is_some_and(|old| {
+                    old.items()
+                        .any(|item| !expected.contains(item.key()) && actual.contains(item.key()))
+                }) {
+                    return Err("ReplayGain 标签移除后回读不一致，原文件未修改".to_owned());
+                }
+                if expected.pictures() != actual.pictures() {
+                    return Err("写入影响了内嵌封面，原文件未修改".to_owned());
+                }
+            }
+            Ok(())
+        },
+    )
 }
 
 #[cfg(test)]

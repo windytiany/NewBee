@@ -7,13 +7,13 @@ pub async fn register_local_tracks<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<super::model::TrackRegistrationResult>, String> {
     use tauri::Manager;
-    let guard = app.state::<crate::locking::write::WriteState>().acquire()?;
+    let guard = app.state::<crate::locking::WriteState>().acquire()?;
     let results = blocking(app.clone(), move |database| {
         let _guard = guard;
-        super::registration::register(database, &paths)
+        super::register(database, &paths)
     })
     .await?;
-    super::scheduling::schedule(
+    super::confirmation::schedule(
         &app,
         results.iter().filter_map(|result| match result {
             super::model::TrackRegistrationResult::Registered {
@@ -72,7 +72,7 @@ pub async fn reread_track_tags<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<super::model::TrackReadResult>, String> {
     use tauri::Manager;
-    let guard = app.state::<crate::locking::write::WriteState>().acquire()?;
+    let guard = app.state::<crate::locking::WriteState>().acquire()?;
     blocking(app, move |database| {
         let _guard = guard;
         let mut seen = std::collections::HashSet::new();
@@ -80,7 +80,7 @@ pub async fn reread_track_tags<R: tauri::Runtime>(
             .into_iter()
             .filter(|id| seen.insert(*id))
             .map(|track_id| {
-                super::reading::reread(database, track_id).unwrap_or_else(|error| {
+                super::refresh::reread(database, track_id).unwrap_or_else(|error| {
                     super::model::TrackReadResult {
                         track_id,
                         database_updated: false,

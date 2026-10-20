@@ -1,4 +1,4 @@
-use super::*;
+use crate::database::Database;
 
 fn database(paths: &[&str]) -> Database {
     let database = Database::open(":memory:").unwrap();
@@ -199,7 +199,7 @@ fn migrates_sources_and_directories_without_changing_library_relationships() {
     assert_eq!(database.list_playlist_tracks(1).unwrap()[0].track_id, 1);
     assert!(matches!(
         database.get_track_artwork(1).unwrap(),
-        Some(crate::artwork::model::TrackArtwork::Available { .. })
+        Some(crate::artwork::track::TrackArtwork::Available { .. })
     ));
     assert_eq!(
         database.list_music_library_directories().unwrap()[0].path,

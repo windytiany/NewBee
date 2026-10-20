@@ -39,11 +39,11 @@ pub(crate) fn insert_track(
     }
 }
 
-pub(crate) fn embedded(image: Option<&[u8]>) -> crate::artwork::collection::Scan {
-    crate::artwork::collection::Scan {
+pub(crate) fn embedded(image: Option<&[u8]>) -> crate::artwork::track::Scan {
+    crate::artwork::track::Scan {
         embedded: Ok(image
             .iter()
-            .map(|content| crate::artwork::collection::Picture {
+            .map(|content| crate::artwork::track::Picture {
                 content: crate::artwork::model::ArtworkContent {
                     mime_type: "image/png".into(),
                     image: content.to_vec(),
@@ -55,12 +55,12 @@ pub(crate) fn embedded(image: Option<&[u8]>) -> crate::artwork::collection::Scan
     }
 }
 
-pub(crate) fn directory(image: Option<&[u8]>, path: &str) -> crate::artwork::collection::Scan {
-    crate::artwork::collection::Scan {
+pub(crate) fn directory(image: Option<&[u8]>, path: &str) -> crate::artwork::track::Scan {
+    crate::artwork::track::Scan {
         embedded: Ok(Vec::new()),
         directory: Ok(image
             .iter()
-            .map(|content| crate::artwork::collection::DirectoryPicture {
+            .map(|content| crate::artwork::track::DirectoryPicture {
                 path: path.into(),
                 content: Ok(crate::artwork::model::ArtworkContent {
                     mime_type: "image/png".into(),
@@ -71,13 +71,21 @@ pub(crate) fn directory(image: Option<&[u8]>, path: &str) -> crate::artwork::col
     }
 }
 
+pub(crate) fn snapshot(database: &Database, snapshot: &crate::tracks::model::Snapshot) -> i64 {
+    let mut connection = database.connection().unwrap();
+    let transaction = connection.transaction().unwrap();
+    let id = crate::database::tracks::persistence::persist(&transaction, snapshot).unwrap();
+    transaction.commit().unwrap();
+    id
+}
+
 /// Publish a supplied fixture snapshot and Inbox membership through the database interface.
 pub(crate) fn inbox(
     database: &Database,
-    track: &crate::database::model::TrackWriteInput,
-    scan: crate::artwork::collection::Scan,
+    track: &crate::tracks::model::TrackWriteInput,
+    scan: crate::artwork::track::Scan,
 ) -> Result<i64, String> {
-    database.save_inbox_snapshot(&crate::tracks::scanning::Snapshot {
+    database.save_inbox_snapshot(&crate::tracks::model::Snapshot {
         track: track.clone(),
         artwork: scan,
         linked: Vec::new(),

@@ -2,9 +2,9 @@ use super::support::{change, Fixture};
 use crate::{
     database::Database,
     library::commands,
-    locking::write::WriteState,
+    locking::WriteState,
     metadata::{files, model::MetadataField},
-    playback::queue::commands as queue,
+    playback::skip as queue,
     playlist::commands as playlist,
 };
 use serde_json::{json, Value};
@@ -82,8 +82,8 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
             commands::remove_track_from_library,
             crate::metadata::get_editable_tracks,
             crate::lyrics::embedded::get_track_lyrics,
-            crate::artwork::get_track_artwork,
-            crate::artwork::get_album_artwork,
+            crate::artwork::track::commands::get_track_artwork,
+            crate::artwork::track::commands::get_album_artwork,
         ])
         .build(tauri::generate_context!())
         .unwrap();
@@ -412,7 +412,9 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     let app = tauri::test::mock_builder()
         .manage(database)
         .manage(WriteState::default())
-        .invoke_handler(tauri::generate_handler![crate::artwork::get_track_artwork])
+        .invoke_handler(tauri::generate_handler![
+            crate::artwork::track::commands::get_track_artwork
+        ])
         .build(tauri::generate_context!())
         .unwrap();
     let scan = || {
@@ -491,7 +493,9 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     let app = tauri::test::mock_builder()
         .manage(Database::open_with_cache(&database_path, &cache_path).unwrap())
         .manage(WriteState::default())
-        .invoke_handler(tauri::generate_handler![crate::artwork::get_track_artwork])
+        .invoke_handler(tauri::generate_handler![
+            crate::artwork::track::commands::get_track_artwork
+        ])
         .build(tauri::generate_context!())
         .unwrap();
     assert_eq!(app.state::<Database>().artwork_decode_count(), 0);
@@ -515,7 +519,7 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     assert_eq!(collection.images[0].source, "directory");
     assert_eq!(
         collection.images[0].path,
-        crate::artwork::collection::linked::normalize(&directory_cover.to_string_lossy()).unwrap()
+        crate::artwork::track::linked::normalize(&directory_cover.to_string_lossy()).unwrap()
     );
     assert!(collection.images[0].error.is_none());
     std::fs::write(&directory_cover, &red).unwrap();

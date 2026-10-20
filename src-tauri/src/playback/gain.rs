@@ -9,6 +9,19 @@ use std::{
     time::Duration,
 };
 
+fn amplitude(gain: replaygain::TrackGain, preamp_db: f64) -> f32 {
+    let Some(gain_db) = gain.gain_db else {
+        return 1.0;
+    };
+    let requested = 10.0_f64.powf((gain_db + preamp_db) / 20.0);
+    let ceiling = gain
+        .peak
+        .filter(|peak| *peak > 0.0)
+        .map(|peak| 1.0 / peak)
+        .unwrap_or(1.0);
+    requested.min(ceiling) as f32
+}
+
 pub(super) struct GainSource<S> {
     source: S,
     gain: replaygain::TrackGain,
@@ -39,7 +52,7 @@ impl<S> GainSource<S> {
         Self {
             source,
             gain,
-            amplitude: gain.amplitude(f64::from_bits(applied_preamp)),
+            amplitude: amplitude(gain, f64::from_bits(applied_preamp)),
             applied_preamp,
             preamp,
             enabled,
@@ -54,7 +67,7 @@ impl<S: Source<Item = f32>> Iterator for GainSource<S> {
             if self.enabled.load(Ordering::Relaxed) {
                 let preamp = self.preamp.load(Ordering::Relaxed);
                 if preamp != self.applied_preamp {
-                    self.amplitude = self.gain.amplitude(f64::from_bits(preamp));
+                    self.amplitude = amplitude(self.gain, f64::from_bits(preamp));
                     self.applied_preamp = preamp;
                 }
                 sample * self.amplitude

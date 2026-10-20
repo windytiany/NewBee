@@ -113,7 +113,7 @@ pub fn initialize(app: &AppHandle, path: PathBuf) -> Result<(), String> {
             busy,
             receiver,
             |references| {
-                crate::tracks::lifecycle::resume(&app, references);
+                crate::tracks::resume(&app, references);
                 let _ = ready.send(());
             },
             (
@@ -174,7 +174,7 @@ pub(super) fn run_worker<A: SessionAudio>(
     generation: Arc<AtomicU64>,
     busy: Arc<AtomicBool>,
     receiver: mpsc::Receiver<Request>,
-    restored: impl FnOnce(Result<crate::tracks::lifecycle::References, &str>),
+    restored: impl FnOnce(Result<crate::tracks::model::References, &str>),
     publications: (impl FnMut(&SessionSnapshot), impl FnMut(&MetadataDelta)),
 ) {
     let (mut publish, mut publish_metadata) = publications;
@@ -185,7 +185,7 @@ pub(super) fn run_worker<A: SessionAudio>(
     } else if !session.playback_error.is_empty() {
         Err("session_restore_incomplete")
     } else {
-        let mut references = crate::tracks::lifecycle::References::default();
+        let mut references = crate::tracks::model::References::default();
         references.ids.extend(
             session
                 .queue

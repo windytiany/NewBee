@@ -1,12 +1,13 @@
 pub(crate) mod files;
 pub(crate) mod model;
 pub(crate) mod releases;
+pub(crate) mod replaygain;
 pub(crate) mod save;
 #[cfg(test)]
 mod tests;
 
 use crate::database::Database;
-use crate::locking::write::WriteState;
+use crate::locking::WriteState;
 use crate::tracks::model::TrackDetails;
 use model::{normalize_changes, validate_track_ids, LyricsMarkAction, MetadataField};
 use serde::Serialize;
@@ -115,7 +116,7 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
                 .map(|id| {
                     let prepared = drafts
                         .remove(&id)
-                        .map(|draft| crate::artwork::collection::editing::prepare(&database, draft))
+                        .map(|draft| crate::artwork::track::editing::prepare(&database, draft))
                         .transpose();
                     let result = match prepared {
                         Ok(prepared) => save::save_track_collection(

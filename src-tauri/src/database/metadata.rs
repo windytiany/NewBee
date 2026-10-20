@@ -55,9 +55,9 @@ impl Database {
         track_id: i64,
         changes: &[MetadataChange],
         cover: Option<Option<&ArtworkContent>>,
-        artwork: Option<&crate::artwork::collection::Draft>,
+        artwork: Option<&crate::artwork::track::Draft>,
         action: LyricsMarkAction,
-        confirmed: Option<&super::model::TrackWriteInput>,
+        confirmed: Option<&crate::tracks::model::TrackWriteInput>,
     ) -> Result<(), String> {
         let mut connection = self.connection()?;
         let transaction = connection

@@ -23,10 +23,10 @@ fn junction_temp_directory_preserves_scanned_artwork_identity() {
     assert_ne!(alias, alias.canonicalize().unwrap());
 
     let tests = [
-        "database::artwork::collection::tests::directory_discovery_and_manual_association_share_only_the_same_path_identity",
-        "database::tests::artwork::repeated_scans_share_content_and_missing_paths_retain_associations",
-        "database::tests::artwork::invalid_directory_cover_reports_a_problem_and_retains_the_path",
-        "database::tests::artwork::unreadable_directory_cover_is_not_treated_as_removal",
+        "database::tests::collection::directory_discovery_and_manual_association_share_only_the_same_path_identity",
+        "database::tests::artwork::scanning::repeated_scans_share_content_and_missing_paths_retain_associations",
+        "database::tests::artwork::failures::invalid_directory_cover_reports_a_problem_and_retains_the_path",
+        "database::tests::artwork::failures::unreadable_directory_cover_is_not_treated_as_removal",
         "metadata::tests::library::scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse",
         "library::import::tests::directory::rejects_roots_that_no_longer_match_the_saved_canonical_path",
     ];

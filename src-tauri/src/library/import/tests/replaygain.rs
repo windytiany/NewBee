@@ -1,5 +1,5 @@
 use super::super::directory::{run_scan, run_scan_with_replay_gain};
-use super::support::TestFiles;
+use crate::fixtures::TestFiles;
 use crate::{database::Database, metadata::files::replaygain};
 use lofty::{
     config::WriteOptions,
@@ -59,7 +59,7 @@ fn replay_gain_progress_never_rewinds_at_batch_boundaries() {
 #[test]
 fn scan_command_uses_the_persisted_opt_in() {
     use crate::{
-        locking::write::WriteState,
+        locking::WriteState,
         settings::{Settings, SettingsState},
     };
     use tauri::Manager;

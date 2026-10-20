@@ -1,4 +1,4 @@
-use crate::database::model::TrackWriteInput;
+use crate::tracks::model::TrackWriteInput;
 use lofty::{
     file::FileType,
     prelude::*,
@@ -14,7 +14,7 @@ enum Mode {
 
 pub(crate) struct ArtworkSnapshot {
     pub track: TrackWriteInput,
-    pub embedded: Result<Vec<crate::artwork::collection::Picture>, String>,
+    pub embedded: Result<Vec<crate::artwork::track::Picture>, String>,
 }
 
 pub(crate) fn read_track(path: &Path) -> Result<Option<TrackWriteInput>, String> {

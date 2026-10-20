@@ -139,7 +139,3 @@ impl Database {
         Ok(count)
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/paths.rs"]
-mod tests;

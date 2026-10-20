@@ -245,5 +245,5 @@ impl Source for ContinuousSource {
 #[path = "tests/continuous/statistics.rs"]
 mod statistics_tests;
 #[cfg(test)]
-#[path = "tests/continuous.rs"]
+#[path = "tests/continuous/mod.rs"]
 mod tests;

@@ -5,7 +5,7 @@ mod tests;
 
 use crate::{
     database::Database,
-    locking::write::{WriteGuard, WriteState},
+    locking::{WriteGuard, WriteState},
     settings::SettingsState,
 };
 use archive::{InterfaceState, Manifest, Workspace};

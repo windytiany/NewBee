@@ -60,7 +60,7 @@ fn removes_track_and_album_tags_from_all_supported_formats_without_changing_audi
 fn removes_malformed_partial_tags_but_readonly_and_invalid_files_are_unchanged() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("partial.wav");
-    crate::loudness::tests::support::wave(&path, 0.1);
+    crate::fixtures::wave(&path, 0.1);
     let mut tag = Tag::new(TagType::Id3v2);
     tag.insert_text(ItemKey::ReplayGainTrackGain, "invalid gain".to_owned());
     tag.insert_text(ItemKey::ReplayGainAlbumPeak, "NaN".to_owned());

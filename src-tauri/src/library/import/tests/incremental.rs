@@ -1,5 +1,5 @@
 use super::super::directory::run_scan;
-use super::support::TestFiles;
+use crate::fixtures::TestFiles;
 use crate::{database::Database, metadata::files::access};
 use std::fs;
 
@@ -87,7 +87,7 @@ fn failed_database_write_rolls_back_one_track_and_is_retried() {
 
 #[test]
 fn manual_image_changes_and_missing_sources_are_not_hidden_by_cache() {
-    use crate::artwork::collection::{Draft, DraftPicture, Picture};
+    use crate::artwork::track::{Draft, DraftPicture, Picture};
     let files = TestFiles::new();
     files.wav("song.wav");
     let images = TestFiles::new();
@@ -105,7 +105,7 @@ fn manual_image_changes_and_missing_sources_are_not_hidden_by_cache() {
                 pictures: vec![DraftPicture::Linked {
                     path: path.to_string_lossy().into_owned(),
                     picture: Picture {
-                        content: crate::artwork::collection::linked::read(&path.to_string_lossy())
+                        content: crate::artwork::track::linked::read(&path.to_string_lossy())
                             .unwrap(),
                         picture_type: 3,
                     },

@@ -1,4 +1,4 @@
-use crate::tracks::discovery::has_supported_extension;
+use crate::tracks::has_supported_extension;
 use std::{
     collections::BTreeMap,
     fs,

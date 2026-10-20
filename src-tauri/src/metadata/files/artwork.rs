@@ -1,8 +1,8 @@
 #[cfg(test)]
-use crate::artwork::collection::Scan;
+use crate::artwork::track::Scan;
 use crate::artwork::{
-    collection::{DirectoryPicture, Picture},
     model::ArtworkContent,
+    track::{DirectoryPicture, Picture},
 };
 use lofty::{
     file::TaggedFileExt,

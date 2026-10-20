@@ -5,6 +5,7 @@ pub(crate) mod media;
 mod persistence;
 pub(crate) mod queue;
 pub(crate) mod session;
+pub(crate) mod skip;
 mod spectrum;
 pub(crate) mod statistics;
 

@@ -103,7 +103,7 @@ fn replay_gain_coalesces_identical_legacy_and_modern_id3_dates_without_losing_me
     );
     assert!(remove(&path).unwrap());
     let restored = read_file(&path).unwrap();
-    crate::metadata::files::verify_tag_items(tag, restored.tag(TagType::Id3v2).unwrap()).unwrap();
+    verify_tag_items(tag, restored.tag(TagType::Id3v2).unwrap()).unwrap();
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn tiny_raw_aac_is_not_replaced_when_its_decoder_verification_fails() {
 fn wav_keeps_riff_metadata_album_gain_custom_fields_and_pictures() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("track.wav");
-    crate::loudness::tests::support::wave(&path, 0.1);
+    crate::fixtures::wave(&path, 0.1);
     let mut riff = Tag::new(TagType::RiffInfo);
     riff.insert_text(ItemKey::TrackTitle, "Title".to_owned());
     riff.save_to_path(&path, WriteOptions::default()).unwrap();
@@ -202,7 +202,7 @@ fn wav_keeps_riff_metadata_album_gain_custom_fields_and_pictures() {
 fn filling_partial_tags_preserves_valid_values_but_force_replaces_them() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("partial.wav");
-    crate::loudness::tests::support::wave(&path, 0.1);
+    crate::fixtures::wave(&path, 0.1);
     let mut tag = Tag::new(TagType::Id3v2);
     tag.insert_text(ItemKey::ReplayGainTrackPeak, "0.50000000".to_owned());
     tag.save_to_path(&path, WriteOptions::default()).unwrap();

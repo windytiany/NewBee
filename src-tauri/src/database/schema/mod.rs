@@ -34,7 +34,3 @@ pub(super) fn initialize_schema(connection: &mut Connection) -> rusqlite::Result
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()
 }
-
-#[cfg(test)]
-#[path = "../tests/schema.rs"]
-mod tests;

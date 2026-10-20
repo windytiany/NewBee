@@ -1,5 +1,5 @@
-use super::super::{model::TrackWriteOutcome, Database};
-use crate::tracks::scanning::Snapshot;
+use super::super::Database;
+use crate::tracks::model::{Snapshot, TrackWriteOutcome};
 use std::collections::HashMap;
 
 #[derive(Default)]

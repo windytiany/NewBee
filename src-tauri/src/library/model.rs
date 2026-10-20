@@ -1,4 +1,39 @@
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    pub(in crate::library) added: u64,
+    pub(in crate::library) updated: u64,
+    pub(in crate::library) skipped: u64,
+    pub(in crate::library) failed: u64,
+    #[serde(skip)]
+    failures: crate::logging::aggregation::Failures,
+}
+
+impl Default for ImportResult {
+    fn default() -> Self {
+        Self {
+            added: 0,
+            updated: 0,
+            skipped: 0,
+            failed: 0,
+            failures: crate::logging::aggregation::Failures::new("library.import"),
+        }
+    }
+}
+
+impl ImportResult {
+    pub(in crate::library) fn record_failure(&mut self, path: &Path, stage: &str, error: &str) {
+        self.failed += 1;
+        self.failures.record(stage, error, &path.to_string_lossy());
+    }
+
+    pub(in crate::library) fn flush_failures(&mut self) {
+        self.failures.flush();
+    }
+}
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

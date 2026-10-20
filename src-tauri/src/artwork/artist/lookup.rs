@@ -1,5 +1,5 @@
 use super::{discogs::Discogs, storage};
-use crate::locking::write::WriteState;
+use crate::locking::WriteState;
 use std::{collections::HashSet, path::Path, sync::Mutex};
 
 #[derive(Default)]

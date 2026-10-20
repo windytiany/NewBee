@@ -1,5 +1,5 @@
 use super::*;
-use crate::{library::import::tests::support::TestFiles, settings::Settings};
+use crate::{fixtures::TestFiles, settings::Settings};
 
 fn app(files: &TestFiles, mode: Mode) -> tauri::App<tauri::test::MockRuntime> {
     let settings = SettingsState::load(files.0.join("settings.json")).unwrap();

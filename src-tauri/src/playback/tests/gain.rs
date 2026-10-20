@@ -13,7 +13,7 @@ fn source(samples: Vec<f32>, gain: TrackGain, state: &PlaybackState) -> GainSour
             samples,
         ),
         gain,
-        amplitude: gain.amplitude(f64::from_bits(applied_preamp)),
+        amplitude: amplitude(gain, f64::from_bits(applied_preamp)),
         applied_preamp,
         preamp: state.replay_gain_preamp.clone(),
         enabled: state.replay_gain.clone(),
@@ -25,6 +25,52 @@ fn attenuation(amplitude: f64) -> TrackGain {
         gain_db: Some(20.0 * amplitude.log10()),
         peak: None,
     }
+}
+
+#[test]
+fn missing_gain_and_peak_prevent_unsafe_amplification() {
+    assert_eq!(amplitude(TrackGain::default(), 0.0), 1.0);
+    assert_eq!(
+        amplitude(
+            TrackGain {
+                gain_db: Some(6.0),
+                peak: None
+            },
+            0.0
+        ),
+        1.0
+    );
+    assert_eq!(
+        amplitude(
+            TrackGain {
+                gain_db: Some(20.0),
+                peak: Some(0.5)
+            },
+            0.0
+        ),
+        2.0
+    );
+    assert!(
+        (amplitude(
+            TrackGain {
+                gain_db: Some(-6.0),
+                peak: Some(0.8)
+            },
+            0.0
+        ) - 0.5011872)
+            .abs()
+            < 0.00001
+    );
+    assert_eq!(
+        amplitude(
+            TrackGain {
+                gain_db: None,
+                peak: Some(2.0)
+            },
+            0.0
+        ),
+        1.0
+    );
 }
 
 #[test]
@@ -48,7 +94,7 @@ fn toggle_seek_duration_and_user_volume_preserve_the_source_contract() {
 fn reads_tags_but_untagged_and_unreadable_metadata_keep_original_gain() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("track.wav");
-    crate::loudness::tests::support::wave(&path, 0.1);
+    crate::fixtures::wave(&path, 0.1);
     let state = PlaybackState::default();
     state.set_replay_gain(true, -6.0);
     let make = || {

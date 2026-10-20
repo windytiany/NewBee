@@ -1,8 +1,9 @@
-use super::super::{model::TrackWriteInput, model::TrackWriteOutcome, Database};
-use crate::artwork::model::TrackArtwork;
+use super::super::Database;
+use crate::artwork::track::TrackArtwork;
 use crate::library::model::{LibraryGroup, LibraryGrouping};
 use crate::metadata::model::LyricsMarkAction;
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
+use crate::tracks::model::{TrackWriteInput, TrackWriteOutcome};
 
 fn snapshot(path: &str, artist: Option<&str>, album: Option<&str>) -> TrackWriteInput {
     TrackWriteInput {

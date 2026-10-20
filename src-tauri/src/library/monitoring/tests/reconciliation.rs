@@ -4,7 +4,8 @@ use super::super::{
 };
 use crate::{
     database::Database,
-    library::import::{directory::scanning, tests::support::TestFiles, ImportResult},
+    fixtures::TestFiles,
+    library::{model::ImportResult, scanning},
 };
 use std::path::PathBuf;
 

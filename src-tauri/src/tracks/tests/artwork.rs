@@ -3,7 +3,7 @@ use crate::database::tracks::confirmation::Confirmation;
 use crate::tracks::model::TrackRegistrationResult;
 
 fn placeholder(database: &Database, path: &Path) -> i64 {
-    match super::super::registration::register(database, &[path.to_string_lossy().into_owned()])
+    match super::super::register(database, &[path.to_string_lossy().into_owned()])
         .unwrap()
         .remove(0)
     {
@@ -14,7 +14,7 @@ fn placeholder(database: &Database, path: &Path) -> i64 {
 
 fn confirm(database: &Database, id: i64) {
     let (path, revision) = database.pending_track(id).unwrap().unwrap();
-    let snapshot = crate::tracks::scanning::scan(database, Path::new(&path));
+    let snapshot = crate::tracks::inspect(database, Path::new(&path));
     database
         .confirm_tracks(vec![Confirmation {
             id,
@@ -98,7 +98,7 @@ fn absence_is_a_successful_snapshot_until_explicit_reread() {
         .unwrap()
         .is_empty());
     assert!(files::access::take(directory.path()).is_empty());
-    super::super::reading::reread(&database, id).unwrap();
+    crate::tracks::refresh::reread(&database, id).unwrap();
     assert_eq!(
         database
             .track_artwork_bytes(id, None, |_, _| unreachable!())
@@ -106,7 +106,7 @@ fn absence_is_a_successful_snapshot_until_explicit_reread() {
         include_bytes!("../../../fixtures/cover.png")
     );
     std::fs::remove_file(directory.path().join("cover.png")).unwrap();
-    super::super::reading::reread(&database, id).unwrap();
+    crate::tracks::refresh::reread(&database, id).unwrap();
     assert!(database
         .track_artwork_bytes(id, None, |_, _| unreachable!())
         .unwrap()
@@ -140,7 +140,7 @@ fn failed_initial_inspection_is_terminal_until_explicit_reread() {
         .unwrap()
         .is_empty());
     assert!(files::access::take(directory.path()).is_empty());
-    super::super::reading::reread(&database, id).unwrap();
+    crate::tracks::refresh::reread(&database, id).unwrap();
     assert!(database.get_editing_snapshot(id).unwrap().issue.is_none());
     assert_eq!(
         database

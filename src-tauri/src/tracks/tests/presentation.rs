@@ -19,8 +19,7 @@ fn presentation_waits_for_confirmation_before_using_metadata_or_fallbacks() {
         }
         let database = Database::open(":memory:").unwrap();
         let registered =
-            super::super::registration::register(&database, &[path.to_string_lossy().into_owned()])
-                .unwrap();
+            super::super::register(&database, &[path.to_string_lossy().into_owned()]).unwrap();
         let super::super::model::TrackRegistrationResult::Registered { track, .. } = &registered[0]
         else {
             panic!("registration failed");
@@ -47,7 +46,7 @@ fn presentation_waits_for_confirmation_before_using_metadata_or_fallbacks() {
         let snapshot = if outcome == "failed" {
             Err("Scan failed".into())
         } else {
-            super::super::scanning::scan(&database, Path::new(&path))
+            super::super::inspect(&database, Path::new(&path))
         };
         let duration = snapshot
             .as_ref()

@@ -159,7 +159,7 @@ fn restoring_reused_database_ids_never_returns_previous_library_cache() {
 
 #[test]
 fn backup_round_trip_preserves_collection_sources_types_and_display_selection() {
-    use crate::artwork::collection::{DirectoryPicture, Draft, DraftPicture, Picture, Scan};
+    use crate::artwork::track::{DirectoryPicture, Draft, DraftPicture, Picture, Scan};
     let source = Directory::new();
     let target = Directory::new();
     let caches = tempfile::tempdir().unwrap();

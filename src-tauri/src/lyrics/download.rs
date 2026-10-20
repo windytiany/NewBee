@@ -139,7 +139,7 @@ impl LyricsTrack for TrackDetails {
         self.duration_ms()
     }
 }
-impl LyricsTrack for crate::database::model::TrackWriteInput {
+impl LyricsTrack for crate::tracks::model::TrackWriteInput {
     fn path(&self) -> &str {
         &self.path
     }

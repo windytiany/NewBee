@@ -1,7 +1,7 @@
 use super::super::directory::run_scan as scan_with_progress;
-use super::super::ImportResult;
-use super::support::TestFiles;
 use crate::database::Database;
+use crate::fixtures::TestFiles;
+use crate::library::model::ImportResult;
 use std::fs;
 
 fn run_scan(database: &Database) -> Result<ImportResult, String> {

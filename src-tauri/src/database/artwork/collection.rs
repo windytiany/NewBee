@@ -1,7 +1,7 @@
 use super::synchronization::attach_source;
 use crate::artwork::{
-    collection::{Collection, Draft, DraftPicture, Image, Picture},
     model::ArtworkContent,
+    track::{Collection, Draft, DraftPicture, Image, Picture},
 };
 use crate::database::Database;
 #[cfg(test)]
@@ -13,8 +13,8 @@ impl Database {
     pub(crate) fn describe_artwork_collections(
         &self,
         track_ids: &[i64],
-    ) -> Result<Vec<crate::artwork::collection::commands::Description>, String> {
-        use crate::artwork::collection::commands::{Description, PictureDescription};
+    ) -> Result<Vec<crate::artwork::track::commands::Description>, String> {
+        use crate::artwork::track::commands::{Description, PictureDescription};
         track_ids
             .iter()
             .map(|id| {
@@ -139,7 +139,7 @@ impl Database {
         &self,
         track_id: i64,
         path: &str,
-        scan: &crate::artwork::collection::Scan,
+        scan: &crate::artwork::track::Scan,
     ) -> Result<(), String> {
         let mut connection = self.connection()?;
         let transaction = connection
@@ -344,7 +344,3 @@ pub(in crate::database) fn add_cover(
         .map_err(|error| error.to_string())?;
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "tests/collection.rs"]
-mod tests;

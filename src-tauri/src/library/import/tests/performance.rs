@@ -1,6 +1,6 @@
 use super::super::directory::run_scan;
-use super::support::TestFiles;
 use crate::database::Database;
+use crate::fixtures::TestFiles;
 use std::time::Instant;
 
 struct Timings;

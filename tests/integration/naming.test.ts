@@ -25,3 +25,15 @@ function invalidPaths(directory: string): string[] {
 test("module directories express ownership and non-Vue files name one responsibility", () => {
   expect(["src", "src-tauri/src", "tests"].flatMap(invalidPaths)).toEqual([]);
 });
+
+test("backend tests use owned tests directories instead of tests.rs", () => {
+  const directory = "src-tauri/src";
+  const paths = readdirSync(new URL(`${directory}/`, projectRoot), {
+    recursive: true,
+    withFileTypes: true,
+  })
+    .filter((entry) => entry.isFile() && entry.name === "tests.rs")
+    .map((entry) => `${entry.parentPath}/${entry.name}`.split("\\").join("/"))
+    .sort();
+  expect(paths).toEqual([]);
+});

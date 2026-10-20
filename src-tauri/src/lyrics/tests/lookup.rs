@@ -1,6 +1,6 @@
 use super::super::*;
-use crate::database::model::TrackWriteInput;
 use crate::lyrics::default_providers;
+use crate::tracks::model::TrackWriteInput;
 use std::cell::RefCell;
 
 fn track() -> TrackDetails {

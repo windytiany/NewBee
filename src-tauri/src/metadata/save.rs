@@ -53,7 +53,7 @@ pub(crate) fn save_track_collection(
     track_id: i64,
     changes: &[MetadataChange],
     action: LyricsMarkAction,
-    artwork: Option<&crate::artwork::collection::editing::Prepared>,
+    artwork: Option<&crate::artwork::track::editing::Prepared>,
 ) -> MetadataSaveResult {
     persist_track(database, track_id, changes, action, None, artwork)
 }
@@ -64,7 +64,7 @@ fn persist_track(
     changes: &[MetadataChange],
     action: LyricsMarkAction,
     cover: Option<&CoverUpdate>,
-    artwork: Option<&crate::artwork::collection::editing::Prepared>,
+    artwork: Option<&crate::artwork::track::editing::Prepared>,
 ) -> MetadataSaveResult {
     let mut result = MetadataSaveResult {
         track_id,

@@ -1,4 +1,4 @@
-use crate::artwork::collection::Scan;
+use crate::artwork::track::Scan;
 use rusqlite::{params, OptionalExtension, Transaction};
 use std::collections::HashSet;
 
@@ -75,7 +75,7 @@ pub(super) fn attach_source(
     let normalized;
     let path = if kind != "embedded" {
         normalized =
-            crate::artwork::collection::linked::normalize(path).unwrap_or_else(|_| path.to_owned());
+            crate::artwork::track::linked::normalize(path).unwrap_or_else(|_| path.to_owned());
         normalized.as_str()
     } else {
         path
