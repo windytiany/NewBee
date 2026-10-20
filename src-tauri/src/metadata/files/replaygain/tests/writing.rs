@@ -1,48 +1,4 @@
 use super::*;
-use lofty::{config::WriteOptions, prelude::TagExt};
-
-fn measured() -> TrackGain {
-    TrackGain {
-        gain_db: Some(-6.0),
-        peak: Some(0.8),
-    }
-}
-
-#[test]
-fn parses_units_and_rejects_invalid_values_without_unsafe_amplification() {
-    assert_eq!(gain(" +3.25 dB "), Some(3.25));
-    assert_eq!(gain("-9.5 DB"), Some(-9.5));
-    assert_eq!(gain("2"), Some(2.0));
-    for value in ["NaN", "inf", "-inf", "1000 dB", "abc", "🦀", "3 dB junk"] {
-        assert_eq!(gain(value), None, "{value}");
-    }
-    assert_eq!(TrackGain::default().amplitude(0.0), 1.0);
-    assert_eq!(
-        TrackGain {
-            gain_db: Some(6.0),
-            peak: None
-        }
-        .amplitude(0.0),
-        1.0
-    );
-    assert_eq!(
-        TrackGain {
-            gain_db: Some(20.0),
-            peak: Some(0.5)
-        }
-        .amplitude(0.0),
-        2.0
-    );
-    assert!((measured().amplitude(0.0) - 0.5011872).abs() < 0.00001);
-    assert_eq!(
-        TrackGain {
-            gain_db: None,
-            peak: Some(2.0)
-        }
-        .amplitude(0.0),
-        1.0
-    );
-}
 
 #[test]
 fn round_trips_native_tags_and_preserves_audio_and_other_metadata() {
@@ -75,10 +31,86 @@ fn round_trips_native_tags_and_preserves_audio_and_other_metadata() {
 }
 
 #[test]
+#[ignore = "requires NEWBEE_REPLAYGAIN_REPRO_FILE pointing to a local audio file"]
+fn replay_gain_preserves_local_file_metadata() {
+    let source =
+        std::path::PathBuf::from(std::env::var_os("NEWBEE_REPLAYGAIN_REPRO_FILE").unwrap());
+    let original = fs::read(&source).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(source.file_name().unwrap());
+    fs::copy(&source, &path).unwrap();
+    let before = read_file(&path).unwrap();
+    let result = write(&path, measured(), false);
+    assert_eq!(fs::read(&source).unwrap(), original);
+    assert!(result.is_ok(), "{result:?}");
+    let after = read_file(&path).unwrap();
+    for expected in before.tags() {
+        let actual = after.tag(expected.tag_type()).unwrap();
+        for item in expected.items().filter(|item| !is_replay_gain(item.key())) {
+            assert!(
+                actual.items().any(|candidate| candidate == item),
+                "{item:?}"
+            );
+        }
+        assert_eq!(expected.pictures(), actual.pictures());
+    }
+    assert_eq!(read(&path).unwrap(), measured());
+}
+
+#[test]
+fn replay_gain_coalesces_identical_legacy_and_modern_id3_dates_without_losing_metadata() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("dates.mp3");
+    let fixture = include_bytes!("../../../../../fixtures/silence.mp3");
+    let tag_size = fixture[6..10]
+        .iter()
+        .fold(0usize, |size, byte| (size << 7) | usize::from(*byte));
+    let mut bytes = b"ID3\x03\0\0\0\0\0\x2e".to_vec();
+    for (id, value) in [
+        (b"TDOR", b"\x031994\0".as_slice()),
+        (b"TYER", b"\x001994".as_slice()),
+        (b"TORY", b"\x001994".as_slice()),
+    ] {
+        bytes.extend_from_slice(id);
+        bytes.extend_from_slice(&(value.len() as u32).to_be_bytes());
+        bytes.extend_from_slice(b"\0\0");
+        bytes.extend_from_slice(value);
+    }
+    bytes.extend_from_slice(&fixture[10 + tag_size..]);
+    fs::write(&path, bytes).unwrap();
+    let before = read_file(&path).unwrap();
+    let tag = before.tag(TagType::Id3v2).unwrap();
+    assert_eq!(tag.get_items(ItemKey::OriginalReleaseDate).count(), 2);
+    let audio: Vec<_> = rodio::Decoder::try_from(File::open(&path).unwrap())
+        .unwrap()
+        .collect();
+    assert!(write(&path, measured(), false).unwrap());
+    assert_eq!(read(&path).unwrap(), measured());
+    let after = read_file(&path).unwrap();
+    let actual = after.tag(TagType::Id3v2).unwrap();
+    for item in tag.items() {
+        assert!(
+            actual.items().any(|candidate| candidate == item),
+            "{item:?}"
+        );
+    }
+    assert_eq!(actual.get_items(ItemKey::OriginalReleaseDate).count(), 1);
+    assert_eq!(
+        audio,
+        rodio::Decoder::try_from(File::open(&path).unwrap())
+            .unwrap()
+            .collect::<Vec<_>>()
+    );
+    assert!(remove(&path).unwrap());
+    let restored = read_file(&path).unwrap();
+    crate::metadata::files::verify_tag_items(tag, restored.tag(TagType::Id3v2).unwrap()).unwrap();
+}
+
+#[test]
 fn tiny_raw_aac_is_not_replaced_when_its_decoder_verification_fails() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("tiny.aac");
-    let bytes = include_bytes!("../../../../fixtures/silence.aac");
+    let bytes = include_bytes!("../../../../../fixtures/silence.aac");
     fs::write(&path, bytes).unwrap();
     assert!(write(&path, measured(), true).is_err());
     assert_eq!(fs::read(&path).unwrap(), bytes);
@@ -196,90 +228,4 @@ fn filling_partial_tags_preserves_valid_values_but_force_replaces_them() {
             peak: Some(0.8)
         }
     );
-}
-
-#[test]
-fn removes_track_and_album_tags_from_all_supported_formats_without_changing_audio() {
-    let dir = tempfile::tempdir().unwrap();
-    for fixture in [
-        "silence.mp3",
-        "silence.flac",
-        "silence.m4a",
-        "silence.ogg",
-        "alac/tone.m4a",
-    ] {
-        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("fixtures")
-            .join(fixture);
-        let path = dir.path().join(fixture.replace('/', "."));
-        fs::copy(&source, &path).unwrap();
-        let audio: Vec<_> = rodio::Decoder::try_from(File::open(&path).unwrap())
-            .unwrap()
-            .collect();
-        write(&path, measured(), true).unwrap();
-        let original = read_file(&path).unwrap();
-        let mut tag = original.tag(preferred_type(&original)).unwrap().clone();
-        tag.insert_text(ItemKey::ReplayGainAlbumGain, "-3.00 dB".to_owned());
-        tag.insert_text(ItemKey::ReplayGainAlbumPeak, "0.95".to_owned());
-        tag.insert_text(ItemKey::TrackTitle, "Keep title".to_owned());
-        tag.save_to_path(&path, WriteOptions::default()).unwrap();
-        assert!(remove(&path).unwrap(), "{fixture}");
-        assert_eq!(read(&path).unwrap(), TrackGain::default(), "{fixture}");
-        let restored = read_file(&path).unwrap();
-        assert!(
-            restored
-                .tags()
-                .iter()
-                .all(|tag| tag.items().all(|item| !is_replay_gain(item.key()))),
-            "{fixture}"
-        );
-        assert_eq!(
-            restored
-                .tag(preferred_type(&restored))
-                .unwrap()
-                .get_string(ItemKey::TrackTitle),
-            Some("Keep title"),
-            "{fixture}"
-        );
-        assert_eq!(
-            audio,
-            rodio::Decoder::try_from(File::open(&path).unwrap())
-                .unwrap()
-                .collect::<Vec<_>>(),
-            "{fixture}"
-        );
-        let bytes = fs::read(&path).unwrap();
-        assert!(!remove(&path).unwrap());
-        assert_eq!(bytes, fs::read(&path).unwrap());
-    }
-}
-
-#[test]
-fn removes_malformed_partial_tags_but_readonly_and_invalid_files_are_unchanged() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("partial.wav");
-    crate::loudness::tests::support::wave(&path, 0.1);
-    let mut tag = Tag::new(TagType::Id3v2);
-    tag.insert_text(ItemKey::ReplayGainTrackGain, "invalid gain".to_owned());
-    tag.insert_text(ItemKey::ReplayGainAlbumPeak, "NaN".to_owned());
-    tag.save_to_path(&path, WriteOptions::default()).unwrap();
-    let bytes = fs::read(&path).unwrap();
-    let permissions = fs::metadata(&path).unwrap().permissions();
-    let mut readonly = permissions.clone();
-    readonly.set_readonly(true);
-    fs::set_permissions(&path, readonly).unwrap();
-    assert!(remove(&path).unwrap_err().contains("只读"));
-    assert_eq!(bytes, fs::read(&path).unwrap());
-    fs::set_permissions(&path, permissions).unwrap();
-    assert!(remove(&path).unwrap());
-    assert!(!read_file(&path)
-        .unwrap()
-        .tags()
-        .iter()
-        .any(|tag| tag.items().any(|item| is_replay_gain(item.key()))));
-    let invalid = dir.path().join("invalid.mp3");
-    fs::write(&invalid, b"not audio").unwrap();
-    assert!(remove(&invalid).is_err());
-    assert_eq!(fs::read(&invalid).unwrap(), b"not audio");
-    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 2);
 }

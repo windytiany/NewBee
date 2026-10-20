@@ -22,6 +22,31 @@ fn allows_empty_removal_number_formatting_and_item_reordering() {
 }
 
 #[test]
+fn only_identical_id3_timestamp_aliases_may_be_coalesced() {
+    for key in [ItemKey::OriginalReleaseDate, ItemKey::RecordingDate] {
+        let mut expected = Tag::new(TagType::Id3v2);
+        let date = TagItem::new(key, ItemValue::Text("1994".into()));
+        expected.push(date.clone());
+        expected.push(date.clone());
+        let mut actual = Tag::new(TagType::Id3v2);
+        actual.push(date.clone());
+        assert!(verify_tag_items(&expected, &actual).is_ok());
+        let mut vorbis_expected = expected.clone();
+        let mut vorbis_actual = actual.clone();
+        vorbis_expected.re_map(TagType::VorbisComments);
+        vorbis_actual.re_map(TagType::VorbisComments);
+        assert!(verify_tag_items(&vorbis_expected, &vorbis_actual).is_err());
+        actual.remove_key(key);
+        assert!(verify_tag_items(&expected, &actual).is_err());
+        actual.insert_text(key, "1995".into());
+        assert!(verify_tag_items(&expected, &actual).is_err());
+        expected.push(TagItem::new(key, ItemValue::Text("1995".into())));
+        actual.insert(date);
+        assert!(verify_tag_items(&expected, &actual).is_err());
+    }
+}
+
+#[test]
 fn cleared_numbers_must_be_absent_not_unparseable() {
     let mut actual = Tag::new(TagType::Id3v2);
     actual.insert_text(ItemKey::TrackNumber, "invalid".into());

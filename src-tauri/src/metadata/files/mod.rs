@@ -249,7 +249,21 @@ fn same_item(expected: &TagItem, actual: &TagItem) -> bool {
 
 fn verify_tag_items(expected: &Tag, actual: &Tag) -> Result<(), String> {
     let mut remaining = actual.items().collect::<Vec<_>>();
+    let mut dates = Vec::new();
     for item in expected.items().filter(|item| !item.value().is_empty()) {
+        // Legacy TORY/TYER can coexist with TDOR/TDRC and map to identical
+        // timestamps. ID3 serialization coalesces these aliases into one frame.
+        if expected.tag_type() == TagType::Id3v2
+            && matches!(
+                item.key(),
+                ItemKey::OriginalReleaseDate | ItemKey::RecordingDate
+            )
+        {
+            if dates.contains(&item) {
+                continue;
+            }
+            dates.push(item);
+        }
         let Some(index) = remaining
             .iter()
             .position(|candidate| same_item(item, candidate))
