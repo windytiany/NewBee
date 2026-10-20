@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { transpileScript, evaluateSource } from "../../../support/module/loader";
 
 import { notifications, notify } from "@/shared/notifications/center";
@@ -18,9 +18,13 @@ let receiveProgress: (event: {
 }) => void;
 let unlistened: boolean;
 let activeOperation: string;
+const monitoringSnapshot = ref<{ progress: { completed: number; total: number } | null }>({
+  progress: null,
+});
 function createScan(invoke: () => Promise<ScanResult>) {
   const modules: Record<string, unknown> = {
-    vue: { ref },
+    vue: { computed, ref },
+    "@/features/library/monitoring/state": { monitoringSnapshot },
     "@tauri-apps/api/core": {
       invoke: (_command: string, args: { operationId: string }) => {
         activeOperation = args.operationId;
@@ -49,6 +53,7 @@ function createScan(invoke: () => Promise<ScanResult>) {
 }
 beforeEach(() => {
   events = [];
+  monitoringSnapshot.value = { progress: null };
   unlistened = false;
   notifications.clear();
   Object.defineProperty(globalThis, "window", {
@@ -67,6 +72,21 @@ afterEach(() => {
 });
 
 describe("scan notifications", () => {
+  it("does not start a conflicting scan while folder monitoring is writing", async () => {
+    let calls = 0;
+    const scan = createScan(async () => {
+      calls++;
+      throw new Error("background write in progress");
+    });
+    monitoringSnapshot.value = { progress: { completed: 30, total: 3000 } };
+    expect(scan.isScanning.value).toBe(true);
+    await scan.scanMusicLibrary();
+    expect(calls).toBe(0);
+    expect(notifications.items.value).toEqual([]);
+    monitoringSnapshot.value = { progress: null };
+    expect(scan.isScanning.value).toBe(false);
+  });
+
   it("reports complete statistics as success and still refreshes library consumers", async () => {
     const scan = createScan(async () => ({ added: 2, updated: 3, skipped: 4, failed: 0 }));
     await scan.scanMusicLibrary();

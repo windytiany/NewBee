@@ -95,7 +95,6 @@ pub(crate) fn run_with_replay_gain(
                 if let Err(error) = crate::loudness::analyze(path, false) {
                     record_failure(database, result, path, &format!("ReplayGain：{error}"));
                 }
-                progress(completed, files.len());
             }
             let detecting = Instant::now();
             let inspected_before = inspection;
@@ -137,6 +136,9 @@ pub(crate) fn run_with_replay_gain(
                 Err(error) => record_failure(database, result, path, &error),
             }
             completed += 1;
+            if fill_replay_gain {
+                progress(completed, files.len());
+            }
         }
         if !pending.is_empty() {
             let persisting = Instant::now();
@@ -153,8 +155,10 @@ pub(crate) fn run_with_replay_gain(
                 }
             }
         }
-        for index in start..completed {
-            progress(index + 1, files.len());
+        if !fill_replay_gain {
+            for index in start..completed {
+                progress(index + 1, files.len());
+            }
         }
     }
     log::info!("event=scan_processed total={} unchanged={} detectionMs={} inspectionMs={} persistenceMs={} elapsedMs={}",

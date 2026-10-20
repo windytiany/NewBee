@@ -33,6 +33,30 @@ fn opt_in_fills_even_fingerprint_cached_tracks_and_does_not_rewrite_existing_tag
 }
 
 #[test]
+fn replay_gain_progress_never_rewinds_at_batch_boundaries() {
+    let files = TestFiles::new();
+    for index in 0..70 {
+        files.wav(&format!("{index}.wav"));
+    }
+    let database = Database::open(":memory:").unwrap();
+    database
+        .add_music_library_directory(&files.0.to_string_lossy())
+        .unwrap();
+    let mut updates = Vec::new();
+    let result = run_scan_with_replay_gain(&database, true, |completed, total| {
+        updates.push((completed, total));
+    })
+    .unwrap();
+    assert_eq!(result.failed, 0);
+    assert_eq!(updates.first(), Some(&(0, 70)));
+    assert_eq!(updates.last(), Some(&(70, 70)));
+    assert!(
+        updates.windows(2).all(|pair| pair[0].0 <= pair[1].0),
+        "progress rewound: {updates:?}"
+    );
+}
+
+#[test]
 fn scan_command_uses_the_persisted_opt_in() {
     use crate::{
         locking::write::WriteState,

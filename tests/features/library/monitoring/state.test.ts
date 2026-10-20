@@ -1,10 +1,38 @@
-import { expect, it } from "bun:test";
+import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { evaluateSource, transpileScript } from "../../../support/module/loader";
 import type * as State from "@/features/library/monitoring/state";
 import type { MonitoringSnapshot } from "@/features/library/monitoring/types";
+import { notifications } from "@/shared/notifications/center";
+
+afterEach(() => notifications.removeTask("library-monitoring"));
 
 const source = transpileScript(await Bun.file("src/features/library/monitoring/state.ts").text());
+
+it("restores an active background task from a snapshot and removes it on completion", async () => {
+  let snapshot: MonitoringSnapshot = {
+    statuses: [],
+    missing: [],
+    progress: { path: "music", completed: 30, total: 3000 },
+  };
+  const state = evaluateSource<typeof State>(source, {
+    vue: Vue,
+    "@tauri-apps/api/core": { invoke: async () => snapshot },
+    "@/shared/notifications/center": { notifications },
+  });
+  await state.refreshMonitoring();
+  expect(notifications.tasks.value).toContainEqual({
+    key: "library-monitoring",
+    message: "正在扫描…",
+    completed: 30,
+    total: 3000,
+  });
+  snapshot = { statuses: [], missing: [], progress: null };
+  await state.refreshMonitoring();
+  expect(
+    notifications.tasks.value.find((task) => task.key === "library-monitoring"),
+  ).toBeUndefined();
+});
 
 it("keeps the latest snapshot when IPC responses arrive out of order", async () => {
   const replies: ((snapshot: MonitoringSnapshot) => void)[] = [];

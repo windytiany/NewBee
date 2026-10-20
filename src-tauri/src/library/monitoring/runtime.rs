@@ -123,13 +123,32 @@ impl Work {
         let exhausted = self.attempts >= MAX_ATTEMPTS;
         if !exhausted {
             self.attempts += 1;
-            scanning::run_with_replay_gain(
+            let fill_replay_gain = app.state::<SettingsState>().get()?.scan_replay_gain;
+            let mut last_update = Instant::now();
+            let scan = scanning::run_with_replay_gain(
                 &database,
                 &inventory::audio(&inventory),
                 &mut result,
-                app.state::<SettingsState>().get()?.scan_replay_gain,
-                |_, _| {},
-            )?;
+                fill_replay_gain,
+                |completed, total| {
+                    if completed != 0
+                        && completed != total
+                        && last_update.elapsed() < Duration::from_millis(100)
+                    {
+                        return;
+                    }
+                    last_update = Instant::now();
+                    state.progress(Some(super::Progress {
+                        path: self.folder.path.clone(),
+                        completed,
+                        total,
+                    }));
+                    publish(app);
+                },
+            );
+            state.progress(None);
+            publish(app);
+            scan?;
         }
         if result.added + result.updated > 0 {
             if let Err(error) = app.emit("library-monitoring-imported", &result) {

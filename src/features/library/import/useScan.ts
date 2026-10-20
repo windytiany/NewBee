@@ -2,22 +2,24 @@ import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { watchActivity } from "@/shared/lifecycle/activity";
 import { notifications, notify } from "@/shared/notifications/center";
 import { reportLibraryImport } from "@/features/library/events";
+import { monitoringSnapshot } from "@/features/library/monitoring/state";
 import type { IngestResult } from "@/features/library/types";
 
 type ScanProgress = { operationId: string; completed: number; total: number };
 const TASK_KEY = "library-scan";
 const isScanning = ref(false);
-watchActivity(isScanning);
+const scanActive = computed(() => isScanning.value || monitoringSnapshot.value.progress != null);
+watchActivity(scanActive);
 const scanResult = ref<IngestResult | null>(null);
 const scanError = ref("");
 
 export function useLibraryScan() {
   async function scanMusicLibrary() {
-    if (isScanning.value) return;
+    if (scanActive.value) return;
 
     isScanning.value = true;
     scanResult.value = null;
@@ -72,5 +74,5 @@ export function useLibraryScan() {
     }
   }
 
-  return { isScanning, scanResult, scanError, scanMusicLibrary };
+  return { isScanning: scanActive, scanResult, scanError, scanMusicLibrary };
 }

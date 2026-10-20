@@ -27,8 +27,17 @@ pub(crate) struct Status {
     error: Option<String>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Progress {
+    path: String,
+    completed: usize,
+    total: usize,
+}
+
 #[derive(Default)]
 struct Data {
+    progress: Option<Progress>,
     statuses: BTreeMap<String, Status>,
     missing: BTreeSet<String>,
     acknowledged: BTreeSet<String>,
@@ -57,6 +66,13 @@ impl MonitoringState {
         );
     }
 
+    fn progress(&self, progress: Option<Progress>) {
+        self.data
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .progress = progress;
+    }
+
     fn reconcile(&self, root: &str, paths: &[String]) {
         let mut data = self.data.lock().unwrap_or_else(|error| error.into_inner());
         // A returned file can prompt again if it disappears later.
@@ -79,6 +95,7 @@ impl MonitoringState {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Snapshot {
+    progress: Option<Progress>,
     statuses: Vec<Status>,
     missing: Vec<String>,
 }
@@ -91,6 +108,7 @@ pub(crate) fn get_library_monitoring(
     let folders = settings.get()?.monitoring_folders;
     let data = state.data.lock().map_err(|error| error.to_string())?;
     Ok(Snapshot {
+        progress: data.progress.clone(),
         statuses: data
             .statuses
             .values()

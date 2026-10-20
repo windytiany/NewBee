@@ -64,6 +64,42 @@ fn disabling_drops_work_and_reenabling_schedules_a_fresh_scan_without_removing_t
 }
 
 #[test]
+fn replay_gain_monitoring_publishes_active_progress_before_writing_and_clears_it() {
+    use tauri::Listener;
+    let files = TestFiles::new();
+    files.wav("song.wav");
+    let app = app(&files, Mode::Startup);
+    let settings = app.state::<SettingsState>();
+    let mut configuration = settings.get().unwrap();
+    configuration.scan_replay_gain = true;
+    settings.save(configuration.clone()).unwrap();
+    let snapshots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let received = snapshots.clone();
+    let handle = app.handle().clone();
+    app.listen(super::super::EVENT, move |_| {
+        let snapshot =
+            super::super::get_library_monitoring(handle.state(), handle.state()).unwrap();
+        received
+            .lock()
+            .unwrap()
+            .push(serde_json::to_value(snapshot).unwrap());
+    });
+    let mut work = Work::new(configuration.monitoring_folders.remove(0));
+    work.process(app.handle()).unwrap();
+    work.process(app.handle()).unwrap();
+    let snapshots = snapshots.lock().unwrap();
+    assert!(
+        snapshots.iter().any(|snapshot| {
+            snapshot["progress"]["completed"] == 0 && snapshot["progress"]["total"] == 1
+        }),
+        "background ReplayGain writes were invisible: {snapshots:?}"
+    );
+    let snapshot = super::super::get_library_monitoring(app.state(), app.state()).unwrap();
+    assert!(serde_json::to_value(snapshot).unwrap()["progress"].is_null());
+    assert!(app.state::<WriteState>().acquire().is_ok());
+}
+
+#[test]
 fn startup_imports_once_without_registering_a_watcher() {
     let files = TestFiles::new();
     files.wav("song.wav");

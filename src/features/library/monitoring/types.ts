@@ -5,6 +5,7 @@ export type MonitoringFolder = {
 };
 
 export type MonitoringSnapshot = {
+  progress?: { path: string; completed: number; total: number } | null;
   statuses: {
     path: string;
     phase: "scanning" | "watching" | "idle" | "unavailable" | "error";
