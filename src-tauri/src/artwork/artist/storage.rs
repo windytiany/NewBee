@@ -11,8 +11,11 @@ fn path(directory: &Path, artist: &str) -> Result<PathBuf, String> {
     if artist.trim().is_empty() {
         return Err("演出者名称不能为空".to_owned());
     }
-    let digest = Sha256::digest(artist.as_bytes());
-    Ok(directory.join(format!("{digest:x}.webp")))
+    let digest: String = Sha256::digest(artist.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    Ok(directory.join(format!("{digest}.webp")))
 }
 
 pub(super) fn read(directory: &Path, artist: &str) -> Result<Vec<u8>, String> {
@@ -119,6 +122,15 @@ mod tests {
             assert_eq!(read(directory, "Artist").unwrap(), original);
         }
         assert_eq!(std::fs::read_dir(directory).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn photo_path_preserves_sha256_cache_keys() {
+        assert_eq!(
+            path(Path::new("photos"), "abc").unwrap(),
+            Path::new("photos")
+                .join("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.webp")
+        );
     }
 
     #[test]

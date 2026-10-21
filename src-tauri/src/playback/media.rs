@@ -136,7 +136,7 @@ fn set_artwork(
         let stream = InMemoryRandomAccessStream::new()?;
         let writer = DataWriter::CreateDataWriter(&stream)?;
         writer.WriteBytes(&data)?;
-        writer.StoreAsync()?.get()?;
+        writer.StoreAsync()?.join()?;
         writer.DetachStream()?;
         stream.Seek(0)?;
         updater.SetThumbnail(&RandomAccessStreamReference::CreateFromStream(&stream)?)
