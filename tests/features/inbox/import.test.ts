@@ -1,5 +1,6 @@
 import { expect, it } from "bun:test";
 import * as Vue from "vue";
+import { createTaskCenter } from "@/shared/tasks/state";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 import { INBOX_CHANGED_EVENT } from "@/features/inbox/api";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
@@ -11,11 +12,13 @@ import type { NotificationInput } from "@/shared/notifications/center";
 const importOutput = transpileScript(await Bun.file("src/features/inbox/useImport.ts").text());
 
 function createDropImporter(validate: () => Promise<string[]>, results: InboxResult[]) {
+  const tasks = createTaskCenter();
   const notices: NotificationInput[] = [];
   const registrations: unknown[] = [];
   const events: string[] = [];
   const module = evaluateSource<{ useInboxImport: typeof useInboxImport }>(importOutput, {
     vue: Vue,
+    "@/shared/tasks/state": { tasks },
     "@tauri-apps/api/core": { isTauri: () => true, invoke: validate },
     "@tauri-apps/plugin-dialog": {
       open: () => {
@@ -50,6 +53,7 @@ function createDropImporter(validate: () => Promise<string[]>, results: InboxRes
   });
   return {
     ...module.useInboxImport(),
+    tasks,
     notices,
     registrations,
     events,
@@ -59,6 +63,25 @@ function createDropImporter(validate: () => Promise<string[]>, results: InboxRes
     },
   };
 }
+
+it("tracks Inbox imports during discovery and removes the task after an empty batch", async () => {
+  let resolve!: (paths: string[]) => void;
+  const discovery = new Promise<string[]>((finish) => {
+    resolve = finish;
+  });
+  const importer = createDropImporter(() => discovery, []);
+  try {
+    const pending = importer.importPaths(["/Music"]);
+    expect(importer.tasks.active.value).toHaveLength(1);
+    resolve([]);
+    await pending;
+    expect(importer.tasks.active.value).toEqual([]);
+    expect(importer.pending.value).toBe(false);
+  } finally {
+    resolve([]);
+    importer.restore();
+  }
+});
 
 it("registers validated dropped files and refreshes Inbox without a success notice", async () => {
   const importer = createDropImporter(
@@ -178,6 +201,7 @@ it("reports system failures rather than suppressing them for drops", async () =>
 });
 
 it("registers picked files and folders and refreshes Inbox without success notices", async () => {
+  const tasks = createTaskCenter();
   const calls: Array<{ command: string; args: unknown }> = [];
   const pickerOptions: OpenDialogOptions[] = [];
   const notifications: Array<{ message: string }> = [];
@@ -198,9 +222,11 @@ it("registers picked files and folders and refreshes Inbox without success notic
       transpileScript(await Bun.file("src/features/inbox/useImport.ts").text()),
       {
         vue: Vue,
+        "@/shared/tasks/state": { tasks },
         "@tauri-apps/api/core": {
           isTauri: () => true,
           invoke: async (command: string, args: unknown) => {
+            expect(tasks.active.value).toHaveLength(command === "register_inbox" ? 1 : 0);
             calls.push({ command, args });
             return command === "supported_audio_extensions"
               ? ["wav"]
@@ -224,6 +250,7 @@ it("registers picked files and folders and refreshes Inbox without success notic
         },
         "@tauri-apps/plugin-dialog": {
           open: async (options: OpenDialogOptions) => {
+            expect(tasks.active.value).toEqual([]);
             pickerOptions.push(options);
             return options.directory
               ? ["C:\\music"]
@@ -280,6 +307,7 @@ it("registers picked files and folders and refreshes Inbox without success notic
     expect(notifications).toEqual([]);
     expect(controller.pending.value).toBe(false);
     expect(warnings).toEqual([]);
+    expect(tasks.active.value).toEqual([]);
   } finally {
     if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
     else Reflect.deleteProperty(globalThis, "window");

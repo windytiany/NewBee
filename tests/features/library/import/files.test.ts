@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { ref } from "vue";
+import { createTaskCenter } from "@/shared/tasks/state";
 import { setLocale } from "@/shared/i18n/locale";
 import { transpileScript, evaluateSource } from "../../../support/module/loader";
 
@@ -37,6 +38,7 @@ function createImport({
   invoke?: (command: string, args?: unknown) => Promise<unknown>;
   desktop?: boolean;
 } = {}) {
+  const tasks = createTaskCenter();
   const events: string[] = [];
   const effects: string[] = [];
   const changes = evaluateSource<typeof LibraryChanges>(changesOutput, {
@@ -61,6 +63,7 @@ function createImport({
   });
   const modules: Record<string, unknown> = {
     vue: { ref },
+    "@/shared/tasks/state": { tasks },
     "@tauri-apps/api/core": {
       isTauri: () => desktop,
       invoke: (command: string, args: unknown) => {
@@ -84,6 +87,7 @@ function createImport({
   }>(output, modules);
   return {
     ...createImport(),
+    tasks,
     factory: createImport,
     events,
     effects,
@@ -135,9 +139,11 @@ describe("audio file import", () => {
     await importer.factory().importPaths(["/Music/other.wav"]);
     expect(importer.calls).toHaveLength(1);
     expect(importer.pickerOptions).toEqual([]);
+    expect(importer.tasks.active.value).toHaveLength(1);
     validation.resolve([]);
     await pending;
     expect(importer.isImporting.value).toBe(false);
+    expect(importer.tasks.active.value).toEqual([]);
   });
 
   it("reports system errors from a drop and releases the lock", async () => {
@@ -149,6 +155,7 @@ describe("audio file import", () => {
     await importer.importPaths(["/Music/song.wav"]);
     expect(importer.notices[0]?.type).toBe("error");
     expect(importer.isImporting.value).toBe(false);
+    expect(importer.tasks.active.value).toEqual([]);
   });
 
   it("evaluates picker titles, filters, and count notifications in the current locale", async () => {
@@ -257,14 +264,17 @@ describe("audio file import", () => {
     await importer.factory().importMusicFiles();
     expect(importer.calls).toHaveLength(1);
     expect(importer.isImporting.value).toBe(true);
+    expect(importer.tasks.active.value).toEqual([]);
     selection.resolve(["/Music/song.wav"]);
     await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
     await importer.factory().importMusicFiles();
     expect(importer.calls).toHaveLength(2);
     expect(importer.pickerOptions).toHaveLength(1);
+    expect(importer.tasks.active.value).toHaveLength(1);
     completion.resolve(result);
     await pending;
     expect(importer.isImporting.value).toBe(false);
+    expect(importer.tasks.active.value).toEqual([]);
   });
 
   for (const stage of ["extensions", "picker", "import"]) {

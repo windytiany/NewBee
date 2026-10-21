@@ -7,6 +7,7 @@ import { reportLibraryMembershipChanged } from "@/features/library/events";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
+import { tasks } from "@/shared/tasks/state";
 const pending = ref(false);
 watchActivity(pending);
 export function useInboxImport() {
@@ -14,10 +15,13 @@ export function useInboxImport() {
     if (pending.value || !isTauri()) return;
     pending.value = true;
     try {
+      if (droppedPaths)
+        tasks.update({ key: "inbox-import", message: t("导入音频文件"), completed: 0 });
       const picked = droppedPaths
         ? await invoke<string[]>("readable_audio_files", { paths: droppedPaths })
         : await pickFiles(directory);
       if (!picked || picked.length === 0) return;
+      tasks.update({ key: "inbox-import", message: t("导入音频文件"), completed: 0 });
       const results = await createInboxApi().register(
         Array.isArray(picked) ? picked : [picked],
         directory,
@@ -42,6 +46,7 @@ export function useInboxImport() {
       logger.error("inbox", "register_failed", error);
       notify({ type: "error", message: t("导入失败。无法完成扫描。"), key: "inbox-import" });
     } finally {
+      tasks.finish("inbox-import");
       pending.value = false;
     }
   }

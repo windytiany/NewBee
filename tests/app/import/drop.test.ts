@@ -1,5 +1,7 @@
 import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
+import { createTaskCenter } from "@/shared/tasks/state";
+import { operationId } from "@/shared/logging/logger";
 import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import type { useDropImport } from "@/app/import/useDropImport";
@@ -74,6 +76,7 @@ function createDrop({
     ids: readonly number[],
   ) => Promise<import("@/features/playlist/types").PlaylistAppendResult[]>;
 } = {}) {
+  const tasks = createTaskCenter();
   const region = Vue.ref<string | null>("Library");
   const playlistId = Vue.ref(3);
   const importing = Vue.ref(false);
@@ -216,11 +219,13 @@ function createDrop({
     "@/shared/notifications/center": {
       notify: (notice: NotificationInput) => notices.push(notice),
     },
-    "@/shared/logging/logger": { logger: { error: () => {} } },
+    "@/shared/tasks/state": { tasks },
+    "@/shared/logging/logger": { logger: { error: () => {} }, operationId },
   });
   const controller = module.useDropImport();
   return {
     ...controller,
+    tasks,
     mount,
     unmount,
     region,
@@ -354,6 +359,32 @@ it("creates a named playlist per sidebar folder and registers each folder recurs
   drop.unmount();
 });
 
+it("keeps one task across folder discovery, playlist creation and track registration", async () => {
+  const directories = deferred<{ path: string; name: string }[]>();
+  const creation = deferred<number>();
+  const registration = deferred<TrackRegistrationResult[]>();
+  const drop = createDrop({
+    directories: () => directories.promise,
+    createPlaylist: () => creation.promise,
+    registration: () => registration.promise,
+  });
+  await drop.mount();
+  drop.region.value = "playlists";
+  await drop.emit("drop", ["/Music"]);
+  expect(drop.tasks.active.value).toHaveLength(1);
+  directories.resolve([{ path: "/Music", name: "Music" }]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(drop.tasks.active.value).toHaveLength(1);
+  creation.resolve(12);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(drop.tasks.active.value).toHaveLength(1);
+  registration.resolve([{ status: "registered", track, needsMetadata: true }]);
+  for (let i = 0; i < 60; i++) await Promise.resolve();
+  expect(drop.calls).toContainEqual(["playlistChanged", 12]);
+  expect(drop.tasks.active.value).toEqual([]);
+  drop.unmount();
+});
+
 it("moving audio between sidebar and browser changes feedback and only the browser appends it", async () => {
   const drop = createDrop();
   await drop.mount();
@@ -438,6 +469,7 @@ it("captures playlist ID before registration and refreshes after appending even 
   await drop.mount();
   drop.region.value = "playlist";
   await drop.emit("drop");
+  expect(drop.tasks.active.value).toHaveLength(1);
   drop.playlistId.value = 99;
   drop.region.value = "queue";
   await drop.emit("drop");
@@ -452,6 +484,7 @@ it("captures playlist ID before registration and refreshes after appending even 
     drop.calls.findIndex(([name]) => name === "append_playlist_tracks"),
   );
   expect(drop.notices[drop.notices.length - 1]?.message).toBe("1 个文件登记失败");
+  expect(drop.tasks.active.value).toEqual([]);
   drop.unmount();
 });
 it("queue drop uses IDs only and refreshes the DB snapshot after append", async () => {
@@ -495,6 +528,7 @@ it("reports append failure separately from registration and leaves existing dest
   drop.region.value = "queue";
   await drop.emit("drop");
   expect(drop.notices.map((notice) => notice.message)).toEqual(["曲目已登记，目标追加失败"]);
+  expect(drop.tasks.active.value).toEqual([]);
   drop.unmount();
   const failed = createDrop({
     registration: async () => [{ status: "failed", path: "bad", error: "bad" }],

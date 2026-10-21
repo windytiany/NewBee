@@ -12,7 +12,8 @@ import { createDirectoryPlaylists } from "@/features/playlist/creation/directory
 import { createPlaylistAppend } from "@/features/playlist/tracks/append";
 import { usePlaybackSession } from "@/features/playback/session";
 import { notify } from "@/shared/notifications/center";
-import { logger } from "@/shared/logging/logger";
+import { logger, operationId } from "@/shared/logging/logger";
+import { tasks } from "@/shared/tasks/state";
 import { t } from "@/shared/i18n/locale";
 
 export function useImport() {
@@ -86,6 +87,9 @@ export function useImport() {
   async function importPaths(paths: string[], target: DropTarget) {
     if (busy.value) return;
     pending.value = true;
+    const taskKey = operationId("local-import");
+    if (target.kind !== "Library" && target.kind !== "Inbox")
+      tasks.update({ key: taskKey, message: t("导入音频文件"), completed: 0 });
     try {
       if (target.kind === "Library") await library.importPaths(paths);
       else if (target.kind === "Inbox") await inbox.importPaths(paths);
@@ -95,6 +99,7 @@ export function useImport() {
       logger.error("import", "drop_failed", error);
       notify({ type: "error", message: t("文件处理失败") });
     } finally {
+      tasks.finish(taskKey);
       pending.value = false;
     }
   }

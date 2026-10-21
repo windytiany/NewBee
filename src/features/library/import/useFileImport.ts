@@ -8,6 +8,7 @@ import { watchActivity } from "@/shared/lifecycle/activity";
 import type { IngestResult } from "@/features/library/types";
 import { reportLibraryImport } from "@/features/library/events";
 import { notify } from "@/shared/notifications/center";
+import { tasks } from "@/shared/tasks/state";
 
 const isImporting = ref(false);
 watchActivity(isImporting);
@@ -21,6 +22,7 @@ export function useLibraryFileImport() {
     const id = operationId("library-import");
     const started = performance.now();
     try {
+      if (droppedPaths) tasks.update({ key: id, message: t("导入音频文件"), completed: 0 });
       const paths = droppedPaths
         ? await invoke<string[]>("readable_audio_files", { paths: droppedPaths })
         : await pickFiles();
@@ -28,6 +30,7 @@ export function useLibraryFileImport() {
         logger.debug("library", "file_import_cancelled", { operationId: id });
         return;
       }
+      tasks.update({ key: id, message: t("导入音频文件"), completed: 0 });
       logger.debug("library", "import_started", { operationId: id });
       const result = await invoke<IngestResult>("import_music_files", { paths, operationId: id });
       logger.write(result.failed ? "warn" : "info", "library", "import_completed", {
@@ -56,6 +59,7 @@ export function useLibraryFileImport() {
         key: "library-file-import",
       });
     } finally {
+      tasks.finish(id);
       isImporting.value = false;
     }
   }
