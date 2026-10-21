@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -65,7 +65,8 @@ describe("signed Windows update release", () => {
   it.skipIf(process.platform !== "win32")(
     "publishes a valid manifest with the exact installer and signature before setting latest",
     () => {
-      const directory = mkdtempSync(join(tmpdir(), "newbee-update-"));
+      // PowerShell expands Windows 8.3 aliases when resolving installer paths.
+      const directory = realpathSync.native(mkdtempSync(join(tmpdir(), "newbee-update-")));
       try {
         const bundles = join(
           directory,
