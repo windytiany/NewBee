@@ -5,7 +5,7 @@ mod tests;
 
 use crate::{
     database::Database,
-    locking::{WriteGuard, WriteState},
+    locking::{ExclusiveWriteGuard, WriteState},
     settings::SettingsState,
 };
 use archive::{InterfaceState, Manifest, Workspace};
@@ -20,7 +20,7 @@ use tauri_plugin_opener::OpenerExt;
 #[derive(Default)]
 pub(crate) struct BackupState {
     candidate: Mutex<Option<Candidate>>,
-    restart_guard: Mutex<Option<WriteGuard>>,
+    restart_guard: Mutex<Option<ExclusiveWriteGuard>>,
     restore_error: Mutex<Option<String>>,
 }
 struct Candidate {
@@ -135,7 +135,7 @@ pub(crate) async fn export_backup(
     path: String,
     interface: InterfaceState,
 ) -> Result<(), String> {
-    let guard = app.state::<WriteState>().acquire()?;
+    let guard = app.state::<WriteState>().acquire_all()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
         let root = data_directory(&app)?;
@@ -173,7 +173,7 @@ pub(crate) async fn restore_backup(
     interface: InterfaceState,
     backup_current: bool,
 ) -> Result<(), String> {
-    let guard = app.state::<WriteState>().acquire()?;
+    let guard = app.state::<WriteState>().acquire_all()?;
     let worker_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let app = worker_app;

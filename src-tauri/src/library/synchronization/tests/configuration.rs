@@ -97,7 +97,7 @@ fn inventory_is_recursive_and_detects_non_audio_changes() {
 }
 
 #[test]
-fn folder_commands_share_settings_and_respect_the_write_lock() {
+fn folder_commands_allow_scanning_but_respect_exclusive_tasks() {
     use crate::{
         locking::WriteState,
         settings::{Locale, Settings, SettingsState},
@@ -121,6 +121,7 @@ fn folder_commands_share_settings_and_respect_the_write_lock() {
         mode: Mode::Manual,
         enabled: true,
     }];
+    let scan = app.state::<WriteState>().acquire().unwrap();
     let saved =
         tauri::async_runtime::block_on(super::super::commands::save_synchronization_folders(
             app.handle().clone(),
@@ -143,7 +144,8 @@ fn folder_commands_share_settings_and_respect_the_write_lock() {
             .synchronization_folders,
         saved
     );
-    let guard = app.state::<WriteState>().acquire().unwrap();
+    drop(scan);
+    let guard = app.state::<WriteState>().acquire_all().unwrap();
     assert!(
         tauri::async_runtime::block_on(super::super::commands::save_synchronization_folders(
             app.handle().clone(),

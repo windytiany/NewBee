@@ -23,7 +23,7 @@ pub(crate) async fn save_synchronization_folders<R: tauri::Runtime>(
     write: State<'_, WriteState>,
     mut folders: Vec<Folder>,
 ) -> Result<Vec<Folder>, String> {
-    let guard = write.acquire()?;
+    let guard = write.acquire_settings()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
         app.state::<SettingsState>().update_folders(|previous| {

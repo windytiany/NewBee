@@ -258,7 +258,9 @@ async fn save_settings_for_app<R: tauri::Runtime>(
     settings: Settings,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = app.state::<crate::locking::WriteState>().acquire()?;
+        let _guard = app
+            .state::<crate::locking::WriteState>()
+            .acquire_settings()?;
         let locale = settings.locale;
         let replay_gain = settings.replay_gain;
         let replay_gain_preamp = settings.replay_gain_preamp;

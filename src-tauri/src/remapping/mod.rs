@@ -57,7 +57,7 @@ pub(crate) async fn remap_paths<R: tauri::Runtime>(
     new_path: String,
     app: tauri::AppHandle<R>,
 ) -> Result<usize, String> {
-    let guard = app.state::<WriteState>().acquire()?;
+    let guard = app.state::<WriteState>().acquire_all()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
         let count = remap(
