@@ -23,7 +23,11 @@ pub(super) fn run(
                 Ok(snapshot) => {
                     let files: Vec<_> = inventory::audio(&snapshot)
                         .into_iter()
-                        .filter(|path| visited.insert(path.clone()))
+                        // Stability passes may discover changes, but must not
+                        // retry files that already failed in this scan.
+                        .filter(|path| {
+                            !result.has_failures_in(Path::new(path)) && visited.insert(path.clone())
+                        })
                         .collect();
                     if attempt == 0 {
                         result.skipped += snapshot.skipped();

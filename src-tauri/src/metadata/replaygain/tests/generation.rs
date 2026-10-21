@@ -61,6 +61,32 @@ fn silence_has_finite_tags_and_a_readonly_or_invalid_file_is_unchanged() {
 }
 
 #[test]
+fn below_gate_and_short_audio_use_neutral_gain_and_keep_measured_peak() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, amplitude, short) in [("quiet.wav", 0.0001, false), ("short.wav", 0.1, true)] {
+        let path = dir.path().join(name);
+        wave(&path, amplitude);
+        if short {
+            let mut bytes = fs::read(&path).unwrap();
+            bytes.truncate(44 + 4410 * 2);
+            bytes[4..8].copy_from_slice(&(36_u32 + 4410 * 2).to_le_bytes());
+            bytes[40..44].copy_from_slice(&(4410_u32 * 2).to_le_bytes());
+            fs::write(&path, bytes).unwrap();
+        }
+        let before = samples(&path);
+        let measurement = measurement::measure(&path).unwrap();
+        assert_eq!(measurement.loudness, f64::NEG_INFINITY);
+        assert!(measurement.peak > 0.0);
+        assert!(generate(&path, true).unwrap());
+        let gain = replaygain::read(&path).unwrap();
+        assert_eq!(gain.gain_db, Some(0.0));
+        assert!((gain.peak.unwrap() - measurement.peak).abs() < 0.000001);
+        assert_eq!(before, samples(&path));
+        assert!(!generate(&path, false).unwrap());
+    }
+}
+
+#[test]
 fn batch_forces_overwrite_deduplicates_and_continues_after_failure() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("track.wav");
@@ -106,6 +132,23 @@ fn temporary_file_analysis_writes_tags_without_registering_the_file() {
         .unwrap();
     assert_eq!(count, 0);
     assert!(replaygain::read(&path).unwrap().complete());
+}
+
+#[test]
+#[ignore = "requires NEWBEE_REPLAYGAIN_REPRO_FILE pointing to a local audio file"]
+fn analyzes_local_file_without_changing_source() {
+    let source =
+        std::path::PathBuf::from(std::env::var_os("NEWBEE_REPLAYGAIN_REPRO_FILE").unwrap());
+    let original = fs::read(&source).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(source.file_name().unwrap());
+    fs::copy(&source, &path).unwrap();
+    let result = generate(&path, true);
+    assert_eq!(fs::read(&source).unwrap(), original);
+    assert!(result.is_ok(), "{result:?}");
+    let gain = replaygain::read(&path).unwrap();
+    assert_eq!(gain.gain_db, Some(0.0));
+    assert!(gain.complete());
 }
 
 #[test]

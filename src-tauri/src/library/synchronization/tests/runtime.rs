@@ -254,32 +254,47 @@ fn continuous_detects_events_and_renames_as_missing_plus_new() {
 }
 
 #[test]
-fn retries_are_bounded_and_new_changes_reset_the_budget() {
-    let files = TestFiles::new();
-    files.write("broken.wav", b"not audio");
-    let app = app(&files, Mode::Startup);
-    let folder = app
-        .state::<SettingsState>()
-        .get()
-        .unwrap()
-        .synchronization_folders
-        .remove(0);
-    let mut work = Work::new(folder);
-    work.process(app.handle()).unwrap();
-    for _ in 0..MAX_ATTEMPTS {
+fn failed_scans_are_not_retried_until_files_change() {
+    use std::sync::{atomic::AtomicUsize, Arc};
+    use tauri::Listener;
+
+    for mode in [Mode::Startup, Mode::Continuous] {
+        let files = TestFiles::new();
+        files.write("broken.wav", b"not audio");
+        let app = app(&files, mode);
+        let folder = app
+            .state::<SettingsState>()
+            .get()
+            .unwrap()
+            .synchronization_folders
+            .remove(0);
+        let mut work = Work::new(folder);
         work.process(app.handle()).unwrap();
+        work.process(app.handle()).unwrap();
+        if mode == Mode::Startup {
+            assert!(work.due.is_none());
+        } else {
+            assert!(work.due.unwrap() > Instant::now() + SETTLE);
+        }
+        let events = Arc::new(AtomicUsize::new(0));
+        let received = events.clone();
+        app.listen(super::super::EVENT, move |_| {
+            received.fetch_add(1, Ordering::Relaxed);
+        });
+        // Periodic or watcher wakeups must not rerun the failed inventory.
+        for _ in 0..3 {
+            work.process(app.handle()).unwrap();
+        }
+        assert_eq!(events.load(Ordering::Relaxed), 0);
+        files.wav("broken.wav");
+        work.process(app.handle()).unwrap();
+        work.process(app.handle()).unwrap();
+        assert_eq!(
+            app.state::<Database>().library_track_paths().unwrap().len(),
+            1
+        );
+        assert!(!work.failed);
     }
-    assert_eq!(work.attempts, MAX_ATTEMPTS);
-    assert!(work.due.is_none());
-    files.wav("broken.wav");
-    work.process(app.handle()).unwrap();
-    assert_eq!(work.attempts, 0);
-    work.process(app.handle()).unwrap();
-    assert_eq!(
-        app.state::<Database>().library_track_paths().unwrap().len(),
-        1
-    );
-    assert_eq!(work.attempts, 0);
 }
 
 #[test]

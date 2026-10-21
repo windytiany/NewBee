@@ -117,8 +117,16 @@ fn analysis_failure_is_reported_without_preventing_metadata_import() {
     fs::set_permissions(&path, readonly).unwrap();
     let database = Database::open(":memory:").unwrap();
     database.add_folder(&files.0.to_string_lossy()).unwrap();
-    let result = run_scan_with_replay_gain(&database, true, |_, _| {}).unwrap();
+    let result = run_scan_with_replay_gain(&database, true, |done, total| {
+        if done == total {
+            fs::set_permissions(&path, permissions.clone()).unwrap();
+        }
+    })
+    .unwrap();
     fs::set_permissions(&path, permissions).unwrap();
     assert_eq!(result.added, 2);
     assert_eq!(result.failed, 1);
+    // Writing the other track changes the inventory and triggers a stability
+    // pass. A previously failed file must not be analyzed again in that pass.
+    assert!(!replaygain::read(Path::new(&path)).unwrap().complete());
 }

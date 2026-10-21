@@ -107,6 +107,46 @@ fn replay_gain_coalesces_identical_legacy_and_modern_id3_dates_without_losing_me
 }
 
 #[test]
+fn replay_gain_preserves_id3_url_frames() {
+    use lofty::tag::{ItemValue, TagItem};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("urls.mp3");
+    fs::write(&path, include_bytes!("../../../../../fixtures/silence.mp3")).unwrap();
+    let mut tag = Tag::new(TagType::Id3v2);
+    for key in [
+        ItemKey::TrackArtistUrl,
+        ItemKey::AudioFileUrl,
+        ItemKey::CopyrightUrl,
+    ] {
+        tag.push(TagItem::new(
+            key,
+            ItemValue::Locator("https://example.com/".into()),
+        ));
+    }
+    let native = lofty::id3::v2::Id3v2Tag::from(tag);
+    native.save_to_path(&path, WriteOptions::default()).unwrap();
+    let before = read_file(&path).unwrap();
+    let audio: Vec<_> = rodio::Decoder::try_from(File::open(&path).unwrap())
+        .unwrap()
+        .collect();
+    assert!(write(&path, measured(), true).unwrap());
+    assert_eq!(read(&path).unwrap(), measured());
+    assert!(remove(&path).unwrap());
+    let after = read_file(&path).unwrap();
+    let expected = before.tag(TagType::Id3v2).unwrap();
+    let actual = after.tag(TagType::Id3v2).unwrap();
+    assert_eq!(expected.items().count(), actual.items().count());
+    verify_tag_items(expected, actual).unwrap();
+    assert_eq!(
+        audio,
+        rodio::Decoder::try_from(File::open(&path).unwrap())
+            .unwrap()
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn tiny_raw_aac_is_not_replaced_when_its_decoder_verification_fails() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("tiny.aac");

@@ -66,7 +66,13 @@ pub(super) fn write_tag(
             let (remainder, _) = native.split_tag();
             save_tag(&remainder.merge_tag(tag.clone()), file)
         }
-        // Generic ID3v2 and MP4 tags carry their format-specific companion data.
+        (_, TagType::Id3v2) => {
+            // Lofty's borrowed generic writer drops Locator values. The owned
+            // native conversion handles both text and URLs and keeps companion frames.
+            let native = lofty::id3::v2::Id3v2Tag::from(tag.clone());
+            save_tag(&native, file)
+        }
+        // Generic MP4 tags carry their format-specific companion data.
         _ => save_tag(tag, file),
     }
 }
