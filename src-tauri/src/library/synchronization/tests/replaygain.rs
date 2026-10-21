@@ -111,21 +111,40 @@ fn analysis_failure_is_reported_without_preventing_metadata_import() {
     let files = TestFiles::new();
     let path = files.wav("readonly.wav");
     files.wav("writable.wav");
+    let original = fs::read(&path).unwrap();
     let permissions = fs::metadata(&path).unwrap().permissions();
     let mut readonly = permissions.clone();
     readonly.set_readonly(true);
     fs::set_permissions(&path, readonly).unwrap();
     let database = Database::open(":memory:").unwrap();
     database.add_folder(&files.0.to_string_lossy()).unwrap();
-    let result = run_scan_with_replay_gain(&database, true, |done, total| {
-        if done == total {
-            fs::set_permissions(&path, permissions.clone()).unwrap();
-        }
-    })
+    let settings = super::support::settings(&files.0);
+    let state = super::super::SynchronizationState::default();
+    let result = super::super::reconciliation::run(
+        &database,
+        &state,
+        &settings.get().unwrap().synchronization_folders,
+        true,
+        |done, total| {
+            if done == total {
+                fs::set_permissions(&path, permissions.clone()).unwrap();
+            }
+        },
+    )
     .unwrap();
     fs::set_permissions(&path, permissions).unwrap();
     assert_eq!(result.added, 2);
     assert_eq!(result.failed, 1);
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let data = state.data.lock().unwrap();
+    let status = data.statuses.values().next().unwrap();
+    assert_eq!(status.phase, "warning");
+    assert!(status.error.is_none());
+    let issues = status.issues.as_ref().unwrap();
+    assert_eq!(issues.failed, 1);
+    assert_eq!(issues.replay_gain_failed, 1);
+    let serialized = serde_json::to_value(status).unwrap();
+    assert_eq!(serialized["issues"]["replayGainFailed"], 1);
     // Writing the other track changes the inventory and triggers a stability
     // pass. A previously failed file must not be analyzed again in that pass.
     assert!(!replaygain::read(Path::new(&path)).unwrap().complete());

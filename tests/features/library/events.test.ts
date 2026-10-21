@@ -7,6 +7,7 @@ import type * as LibraryScan from "@/features/library/synchronization/useScan";
 import type * as LibraryPage from "@/features/library/browser/useBrowser";
 import type * as PlaylistPage from "@/features/playlist/usePlaylist";
 import { notifications, type NotificationInput } from "@/shared/notifications/center";
+import { createTaskCenter } from "@/shared/tasks/state";
 
 const outputs = new Map<string, string>();
 for (const path of [
@@ -33,6 +34,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   const calls: string[] = [];
   const effects: Array<readonly number[] | "all" | "albums" | "refresh"> = [];
   const notices: NotificationInput[] = [];
+  const tasks = createTaskCenter();
   const artist = { artist: "Artist", albumCount: 1 };
   const album = { albumArtist: "Artist", album: "Album", year: 2024 };
   const track = { id: 41, title: "Song", artist: "Artist", album: "Album", durationMs: 100 };
@@ -100,6 +102,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
       synchronizationSnapshot: Vue.ref({ progress: null, statuses: [], missing: [] }),
       refreshSynchronization: async () => {},
     },
+    "@/shared/tasks/state": { tasks },
     "@/shared/notifications/center": {
       notifications,
       notify: (notice: NotificationInput) => notices.push(notice),
@@ -179,6 +182,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     calls,
     effects,
     notices,
+    tasks,
     activePage,
     updateSnapshot: (title: string) => {
       for (const entry of registeredTracks) entry.title = title;
@@ -253,7 +257,8 @@ describe("媒体库变更", () => {
       expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(0);
       expect(harness.calls.filter((command) => command === "list_playlist_tracks")).toHaveLength(0);
       expect(harness.calls.includes("list_artists")).toBe(mode === "Library");
-      expect(harness.notices[0]?.type).toBe("warning");
+      expect(harness.notices).toEqual([]);
+      expect(harness.tasks.items.value[0]?.result?.type).toBe("warning");
     });
   }
 
@@ -263,11 +268,13 @@ describe("媒体库变更", () => {
     await harness.scan.synchronizeLibrary();
     expect(harness.effects).toEqual([]);
     expect(harness.calls).toEqual(["synchronize_library"]);
-    expect(harness.notices[0]?.type).toBe("warning");
+    expect(harness.notices).toEqual([]);
+    expect(harness.tasks.items.value[0]?.result?.type).toBe("warning");
     harness.failScan();
     await harness.scan.synchronizeLibrary();
     expect(harness.effects).toEqual([]);
-    expect(harness.notices[1]?.type).toBe("error");
+    expect(harness.notices).toEqual([]);
+    expect(harness.tasks.items.value[0]?.result?.type).toBe("error");
   });
 
   it("专辑部分删除按批次传播实际删除曲目，队列失败不阻断后台刷新", async () => {

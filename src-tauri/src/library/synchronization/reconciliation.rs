@@ -66,19 +66,20 @@ pub(super) fn run(
             match inventory::inspect(Path::new(&folder.path)) {
                 Ok(after) if before == after => {
                     state.reconcile(&folder.path, &database.library_track_paths()?);
-                    state.status(
-                        &folder.path,
-                        if result.has_failures_in(Path::new(&folder.path)) {
-                            "error"
-                        } else if folder.mode == super::configuration::Mode::Continuous {
-                            "watching"
-                        } else {
-                            "idle"
-                        },
-                        result
-                            .has_failures_in(Path::new(&folder.path))
-                            .then(|| "部分文件读取失败".into()),
-                    );
+                    let issues = result.issues_in(Path::new(&folder.path));
+                    if issues.failed > 0 {
+                        state.warning(&folder.path, issues);
+                    } else {
+                        state.status(
+                            &folder.path,
+                            if folder.mode == super::configuration::Mode::Continuous {
+                                "watching"
+                            } else {
+                                "idle"
+                            },
+                            None,
+                        );
+                    }
                 }
                 Ok(_) if attempt + 1 < STABILITY_ATTEMPTS => pending.push(folder),
                 Ok(_) => {

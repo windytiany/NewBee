@@ -57,11 +57,48 @@ it("retains a failed background scan without marking an already-viewed result un
   };
   await state.refreshSynchronization();
   expect(tasks.active.value).toEqual([]);
-  expect(tasks.items.value[0]?.result).toEqual({ type: "error", message: "扫描失败" });
+  expect(tasks.items.value[0]?.result).toEqual({
+    type: "error",
+    message: "扫描失败",
+    details: ["无法扫描文件夹：music"],
+  });
   expect(tasks.unread.value).toBe(true);
   tasks.acknowledge();
   await state.refreshSynchronization();
   expect(tasks.unread.value).toBe(false);
+});
+
+it("reports partial failures as warnings with ReplayGain preservation details and no toast", async () => {
+  let snapshot = {
+    statuses: [],
+    missing: [],
+    progress: { path: "music", completed: 1, total: 3 },
+  } as SynchronizationSnapshot;
+  const state = evaluateSource<typeof State>(source, {
+    vue: Vue,
+    "@tauri-apps/api/core": { invoke: async () => snapshot },
+    "@/shared/tasks/state": { tasks },
+  });
+  await state.refreshSynchronization();
+  snapshot = {
+    statuses: [
+      {
+        path: "music",
+        phase: "warning",
+        error: null,
+        issues: { failed: 1, replayGainFailed: 1 },
+      },
+    ],
+    missing: [],
+    progress: null,
+  } as SynchronizationSnapshot;
+  await state.refreshSynchronization();
+  expect(tasks.active.value).toEqual([]);
+  expect(tasks.items.value[0]?.result).toEqual({
+    type: "warning",
+    message: "扫描完成，1 个文件处理异常",
+    details: ["ReplayGain 失败 1 首，未改写原文件"],
+  });
 });
 
 it("keeps the latest snapshot when IPC responses arrive out of order", async () => {

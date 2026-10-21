@@ -55,13 +55,55 @@ describe("manual synchronization", () => {
     it(`reports partial failure when ${added} tracks were added`, async () => {
       const context = createSynchronization(async () => ({ ...unchanged, added, failed: 1 }));
       await context.scan.synchronizeLibrary();
-      expect(notifications.items.value[0]).toMatchObject({
+      expect(notifications.items.value).toEqual([]);
+      expect(context.tasks.items.value[0]?.result).toMatchObject({
         type: "warning",
-        message: "扫描完成，1 首失败",
+        message: "扫描完成，1 个文件处理异常",
       });
       expect(context.scan.scanResult.value?.failed).toBe(1);
     });
   }
+
+  it("keeps snapshot details as the single partial-failure notification", async () => {
+    const context = createSynchronization(
+      async () => ({ ...unchanged, added: 2, failed: 1 }),
+      true,
+      async () => ({
+        missing: [],
+        progress: null,
+        statuses: [
+          {
+            path: "/Music",
+            phase: "warning",
+            error: null,
+            issues: { failed: 1, replayGainFailed: 1 },
+          },
+        ],
+      }),
+    );
+    await context.scan.synchronizeLibrary();
+    expect(notifications.items.value).toEqual([]);
+    expect(context.tasks.items.value).toHaveLength(1);
+    expect(context.tasks.items.value[0]?.result).toEqual({
+      type: "warning",
+      message: "扫描完成，1 个文件处理异常",
+      details: ["ReplayGain 失败 1 首，未改写原文件"],
+    });
+  });
+
+  it("retains a partial result when refreshing the snapshot fails", async () => {
+    const context = createSynchronization(
+      async () => ({ ...unchanged, failed: 1 }),
+      true,
+      async () => {
+        throw new Error("snapshot unavailable");
+      },
+    );
+    await context.scan.synchronizeLibrary();
+    expect(context.tasks.active.value).toEqual([]);
+    expect(context.tasks.items.value[0]?.result?.type).toBe("warning");
+    expect(notifications.items.value).toEqual([]);
+  });
 
   it("reports a busy command as a recoverable warning", async () => {
     const context = createSynchronization(async () => {
@@ -88,7 +130,8 @@ describe("manual synchronization", () => {
       };
     });
     await context.scan.synchronizeLibrary();
-    expect(notifications.items.value[0]?.message).toBe("扫描失败");
+    expect(notifications.items.value).toEqual([]);
+    expect(context.tasks.items.value[0]?.result?.message).toBe("扫描失败");
   });
 
   it("keeps the failure and releases pending state for a retry", async () => {
@@ -96,8 +139,8 @@ describe("manual synchronization", () => {
       throw new Error("permission denied");
     });
     await context.scan.synchronizeLibrary();
-    expect(notifications.items.value).toHaveLength(1);
-    expect(notifications.items.value[0]).toMatchObject({
+    expect(notifications.items.value).toEqual([]);
+    expect(context.tasks.items.value[0]?.result).toMatchObject({
       type: "error",
       message: "permission denied",
     });

@@ -8,7 +8,11 @@ export type TaskProgress = {
   cancelling?: boolean;
   cancel?: () => void;
 };
-export type TaskResult = { type: "warning" | "error"; message: string };
+export type TaskResult = {
+  type: "warning" | "error";
+  message: string;
+  details?: readonly string[];
+};
 export type Task = TaskProgress & { result?: TaskResult; unread?: boolean };
 
 export function createTaskCenter() {

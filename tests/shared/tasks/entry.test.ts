@@ -101,13 +101,19 @@ describe("task entry", () => {
   it("retains an unread error, acknowledges on open and clears viewed results on close", async () => {
     const test = mount();
     test.tasks.update(progress);
-    test.tasks.finish("replaygain-analysis", { type: "error", message: "ReplayGain 分析失败" });
+    test.tasks.finish("replaygain-analysis", {
+      type: "error",
+      message: "ReplayGain 分析失败",
+      details: ["未改写原文件"],
+    });
     await Vue.nextTick();
     expect(test.entry()).not.toBeNull();
     expect(
       findNode(test.entry()!, (node) => node.props["aria-label"] === "任务异常"),
     ).not.toBeNull();
     expect(getTextContent(test.panel())).toContain("ReplayGain 分析失败");
+    expect(getTextContent(test.panel())).toContain("未改写原文件");
+    expect(getTextContent(test.panel())).not.toContain("正在分析 ReplayGain…");
     expect(findNode(test.panel(), (node) => node.type === "progress")).toBeNull();
     test.toggle("open");
     await Vue.nextTick();

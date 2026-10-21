@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
+import { tasks } from "@/shared/tasks/state";
 import { commandFailure, errorMessage } from "@/shared/notifications/error";
 import { watchActivity } from "@/shared/lifecycle/activity";
 import {
@@ -28,6 +29,7 @@ export function useLibrarySynchronization() {
     isScanning.value = true;
     scanResult.value = null;
     scanError.value = "";
+    tasks.update({ key: "library-synchronization", message: t("正在扫描…"), completed: 0 });
     const id = operationId("library-synchronization");
     const started = performance.now();
     try {
@@ -40,22 +42,29 @@ export function useLibrarySynchronization() {
         ...result,
       });
       const message = result.failed
-        ? t("扫描完成，{count} 首失败", { count: result.failed })
+        ? t("扫描完成，{count} 个文件处理异常", { count: result.failed })
         : result.added === 0 && result.updated === 0
           ? t("未发现变化")
           : t("扫描完成：新增 {added} 首，更新 {updated} 首", {
               added: result.added,
               updated: result.updated,
             });
-      notify({
-        type: result.failed ? "warning" : "success",
-        message,
-        key: "library-synchronization",
-      });
       try {
         await refreshSynchronization();
       } catch (error) {
         logger.warn("library/synchronization", "snapshot_refresh_failed", error);
+      }
+      if (result.failed) {
+        // The snapshot owns detailed warnings. Fall back if it could not supply a result.
+        if (
+          !tasks.items.value.some((task) => task.key === "library-synchronization" && task.result)
+        ) {
+          tasks.update({ key: "library-synchronization", message: t("正在扫描…"), completed: 0 });
+          tasks.finish("library-synchronization", { type: "warning", message });
+        }
+      } else {
+        tasks.finish("library-synchronization");
+        notify({ type: "success", message, key: "library-synchronization" });
       }
     } catch (error) {
       scanError.value = errorMessage(error, t("扫描失败"));
@@ -63,11 +72,12 @@ export function useLibrarySynchronization() {
       logger[busy ? "warn" : "error"]("library/synchronization", "failed", error, {
         operationId: id,
       });
-      notify({
-        type: busy ? "warning" : "error",
-        message: scanError.value,
-        key: "library-synchronization",
-      });
+      if (busy) {
+        tasks.finish("library-synchronization");
+        notify({ type: "warning", message: scanError.value, key: "library-synchronization" });
+      } else {
+        tasks.finish("library-synchronization", { type: "error", message: scanError.value });
+      }
     } finally {
       isScanning.value = false;
     }

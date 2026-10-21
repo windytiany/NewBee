@@ -1,7 +1,7 @@
 import { shallowRef } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { SynchronizationSnapshot } from "@/features/library/synchronization/types";
-import { tasks } from "@/shared/tasks/state";
+import { tasks, type TaskResult } from "@/shared/tasks/state";
 import { t } from "@/shared/i18n/locale";
 
 export const synchronizationSnapshot = shallowRef<SynchronizationSnapshot>({
@@ -23,12 +23,38 @@ export async function refreshSynchronization() {
       total: snapshot.progress?.total || undefined,
     });
   } else {
-    tasks.finish(
-      "library-synchronization",
-      snapshot.statuses.some((status) => status.phase === "error" || status.phase === "unavailable")
-        ? { type: "error", message: t("扫描失败") }
-        : undefined,
+    const errors = snapshot.statuses.filter(
+      ({ phase }) => phase === "error" || phase === "unavailable",
     );
+    const issues = snapshot.statuses.reduce(
+      (sum, status) => ({
+        failed: sum.failed + (status.issues?.failed ?? 0),
+        replayGainFailed: sum.replayGainFailed + (status.issues?.replayGainFailed ?? 0),
+      }),
+      { failed: 0, replayGainFailed: 0 },
+    );
+    const details = errors.map(({ path }) => t("无法扫描文件夹：{path}", { path }));
+    if (issues.replayGainFailed) {
+      details.push(
+        t("ReplayGain 失败 {count} 首，未改写原文件", { count: issues.replayGainFailed }),
+      );
+    }
+    let result: TaskResult | undefined;
+    if (errors.length) {
+      result = {
+        type: "error",
+        message:
+          errors.length === snapshot.statuses.length ? t("扫描失败") : t("部分文件夹扫描失败"),
+        details,
+      };
+    } else if (issues.failed) {
+      result = {
+        type: "warning",
+        message: t("扫描完成，{count} 个文件处理异常", { count: issues.failed }),
+        details,
+      };
+    }
+    tasks.finish("library-synchronization", result);
   }
 }
 

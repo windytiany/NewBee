@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ScanIssues {
+    pub(crate) failed: u64,
+    pub(crate) replay_gain_failed: u64,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {
@@ -12,6 +19,8 @@ pub struct ImportResult {
     failures: crate::logging::aggregation::Failures,
     #[serde(skip)]
     failed_paths: std::collections::HashSet<std::path::PathBuf>,
+    #[serde(skip)]
+    replay_gain_failures: std::collections::HashSet<std::path::PathBuf>,
 }
 
 impl Default for ImportResult {
@@ -23,6 +32,7 @@ impl Default for ImportResult {
             failed: 0,
             failures: crate::logging::aggregation::Failures::new("library.import"),
             failed_paths: std::collections::HashSet::new(),
+            replay_gain_failures: std::collections::HashSet::new(),
         }
     }
 }
@@ -32,11 +42,29 @@ impl ImportResult {
         if self.failed_paths.insert(path.to_owned()) {
             self.failed += 1;
         }
+        if stage == "replay_gain" {
+            self.replay_gain_failures.insert(path.to_owned());
+        }
         self.failures.record(stage, error, &path.to_string_lossy());
     }
 
     pub(in crate::library) fn has_failures_in(&self, root: &Path) -> bool {
         self.failed_paths.iter().any(|path| path.starts_with(root))
+    }
+
+    pub(in crate::library) fn issues_in(&self, root: &Path) -> ScanIssues {
+        ScanIssues {
+            failed: self
+                .failed_paths
+                .iter()
+                .filter(|path| path.starts_with(root))
+                .count() as u64,
+            replay_gain_failed: self
+                .replay_gain_failures
+                .iter()
+                .filter(|path| path.starts_with(root))
+                .count() as u64,
+        }
     }
 
     pub(in crate::library) fn flush_failures(&mut self) {

@@ -38,7 +38,16 @@
         aria-hidden="true"
         class="size-4 motion-safe:animate-spin"
       />
-      <TriangleAlert v-else aria-hidden="true" class="size-4 text-amber-200" />
+      <TriangleAlert
+        v-else
+        aria-hidden="true"
+        class="size-4"
+        :class="
+          tasks.items.value.some((task) => task.result?.type === 'error')
+            ? 'text-red-300'
+            : 'text-amber-200'
+        "
+      />
       <span v-if="singlePercentage !== undefined">{{ singlePercentage }}%</span>
       <span v-else-if="tasks.active.value.length > 1">{{ tasks.active.value.length }}</span>
       <span
@@ -51,11 +60,11 @@
       :id="panelId"
       popover="auto"
       :aria-label="t('后台任务')"
-      class="bg-app-interactive fixed top-14 right-3 bottom-auto left-auto m-0 max-h-[calc(100dvh-5rem)] w-[min(24rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-white/15 p-4 text-sm text-white shadow-xl"
+      class="bg-app-interactive fixed top-14 right-3 bottom-auto left-auto m-0 max-h-[calc(100dvh-5rem)] w-96 max-w-[calc(100dvw-1.5rem)] overflow-y-auto rounded-xl border border-white/15 p-4 text-sm text-white shadow-xl"
       @toggle="onToggle"
     >
-      <header class="mb-3 flex items-center justify-between gap-3">
-        <h2 class="font-medium">{{ t("后台任务") }}</h2>
+      <header class="mb-3 flex items-center gap-2 border-b border-white/10 pb-3">
+        <h2 class="min-w-0 flex-1 font-medium">{{ t("后台任务") }}</h2>
         <button
           v-if="hasFinished"
           type="button"
@@ -78,14 +87,35 @@
         <article
           v-for="task in tasks.items.value"
           :key="task.key"
-          class="space-y-2"
+          class="min-w-0 space-y-2"
           data-background-task
         >
-          <p class="wrap-anywhere">{{ task.message }}</p>
-          <p v-if="task.result" role="status" class="wrap-anywhere text-amber-200">
-            {{ task.result.message }}
-          </p>
+          <div v-if="task.result" role="status" class="flex min-w-0 items-start gap-2">
+            <TriangleAlert
+              aria-hidden="true"
+              class="mt-0.5 size-4 shrink-0"
+              :class="task.result.type === 'error' ? 'text-red-300' : 'text-amber-200'"
+            />
+            <div class="min-w-0 flex-1 space-y-1">
+              <p
+                class="font-medium wrap-anywhere"
+                :class="task.result.type === 'error' ? 'text-red-300' : 'text-amber-200'"
+              >
+                {{ task.result.message }}
+              </p>
+              <ul v-if="task.result.details?.length" class="text-app-muted space-y-1 text-xs">
+                <li
+                  v-for="(detail, index) in task.result.details"
+                  :key="index"
+                  class="wrap-anywhere"
+                >
+                  {{ detail }}
+                </li>
+              </ul>
+            </div>
+          </div>
           <template v-else>
+            <p class="wrap-anywhere">{{ task.message }}</p>
             <progress
               :aria-label="task.message"
               :value="task.total ? task.completed : undefined"

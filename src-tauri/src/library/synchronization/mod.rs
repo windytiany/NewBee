@@ -28,6 +28,7 @@ pub(crate) struct Status {
     path: String,
     phase: &'static str,
     error: Option<String>,
+    issues: Option<crate::library::model::ScanIssues>,
 }
 
 #[derive(Clone, Serialize)]
@@ -79,8 +80,25 @@ impl SynchronizationState {
                 path: path.into(),
                 phase,
                 error,
+                issues: None,
             },
         );
+    }
+
+    fn warning(&self, path: &str, issues: crate::library::model::ScanIssues) {
+        self.data
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .statuses
+            .insert(
+                path.into(),
+                Status {
+                    path: path.into(),
+                    phase: "warning",
+                    error: None,
+                    issues: Some(issues),
+                },
+            );
     }
 
     fn progress(&self, progress: Option<Progress>) {

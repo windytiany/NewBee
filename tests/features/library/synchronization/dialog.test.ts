@@ -233,7 +233,8 @@ describe("synchronization directory dialog", () => {
     expect(context.calls).toHaveLength(1);
     reject(new Error("database unavailable"));
     await settle();
-    expect(notifications.items.value[0]).toMatchObject({
+    expect(notifications.items.value).toEqual([]);
+    expect(context.tasks.items.value[0]?.result).toMatchObject({
       type: "error",
       message: "database unavailable",
     });
