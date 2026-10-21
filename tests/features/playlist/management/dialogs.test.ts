@@ -241,7 +241,8 @@ const appModules: Record<string, unknown> = {
     default: passiveComponent,
   },
   "@/app/pages": { usePersistentActivePage: () => ({ activePage }) },
-  "@/features/import/useDropImport": { useDropImport: () => ({ label: Vue.ref("") }) },
+  "@/app/import/useDropImport": { useDropImport: () => ({ label: Vue.ref("") }) },
+  "@/features/lyrics/useSidecar": { usePlaybackLyrics: () => Vue.ref(null) },
   "@/features/library/browser/useBrowser": { useLibraryBrowser: emptyLibraryPage },
   "@/features/playback/session": {
     usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
@@ -298,7 +299,7 @@ const appModules: Record<string, unknown> = {
     __esModule: true,
     default: passiveComponent,
   },
-  "@/features/artists/navigation/ArtistList.vue": {
+  "@/features/artists/ArtistList.vue": {
     __esModule: true,
     default: passiveComponent,
   },

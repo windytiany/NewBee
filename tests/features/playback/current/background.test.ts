@@ -96,6 +96,7 @@ function mountPage(enabled = true) {
         },
       },
       "@/features/playback/current/useDisplayMode": { useDisplayMode: () => ({ presentation }) },
+      "@/features/lyrics/useSidecar": { usePlaybackLyrics: () => Vue.ref(null) },
       "@/features/lyrics/useLyrics": {
         useLyrics: () => ({
           retry() {},

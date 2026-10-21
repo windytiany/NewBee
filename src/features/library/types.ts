@@ -1,13 +1,8 @@
-export type LibraryGrouping = "albumArtist" | "artist";
+import type { ArtistGrouping } from "@/features/artists/types";
 
 export type LibraryGroup = {
-  grouping: LibraryGrouping;
+  grouping: ArtistGrouping;
   artist: string | null;
-};
-
-export type ArtistSummary = {
-  artist: string | null;
-  albumCount: number;
 };
 
 export type AlbumSummary = {

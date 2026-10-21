@@ -56,7 +56,7 @@ pub(crate) fn discover(paths: &[String]) -> Vec<DiscoveredFile> {
         };
         if canonical.is_dir() {
             let mut discovered = Vec::new();
-            collect_directory(&canonical, &mut directories, &mut discovered);
+            collect_directory(&canonical, &mut directories, &mut discovered, true);
             discovered.sort_by(|left, right| left.0.cmp(&right.0));
             for (path, outcome) in discovered {
                 match outcome {
@@ -98,10 +98,26 @@ fn add_file(path: &Path, seen: &mut HashSet<PathBuf>, results: &mut Vec<Discover
     results.push(outcome);
 }
 
+pub(crate) fn discover_directories(paths: &[String]) -> Vec<DiscoveredFile> {
+    let mut results = Vec::new();
+    for path in paths {
+        let mut entries = Vec::new();
+        // Inbox directory registration does not follow links or deduplicate separate inputs.
+        collect_directory(Path::new(path), &mut HashSet::new(), &mut entries, false);
+        results.extend(entries.into_iter().map(|(path, outcome)| {
+            outcome
+                .map(|()| path.to_string_lossy().into_owned())
+                .map_err(|error| failure(&path, error))
+        }));
+    }
+    results
+}
+
 fn collect_directory(
     path: &Path,
     seen: &mut HashSet<PathBuf>,
     results: &mut Vec<(PathBuf, Result<(), String>)>,
+    follow_links: bool,
 ) {
     let canonical = match fs::canonicalize(path) {
         Ok(path) => path,
@@ -129,8 +145,15 @@ fn collect_directory(
     }
     sorted.sort();
     for entry_path in sorted {
-        match fs::metadata(&entry_path) {
-            Ok(metadata) if metadata.is_dir() => collect_directory(&entry_path, seen, results),
+        let metadata = if follow_links {
+            fs::metadata(&entry_path)
+        } else {
+            fs::symlink_metadata(&entry_path)
+        };
+        match metadata {
+            Ok(metadata) if metadata.is_dir() => {
+                collect_directory(&entry_path, seen, results, follow_links)
+            }
             Ok(metadata) if metadata.is_file() && has_supported_extension(&entry_path) => {
                 results.push((entry_path, Ok(())));
             }

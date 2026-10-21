@@ -2,14 +2,14 @@ import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
-import type { useDropImport } from "@/features/import/useDropImport";
+import type { useDropImport } from "@/app/import/useDropImport";
 import type { NotificationInput } from "@/shared/notifications/center";
 import type { TrackRegistrationResult, TrackDetails } from "@/features/tracks/types";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 import { playbackFixture } from "../../support/playback/session";
 
-const output = transpileScript(await Bun.file("src/features/import/useDropImport.ts").text());
+const output = transpileScript(await Bun.file("src/app/import/useDropImport.ts").text());
 const originals = ["document", "MutationObserver"].map(
   (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
 );
@@ -183,7 +183,7 @@ function createDrop({
         },
       }),
     },
-    "@/features/inbox/import": {
+    "@/features/inbox/useImport": {
       useInboxImport: () => ({
         pending: inboxPending,
         importPaths: async (paths: string[]) => {

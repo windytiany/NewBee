@@ -94,7 +94,7 @@ export function createEditor(
     },
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
     "@/features/backup/BackupOptions.vue": Vue.defineComponent({ template: "<div />" }),
-    "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({ template: "<div />" }),
+    "@/features/settings/AboutPanel.vue": Vue.defineComponent({ template: "<div />" }),
     "@/shared/update/UpdatePanel.vue": Vue.defineComponent({ render: () => null }),
     "@/features/library/synchronization/SynchronizationOptions.vue": Vue.defineComponent({
       template: "<div />",

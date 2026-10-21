@@ -4,9 +4,9 @@ import type { Ref } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { createInboxApi, INBOX_CHANGED_EVENT } from "@/features/inbox/api";
 import type { InboxResult, InboxTrack } from "@/features/inbox/api";
-import type { ArtistSummary, LibraryGrouping } from "@/features/library/types";
+import type { ArtistSummary, ArtistGrouping } from "@/features/artists/types";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
-import { useTrackReread } from "@/features/tracks/reread";
+import { useTrackReread } from "@/features/tracks/useReread";
 import { TRACKS_CHANGED_EVENT, type TracksChange } from "@/features/tracks/events";
 import { usePlaybackSession } from "@/features/playback/session";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
@@ -32,7 +32,7 @@ export function createInbox(options: InboxOptions) {
     pending: computed(() => pending.value || options.reread.pending.value),
     error: "",
     results: [] as InboxResult[],
-    grouping: "albumArtist" as LibraryGrouping,
+    grouping: "albumArtist" as ArtistGrouping,
     artist: null as ArtistSummary | null,
   });
   let version = 0;
@@ -203,7 +203,7 @@ export function createInbox(options: InboxOptions) {
       state.pending ? false : options.session.addTracksToNext(targets(ids, state.tracks)),
     addEnd: (ids: number[]) =>
       state.pending ? false : options.session.addTracksToQueueEnd(targets(ids, state.tracks)),
-    selectGrouping: (grouping: LibraryGrouping) => {
+    selectGrouping: (grouping: ArtistGrouping) => {
       state.grouping = grouping;
       state.artist = null;
     },

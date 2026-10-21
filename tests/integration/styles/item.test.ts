@@ -24,7 +24,7 @@ const componentPaths = [
   "../../../src/features/playlist/tracks/PlaylistTrack.vue",
   "../../../src/features/tracks/presentation/TrackFields.vue",
   "../../../src/features/tracks/presentation/TrackRow.vue",
-  "../../../src/features/artists/navigation/ArtistRow.vue",
+  "../../../src/features/artists/ArtistRow.vue",
   "../../../src/features/library/browser/albums/AlbumCard.vue",
   "../../../src/features/library/browser/albums/AlbumTrack.vue",
   "../../../src/features/playback/queue/QueueRow.vue",

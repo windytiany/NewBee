@@ -24,6 +24,42 @@ fn recursive_registration_scans_duplicates_and_rejects_broken_new_files() {
 }
 
 #[test]
+fn directory_registration_preserves_repeated_inputs_and_reports_discovery_failures() {
+    let fixture = TestFiles::new();
+    fixture.wav("track.wav");
+    let directory = fixture.0.to_string_lossy().into_owned();
+    let missing = fixture.0.join("missing").to_string_lossy().into_owned();
+    let database = Database::open(":memory:").unwrap();
+    let results = register_directories(
+        &database,
+        vec![directory.clone(), missing.clone(), directory],
+    );
+    assert_eq!(results.iter().filter(|result| result.success).count(), 2);
+    let failures = results
+        .iter()
+        .filter(|result| !result.success)
+        .collect::<Vec<_>>();
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].path, missing);
+    assert!(failures[0].error.is_some());
+    assert_eq!(database.inbox_entries().unwrap().len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_registration_ignores_symbolic_links() {
+    let fixture = TestFiles::new();
+    let external = TestFiles::new();
+    let path = external.wav("track.wav");
+    std::os::unix::fs::symlink(path, fixture.0.join("linked.wav")).unwrap();
+    std::os::unix::fs::symlink(&external.0, fixture.0.join("linked")).unwrap();
+    let database = Database::open(":memory:").unwrap();
+    let results = register_directories(&database, vec![fixture.0.to_string_lossy().into_owned()]);
+    assert!(results.is_empty());
+    assert!(database.inbox_entries().unwrap().is_empty());
+}
+
+#[test]
 fn initial_artwork_failure_registers_nothing_and_ingest_database_failure_is_atomic() {
     let fixture = TestFiles::new();
     let first = canonical(fixture.wav("first.wav"));

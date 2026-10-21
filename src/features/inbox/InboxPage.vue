@@ -5,7 +5,7 @@ import { useReleaseEditor } from "@/features/metadata/releases/useEditor";
 import { useInbox } from "@/features/inbox/useInbox";
 import { usePlaybackSession } from "@/features/playback/session";
 import SidePane from "@/shared/layout/SidePane.vue";
-import ArtistList from "@/features/artists/navigation/ArtistList.vue";
+import ArtistList from "@/features/artists/ArtistList.vue";
 import TrackRow from "@/features/tracks/presentation/TrackRow.vue";
 import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";
 import ReleaseMenuItem from "@/features/metadata/releases/ReleaseMenuItem.vue";

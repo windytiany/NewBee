@@ -7,12 +7,8 @@ import { createLibraryApi } from "@/features/library/api";
 import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import { SETTINGS_CHANGED_EVENT } from "@/features/settings/events";
-import type {
-  ArtistSummary,
-  AlbumSummary,
-  LibraryAlbumSelection,
-  LibraryGrouping,
-} from "@/features/library/types";
+import type { ArtistSummary, ArtistGrouping } from "@/features/artists/types";
+import type { AlbumSummary, LibraryAlbumSelection } from "@/features/library/types";
 import type { TrackSummary } from "@/features/tracks/types";
 
 export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
@@ -186,7 +182,7 @@ export function useLibraryBrowser(active: Readonly<Ref<boolean>>) {
     }
   }
 
-  function selectGrouping(next: LibraryGrouping) {
+  function selectGrouping(next: ArtistGrouping) {
     if (next === grouping.value) return;
     deactivate();
     setGrouping(next);

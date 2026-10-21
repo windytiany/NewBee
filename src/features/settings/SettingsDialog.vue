@@ -10,7 +10,7 @@ import LyricsOptions from "@/features/settings/LyricsOptions.vue";
 import LibraryOptions from "@/features/settings/LibraryOptions.vue";
 import AdvancedOptions from "@/features/settings/AdvancedOptions.vue";
 import ShortcutOptions from "@/features/shortcuts/ShortcutOptions.vue";
-import AboutPanel from "@/features/settings/about/AboutPanel.vue";
+import AboutPanel from "@/features/settings/AboutPanel.vue";
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const {
   session,

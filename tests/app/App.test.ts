@@ -192,6 +192,7 @@ async function createComponent(source: string) {
   const defaultModule = (component: Vue.Component) => ({ __esModule: true, default: component });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/features/lyrics/useSidecar": { usePlaybackLyrics: () => Vue.ref(null) },
     "@/shared/notifications/center": { notify },
     "@/shared/notifications/useNotification": { useNotification },
     "@/features/metadata/manual/TagEditorDialog.vue": defaultModule(passiveComponent),
@@ -200,7 +201,7 @@ async function createComponent(source: string) {
     "@/features/metadata/releases/ReleaseTagDialog.vue": defaultModule(passiveComponent),
     "@/shared/notifications/NotificationHost.vue": defaultModule(passiveComponent),
     "@/features/library/synchronization/MissingFilesDialog.vue": defaultModule(passiveComponent),
-    "@/features/import/useDropImport": {
+    "@/app/import/useDropImport": {
       useDropImport: () => ({ highlight: dropHighlight }),
     },
     "@/app/pages": {
@@ -220,7 +221,7 @@ async function createComponent(source: string) {
     "@/features/playback/NowPlayingPage.vue",
     "@/features/inbox/InboxPage.vue",
     "@/features/playback/controls/PlaybackBar.vue",
-    "@/features/artists/navigation/ArtistList.vue",
+    "@/features/artists/ArtistList.vue",
     "@/features/library/removal/DeleteAlbumDialog.vue",
     "@/features/playlist/creation/CreatePlaylistDialog.vue",
     "@/features/playlist/tracks/PlaylistBrowser.vue",

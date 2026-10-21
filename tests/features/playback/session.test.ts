@@ -19,10 +19,6 @@ const rows = [1, 2].map((trackId) => ({
   durationMs: 100,
 }));
 
-async function settle() {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-}
-
 describe("backend playback session adapter", () => {
   it("loads the restored projection without issuing any playback command or writing localStorage", async () => {
     const fixture = playbackFixture({
@@ -156,31 +152,6 @@ describe("backend playback session adapter", () => {
     expect(fixture.session.state.isSeeking.value).toBe(false);
   });
 
-  it("retains sidecar lyrics when editing detaches playback, ignores stale reads, and rereads on real restart", async () => {
-    const first = deferred<unknown>();
-    const reads: number[] = [];
-    const second = { kind: "plain", text: "Second" } as const;
-    const fixture = playbackFixture({
-      invokeExtra: (name, args) => {
-        if (name !== "get_playback_sidecar_lyrics") throw new Error(`Unexpected command ${name}`);
-        reads.push(args?.trackId as number);
-        return reads.length === 1 ? first.promise : second;
-      },
-    });
-    await fixture.session.ready;
-    await fixture.session.playTracks(rows, "row:1");
-    await fixture.session.playQueueItem("row:2");
-    first.resolve({ kind: "plain", text: "Stale" });
-    await settle();
-    expect(fixture.session.state.sidecarLyrics.value).toEqual(second);
-    await fixture.session.withMetadataEditing([2], async () => {});
-    expect(fixture.session.state.sidecarLyrics.value).toEqual(second);
-    expect(reads).toEqual([1, 2]);
-    await fixture.session.togglePlayback();
-    await settle();
-    expect(reads).toEqual([1, 2, 2]);
-  });
-
   it("forwards removal outcomes instead of claiming a failed or superseded removal succeeded", async () => {
     const fixture = playbackFixture();
     await fixture.session.ready;
@@ -194,17 +165,13 @@ describe("backend playback session adapter", () => {
     }
   });
 
-  it("disposes the subscription and ignores late events and sidecar replies", async () => {
-    const late = deferred<unknown>();
-    const fixture = playbackFixture({ invokeExtra: () => late.promise });
+  it("disposes the subscription and ignores late events", async () => {
+    const fixture = playbackFixture();
     await fixture.session.ready;
     await fixture.session.playTracks(rows, "row:1");
     fixture.session.dispose();
     fixture.emit({ currentRowKey: "row:2" });
-    late.resolve({ kind: "plain", text: "Late" });
-    await settle();
     expect(fixture.session.state.currentRowKey.value).toBe("row:1");
-    expect(fixture.session.state.sidecarLyrics.value).toBeNull();
   });
 
   it("loads skip preferences from authoritative snapshots and only publishes confirmed database writes", async () => {

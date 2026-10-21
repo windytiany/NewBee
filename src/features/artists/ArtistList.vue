@@ -105,14 +105,14 @@ import { Check, ChevronDown } from "@lucide/vue";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
-import type { ArtistSummary, LibraryGrouping } from "@/features/library/types";
-import ArtistRow from "@/features/artists/navigation/ArtistRow.vue";
+import type { ArtistSummary, ArtistGrouping } from "@/features/artists/types";
+import ArtistRow from "@/features/artists/ArtistRow.vue";
 
 const props = withDefaults(
   defineProps<{
     artists: ArtistSummary[];
     selectedArtist: ArtistSummary | null;
-    grouping: LibraryGrouping;
+    grouping: ArtistGrouping;
     isLoading: boolean;
     error: string;
     scope?: string;
@@ -124,7 +124,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   select: [artist: ArtistSummary];
-  selectGrouping: [grouping: LibraryGrouping];
+  selectGrouping: [grouping: ArtistGrouping];
   selectAll: [];
 }>();
 
@@ -183,7 +183,7 @@ function selectAll() {
   emit("selectAll");
 }
 
-function selectGrouping(grouping: LibraryGrouping) {
+function selectGrouping(grouping: ArtistGrouping) {
   isGroupingMenuOpen.value = false;
   emit("selectGrouping", grouping);
   groupingButton.value?.focus();

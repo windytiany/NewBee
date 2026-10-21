@@ -34,9 +34,8 @@ function fixture(
   let mounted!: () => Promise<void>;
   let unmounted!: () => void;
   let stopped = false;
-  const { useStartupUpdates, waitForUpdates } = evaluateSource<{
+  const { useStartupUpdates } = evaluateSource<{
     useStartupUpdates: (open: () => void) => void;
-    waitForUpdates: (signal: AbortSignal) => Promise<void>;
   }>(output, {
     vue: {
       ...Vue,
@@ -69,7 +68,6 @@ function fixture(
   });
   return {
     updater,
-    waitForUpdates,
     start: () => {
       useStartupUpdates(() => {
         opened++;
@@ -94,36 +92,6 @@ function fixture(
 }
 
 describe("startup updates", () => {
-  it("keeps downloaded bytes alive while hidden and cancels the release wait on reopen", async () => {
-    const run = fixture("available");
-    await run.start();
-    await run.updater.download();
-    expect(run.updater.busy.value).toBe(false);
-    expect(run.updater.holdsWindow.value).toBe(true);
-    const request = new AbortController();
-    let finished = false;
-    const waiting = run.waitForUpdates(request.signal).then(
-      () => {
-        finished = true;
-        return undefined;
-      },
-      (reason: unknown) => reason,
-    );
-    await Vue.nextTick();
-    expect(finished).toBe(false);
-    request.abort(new Error("reopened"));
-    expect(await waiting).toEqual(new Error("reopened"));
-    expect(run.updater.phase.value).toBe("ready");
-  });
-
-  it("does not wait when no update data is held or after cancellation", async () => {
-    const run = fixture("latest");
-    const request = new AbortController();
-    await run.waitForUpdates(request.signal);
-    request.abort(new Error("cancelled"));
-    await expect(run.waitForUpdates(request.signal)).rejects.toThrow("cancelled");
-  });
-
   it("checks once and offers a direct settings action without downloading", async () => {
     const run = fixture("available");
     await run.start();

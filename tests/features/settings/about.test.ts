@@ -11,7 +11,7 @@ import {
   getTextContent,
 } from "../../support/host/renderer";
 
-const filename = "src/features/settings/about/AboutPanel.vue";
+const filename = "src/features/settings/AboutPanel.vue";
 const source = await Bun.file(filename).text();
 
 function mountPanel(desktop = true, open: (url: string) => Promise<void> = async () => {}) {
@@ -20,8 +20,8 @@ function mountPanel(desktop = true, open: (url: string) => Promise<void> = async
     vue: Vue,
     "@tauri-apps/api/core": { isTauri: () => desktop },
     "@tauri-apps/plugin-opener": { openUrl: open },
-    "../../../../src-tauri/tauri.conf.json": config,
-    "../../../../src-tauri/icons/128x128.png": "/app.png",
+    "../../../src-tauri/tauri.conf.json": config,
+    "../../../src-tauri/icons/128x128.png": "/app.png",
     "@/shared/notifications/center": { notify: (input: NotificationInput) => feedback.push(input) },
   }).default;
   const root = createHostNode("root");

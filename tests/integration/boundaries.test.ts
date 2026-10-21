@@ -88,6 +88,16 @@ describe("frontend module boundaries", () => {
     ).toEqual([]);
   });
 
+  it("keeps shared artist contracts independent of the library and lyrics out of the playback session", () => {
+    expect(
+      dependencies.filter(
+        ({ source, target }) =>
+          (source.startsWith("features/artists/") && target.startsWith("features/library/")) ||
+          (source === "features/playback/session.ts" && target.startsWith("features/lyrics/")),
+      ),
+    ).toEqual([]);
+  });
+
   it("limits other features to playback session contracts and UI components", () => {
     expect(
       dependencies.filter(

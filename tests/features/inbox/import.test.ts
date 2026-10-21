@@ -3,12 +3,12 @@ import * as Vue from "vue";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 import { INBOX_CHANGED_EVENT } from "@/features/inbox/api";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
-import type { useInboxImport } from "@/features/inbox/import";
+import type { useInboxImport } from "@/features/inbox/useImport";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { InboxResult } from "@/features/inbox/api";
 import type { NotificationInput } from "@/shared/notifications/center";
 
-const importOutput = transpileScript(await Bun.file("src/features/inbox/import.ts").text());
+const importOutput = transpileScript(await Bun.file("src/features/inbox/useImport.ts").text());
 
 function createDropImporter(validate: () => Promise<string[]>, results: InboxResult[]) {
   const notices: NotificationInput[] = [];
@@ -195,7 +195,7 @@ it("registers picked files and folders and refreshes Inbox without success notic
   Object.defineProperty(globalThis, "window", { configurable: true, value: window });
   try {
     const module = evaluateSource<{ useInboxImport: typeof useInboxImport }>(
-      transpileScript(await Bun.file("src/features/inbox/import.ts").text()),
+      transpileScript(await Bun.file("src/features/inbox/useImport.ts").text()),
       {
         vue: Vue,
         "@tauri-apps/api/core": {

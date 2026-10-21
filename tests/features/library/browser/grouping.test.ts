@@ -2,19 +2,15 @@ import { afterEach, beforeEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import type { useLibraryBrowser } from "@/features/library/browser/useBrowser";
 import type { useLibrarySelection } from "@/features/library/browser/useSelection";
-import type {
-  AlbumSummary,
-  LibraryAlbumSelection,
-  LibraryGroup,
-  LibraryGrouping,
-} from "@/features/library/types";
+import type { AlbumSummary, LibraryAlbumSelection, LibraryGroup } from "@/features/library/types";
+import type { ArtistGrouping } from "@/features/artists/types";
 import type { TrackSummary } from "@/features/tracks/types";
 import { compileSfc, evaluateSource, transpileScript } from "../../../support/module/loader";
 import { createHostNode, createHostRenderer, findNode } from "../../../support/host/renderer";
 
 const browserSource = await Bun.file("src/features/library/browser/useBrowser.ts").text();
 const selectionSource = await Bun.file("src/features/library/browser/useSelection.ts").text();
-const artistSource = await Bun.file("src/features/artists/navigation/ArtistList.vue").text();
+const artistSource = await Bun.file("src/features/artists/ArtistList.vue").text();
 const albumSource = await Bun.file("src/features/library/browser/albums/AlbumBrowser.vue").text();
 const descriptors = new Map(
   ["window", "localStorage", "document"].map((key) => [
@@ -101,7 +97,7 @@ function mountBrowser() {
       invoke: async (command: string, args?: Record<string, unknown>) => {
         requests.push({ command, args });
         if (command === "list_artists")
-          return deferredArtists ?? groups[args?.grouping as LibraryGrouping];
+          return deferredArtists ?? groups[args?.grouping as ArtistGrouping];
         if (command === "list_albums")
           return (
             deferredAlbums ??
@@ -362,10 +358,10 @@ it("offers both grouping options and emits the selected mode", async () => {
     {
       vue: Vue,
       "@lucide/vue": { Check: placeholder, ChevronDown: placeholder },
-      "@/features/artists/navigation/ArtistRow.vue": placeholder,
+      "@/features/artists/ArtistRow.vue": placeholder,
     },
   );
-  const grouping = Vue.ref<LibraryGrouping>("albumArtist");
+  const grouping = Vue.ref<ArtistGrouping>("albumArtist");
   const root = createHostNode("root");
   const focused = { value: null as ReturnType<typeof createHostNode> | null };
   const app = createHostRenderer<ReturnType<typeof createHostNode>>((type, text) => {
@@ -386,7 +382,7 @@ it("offers both grouping options and emits the selected mode", async () => {
         grouping: grouping.value,
         isLoading: false,
         error: "",
-        onSelectGrouping: (value: LibraryGrouping) => {
+        onSelectGrouping: (value: ArtistGrouping) => {
           grouping.value = value;
         },
       }),

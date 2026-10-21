@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useLibraryFileImport } from "@/features/library/import/useFileImport";
-import { useInboxImport } from "@/features/inbox/import";
+import { useInboxImport } from "@/features/inbox/useImport";
 import { t } from "@/shared/i18n/locale";
 const dialog = ref<globalThis.HTMLDialogElement | null>(null);
 const target = ref("library");

@@ -32,7 +32,7 @@ export async function createView() {
     "@/shared/notifications/center": {
       notify: (input: NotificationInput) => feedback.push(input),
     },
-    "@/features/settings/about/AboutPanel.vue": Vue.defineComponent({
+    "@/features/settings/AboutPanel.vue": Vue.defineComponent({
       setup: () => () => Vue.h("div", { "data-about": "" }, "NewBee"),
     }),
     "@/shared/update/UpdatePanel.vue": Vue.defineComponent({

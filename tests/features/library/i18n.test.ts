@@ -17,7 +17,7 @@ import {
 
 const components = new Map<string, Vue.Component>();
 for (const path of [
-  "artists/navigation/ArtistRow.vue",
+  "artists/ArtistRow.vue",
   "library/browser/albums/AlbumTrack.vue",
   "playlist/tracks/PlaylistTrack.vue",
   "library/removal/DeleteAlbumDialog.vue",
@@ -159,7 +159,7 @@ describe("library and playlist translations", () => {
   });
 
   it("updates artist album counts when the locale changes without remounting", async () => {
-    const root = mount("artists/navigation/ArtistRow.vue", {
+    const root = mount("artists/ArtistRow.vue", {
       artist: "演出者数据",
       name: "演出者数据",
       albumCount: 3,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { useTrackReread } from "@/features/tracks/reread";
+import { useTrackReread } from "@/features/tracks/useReread";
 
 const props = defineProps<{ trackIds: readonly number[]; disabled?: boolean }>();
 const emit = defineEmits<{ close: [] }>();

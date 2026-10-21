@@ -5,7 +5,8 @@ import { useStartupUpdates } from "@/app/update";
 import CommandDialog from "@/features/shortcuts/CommandDialog.vue";
 import { getContextCommands } from "@/features/shortcuts/context";
 import { useTrackBridge } from "@/features/tracks/bridge";
-import { useDropImport } from "@/features/import/useDropImport";
+import { usePlaybackLyrics } from "@/features/lyrics/useSidecar";
+import { useDropImport } from "@/app/import/useDropImport";
 import { usePersistentActivePage } from "@/app/pages";
 import { useShortcuts } from "@/features/shortcuts/useShortcuts";
 import type { PlaylistCatalog } from "@/features/playlist/types";
@@ -26,6 +27,7 @@ import TrackInfoPanel from "@/features/playback/current/TrackInfoPanel.vue";
 import TitleBar from "@/app/shell/TitleBar.vue";
 
 useTrackBridge();
+usePlaybackLyrics();
 const { activePage } = usePersistentActivePage();
 const titleBar = shallowRef<InstanceType<typeof TitleBar> | null>(null);
 useStartupUpdates(() => void titleBar.value?.showSettings("advanced"));

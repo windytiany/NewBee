@@ -2,6 +2,7 @@ import { expect, it } from "bun:test";
 import { effectScope } from "vue";
 import { playbackFixture } from "../../support/playback/session";
 import { useLyrics } from "@/features/lyrics/useLyrics";
+import { useSidecar } from "@/features/lyrics/useSidecar";
 import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import type { TrackLyrics } from "@/features/lyrics/types";
@@ -59,7 +60,11 @@ for (const validSidecar of [true, false]) {
         useLyrics({
           currentTrack: session.state.currentTrack,
           playbackStatus: session.state.playbackStatus,
-          sidecarLyrics: session.state.sidecarLyrics,
+          sidecarLyrics: useSidecar({
+            currentTrack: session.state.currentTrack,
+            currentPlaybackId: session.state.currentPlaybackId,
+            invokeCommand,
+          }),
           invokeCommand,
         }),
       )!;

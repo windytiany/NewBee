@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import * as Vue from "vue";
-import type { useTrackReread } from "@/features/tracks/reread";
+import type { useTrackReread } from "@/features/tracks/useReread";
 import type { TrackReadResult } from "@/features/tracks/types";
 import type { NotificationInput } from "@/shared/notifications/center";
 import { compileSfc, evaluateSource, transpileScript } from "../../support/module/loader";
@@ -11,7 +11,7 @@ import {
   getTextContent,
 } from "../../support/host/renderer";
 
-const output = transpileScript(await Bun.file("src/features/tracks/reread.ts").text());
+const output = transpileScript(await Bun.file("src/features/tracks/useReread.ts").text());
 const menuOutput = compileSfc(
   await Bun.file("src/features/tracks/presentation/RereadMenuItem.vue").text(),
   "src/features/tracks/presentation/RereadMenuItem.vue",
@@ -100,7 +100,7 @@ it("menu captures multi-selection before close, shows reading state and blocks d
   const reader = test.module.useTrackReread();
   const module = evaluateSource<{ default: Vue.Component }>(menuOutput, {
     vue: Vue,
-    "@/features/tracks/reread": { useTrackReread: () => reader },
+    "@/features/tracks/useReread": { useTrackReread: () => reader },
   });
   const ids = Vue.ref([7, 9]);
   let closes = 0;

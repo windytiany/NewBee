@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { resolveDropRegion, type DropBounds } from "@/features/import/target";
+import { resolveDropRegion, type DropBounds } from "@/app/import/target";
 
 const bounds: DropBounds = { left: 0, top: 0, width: 300, height: 500 };
 function region(kind: string, id?: string, rectangle = bounds) {

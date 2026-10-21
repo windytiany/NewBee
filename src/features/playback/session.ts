@@ -1,9 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { computed, readonly, ref, watch } from "vue";
+import { computed, readonly, ref } from "vue";
 import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
-import type { TrackLyrics } from "@/features/lyrics/types";
 import type {
   PlaybackCommandInvoker,
   PlaybackDisplayTrack,
@@ -121,14 +120,12 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   const isSeeking = ref(false);
   const isTrackSkipPending = ref(false);
   const adapterError = ref("");
-  const sidecarLyrics = ref<TrackLyrics | null>(null);
   let disposed = false;
   let unlisten: (() => void) | null = null;
   let unlistenMetadata: (() => void) | null = null;
   let refreshing: Promise<void> | null = null;
   const rows = new Map<string, { track: PlaybackDisplayTrack; revision: number }>();
   let currentMetadataRevision = -1;
-  let sidecarRequest = 0;
   let seekingVersion = 0;
   let seekPlaybackId: number | null = null;
   let seekingRequest: Promise<PlaybackSessionReply> | null = null;
@@ -244,26 +241,6 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
   }
 
   const currentTrack = computed(() => snapshot.value.currentTrack);
-  watch(
-    () => [currentTrack.value?.trackId ?? null, snapshot.value.currentPlaybackId] as const,
-    ([trackId, playbackId], previous) => {
-      if (trackId === previous?.[0] && playbackId === previous?.[1]) return;
-      // Editing detaches the audio instance, but retains the listening lyrics.
-      if (trackId !== null && trackId === previous?.[0] && playbackId === null) return;
-      const generation = ++sidecarRequest;
-      sidecarLyrics.value = null;
-      if (trackId === null || playbackId === null) return;
-      const request = invokeCommand<TrackLyrics | null>("get_playback_sidecar_lyrics", { trackId });
-      void request
-        .then((lyrics) => {
-          if (!disposed && generation === sidecarRequest) sidecarLyrics.value = lyrics;
-        })
-        .catch((error: unknown) =>
-          logger.warn("lyrics", "sidecar_read_failed", error, { trackId }),
-        );
-    },
-    { flush: "sync" },
-  );
 
   const subscribe =
     options.subscribe ??
@@ -375,7 +352,6 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
 
   const state = Object.freeze({
     volume: computed(() => snapshot.value.volume),
-    sidecarLyrics: readonly(sidecarLyrics),
     playbackStatus: readonly(computed(() => snapshot.value.playbackStatus)),
     isPlaybackStatusSettled: computed(() => snapshot.value.revision >= 0 && !statusPending.value),
     playbackError: computed(() => adapterError.value || snapshot.value.playbackError),
@@ -411,7 +387,6 @@ export function createPlaybackSession(options: PlaybackSessionOptions = {}) {
     ready,
     dispose: () => {
       disposed = true;
-      sidecarRequest += 1;
       unlisten?.();
       unlistenMetadata?.();
     },

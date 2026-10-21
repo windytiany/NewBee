@@ -1,11 +1,7 @@
 import { logger } from "@/shared/logging/logger";
 import { ref } from "vue";
-import type {
-  ArtistSummary,
-  AlbumSummary,
-  LibraryAlbumSelection,
-  LibraryGrouping,
-} from "@/features/library/types";
+import type { ArtistSummary, ArtistGrouping } from "@/features/artists/types";
+import type { AlbumSummary, LibraryAlbumSelection } from "@/features/library/types";
 
 interface StoredSelection {
   group: { artist: string | null } | null;
@@ -13,8 +9,8 @@ interface StoredSelection {
 }
 
 interface StoredLibrarySelection {
-  grouping: LibraryGrouping;
-  selections: Record<LibraryGrouping, StoredSelection>;
+  grouping: ArtistGrouping;
+  selections: Record<ArtistGrouping, StoredSelection>;
 }
 
 const STORAGE_KEY = "newbee.library-selection";
@@ -93,7 +89,7 @@ function loadLibrarySelection(): StoredLibrarySelection {
 
 export function useLibrarySelection() {
   const stored = loadLibrarySelection();
-  const grouping = ref<LibraryGrouping>(stored.grouping);
+  const grouping = ref<ArtistGrouping>(stored.grouping);
   const selectedGroup = ref<ArtistSummary | null>(null);
   const selectedAlbum = ref<LibraryAlbumSelection | null>(null);
   let pendingAlbumSelection: StoredSelection["album"] = null;
@@ -121,7 +117,7 @@ export function useLibrarySelection() {
     persist();
   }
 
-  function setGrouping(next: LibraryGrouping) {
+  function setGrouping(next: ArtistGrouping) {
     if (next === grouping.value) return;
     if (hasRestoredGroups) saveSelection();
     grouping.value = next;

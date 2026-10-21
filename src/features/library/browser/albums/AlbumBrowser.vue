@@ -147,12 +147,8 @@ import LibraryStatistics from "@/features/library/statistics/LibraryStatistics.v
 import { ALBUM_COLUMN_WIDTH } from "@/features/library/layout";
 import { useAlbumScroll } from "@/features/library/browser/albums/scroll";
 import { layoutDensity } from "@/features/settings/appearance/layout";
-import type {
-  LibraryAlbumSelection,
-  ArtistSummary,
-  LibraryGrouping,
-  AlbumSummary,
-} from "@/features/library/types";
+import type { ArtistSummary, ArtistGrouping } from "@/features/artists/types";
+import type { LibraryAlbumSelection, AlbumSummary } from "@/features/library/types";
 import type { TrackSummary } from "@/features/tracks/types";
 
 import type { PlaylistSummary } from "@/features/playlist/types";
@@ -165,7 +161,7 @@ import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDia
 
 const props = defineProps<{
   artist: ArtistSummary | null;
-  grouping: LibraryGrouping;
+  grouping: ArtistGrouping;
   albums: AlbumSummary[];
   selectedAlbum: LibraryAlbumSelection | null;
   tracks: TrackSummary[];

@@ -39,10 +39,10 @@ it("lays out task progress before window controls without overlapping absolute p
       "@/app/shell/AppMenu.vue": { render: () => null },
       "@/app/shell/PageTabs.vue": { render: () => null },
       "@/features/library/synchronization/ScanDialog.vue": { render: () => null },
-      "@/features/import/ImportDialog.vue": { render: () => null },
+      "@/app/import/ImportDialog.vue": { render: () => null },
       "@/features/remapping/PathRemappingDialog.vue": { render: () => null },
       "@/features/settings/SettingsDialog.vue": { render: () => null },
-      "@/features/inbox/import": { useInboxImport: () => ({ pending: Vue.ref(false) }) },
+      "@/features/inbox/useImport": { useInboxImport: () => ({ pending: Vue.ref(false) }) },
       "@/features/library/import/useFileImport": {
         useLibraryFileImport: () => ({ isImporting: Vue.ref(false) }),
       },
@@ -77,8 +77,8 @@ it("routes brand menu selections to existing import and dialog actions", async (
     "@/app/shell/AppMenu.vue": { default: {} },
     "@/app/pages": { pageNames, pageLabel },
     "@/features/library/synchronization/ScanDialog.vue": { default: {} },
-    "@/features/import/ImportDialog.vue": { default: {} },
-    "@/features/inbox/import": { useInboxImport: () => ({ pending: Vue.ref(false) }) },
+    "@/app/import/ImportDialog.vue": { default: {} },
+    "@/features/inbox/useImport": { useInboxImport: () => ({ pending: Vue.ref(false) }) },
     "@/features/remapping/PathRemappingDialog.vue": { default: {} },
     "@/features/settings/SettingsDialog.vue": { default: {} },
     "@/features/library/import/useFileImport": {

@@ -89,6 +89,7 @@ import LyricsView from "@/features/lyrics/LyricsView.vue";
 import TrackPresentation from "@/features/playback/current/TrackPresentation.vue";
 import { canSeekLyrics, seekToLyric } from "@/features/lyrics/seek";
 import { useLyrics } from "@/features/lyrics/useLyrics";
+import { usePlaybackLyrics } from "@/features/lyrics/useSidecar";
 import {
   useDisplayMode,
   type PlaybackDisplayMode as Presentation,
@@ -126,7 +127,7 @@ const {
   state: lyricsState,
   activeIndex,
   activeGroupStartIndex,
-} = useLyrics({ currentTrack, playbackStatus, sidecarLyrics: session.state.sidecarLyrics });
+} = useLyrics({ currentTrack, playbackStatus, sidecarLyrics: usePlaybackLyrics() });
 const canSeek = computed(() => canSeekLyrics(session, lyricsState.value));
 const trackLyrics = computed(() =>
   lyricsState.value.status === "ready" ? lyricsState.value.lyrics : { kind: "none" as const },

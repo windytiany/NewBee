@@ -3,7 +3,7 @@ import { toRef } from "vue";
 import { useLibrary } from "@/features/library/useLibrary";
 import type { PlaylistCatalog } from "@/features/playlist/types";
 import SidePane from "@/shared/layout/SidePane.vue";
-import ArtistList from "@/features/artists/navigation/ArtistList.vue";
+import ArtistList from "@/features/artists/ArtistList.vue";
 import AlbumBrowser from "@/features/library/browser/albums/AlbumBrowser.vue";
 import DeleteAlbumDialog from "@/features/library/removal/DeleteAlbumDialog.vue";
 import DeleteTrackDialog from "@/features/library/removal/DeleteTrackDialog.vue";

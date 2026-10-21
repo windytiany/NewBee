@@ -328,7 +328,7 @@ it("activation and ordinary events read snapshots without scanning offline origi
         },
       }),
     },
-    "@/features/tracks/reread": {
+    "@/features/tracks/useReread": {
       useTrackReread: () => ({
         pending: Vue.ref(false),
         reread: () => {

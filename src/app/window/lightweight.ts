@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
 import { prepareRelease, waitForIdle } from "@/shared/lifecycle/activity";
 import { createWindowRelease } from "@/app/window/release";
-import { waitForUpdates } from "@/app/update";
+import { waitForUpdates } from "@/app/window/update";
 import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
 
