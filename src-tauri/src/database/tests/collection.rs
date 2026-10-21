@@ -417,7 +417,7 @@ fn path_migration_updates_each_distinct_source_without_changing_content_types_or
     draft.display_index = Some(2);
     database.save_artwork_drafts(&[(1, draft)]).unwrap();
     let before = signature(&database.get_artwork_collection(1).unwrap());
-    assert_eq!(database.migrate_library_paths("/old", "/new").unwrap(), 6);
+    assert_eq!(database.remap_paths("/old", "/new").unwrap(), 6);
     assert_eq!(
         signature(&database.get_artwork_collection(1).unwrap()),
         before

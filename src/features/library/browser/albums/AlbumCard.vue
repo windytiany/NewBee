@@ -49,7 +49,7 @@ import { computed, onUnmounted, ref } from "vue";
 import { DiscAlbum } from "@lucide/vue";
 import type { AlbumSummary } from "@/features/library/types";
 import { useArtworkSize } from "@/features/artwork/useArtworkSize";
-import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
+import { useAlbumArtwork } from "@/features/artwork/album/useArtwork";
 
 const props = defineProps<{
   album: AlbumSummary;

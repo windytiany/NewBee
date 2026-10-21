@@ -5,7 +5,7 @@ import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useLibraryFileImport } from "@/features/library/import/useFileImport";
-import { useLibraryScan } from "@/features/library/import/useScan";
+import { useLibrarySynchronization } from "@/features/library/synchronization/useScan";
 import { useInboxImport } from "@/features/inbox/import";
 import { resolveDropRegion, type DropRegion, type DropTarget } from "@/features/import/target";
 import { createTrackRegistration } from "@/features/tracks/registration";
@@ -21,7 +21,7 @@ import { t } from "@/shared/i18n/locale";
 export function useDropImport() {
   const library = useLibraryFileImport();
   const inbox = useInboxImport();
-  const { isScanning } = useLibraryScan();
+  const { isScanning } = useLibrarySynchronization();
   const session = usePlaybackSession();
   const synchronization = createTrackSynchronization(session, invoke);
   const register = createTrackRegistration(invoke);

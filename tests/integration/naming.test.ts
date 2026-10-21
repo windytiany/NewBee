@@ -26,6 +26,22 @@ test("module directories express ownership and non-Vue files name one responsibi
   expect(["src", "src-tauri/src", "tests"].flatMap(invalidPaths)).toEqual([]);
 });
 
+test("frontend directories express ownership instead of technical categories", () => {
+  const paths = ["src/features", "src/shared", "tests/features", "tests/shared"].flatMap(
+    (directory) =>
+      readdirSync(new URL(`${directory}/`, projectRoot), {
+        recursive: true,
+        withFileTypes: true,
+      })
+        .filter(
+          (entry) =>
+            entry.isDirectory() && ["components", "composables", "pages"].includes(entry.name),
+        )
+        .map((entry) => `${entry.parentPath}/${entry.name}`.split("\\").join("/")),
+  );
+  expect(paths.sort()).toEqual([]);
+});
+
 test("backend tests use owned tests directories instead of tests.rs", () => {
   const directory = "src-tauri/src";
   const paths = readdirSync(new URL(`${directory}/`, projectRoot), {

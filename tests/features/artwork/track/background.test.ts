@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { loadSourceModules } from "../../../support/module/loader";
-import type { TrackArtwork } from "@/features/artwork/types";
+import type { TrackArtwork } from "@/features/artwork/resources";
 
 const originals = [
   [globalThis, "Image", Object.getOwnPropertyDescriptor(globalThis, "Image")],
@@ -30,10 +30,10 @@ const dependencies: Record<string, unknown> = {
     },
   },
 };
-await loadSourceModules(["features/artwork/useTrackArtwork.ts"], dependencies);
+await loadSourceModules(["features/artwork/track/useArtwork.ts"], dependencies);
 const { useTrackArtwork, invalidateTrackArtworkCache } = dependencies[
-  "@/features/artwork/useTrackArtwork"
-] as typeof import("@/features/artwork/useTrackArtwork");
+  "@/features/artwork/track/useArtwork"
+] as typeof import("@/features/artwork/track/useArtwork");
 async function settle() {
   for (let index = 0; index < 8; index++) await Promise.resolve();
   await Vue.nextTick();

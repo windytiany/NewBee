@@ -3,18 +3,18 @@ import * as Vue from "vue";
 import { transpileScript, evaluateSource } from "../../support/module/loader";
 
 import type * as LibraryChanges from "@/features/library/events";
-import type * as LibraryScan from "@/features/library/import/useScan";
+import type * as LibraryScan from "@/features/library/synchronization/useScan";
 import type * as LibraryPage from "@/features/library/browser/useBrowser";
-import type * as PlaylistPage from "@/features/playlist/composables/usePage";
+import type * as PlaylistPage from "@/features/playlist/usePlaylist";
 import { notifications, type NotificationInput } from "@/shared/notifications/center";
 
 const outputs = new Map<string, string>();
 for (const path of [
   "features/library/events",
-  "features/library/import/useScan",
+  "features/library/synchronization/useScan",
   "features/library/browser/useBrowser",
-  "features/playlist/composables/useState",
-  "features/playlist/composables/usePage",
+  "features/playlist/usePlaylistState",
+  "features/playlist/usePlaylist",
 ]) {
   const source = await Bun.file(new URL(`../../../src/${path}.ts`, import.meta.url)).text();
   outputs.set(path, transpileScript(source));
@@ -49,10 +49,13 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@tauri-apps/api/core": {
+      isTauri: () => true,
       invoke: async (command: string, args?: { trackId?: number }) => {
         calls.push(command);
-        if (command === "scan_music_library") {
+        if (command === "synchronize_library") {
           if (scanError) throw scanError;
+          // The native result event is forwarded by the shared synchronization listener.
+          changes.reportLibraryImport(scanResult);
           return scanResult;
         }
         if (command === "list_artists") return [artist];
@@ -86,13 +89,17 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
         throw new Error(`Unexpected command: ${command}`);
       },
     },
-    "@/features/artwork/useTrackArtwork": {
+    "@/features/artwork/track/useArtwork": {
       invalidateTrackArtworkCache: (ids?: readonly number[]) => effects.push(ids ?? "all"),
     },
-    "@/features/artwork/useAlbumArtwork": {
+    "@/features/artwork/album/useArtwork": {
       invalidateAlbumArtworkCache: () => effects.push("albums"),
     },
     "@tauri-apps/api/event": { listen: async () => () => {} },
+    "@/features/library/synchronization/state": {
+      synchronizationSnapshot: Vue.ref({ progress: null, statuses: [], missing: [] }),
+      refreshSynchronization: async () => {},
+    },
     "@/shared/notifications/center": {
       notifications,
       notify: (notice: NotificationInput) => notices.push(notice),
@@ -108,7 +115,7 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
         setAvailableAlbums: () => {},
       }),
     },
-    "@/features/playlist/composables/useSelection": {
+    "@/features/playlist/list/useSelection": {
       usePlaylistSelection: () => ({
         availablePlaylists: playlists,
         selectedPlaylistId,
@@ -132,14 +139,16 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
     return exports;
   }
   const changes = load<typeof LibraryChanges>("features/library/events");
-  const scan = load<typeof LibraryScan>("features/library/import/useScan").useLibraryScan();
+  const scan = load<typeof LibraryScan>(
+    "features/library/synchronization/useScan",
+  ).useLibrarySynchronization();
   const { useLibraryBrowser } = load<typeof LibraryPage>("features/library/browser/useBrowser");
-  load("features/playlist/composables/useState");
-  const { usePlaylistPage } = load<typeof PlaylistPage>("features/playlist/composables/usePage");
+  load("features/playlist/usePlaylistState");
+  const { usePlaylist } = load<typeof PlaylistPage>("features/playlist/usePlaylist");
   globalThis.window.addEventListener(changes.LIBRARY_CHANGED_EVENT, () => effects.push("refresh"));
   const activePage = Vue.ref(mode);
   let library!: ReturnType<typeof useLibraryBrowser>;
-  let playlist!: ReturnType<typeof usePlaylistPage>;
+  let playlist!: ReturnType<typeof import("@/features/playlist/usePlaylistState").usePlaylistState>;
   const renderer = Vue.createRenderer<object>({
     patchProp: () => {},
     insert: () => {},
@@ -155,7 +164,8 @@ function createHarness(mode: "Library" | "Playlist" | "Playing" = "Library") {
   const app = renderer.createApp({
     setup() {
       library = useLibraryBrowser(Vue.computed(() => activePage.value === "Library"));
-      playlist = usePlaylistPage(Vue.computed(() => activePage.value === "Playlist"));
+      playlist = Vue.toRaw(usePlaylist(Vue.computed(() => activePage.value === "Playlist")))
+        .page as unknown as typeof playlist;
       return () => null;
     },
   });
@@ -237,7 +247,7 @@ describe("媒体库变更", () => {
       await settle();
       harness.calls.length = 0;
       harness.setScanResult({ added: 0, updated: 1, skipped: 0, failed: 1 });
-      await harness.scan.scanMusicLibrary();
+      await harness.scan.synchronizeLibrary();
       await settle();
       expect(harness.effects).toEqual(["all", "albums", "refresh"]);
       expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(0);
@@ -250,12 +260,12 @@ describe("媒体库变更", () => {
   it("无写入仍通知完成，失败不传播变更", async () => {
     const harness = createHarness("Playing");
     harness.setScanResult({ added: 0, updated: 0, skipped: 2, failed: 1 });
-    await harness.scan.scanMusicLibrary();
+    await harness.scan.synchronizeLibrary();
     expect(harness.effects).toEqual([]);
-    expect(harness.calls).toEqual(["scan_music_library"]);
+    expect(harness.calls).toEqual(["synchronize_library"]);
     expect(harness.notices[0]?.type).toBe("warning");
     harness.failScan();
-    await harness.scan.scanMusicLibrary();
+    await harness.scan.synchronizeLibrary();
     expect(harness.effects).toEqual([]);
     expect(harness.notices[1]?.type).toBe("error");
   });

@@ -97,8 +97,7 @@ describe("frontend module boundaries", () => {
           target.startsWith("features/playback/") &&
           target !== "features/playback/session.ts" &&
           target !== "features/playback/types.ts" &&
-          !target.startsWith("features/playback/components/") &&
-          !target.startsWith("features/playback/queue/components/"),
+          !(target.startsWith("features/playback/queue/") && target.endsWith(".vue")),
       ),
     ).toEqual([]);
     expect(

@@ -1,5 +1,5 @@
-import { invalidateAlbumArtworkCache } from "@/features/artwork/useAlbumArtwork";
-import { invalidateTrackArtworkCache } from "@/features/artwork/useTrackArtwork";
+import { invalidateAlbumArtworkCache } from "@/features/artwork/album/useArtwork";
+import { invalidateTrackArtworkCache } from "@/features/artwork/track/useArtwork";
 
 import type { TrackDetails } from "@/features/tracks/types";
 

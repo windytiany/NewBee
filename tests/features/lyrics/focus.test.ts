@@ -14,8 +14,8 @@ afterEach(() => {
 });
 
 const output = compileSfc(
-  await Bun.file("src/features/lyrics/components/LyricsView.vue").text(),
-  "src/features/lyrics/components/LyricsView.vue",
+  await Bun.file("src/features/lyrics/LyricsView.vue").text(),
+  "src/features/lyrics/LyricsView.vue",
 );
 
 function mount(lyrics: TrackLyrics) {
@@ -25,7 +25,7 @@ function mount(lyrics: TrackLyrics) {
   const { default: LyricsView } = evaluateSource<{ default: Vue.Component }>(output, {
     vue: Vue,
     "@lucide/vue": { RefreshCw: Vue.defineComponent({ setup: () => () => null }) },
-    "@/features/lyrics/composables/useFollow": {
+    "@/features/lyrics/useFollow": {
       useLyricsFollow: () => ({
         state: Vue.ref("browsing"),
         handleScroll: noop,
@@ -34,7 +34,6 @@ function mount(lyrics: TrackLyrics) {
         startBrowsing: noop,
         returnToCurrentLyric,
       }),
-      isLyricsScrollKey: () => false,
     },
   });
   const onSeek = mock(noop);

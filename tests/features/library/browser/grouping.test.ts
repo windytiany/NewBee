@@ -434,10 +434,10 @@ it("keeps same-name albums distinct and passes the artist scope to album menu an
       "@/features/artwork/artist/PhotoEditor.vue": placeholder,
       "@/features/library/statistics/LibraryStatistics.vue": placeholder,
       "@tauri-apps/api/core": { invoke: async () => [] },
-      "@/features/artwork/useAlbumArtwork": {
+      "@/features/artwork/album/useArtwork": {
         useAlbumArtwork: () => ({ background: Vue.ref(null) }),
       },
-      "@/features/settings/composables/useCoverBackground": {
+      "@/features/settings/appearance/useCoverBackground": {
         useCoverBackground: () => Vue.ref(false),
       },
       "@/features/library/browser/albums/AlbumDetail.vue": placeholder,

@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import PlaylistPlaceholder from "@/features/playlist/artwork/PlaylistPlaceholder.vue";
-import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
+import TrackArtwork from "@/features/artwork/track/TrackArtwork.vue";
 
 const props = defineProps<{
   playlistId: number;

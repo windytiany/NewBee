@@ -20,9 +20,9 @@ for (const path of [
   "artists/navigation/ArtistRow.vue",
   "library/browser/albums/AlbumTrack.vue",
   "playlist/tracks/PlaylistTrack.vue",
-  "library/components/dialogs/DeleteAlbumDialog.vue",
-  "library/components/dialogs/DeleteTrackDialog.vue",
-  "playlist/components/dialogs/DeletePlaylistDialog.vue",
+  "library/removal/DeleteAlbumDialog.vue",
+  "library/removal/DeleteTrackDialog.vue",
+  "playlist/management/DeletePlaylistDialog.vue",
 ]) {
   const filename = `src/features/${path}`;
   const source = readFileSync(filename, "utf8");
@@ -68,12 +68,12 @@ function collectSources(directory: string): string[] {
 describe("library and playlist translations", () => {
   for (const [path, props, warning] of [
     [
-      "library/components/dialogs/DeleteAlbumDialog.vue",
+      "library/removal/DeleteAlbumDialog.vue",
       { album: { album: "Album", albumArtist: "Artist" }, pending: false },
       "Files will not be deleted.",
     ],
     [
-      "library/components/dialogs/DeleteAlbumDialog.vue",
+      "library/removal/DeleteAlbumDialog.vue",
       {
         album: { album: "Album", albumArtist: "Artist", group: { grouping: "artist" } },
         pending: false,
@@ -81,12 +81,12 @@ describe("library and playlist translations", () => {
       "Only this artist's tracks will be removed. Files will not be deleted.",
     ],
     [
-      "library/components/dialogs/DeleteTrackDialog.vue",
+      "library/removal/DeleteTrackDialog.vue",
       { track: { title: "Song" }, isDeleting: false },
       "Files will not be deleted.",
     ],
     [
-      "playlist/components/dialogs/DeletePlaylistDialog.vue",
+      "playlist/management/DeletePlaylistDialog.vue",
       { playlist: { name: "Playlist" }, isPending: false },
       "This action cannot be undone.",
     ],

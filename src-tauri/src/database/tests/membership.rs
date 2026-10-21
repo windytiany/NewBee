@@ -388,13 +388,12 @@ fn directory_relocation_updates_external_tracks_without_granting_membership() {
         )
         .unwrap();
     let external = register(&database, &snapshot("/old/external.flac", None, None));
-    database.add_music_library_directory("/old").unwrap();
     database.set_tracks_skipped(&[external], true).unwrap();
     let playlist = database.create_playlist("Favorites").unwrap();
     database
         .append_playlist_tracks(playlist, vec![external])
         .unwrap();
-    assert_eq!(database.migrate_library_paths("/old", "/new").unwrap(), 5);
+    assert_eq!(database.remap_paths("/old", "/new").unwrap(), 4);
     assert_eq!(
         database.library_track_paths().unwrap(),
         vec!["/new/member.flac"]
@@ -415,8 +414,4 @@ fn directory_relocation_updates_external_tracks_without_granting_membership() {
         )
         .unwrap();
     assert_eq!(source, "/new/external.flac");
-    assert_eq!(
-        database.list_music_library_directories().unwrap()[0].path,
-        "/new"
-    );
 }

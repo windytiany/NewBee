@@ -6,7 +6,7 @@ export const settingsMessages: Record<string, string> = {
   "前级增益必须为 −20 至 +20 dB，步进 0.5 dB":
     "Preamp must be between −20 and +20 dB in 0.5 dB steps",
   "扫描时补齐 ReplayGain 标签": "Write missing ReplayGain tags during scans",
-  监视文件夹: "Watched folders",
+  同步文件夹: "Sync folders",
   备份: "Backup",
   导出备份: "Export backup",
   导入备份: "Import backup",

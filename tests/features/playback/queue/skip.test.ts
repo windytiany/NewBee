@@ -6,7 +6,7 @@ import { compileSfc, evaluateSource } from "../../../support/module/loader";
 import { createHostNode, createHostRenderer, findNode } from "../../../support/host/renderer";
 import type { HostNode } from "../../../support/host/renderer";
 
-const source = await Bun.file("src/features/playback/queue/components/QueueList.vue").text();
+const source = await Bun.file("src/features/playback/queue/QueueList.vue").text();
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
@@ -40,7 +40,7 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
       Vue.h("button", { "data-skip-targets": JSON.stringify(props.trackIds) }),
   });
   const component = evaluateSource<{ default: Vue.Component }>(
-    compileSfc(source, "src/features/playback/queue/components/QueueList.vue"),
+    compileSfc(source, "src/features/playback/queue/QueueList.vue"),
     {
       vue: Vue,
       "@/shared/interaction/useContextMenu": {
@@ -69,16 +69,20 @@ it("maps multi-selected queue occurrences to global track IDs and synchronizes s
       "@lucide/vue": { ChevronRight: Vue.defineComponent({ setup: () => () => null }) },
       "@/shared/notifications/useNotification": { useNotification: () => {} },
       "@/features/tracks/format": { formatTrackDuration: () => "1:00" },
-      "@/features/playback/queue/components/QueueRow.vue": row,
-      "@/features/metadata/manual/components/EditMenuItem.vue": menu,
-      "@/features/loudness/AnalysisMenuItem.vue": Vue.defineComponent({ setup: () => () => null }),
-      "@/features/loudness/RestoreMenuItem.vue": Vue.defineComponent({ setup: () => () => null }),
+      "@/features/playback/queue/QueueRow.vue": row,
+      "@/features/metadata/manual/EditMenuItem.vue": menu,
+      "@/features/metadata/replaygain/AnalysisMenuItem.vue": Vue.defineComponent({
+        setup: () => () => null,
+      }),
+      "@/features/metadata/replaygain/RemovalMenuItem.vue": Vue.defineComponent({
+        setup: () => () => null,
+      }),
       "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
         props: ["trackIds"],
         setup: (props) => () =>
           Vue.h("button", { "data-reread-targets": JSON.stringify(props.trackIds) }),
       }),
-      "@/features/playback/queue/components/SkipMenuItem.vue": menu,
+      "@/features/playback/queue/SkipMenuItem.vue": menu,
     },
   ).default;
   const skippedIds = Vue.ref([7]);

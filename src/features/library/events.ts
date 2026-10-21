@@ -1,4 +1,4 @@
-import { invalidateAlbumArtworkCache } from "@/features/artwork/useAlbumArtwork";
+import { invalidateAlbumArtworkCache } from "@/features/artwork/album/useArtwork";
 import { reportTracksChanged } from "@/features/tracks/events";
 
 export const LIBRARY_CHANGED_EVENT = "newbee:library-changed";

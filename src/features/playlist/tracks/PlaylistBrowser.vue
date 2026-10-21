@@ -171,7 +171,7 @@
             :disabled="props.isPlaylistActionPending"
             @close="closeContextMenu(true)"
           />
-          <RestoreMenuItem
+          <RemovalMenuItem
             :track-ids="contextTargetTrackIds"
             :disabled="props.isPlaylistActionPending"
             @close="closeContextMenu(true)"
@@ -241,15 +241,15 @@ import { createPlaylistDragReorder } from "@/features/playlist/ordering/drag";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { PlaylistSummary, PlaylistTrackSummary } from "@/features/playlist/types";
 import PlaylistTrack from "@/features/playlist/tracks/PlaylistTrack.vue";
-import TrackArtwork from "@/features/artwork/components/TrackArtwork.vue";
-import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import TrackArtwork from "@/features/artwork/track/TrackArtwork.vue";
+import SkipMenuItem from "@/features/playback/queue/SkipMenuItem.vue";
 import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
-import AnalysisMenuItem from "@/features/loudness/AnalysisMenuItem.vue";
-import RestoreMenuItem from "@/features/loudness/RestoreMenuItem.vue";
-import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
+import AnalysisMenuItem from "@/features/metadata/replaygain/AnalysisMenuItem.vue";
+import RemovalMenuItem from "@/features/metadata/replaygain/RemovalMenuItem.vue";
+import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
-import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
+import ReleaseMenuItem from "@/features/metadata/releases/ReleaseMenuItem.vue";
 import AppendMenuItem from "@/features/playlist/tracks/AppendMenuItem.vue";
 import ImportMenuItem from "@/features/library/import/ImportMenuItem.vue";
 import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDialog.vue";

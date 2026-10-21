@@ -28,7 +28,7 @@ fn junction_temp_directory_preserves_scanned_artwork_identity() {
         "database::tests::artwork::failures::invalid_directory_cover_reports_a_problem_and_retains_the_path",
         "database::tests::artwork::failures::unreadable_directory_cover_is_not_treated_as_removal",
         "metadata::tests::library::scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse",
-        "library::import::tests::directory::rejects_roots_that_no_longer_match_the_saved_canonical_path",
+        "library::synchronization::tests::scan::rejects_roots_that_no_longer_match_the_saved_canonical_path",
     ];
     // Change TEMP only in a child process so parallel tests keep their own environment.
     let output = Command::new(std::env::current_exe().unwrap())

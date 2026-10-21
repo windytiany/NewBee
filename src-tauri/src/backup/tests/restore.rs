@@ -67,7 +67,7 @@ fn snapshot_round_trip_includes_database_settings_session_and_interface_without_
     let file = source.0.join("backup.newbee");
     make_backup(&source.0, &file);
     let saved = archive::read(&file).unwrap();
-    assert_eq!(saved.settings, Settings::default());
+    assert_eq!(saved.settings, manifest().settings);
     assert_eq!(saved.interface, manifest().interface);
     assert_eq!(saved.session.current_track.unwrap().track_id, Some(1));
     let queue = serde_json::to_value(saved.session.queue).unwrap();
@@ -94,9 +94,11 @@ fn snapshot_round_trip_includes_database_settings_session_and_interface_without_
         Some("song")
     );
     assert_eq!(restored.list_playlist_tracks(1).unwrap().len(), 1);
+    let settings =
+        crate::settings::SettingsState::load(destination.0.join("settings.json")).unwrap();
     assert_eq!(
-        restored.list_music_library_directories().unwrap()[0].path,
-        "C:\\Music"
+        settings.get().unwrap().synchronization_folders,
+        manifest().settings.synchronization_folders
     );
     let connection = Connection::open(destination.0.join("music-library.sqlite3")).unwrap();
     let count: i64 = connection

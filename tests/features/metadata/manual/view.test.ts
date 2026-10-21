@@ -15,12 +15,8 @@ import { createTagEditor } from "@/features/metadata/manual/useEditor";
 import { TAG_FIELDS } from "@/features/metadata/draft";
 import type { EditableTrack, TagChange } from "@/features/metadata/types";
 
-const dialogSource = await Bun.file(
-  "src/features/metadata/manual/components/TagEditorDialog.vue",
-).text();
-const menuSource = await Bun.file(
-  "src/features/metadata/manual/components/EditMenuItem.vue",
-).text();
+const dialogSource = await Bun.file("src/features/metadata/manual/TagEditorDialog.vue").text();
+const menuSource = await Bun.file("src/features/metadata/manual/EditMenuItem.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
   setLocale("zh-CN");

@@ -4,7 +4,7 @@ import type { InvokeArgs } from "@tauri-apps/api/core";
 import type { TracksInvoker } from "@/features/tracks/api";
 import type { TrackDetails } from "@/features/tracks/types";
 import type { PlaylistTrackSummary } from "@/features/playlist/types";
-import type { usePlaylistPage } from "@/features/playlist/composables/usePage";
+import type { usePlaylist } from "@/features/playlist/usePlaylist";
 import { reportTracksChanged, TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { reportPlaylistChanged } from "@/features/playlist/events";
 import { createTrackSynchronization } from "@/features/tracks/synchronize";
@@ -12,9 +12,7 @@ import { createMetadataSave } from "@/features/metadata/save";
 import { evaluateSource, transpileScript } from "../../../support/module/loader";
 import { createHostNode, createHostRenderer } from "../../../support/host/renderer";
 
-const source = transpileScript(
-  await Bun.file("src/features/playlist/composables/usePage.ts").text(),
-);
+const source = transpileScript(await Bun.file("src/features/playlist/usePlaylist.ts").text());
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
@@ -86,18 +84,18 @@ async function harness(initialActive = true) {
       ] as T;
     throw new Error(`Unexpected command: ${command}`);
   };
-  const session = { updateTrackMetadata: async () => {} };
-  const { usePlaylistPage: createPage } = evaluateSource<{
-    usePlaylistPage: typeof usePlaylistPage;
+  const session = { state: {}, updateTrackMetadata: async () => {} };
+  const { usePlaylist: createPage } = evaluateSource<{
+    usePlaylist: typeof usePlaylist;
   }>(source, {
     vue: Vue,
     "@tauri-apps/api/core": { invoke: invokeCommand },
     "@/features/playback/session": { usePlaybackSession: () => session },
   });
-  let page!: ReturnType<typeof usePlaylistPage>;
+  let page!: ReturnType<typeof import("@/features/playlist/usePlaylistState").usePlaylistState>;
   const app = createHostRenderer(createHostNode).createApp({
     setup() {
-      page = createPage(active);
+      page = Vue.toRaw(createPage(active)).page as unknown as typeof page;
       return () => null;
     },
   });

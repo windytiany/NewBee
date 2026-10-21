@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { ref } from "vue";
 import type { PlaybackStatus } from "@/features/playback/types";
-import type { LyricsState } from "@/features/lyrics/composables/useLyrics";
+import type { LyricsState } from "@/features/lyrics/useLyrics";
 import { canSeekLyrics, seekToLyric } from "@/features/lyrics/seek";
 import type { LyricsSeekSession } from "@/features/lyrics/seek";
 

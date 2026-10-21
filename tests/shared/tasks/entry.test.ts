@@ -41,7 +41,12 @@ function mount() {
   return { tasks, root, entry, panel, toggle };
 }
 
-const progress = { key: "loudness", message: "正在分析响度…", completed: 1260, total: 3000 };
+const progress = {
+  key: "replaygain-analysis",
+  message: "正在分析 ReplayGain…",
+  completed: 1260,
+  total: 3000,
+};
 
 describe("task entry", () => {
   it("hides when idle, starts collapsed, shows a single percentage and uses a native dismissible popover", async () => {
@@ -66,7 +71,7 @@ describe("task entry", () => {
     await Vue.nextTick();
     expect(test.entry()?.props["aria-expanded"]).toBe(false);
     expect(test.tasks.active.value).toHaveLength(1);
-    test.tasks.finish("loudness");
+    test.tasks.finish("replaygain-analysis");
     await Vue.nextTick();
     expect(test.entry()).toBeNull();
   });
@@ -96,13 +101,13 @@ describe("task entry", () => {
   it("retains an unread error, acknowledges on open and clears viewed results on close", async () => {
     const test = mount();
     test.tasks.update(progress);
-    test.tasks.finish("loudness", { type: "error", message: "响度分析失败" });
+    test.tasks.finish("replaygain-analysis", { type: "error", message: "ReplayGain 分析失败" });
     await Vue.nextTick();
     expect(test.entry()).not.toBeNull();
     expect(
       findNode(test.entry()!, (node) => node.props["aria-label"] === "任务异常"),
     ).not.toBeNull();
-    expect(getTextContent(test.panel())).toContain("响度分析失败");
+    expect(getTextContent(test.panel())).toContain("ReplayGain 分析失败");
     expect(findNode(test.panel(), (node) => node.type === "progress")).toBeNull();
     test.toggle("open");
     await Vue.nextTick();
@@ -117,7 +122,7 @@ describe("task entry", () => {
     test.tasks.update(progress);
     await Vue.nextTick();
     test.toggle("open");
-    test.tasks.finish("loudness", { type: "warning", message: "1 首失败" });
+    test.tasks.finish("replaygain-analysis", { type: "warning", message: "1 首失败" });
     await Vue.nextTick();
     expect(test.tasks.unread.value).toBe(false);
     setLocale("en");

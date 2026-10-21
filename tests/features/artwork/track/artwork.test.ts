@@ -8,7 +8,7 @@ import { notifications, notify } from "@/shared/notifications/center";
 import { useNotification } from "@/shared/notifications/useNotification";
 import { createHostNode, createHostRenderer } from "../../../support/host/renderer";
 import type { HostNode as ArtworkHostNode } from "../../../support/host/renderer";
-import type { TrackArtwork } from "@/features/artwork/types";
+import type { TrackArtwork } from "@/features/artwork/resources";
 
 import type { TrackDetails } from "@/features/tracks/types";
 
@@ -94,15 +94,15 @@ dependencies["@tauri-apps/api/core"] = {
 
 await loadSourceModules(
   [
-    "features/artwork/useTrackArtwork.ts",
-    "features/artwork/useTrackArtworkPresentation.ts",
+    "features/artwork/track/useArtwork.ts",
+    "features/artwork/track/usePresentation.ts",
     "features/playback/current/useTrackDetails.ts",
   ],
   dependencies,
 );
 const artworkModule = dependencies[
-  "@/features/artwork/useTrackArtwork"
-] as typeof import("@/features/artwork/useTrackArtwork");
+  "@/features/artwork/track/useArtwork"
+] as typeof import("@/features/artwork/track/useArtwork");
 const trackInfoModule = dependencies[
   "@/features/playback/current/useTrackDetails"
 ] as typeof import("@/features/playback/current/useTrackDetails");
@@ -112,14 +112,14 @@ const playingTrack = ref<{ trackId: number; title: string; artist: string } | nu
 
 function createTrackArtworkComponent(
   source: string,
-  filename = "src/features/artwork/components/TrackArtwork.vue",
+  filename = "src/features/artwork/track/TrackArtwork.vue",
 ) {
   const output = compileSfc(source, filename, { id: "track-artwork-test" });
   const modules: Record<string, unknown> = {
     vue: { ...Vue, Transition: testTransition },
-    "@/features/artwork/useTrackArtwork": artworkModule,
-    "@/features/artwork/useTrackArtworkPresentation":
-      dependencies["@/features/artwork/useTrackArtworkPresentation"],
+    "@/features/artwork/track/useArtwork": artworkModule,
+    "@/features/artwork/track/usePresentation":
+      dependencies["@/features/artwork/track/usePresentation"],
     "@/features/artwork/useArtworkSize": { useArtworkSize: () => measuredArtworkSize },
     "@/features/playback/session": {
       usePlaybackSession: () => ({ state: { currentTrack: playingTrack } }),
@@ -141,7 +141,7 @@ function createTrackArtworkComponent(
 
 const trackArtworkComponent = createTrackArtworkComponent(
   await Bun.file(
-    new URL("../../../../src/features/artwork/components/TrackArtwork.vue", import.meta.url),
+    new URL("../../../../src/features/artwork/track/TrackArtwork.vue", import.meta.url),
   ).text(),
 );
 

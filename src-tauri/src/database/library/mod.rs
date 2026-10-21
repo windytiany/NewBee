@@ -1,4 +1,3 @@
-mod paths;
 pub(crate) mod scanning;
 mod state;
 #[cfg(test)]
@@ -6,9 +5,7 @@ use crate::tracks::model::TrackWriteInput;
 
 use super::Database;
 use crate::artwork::track::TrackArtwork;
-use crate::library::model::{
-    AlbumSummary, ArtistSummary, LibraryGroup, LibraryGrouping, MusicLibraryDirectory,
-};
+use crate::library::model::{AlbumSummary, ArtistSummary, LibraryGroup, LibraryGrouping};
 use crate::settings::{AlbumSortBy, AlbumSortOrder};
 use crate::tracks::model::TrackSummary;
 use crate::tracks::model::TrackWriteOutcome;
@@ -53,44 +50,6 @@ impl Database {
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
-    }
-
-    pub fn list_music_library_directories(&self) -> Result<Vec<MusicLibraryDirectory>, String> {
-        let connection = self.connection()?;
-        let mut statement = connection
-            .prepare("SELECT id, path FROM music_library_directories ORDER BY id")
-            .map_err(|error| format!("Failed to prepare library directory query: {error}"))?;
-        let rows = statement
-            .query_map([], |row| {
-                let id = row.get(0)?;
-                let path: String = row.get(1)?;
-                Ok(MusicLibraryDirectory { id, path })
-            })
-            .map_err(|error| format!("Failed to list library directories: {error}"))?;
-        rows.collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|error| format!("Failed to read library directories: {error}"))
-    }
-
-    pub fn add_music_library_directory(&self, path: &str) -> Result<bool, String> {
-        let connection = self.connection()?;
-        let inserted = connection
-            .execute(
-                "INSERT OR IGNORE INTO music_library_directories (path) VALUES (?1)",
-                [path],
-            )
-            .map_err(|error| format!("Failed to save library directory: {error}"))?;
-        Ok(inserted > 0)
-    }
-
-    pub fn remove_music_library_directory(&self, id: i64) -> Result<(), String> {
-        let connection = self.connection()?;
-        let removed = connection
-            .execute("DELETE FROM music_library_directories WHERE id = ?1", [id])
-            .map_err(|error| format!("Failed to remove library directory: {error}"))?;
-        if removed == 0 {
-            return Err(format!("Library directory {id} was not found"));
-        }
-        Ok(())
     }
 
     /// Import a snapshot into the library and clear its Inbox registration atomically.

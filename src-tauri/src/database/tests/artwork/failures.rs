@@ -66,7 +66,19 @@ fn invalid_directory_cover_reports_a_problem_and_retains_the_path() {
         before
     );
     std::fs::remove_file(audio).unwrap();
-    assert_eq!(library.scan()["failed"], 1);
+    assert_eq!(library.scan()["failed"], 0);
+    let snapshot = crate::library::synchronization::get_library_synchronization(
+        library.app.state(),
+        library.app.state(),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(snapshot).unwrap()["missing"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
     assert_eq!(artwork(&library.webview, 1), cover);
     assert_eq!(
         library

@@ -1,5 +1,7 @@
 import { nextTick } from "vue";
-import type { TrackArtwork } from "@/features/artwork/types";
+
+/** Raw encoded image bytes from Tauri; an empty response means no artwork. */
+export type TrackArtwork = ArrayBuffer;
 
 export type DecodedArtwork = {
   readonly url: string;

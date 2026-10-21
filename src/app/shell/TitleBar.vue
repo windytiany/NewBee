@@ -13,7 +13,7 @@
       />
       <ScanDialog ref="libraryScanDialog" />
       <ImportDialog ref="importDialog" />
-      <PathMigrationDialog ref="pathMigrationDialog" />
+      <PathRemappingDialog ref="pathRemappingDialog" />
       <SettingsDialog ref="settingsDialog" />
     </div>
 
@@ -42,13 +42,13 @@ import PageTabs from "@/app/shell/PageTabs.vue";
 import WindowControls from "@/app/shell/WindowControls.vue";
 import TaskEntry from "@/shared/tasks/TaskEntry.vue";
 import AppMenu from "@/app/shell/AppMenu.vue";
-import ScanDialog from "@/features/library/import/ScanDialog.vue";
+import ScanDialog from "@/features/library/synchronization/ScanDialog.vue";
 import ImportDialog from "@/features/import/ImportDialog.vue";
 import { useInboxImport } from "@/features/inbox/import";
 import { computed } from "vue";
-import PathMigrationDialog from "@/features/library/paths/PathMigrationDialog.vue";
+import PathRemappingDialog from "@/features/remapping/PathRemappingDialog.vue";
 import { useLibraryFileImport } from "@/features/library/import/useFileImport";
-import SettingsDialog from "@/features/settings/components/SettingsDialog.vue";
+import SettingsDialog from "@/features/settings/SettingsDialog.vue";
 import type { PageName } from "@/app/pages";
 import type { AppMenuAction } from "@/app/shell/AppMenu.vue";
 
@@ -73,7 +73,7 @@ const isImporting = computed(() => libraryImport.isImporting.value || inboxImpor
 const importDialog = ref<InstanceType<typeof ImportDialog> | null>(null);
 const libraryScanDialog = ref<InstanceType<typeof ScanDialog> | null>(null);
 const settingsDialog = ref<InstanceType<typeof SettingsDialog> | null>(null);
-const pathMigrationDialog = ref<InstanceType<typeof PathMigrationDialog> | null>(null);
+const pathRemappingDialog = ref<InstanceType<typeof PathRemappingDialog> | null>(null);
 
 async function showSettings(category?: "advanced") {
   await settingsDialog.value?.show(category);
@@ -88,8 +88,8 @@ async function onMenuSelect(action: AppMenuAction) {
     case "scan":
       libraryScanDialog.value?.show();
       break;
-    case "migrate":
-      pathMigrationDialog.value?.show();
+    case "remap":
+      pathRemappingDialog.value?.show();
       break;
     case "settings":
       await showSettings();

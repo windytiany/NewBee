@@ -7,9 +7,7 @@ const apps: Vue.App[] = [];
 afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();
 });
-const source = await Bun.file(
-  "src/features/metadata/releases/components/ReleaseMenuItem.vue",
-).text();
+const source = await Bun.file("src/features/metadata/releases/ReleaseMenuItem.vue").text();
 async function run(fail = false) {
   const opened: number[][] = [];
   const ids: number[][] = [];

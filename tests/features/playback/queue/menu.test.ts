@@ -11,8 +11,8 @@ import {
   getTextContent,
 } from "../../../support/host/renderer";
 
-const source = await Bun.file("src/features/playback/queue/components/SkipMenuItem.vue").text();
-const rowSource = await Bun.file("src/features/playback/queue/components/QueueRow.vue").text();
+const source = await Bun.file("src/features/playback/queue/SkipMenuItem.vue").text();
+const rowSource = await Bun.file("src/features/playback/queue/QueueRow.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
   for (const app of apps.splice(0)) app.unmount();
@@ -38,7 +38,7 @@ async function menu(trackIds: number[], initialSkipped: number[] = [], fail = fa
   await fixture.session.ready;
   const preferences = fixture.session.state;
   const component = evaluateSource<{ default: Vue.Component }>(
-    compileSfc(source, "src/features/playback/queue/components/SkipMenuItem.vue"),
+    compileSfc(source, "src/features/playback/queue/SkipMenuItem.vue"),
     {
       vue: Vue,
       "@/features/playback/session": {
@@ -114,7 +114,7 @@ it.each([
   selection.selectItem(scope, "first", keys);
   const icon = Vue.defineComponent({ render: () => Vue.h("svg") });
   const component = evaluateSource<{ default: Vue.Component }>(
-    compileSfc(rowSource, "src/features/playback/queue/components/QueueRow.vue"),
+    compileSfc(rowSource, "src/features/playback/queue/QueueRow.vue"),
     {
       vue: Vue,
       "@tauri-apps/api/core": { invoke: async () => null },
@@ -147,7 +147,7 @@ it("shows the skip icon while keeping queue double-click playback available", as
   let plays = 0;
   const icon = Vue.defineComponent({ render: () => Vue.h("svg") });
   const component = evaluateSource<{ default: Vue.Component }>(
-    compileSfc(rowSource, "src/features/playback/queue/components/QueueRow.vue"),
+    compileSfc(rowSource, "src/features/playback/queue/QueueRow.vue"),
     {
       vue: Vue,
       "@tauri-apps/api/core": { invoke: async () => null },

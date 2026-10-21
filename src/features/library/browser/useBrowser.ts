@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
 import { useLibrarySelection } from "@/features/library/browser/useSelection";
-import { useLibraryActions } from "@/features/library/composables/useActions";
+import { useLibraryActions } from "@/features/library/useActions";
 import { createLibraryApi } from "@/features/library/api";
 import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";

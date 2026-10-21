@@ -14,21 +14,11 @@ import { createReleaseEditor } from "@/features/metadata/releases/useEditor";
 import type { MappingDragOptions } from "@/features/metadata/releases/mapping/drag";
 import * as metadata from "@/features/metadata/draft";
 import { album, local, release } from "./fixtures";
-const mappingSource = await Bun.file(
-  "src/features/metadata/releases/components/TrackMapping.vue",
-).text();
-const searchSource = await Bun.file(
-  "src/features/metadata/releases/components/ReleaseSearch.vue",
-).text();
-const fieldsSource = await Bun.file(
-  "src/features/metadata/releases/components/TagFields.vue",
-).text();
-const menuSource = await Bun.file(
-  "src/features/metadata/releases/components/ReleaseMenuItem.vue",
-).text();
-const dialogSource = await Bun.file(
-  "src/features/metadata/releases/components/ReleaseTagDialog.vue",
-).text();
+const mappingSource = await Bun.file("src/features/metadata/releases/TrackMapping.vue").text();
+const searchSource = await Bun.file("src/features/metadata/releases/ReleaseSearch.vue").text();
+const fieldsSource = await Bun.file("src/features/metadata/releases/TagFields.vue").text();
+const menuSource = await Bun.file("src/features/metadata/releases/ReleaseMenuItem.vue").text();
+const dialogSource = await Bun.file("src/features/metadata/releases/ReleaseTagDialog.vue").text();
 const apps: Array<{ unmount: () => void }> = [];
 afterEach(() => {
   setLocale("zh-CN");
@@ -100,9 +90,9 @@ function mountDialog(editor: ReturnType<typeof createReleaseEditor>) {
       vue: Vue,
       "@/features/metadata/releases/useEditor": { useReleaseEditor: () => editor },
       "@/features/metadata/draft": metadata,
-      "@/features/metadata/releases/components/ReleaseSearch.vue": passive,
-      "@/features/metadata/releases/components/TagFields.vue": passive,
-      "@/features/metadata/releases/components/TrackMapping.vue": passive,
+      "@/features/metadata/releases/ReleaseSearch.vue": passive,
+      "@/features/metadata/releases/TagFields.vue": passive,
+      "@/features/metadata/releases/TrackMapping.vue": passive,
     },
   ).default;
   const root = createDialogNode("root");

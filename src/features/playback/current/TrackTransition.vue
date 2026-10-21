@@ -32,8 +32,8 @@
 
 <script setup lang="ts">
 import { shallowRef, watch } from "vue";
-import { useTrackArtworkPresentation } from "@/features/artwork/useTrackArtworkPresentation";
-import type { TrackArtworkStatus } from "@/features/artwork/useTrackArtwork";
+import { useTrackArtworkPresentation } from "@/features/artwork/track/usePresentation";
+import type { TrackArtworkStatus } from "@/features/artwork/track/useArtwork";
 import { useTrackDetails } from "@/features/playback/current/useTrackDetails";
 import type { PlaybackTrack } from "@/features/playback/types";
 import type { EditorTrack } from "@/features/metadata/types";

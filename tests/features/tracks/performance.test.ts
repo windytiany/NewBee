@@ -8,7 +8,7 @@ import { createTrackBridge } from "@/features/tracks/bridge";
 import type { TracksInvoker } from "@/features/tracks/api";
 import type { TrackDetails, TrackReadResult } from "@/features/tracks/types";
 import type { PlaylistTrackSummary } from "@/features/playlist/types";
-import type { usePlaylistPage } from "@/features/playlist/composables/usePage";
+import type { usePlaylist } from "@/features/playlist/usePlaylist";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 import { playbackFixture } from "../../support/playback/session";
 import { createHostNode, createHostRenderer } from "../../support/host/renderer";
@@ -76,19 +76,19 @@ it("measures 5000-entry queue and mounted playlist metadata adapters without nat
   Object.defineProperty(globalThis, "window", { configurable: true, value: new EventTarget() });
   const { session, commands } = playbackFixture();
   const source = await Bun.file(
-    new URL("../../../src/features/playlist/composables/usePage.ts", import.meta.url),
+    new URL("../../../src/features/playlist/usePlaylist.ts", import.meta.url),
   ).text();
-  const { usePlaylistPage: createPage } = evaluateSource<{
-    usePlaylistPage: typeof usePlaylistPage;
+  const { usePlaylist: createPage } = evaluateSource<{
+    usePlaylist: typeof usePlaylist;
   }>(transpileScript(source), {
     vue: Vue,
     "@tauri-apps/api/core": { invoke: invokeCommand },
     "@/features/playback/session": { usePlaybackSession: () => session },
   });
-  let page!: ReturnType<typeof usePlaylistPage>;
+  let page!: ReturnType<typeof import("@/features/playlist/usePlaylistState").usePlaylistState>;
   const app = createHostRenderer(createHostNode).createApp({
     setup() {
-      page = createPage(Vue.ref(true));
+      page = Vue.toRaw(createPage(Vue.ref(true))).page as unknown as typeof page;
       return () => null;
     },
   });

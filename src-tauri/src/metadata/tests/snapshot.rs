@@ -63,20 +63,23 @@ fn scan_reports_missing_audio_without_erasing_the_snapshot_or_playlist() {
     let fixture = Fixture::new();
     let path = fixture.wav();
     let database = Database::open(":memory:").unwrap();
-    database
-        .add_music_library_directory(&std::fs::canonicalize(&fixture.0).unwrap().to_string_lossy())
-        .unwrap();
     let app = tauri::test::mock_builder()
+        .manage(crate::library::synchronization::tests::support::settings(
+            &fixture.0,
+        ))
+        .manage(crate::library::synchronization::SynchronizationState::default())
         .manage(database)
         .manage(WriteState::default())
         .build(tauri::generate_context!())
         .unwrap();
     let scan = || {
-        tauri::async_runtime::block_on(crate::library::import::directory::scan_music_library(
-            None,
-            app.handle().clone(),
-            app.state(),
-        ))
+        tauri::async_runtime::block_on(
+            crate::library::synchronization::commands::synchronize_library(
+                None,
+                app.handle().clone(),
+                app.state(),
+            ),
+        )
         .unwrap()
     };
     assert_eq!(serde_json::to_value(scan()).unwrap()["added"], 1);
@@ -89,7 +92,17 @@ fn scan_reports_missing_audio_without_erasing_the_snapshot_or_playlist() {
         .unwrap();
     let before = serde_json::to_value(app.state::<Database>().get_track(1).unwrap()).unwrap();
     std::fs::remove_file(&path).unwrap();
-    assert_eq!(serde_json::to_value(scan()).unwrap()["failed"], 1);
+    assert_eq!(serde_json::to_value(scan()).unwrap()["failed"], 0);
+    let snapshot =
+        crate::library::synchronization::get_library_synchronization(app.state(), app.state())
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(snapshot).unwrap()["missing"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
     assert_eq!(
         serde_json::to_value(app.state::<Database>().get_track(1).unwrap()).unwrap(),
         before
@@ -173,20 +186,23 @@ fn every_scan_reparses_audio_without_sidecar_reads_and_clears_confirmed_removals
     let sidecar = path.with_extension("lrc");
     std::fs::write(&sidecar, "[00:01.00]sidecar").unwrap();
     let database = Database::open(":memory:").unwrap();
-    database
-        .add_music_library_directory(&std::fs::canonicalize(&fixture.0).unwrap().to_string_lossy())
-        .unwrap();
     let app = tauri::test::mock_builder()
+        .manage(crate::library::synchronization::tests::support::settings(
+            &fixture.0,
+        ))
+        .manage(crate::library::synchronization::SynchronizationState::default())
         .manage(database)
         .manage(WriteState::default())
         .build(tauri::generate_context!())
         .unwrap();
     let scan = || {
-        tauri::async_runtime::block_on(crate::library::import::directory::scan_music_library(
-            None,
-            app.handle().clone(),
-            app.state(),
-        ))
+        tauri::async_runtime::block_on(
+            crate::library::synchronization::commands::synchronize_library(
+                None,
+                app.handle().clone(),
+                app.state(),
+            ),
+        )
         .unwrap()
     };
     assert_eq!(serde_json::to_value(scan()).unwrap()["added"], 1);

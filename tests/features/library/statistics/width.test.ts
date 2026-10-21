@@ -47,7 +47,7 @@ async function harness(stored: string | null = null) {
   const warnings: unknown[][] = [];
   const { useWidth: createWidth } = evaluateSource<{ useWidth: typeof useWidth }>(source, {
     vue: Vue,
-    "@/features/settings/layout": { layoutDensity: density },
+    "@/features/settings/appearance/layout": { layoutDensity: density },
     "@/shared/logging/logger": { logger: { warn: (...args: unknown[]) => warnings.push(args) } },
   });
   async function mount(containerWidth = 1000) {

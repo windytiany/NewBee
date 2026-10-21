@@ -191,7 +191,9 @@ function createDrop({
         },
       }),
     },
-    "@/features/library/import/useScan": { useLibraryScan: () => ({ isScanning: scanning }) },
+    "@/features/library/synchronization/useScan": {
+      useLibrarySynchronization: () => ({ isScanning: scanning }),
+    },
     "@/features/playback/session": {
       usePlaybackSession: () => ({
         addTracksToQueueEnd: async (tracks: readonly Omit<PlaybackDisplayTrack, "rowKey">[]) => {

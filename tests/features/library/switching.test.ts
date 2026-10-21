@@ -2,7 +2,7 @@ import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import type { Component } from "vue";
 import type { useLibraryBrowser } from "@/features/library/browser/useBrowser";
-import type { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
+import type { useAlbumArtwork } from "@/features/artwork/album/useArtwork";
 import { LIBRARY_CHANGED_EVENT } from "@/features/library/events";
 import type { AlbumSummary } from "@/features/library/types";
 import { compileSfc, evaluateSource, transpileScript } from "../../support/module/loader";
@@ -15,7 +15,7 @@ const albumBrowserSource = await Bun.file(
   new URL("../../../src/features/library/browser/albums/AlbumBrowser.vue", import.meta.url),
 ).text();
 const artworkSource = await Bun.file(
-  new URL("../../../src/features/artwork/useAlbumArtwork.ts", import.meta.url),
+  new URL("../../../src/features/artwork/album/useArtwork.ts", import.meta.url),
 ).text();
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
@@ -65,8 +65,8 @@ function mountBrowser(extraAlbums: AlbumSummary[] = []) {
       },
     },
     "@lucide/vue": { DiscAlbum: placeholder, Pause: placeholder },
-    "@/features/library/composables/useActions": { useLibraryActions: () => ({}) },
-    "@/features/settings/composables/useCoverBackground": {
+    "@/features/library/useActions": { useLibraryActions: () => ({}) },
+    "@/features/settings/appearance/useCoverBackground": {
       useCoverBackground: () => Vue.ref(false),
     },
     "@/features/library/browser/albums/AlbumDetail.vue": {
@@ -102,7 +102,7 @@ function mountBrowser(extraAlbums: AlbumSummary[] = []) {
     }
     return artwork.useAlbumArtwork(selection, purpose, size);
   };
-  dependencies["@/features/artwork/useAlbumArtwork"] = { useAlbumArtwork: observeArtwork };
+  dependencies["@/features/artwork/album/useArtwork"] = { useAlbumArtwork: observeArtwork };
   const { useLibraryBrowser: createBrowser } = evaluateSource<{
     useLibraryBrowser: typeof useLibraryBrowser;
   }>(transpileScript(browserSource), dependencies);

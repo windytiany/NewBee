@@ -95,7 +95,7 @@ function mount(disabled = false) {
             { disabled: state.disabled },
             {
               default: () =>
-                ["更新缺少的歌词", "分析响度", "重新读取标签"].map((label, index) =>
+                ["更新缺少的歌词", "分析 ReplayGain", "重新读取标签"].map((label, index) =>
                   Vue.h(
                     "button",
                     {
@@ -128,7 +128,7 @@ it("keeps actions in a hover submenu and flips/clamps it to the viewport", async
   expect(context.menu()?.props.style).toEqual({ left: "526px", top: "480px" });
   expect(context.trigger.props["aria-expanded"]).toBe(true);
   expect(context.trigger.props["aria-controls"]).toBe(context.menu()?.props.id);
-  expect(getTextContent(context.menu()!)).toBe("更新缺少的歌词分析响度重新读取标签");
+  expect(getTextContent(context.menu()!)).toBe("更新缺少的歌词分析 ReplayGain重新读取标签");
   dispatch(context.wrapper, "onPointerleave");
   await Vue.nextTick();
   expect(context.menu()).toBeNull();
@@ -139,7 +139,7 @@ it("opens with Right and returns focus with Left or Escape without closing the p
     dispatch(context.trigger, "onKeydown", { key: "ArrowRight" });
     await Vue.nextTick();
     await Vue.nextTick();
-    expect(focused && getTextContent(focused)).toBe("分析响度");
+    expect(focused && getTextContent(focused)).toBe("分析 ReplayGain");
     expect(dispatch(context.wrapper, "onKeydown", { key })).toEqual({
       prevented: true,
       stopped: true,
@@ -175,11 +175,11 @@ it("lets the original action close the parent menu", async () => {
   dispatch(
     findNode(
       context.root,
-      (node) => node.type === "button" && getTextContent(node) === "分析响度",
+      (node) => node.type === "button" && getTextContent(node) === "分析 ReplayGain",
     )!,
     "onClick",
   );
   await Vue.nextTick();
-  expect(context.calls).toEqual(["分析响度"]);
+  expect(context.calls).toEqual(["分析 ReplayGain"]);
   expect(context.menu()).toBeNull();
 });

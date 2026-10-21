@@ -27,7 +27,6 @@ pub(super) fn fixture(root: &Path) -> Database {
     let connection = Connection::open(path).unwrap();
     connection.execute_batch(
         "INSERT INTO tracks (id, path, title, album, in_library) VALUES (1, 'C:\\Music\\missing.flac', 'song', 'album', 1);
-         INSERT INTO music_library_directories (path) VALUES ('C:\\Music');
          INSERT INTO skipped_tracks (track_id) VALUES (1);
          INSERT INTO playlists (id, name) VALUES (1, 'favorites');
          INSERT INTO playlist_items (playlist_id, track_id, position) VALUES (1, 1, 0);
@@ -59,7 +58,18 @@ pub(super) fn manifest() -> Manifest {
             "{\"library:artists\":{\"top\":50,\"left\":0}}".into(),
         ),
     ]);
-    Manifest::new(Settings::default(), session, interface)
+    Manifest::new(
+        Settings {
+            synchronization_folders: vec![crate::library::synchronization::configuration::Folder {
+                path: "C:\\Music".into(),
+                mode: crate::library::synchronization::configuration::Mode::Manual,
+                enabled: true,
+            }],
+            ..Settings::default()
+        },
+        session,
+        interface,
+    )
 }
 
 pub(super) fn make_backup(root: &Path, destination: &Path) {

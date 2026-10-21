@@ -141,12 +141,12 @@ import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
-import { useAlbumArtwork } from "@/features/artwork/useAlbumArtwork";
-import { useCoverBackground } from "@/features/settings/composables/useCoverBackground";
+import { useAlbumArtwork } from "@/features/artwork/album/useArtwork";
+import { useCoverBackground } from "@/features/settings/appearance/useCoverBackground";
 import LibraryStatistics from "@/features/library/statistics/LibraryStatistics.vue";
-import { ALBUM_COLUMN_WIDTH } from "@/features/library/browser/albums/layout";
+import { ALBUM_COLUMN_WIDTH } from "@/features/library/layout";
 import { useAlbumScroll } from "@/features/library/browser/albums/scroll";
-import { layoutDensity } from "@/features/settings/layout";
+import { layoutDensity } from "@/features/settings/appearance/layout";
 import type {
   LibraryAlbumSelection,
   ArtistSummary,

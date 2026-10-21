@@ -10,6 +10,8 @@ import { useNotification } from "@/shared/notifications/useNotification";
 import { loadLibraryModules } from "../features/library/modules";
 import { loadPlaylistModules } from "../features/playlist/modules";
 
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+
 const playlist: PlaylistSummary = {
   id: 7,
   name: "Favorites",
@@ -103,7 +105,7 @@ async function createComponent(source: string) {
       },
     };
   };
-  const usePlaylistPage = () => {
+  const usePlaylistState = () => {
     playlistPageCreations += 1;
     return {
       playlists: Vue.ref([playlist]),
@@ -192,12 +194,12 @@ async function createComponent(source: string) {
     vue: Vue,
     "@/shared/notifications/center": { notify },
     "@/shared/notifications/useNotification": { useNotification },
-    "@/features/metadata/manual/components/TagEditorDialog.vue": defaultModule(passiveComponent),
+    "@/features/metadata/manual/TagEditorDialog.vue": defaultModule(passiveComponent),
     "@/features/lyrics/download/LyricsDownloadDialog.vue": defaultModule(passiveComponent),
-    "@/features/loudness/ConfirmationDialog.vue": defaultModule(passiveComponent),
-    "@/features/metadata/releases/components/ReleaseTagDialog.vue": defaultModule(passiveComponent),
+    "@/features/metadata/replaygain/ConfirmationDialog.vue": defaultModule(passiveComponent),
+    "@/features/metadata/releases/ReleaseTagDialog.vue": defaultModule(passiveComponent),
     "@/shared/notifications/NotificationHost.vue": defaultModule(passiveComponent),
-    "@/features/library/monitoring/MonitoringDialog.vue": defaultModule(passiveComponent),
+    "@/features/library/synchronization/MissingFilesDialog.vue": defaultModule(passiveComponent),
     "@/features/import/useDropImport": {
       useDropImport: () => ({ highlight: dropHighlight }),
     },
@@ -205,28 +207,29 @@ async function createComponent(source: string) {
       usePersistentActivePage: () => ({ activePage }),
     },
     "@/features/library/browser/useBrowser": { useLibraryBrowser },
-    "@/features/playlist/composables/usePage": { usePlaylistPage },
+    "@/features/tracks/events": { TRACKS_CHANGED_EVENT: "newbee:tracks-changed" },
+    "@/features/playlist/usePlaylistState": { usePlaylistState },
     "@/features/playback/session": {
       usePlaybackSession: () => ({ state: { activeQueueRowKey: Vue.ref(null) } }),
     },
     "@/features/library/browser/albums/AlbumBrowser.vue": defaultModule(AlbumBrowser),
-    "@/features/library/components/dialogs/DeleteTrackDialog.vue": defaultModule(DeleteTrackDialog),
+    "@/features/library/removal/DeleteTrackDialog.vue": defaultModule(DeleteTrackDialog),
     "@/app/shell/AppShell.vue": defaultModule(AppShell),
   };
   for (const name of [
-    "@/features/playback/pages/NowPlayingPage.vue",
-    "@/features/inbox/pages/InboxPage.vue",
+    "@/features/playback/NowPlayingPage.vue",
+    "@/features/inbox/InboxPage.vue",
     "@/features/playback/controls/PlaybackBar.vue",
     "@/features/artists/navigation/ArtistList.vue",
-    "@/features/library/components/dialogs/DeleteAlbumDialog.vue",
+    "@/features/library/removal/DeleteAlbumDialog.vue",
     "@/features/playlist/creation/CreatePlaylistDialog.vue",
     "@/features/playlist/tracks/PlaylistBrowser.vue",
     "@/features/playlist/list/PlaylistList.vue",
-    "@/features/playlist/components/dialogs/RenamePlaylistDialog.vue",
-    "@/features/playlist/components/dialogs/DeletePlaylistDialog.vue",
+    "@/features/playlist/management/RenamePlaylistDialog.vue",
+    "@/features/playlist/management/DeletePlaylistDialog.vue",
     "@/app/shell/TitleBar.vue",
-    "@/shared/components/SidePane.vue",
-    "@/features/playback/queue/components/QueuePanel.vue",
+    "@/shared/layout/SidePane.vue",
+    "@/features/playback/queue/QueuePanel.vue",
     "@/features/playback/current/TrackInfoPanel.vue",
   ]) {
     modules[name] = defaultModule(passiveComponent);
@@ -278,6 +281,7 @@ async function settleApp() {
 }
 
 beforeEach(() => {
+  Object.defineProperty(globalThis, "window", { configurable: true, value: new EventTarget() });
   removalResult = { status: "deleted" };
   removalCalls = 0;
   playlistRefreshCalls = 0;
@@ -302,6 +306,8 @@ beforeEach(() => {
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
   notifications.clear();
+  if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+  else Reflect.deleteProperty(globalThis, "window");
 });
 
 describe("App workspace lifecycle", () => {

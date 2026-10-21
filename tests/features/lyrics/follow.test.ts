@@ -1,18 +1,13 @@
+import { createLyricsFollowCoordinator } from "@/features/lyrics/useFollow";
+import type { LyricsLineGeometry } from "@/features/lyrics/scroll";
 import * as Vue from "vue";
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 import { afterEach, describe, expect, it } from "bun:test";
-import {
-  calculateLyricsEdgePadding,
-  calculateLyricsScrollTop,
-  createLyricsFollowCoordinator,
-  isLyricsScrollKey,
-} from "@/features/lyrics/composables/useFollow";
 import type {
   LyricsFollowAdapter,
   LyricsFollowInputs,
-  LyricsFollowLine,
   LyricsScrollBehavior,
-} from "@/features/lyrics/composables/useFollow";
+} from "@/features/lyrics/useFollow";
 
 type ScrollCall = { top: number; behavior: LyricsScrollBehavior };
 
@@ -23,7 +18,7 @@ function createTestAdapter() {
   const idleCallbacks = new Map<number, () => void>();
   const scrollCalls: ScrollCall[] = [];
   const lookedUpLines: number[] = [];
-  const lines = new Map<number, LyricsFollowLine>();
+  const lines = new Map<number, LyricsLineGeometry>();
   let resizeCallback: (() => void) | null = null;
   let reducedMotion = false;
   let reducedMotionCallback: (() => void) | null = null;
@@ -115,7 +110,7 @@ function createTestAdapter() {
     get edgePadding() {
       return edgePadding;
     },
-    addLine(index: number, line: LyricsFollowLine) {
+    addLine(index: number, line: LyricsLineGeometry) {
       lines.set(index, line);
     },
     flushScheduled() {
@@ -414,22 +409,6 @@ describe("歌词跟随定位", () => {
     follow.dispose();
   });
 
-  it("将目标行中心对齐到容器中心，并限制在可滚动范围内", () => {
-    expect(
-      calculateLyricsScrollTop(
-        { top: 100, scrollTop: 40, clientHeight: 200, scrollHeight: 800 },
-        { top: 230, height: 40 },
-      ),
-    ).toBe(90);
-    expect(
-      calculateLyricsScrollTop(
-        { top: 100, scrollTop: 400, clientHeight: 200, scrollHeight: 600 },
-        { top: 900, height: 40 },
-      ),
-    ).toBe(400);
-    expect(calculateLyricsEdgePadding(200, 40, 60)).toEqual({ top: 80, bottom: 70 });
-  });
-
   it("普通前进平滑定位，倒退、跳过多组和 seek 结束直接定位", () => {
     const testAdapter = createTestAdapter();
     for (let index = 0; index < 6; index += 1) {
@@ -482,22 +461,15 @@ describe("歌词跟随定位", () => {
     expect(testAdapter.scrollCalls[testAdapter.scrollCalls.length - 1]?.behavior).toBe("instant");
     follow.dispose();
   });
-
-  it("滚动键进入 browsing，但歌词 button 的 Enter/Space 激活不算滚动", () => {
-    expect(isLyricsScrollKey("ArrowDown", "ArrowDown", false)).toBe(true);
-    expect(isLyricsScrollKey("Enter", "Enter", true)).toBe(false);
-    expect(isLyricsScrollKey(" ", "Space", true)).toBe(false);
-    expect(isLyricsScrollKey(" ", "Space", false)).toBe(true);
-  });
 });
 
 const domOutput = transpileScript(
-  await Bun.file(
-    new URL("../../../src/features/lyrics/composables/useFollow.ts", import.meta.url),
-  ).text(),
+  await Bun.file(new URL("../../../src/features/lyrics/useFollow.ts", import.meta.url)).text(),
 );
 const motionOutput = transpileScript(
-  await Bun.file(new URL("../../../src/features/settings/motion.ts", import.meta.url)).text(),
+  await Bun.file(
+    new URL("../../../src/features/settings/appearance/motion.ts", import.meta.url),
+  ).text(),
 );
 const originalGlobals = new Map(
   ["document", "window", "requestAnimationFrame", "cancelAnimationFrame"].map((name) => [
@@ -534,9 +506,12 @@ it("DOM lyrics follow ignores the system setting and responds to application mot
   for (const [name, value] of Object.entries(globals)) {
     Object.defineProperty(globalThis, name, { configurable: true, value });
   }
-  const motion = evaluateSource<typeof import("@/features/settings/motion")>(motionOutput, {
-    vue: Vue,
-  });
+  const motion = evaluateSource<typeof import("@/features/settings/appearance/motion")>(
+    motionOutput,
+    {
+      vue: Vue,
+    },
+  );
   const follow = evaluateSource<{ useLyricsFollow: (options: object) => void }>(domOutput, {
     vue: {
       ...Vue,
@@ -547,7 +522,7 @@ it("DOM lyrics follow ignores the system setting and responds to application mot
         dispose = callback;
       },
     },
-    "@/features/settings/motion": motion,
+    "@/features/settings/appearance/motion": motion,
   });
   const activeIndex = Vue.ref(0);
   const smoothCalls: number[] = [];

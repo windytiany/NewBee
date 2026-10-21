@@ -6,14 +6,14 @@ pub(super) fn definition() -> &'static str {
     include_str!("definition.sql")
 }
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 pub(super) fn initialize_schema(connection: &mut Connection) -> rusqlite::Result<()> {
     let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
     if version == SCHEMA_VERSION {
         return Ok(());
     }
-    if version == 1 || version == 2 {
+    if (1..SCHEMA_VERSION).contains(&version) {
         let transaction = connection.transaction()?;
         if version == 1 {
             transaction.execute("DELETE FROM track_play_statistics", [])?;

@@ -105,8 +105,8 @@ import { t } from "@/shared/i18n/locale";
 import { nextTick, ref, watch } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
-import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
-import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
+import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";
+import ReleaseMenuItem from "@/features/metadata/releases/ReleaseMenuItem.vue";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import type { PlaylistSummary } from "@/features/playlist/types";
 

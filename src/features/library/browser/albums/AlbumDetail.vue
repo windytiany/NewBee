@@ -213,7 +213,7 @@
           :disabled="props.trackActionPending"
           @close="closeTrackContextMenu(true)"
         />
-        <RestoreMenuItem
+        <RemovalMenuItem
           :track-ids="contextMenu.payload.targetTrackIds"
           :disabled="props.trackActionPending"
           @close="closeTrackContextMenu(true)"
@@ -257,14 +257,14 @@ import type { TrackSummary } from "@/features/tracks/types";
 import type { AlbumBackground } from "@/features/artwork/background";
 import type { PlaylistSummary } from "@/features/playlist/types";
 import AlbumTrack from "@/features/library/browser/albums/AlbumTrack.vue";
-import SkipMenuItem from "@/features/playback/queue/components/SkipMenuItem.vue";
+import SkipMenuItem from "@/features/playback/queue/SkipMenuItem.vue";
 import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
-import AnalysisMenuItem from "@/features/loudness/AnalysisMenuItem.vue";
-import RestoreMenuItem from "@/features/loudness/RestoreMenuItem.vue";
-import EditMenuItem from "@/features/metadata/manual/components/EditMenuItem.vue";
+import AnalysisMenuItem from "@/features/metadata/replaygain/AnalysisMenuItem.vue";
+import RemovalMenuItem from "@/features/metadata/replaygain/RemovalMenuItem.vue";
+import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
-import ReleaseMenuItem from "@/features/metadata/releases/components/ReleaseMenuItem.vue";
+import ReleaseMenuItem from "@/features/metadata/releases/ReleaseMenuItem.vue";
 import { useTrackColumns } from "@/features/library/browser/albums/useTrackColumns";
 
 type TrackContextMenuTrigger = {

@@ -1,6 +1,6 @@
 import type { Ref } from "vue";
 import type { PlaybackStatus } from "@/features/playback/types";
-import type { LyricsState } from "@/features/lyrics/composables/useLyrics";
+import type { LyricsState } from "@/features/lyrics/useLyrics";
 
 export type LyricsSeekSession = {
   state: {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { setLocale } from "@/shared/i18n/locale";
-import type { LibraryState } from "@/features/library/composables/useLibrary";
+import type { LibraryState } from "@/features/library/useLibrary";
 import { notifications, notify } from "@/shared/notifications/center";
 import { useNotification } from "@/shared/notifications/useNotification";
 import { loadLibraryModules } from "./modules";
@@ -46,16 +46,16 @@ const passiveComponent = { __esModule: true, default: Vue.defineComponent(() => 
 for (const path of [
   "features/library/browser/albums/AlbumBrowser.vue",
   "features/artists/navigation/ArtistList.vue",
-  "shared/components/SidePane.vue",
-  "features/library/components/dialogs/DeleteAlbumDialog.vue",
-  "features/library/components/dialogs/DeleteTrackDialog.vue",
+  "shared/layout/SidePane.vue",
+  "features/library/removal/DeleteAlbumDialog.vue",
+  "features/library/removal/DeleteTrackDialog.vue",
 ]) {
   modules[`@/${path}`] = passiveComponent;
 }
 await loadLibraryModules(modules);
 const { useLibrary } = modules[
-  "@/features/library/composables/useLibrary"
-] as typeof import("@/features/library/composables/useLibrary");
+  "@/features/library/useLibrary"
+] as typeof import("@/features/library/useLibrary");
 
 function createWorkspace() {
   const active = Vue.ref(true);

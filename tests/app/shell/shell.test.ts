@@ -71,10 +71,10 @@ it("restores resized panes after a restart without overwriting preferences on sm
       {
         vue: Vue,
         "@/app/shell/usePaneSizes": state,
-        "@/shared/components/ResizeHandle.vue": resizeStub,
-        "@/shared/components/SidePane.vue": slotStub,
+        "@/shared/interaction/resize/ResizeHandle.vue": resizeStub,
+        "@/shared/layout/SidePane.vue": slotStub,
         "@/features/playback/current/TrackInfoPanel.vue": emptyStub,
-        "@/features/playback/queue/components/QueueList.vue": emptyStub,
+        "@/features/playback/queue/QueueList.vue": emptyStub,
         "@/features/playback/session": {
           usePlaybackSession: () => ({
             state: { displayedTracks: Vue.ref([]), activeQueueRowKey: Vue.ref(null) },

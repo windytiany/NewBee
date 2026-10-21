@@ -11,7 +11,7 @@ type Dialog = { show: () => void };
 type Bindings = {
   libraryScanDialog: Vue.Ref<Dialog | null>;
   importDialog: Vue.Ref<{ show: (inbox: boolean) => void } | null>;
-  pathMigrationDialog: Vue.Ref<Dialog | null>;
+  pathRemappingDialog: Vue.Ref<Dialog | null>;
   settingsDialog: Vue.Ref<{ show: (category?: "advanced") => void } | null>;
   showSettings: (category?: "advanced") => Promise<void>;
   onMenuSelect: (action: AppMenuAction) => Promise<void>;
@@ -38,10 +38,10 @@ it("lays out task progress before window controls without overlapping absolute p
       },
       "@/app/shell/AppMenu.vue": { render: () => null },
       "@/app/shell/PageTabs.vue": { render: () => null },
-      "@/features/library/import/ScanDialog.vue": { render: () => null },
+      "@/features/library/synchronization/ScanDialog.vue": { render: () => null },
       "@/features/import/ImportDialog.vue": { render: () => null },
-      "@/features/library/paths/PathMigrationDialog.vue": { render: () => null },
-      "@/features/settings/components/SettingsDialog.vue": { render: () => null },
+      "@/features/remapping/PathRemappingDialog.vue": { render: () => null },
+      "@/features/settings/SettingsDialog.vue": { render: () => null },
       "@/features/inbox/import": { useInboxImport: () => ({ pending: Vue.ref(false) }) },
       "@/features/library/import/useFileImport": {
         useLibraryFileImport: () => ({ isImporting: Vue.ref(false) }),
@@ -76,11 +76,11 @@ it("routes brand menu selections to existing import and dialog actions", async (
     "@lucide/vue": { Copy: {}, Maximize: {}, Minus: {}, X: {} },
     "@/app/shell/AppMenu.vue": { default: {} },
     "@/app/pages": { pageNames, pageLabel },
-    "@/features/library/import/ScanDialog.vue": { default: {} },
+    "@/features/library/synchronization/ScanDialog.vue": { default: {} },
     "@/features/import/ImportDialog.vue": { default: {} },
     "@/features/inbox/import": { useInboxImport: () => ({ pending: Vue.ref(false) }) },
-    "@/features/library/paths/PathMigrationDialog.vue": { default: {} },
-    "@/features/settings/components/SettingsDialog.vue": { default: {} },
+    "@/features/remapping/PathRemappingDialog.vue": { default: {} },
+    "@/features/settings/SettingsDialog.vue": { default: {} },
     "@/features/library/import/useFileImport": {
       useLibraryFileImport: () => ({
         isImporting: Vue.ref(false),
@@ -105,9 +105,9 @@ it("routes brand menu selections to existing import and dialog actions", async (
       actions.push("scan");
     },
   };
-  bindings.pathMigrationDialog.value = {
+  bindings.pathRemappingDialog.value = {
     show: () => {
-      actions.push("migrate");
+      actions.push("remap");
     },
   };
   bindings.settingsDialog.value = {
@@ -116,11 +116,11 @@ it("routes brand menu selections to existing import and dialog actions", async (
     },
   };
 
-  for (const action of ["import", "scan", "migrate", "settings"] as const) {
+  for (const action of ["import", "scan", "remap", "settings"] as const) {
     await bindings.onMenuSelect(action);
   }
 
-  expect(actions).toEqual(["import", "scan", "migrate", "settings"]);
+  expect(actions).toEqual(["import", "scan", "remap", "settings"]);
   let category: string | undefined;
   bindings.settingsDialog.value = {
     show: (selected) => {

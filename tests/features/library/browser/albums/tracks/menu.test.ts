@@ -166,7 +166,7 @@ function createComponent(source: string) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/features/metadata/releases/components/ReleaseMenuItem.vue": Vue.defineComponent({
+    "@/features/metadata/releases/ReleaseMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
         Vue.h(
@@ -186,31 +186,35 @@ function createComponent(source: string) {
     "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,
     }),
-    "@/features/loudness/RestoreMenuItem.vue": Vue.defineComponent({
+    "@/features/metadata/replaygain/RemovalMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
         Vue.h(
           "button",
-          { "data-restoration-targets": JSON.stringify(props.trackIds) },
-          "恢复原始响度",
+          { "data-replaygain-removal-targets": JSON.stringify(props.trackIds) },
+          "移除 ReplayGain 标签",
         ),
     }),
-    "@/features/loudness/AnalysisMenuItem.vue": Vue.defineComponent({
+    "@/features/metadata/replaygain/AnalysisMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
-        Vue.h("button", { "data-loudness-targets": JSON.stringify(props.trackIds) }, "分析响度"),
+        Vue.h(
+          "button",
+          { "data-replaygain-analysis-targets": JSON.stringify(props.trackIds) },
+          "分析 ReplayGain",
+        ),
     }),
     "@/features/tracks/presentation/RereadMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
         Vue.h("button", { "data-reread-targets": JSON.stringify(props.trackIds) }, "重新读取标签"),
     }),
-    "@/features/metadata/manual/components/EditMenuItem.vue": Vue.defineComponent({
+    "@/features/metadata/manual/EditMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
         Vue.h("button", { "data-edit-targets": JSON.stringify(props.trackIds) }, "编辑"),
     }),
-    "@/features/playback/queue/components/SkipMenuItem.vue": Vue.defineComponent({
+    "@/features/playback/queue/SkipMenuItem.vue": Vue.defineComponent({
       props: ["trackIds"],
       setup: (props) => () =>
         Vue.h("button", { "data-skip-targets": JSON.stringify(props.trackIds) }, "跳过"),
@@ -449,13 +453,13 @@ describe("专辑曲目上下文菜单目标", () => {
       ],
     ).toBe("[1,3]");
     expect(
-      findNode(root, (node) => node.props["data-loudness-targets"] !== undefined)?.props[
-        "data-loudness-targets"
+      findNode(root, (node) => node.props["data-replaygain-analysis-targets"] !== undefined)?.props[
+        "data-replaygain-analysis-targets"
       ],
     ).toBe("[1,3]");
     expect(
-      findNode(root, (node) => node.props["data-restoration-targets"] !== undefined)?.props[
-        "data-restoration-targets"
+      findNode(root, (node) => node.props["data-replaygain-removal-targets"] !== undefined)?.props[
+        "data-replaygain-removal-targets"
       ],
     ).toBe("[1,3]");
     const deleteButton = findMenuItem(root, "从库中删除");

@@ -87,7 +87,7 @@ dependencies["@tauri-apps/api/core"] = {
   },
 };
 
-dependencies["@/features/playlist/composables/useSelection"] = {
+dependencies["@/features/playlist/list/useSelection"] = {
   usePlaylistSelection: () => ({
     availablePlaylists,
     selectedPlaylistId,
@@ -133,11 +133,11 @@ dependencies["@/features/playback/session"] = {
 };
 
 const { usePlaylistState: createState } = evaluateSource<
-  typeof import("@/features/playlist/composables/useState")
+  typeof import("@/features/playlist/usePlaylistState")
 >(
   transpileScript(
     await Bun.file(
-      new URL("../../../src/features/playlist/composables/useState.ts", import.meta.url),
+      new URL("../../../src/features/playlist/usePlaylistState.ts", import.meta.url),
     ).text(),
   ),
   dependencies,

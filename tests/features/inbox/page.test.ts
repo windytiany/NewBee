@@ -168,7 +168,7 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
   });
   await inbox.refresh();
   const component = evaluateSource<{ default: Vue.Component }>(
-    compileSfc(await Bun.file("src/features/inbox/pages/InboxPage.vue").text(), "InboxPage.vue"),
+    compileSfc(await Bun.file("src/features/inbox/InboxPage.vue").text(), "InboxPage.vue"),
     {
       vue: Vue,
       "@/features/tracks/api": {
@@ -180,22 +180,25 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
           getTracks: async (ids: readonly number[]) => ids.map(track),
         }),
       },
-      "@/features/loudness/RestoreMenuItem.vue": Vue.defineComponent({
+      "@/features/metadata/replaygain/RemovalMenuItem.vue": Vue.defineComponent({
         props: ["trackIds"],
         setup: (props) => () =>
           Vue.h(
             "button",
-            { role: "menuitem", "data-restoration-targets": JSON.stringify(props.trackIds) },
-            "恢复原始响度",
+            { role: "menuitem", "data-replaygain-removal-targets": JSON.stringify(props.trackIds) },
+            "移除 ReplayGain 标签",
           ),
       }),
-      "@/features/loudness/AnalysisMenuItem.vue": Vue.defineComponent({
+      "@/features/metadata/replaygain/AnalysisMenuItem.vue": Vue.defineComponent({
         props: ["trackIds"],
         setup: (props) => () =>
           Vue.h(
             "button",
-            { role: "menuitem", "data-loudness-targets": JSON.stringify(props.trackIds) },
-            "分析响度",
+            {
+              role: "menuitem",
+              "data-replaygain-analysis-targets": JSON.stringify(props.trackIds),
+            },
+            "分析 ReplayGain",
           ),
       }),
       "@/features/lyrics/download/DownloadMenuItem.vue": Vue.defineComponent({
@@ -207,7 +210,7 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
             "更新缺少的歌词",
           ),
       }),
-      "@/features/playback/queue/components/SkipMenuItem.vue": Vue.defineComponent({
+      "@/features/playback/queue/SkipMenuItem.vue": Vue.defineComponent({
         props: ["trackIds"],
         setup: (props) => () =>
           Vue.h(
@@ -261,7 +264,7 @@ async function mount(tracks: InboxTrack[] = [track(1), track(2), track(3)]) {
           },
         }),
       },
-      "@/shared/components/SidePane.vue": {
+      "@/shared/layout/SidePane.vue": {
         __esModule: true,
         default: Vue.defineComponent(
           (_, { slots }) =>
@@ -332,6 +335,16 @@ function clickRow(root: Scene, row: Scene, modifiers: Record<string, unknown> = 
   dispatch(row, "onClick", modifiers);
 }
 describe("Inbox workspace", () => {
+  it("renders registration dates in local time to minute precision", async () => {
+    const { root } = await mount([
+      { ...track(1), addedAt: new Date(2026, 0, 2, 3, 4, 59).getTime() },
+      { ...track(2), addedAt: new Date(2026, 10, 12, 13, 14).getTime() },
+    ]);
+    const text = getTextContent(root);
+    expect(text).toContain("2026-01-02 03:04");
+    expect(text).toContain("2026-11-12 13:14");
+  });
+
   it("adds the current keyboard selection to the queue and disables commands while pending", async () => {
     const h = await mount();
     const rows = h.rows();
@@ -442,8 +455,13 @@ describe("Inbox workspace", () => {
     visit(submenu, (node) => {
       if (node.props.role === "menuitem") actions.push(getTextContent(node).trim());
     });
-    expect(actions).toEqual(["更新缺少的歌词", "分析响度", "恢复原始响度", "重新读取标签"]);
-    for (const key of ["lyrics", "skip", "append", "loudness", "restoration"]) {
+    expect(actions).toEqual([
+      "更新缺少的歌词",
+      "分析 ReplayGain",
+      "移除 ReplayGain 标签",
+      "重新读取标签",
+    ]);
+    for (const key of ["lyrics", "skip", "append", "replaygain-analysis", "replaygain-removal"]) {
       expect(
         findNode(context.root, (node) => `data-${key}-targets` in node.props)?.props[
           `data-${key}-targets`

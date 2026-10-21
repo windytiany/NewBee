@@ -318,3 +318,82 @@ it("retains file success and DB failure, accepting only confirmed local patches 
   expect(editor.state.results.map(({ databaseUpdated }) => databaseUpdated)).toEqual([true, true]);
   expect(editor.state.open).toBe(false);
 });
+
+it("invalidates cover lists and image downloads across release changes and close/reopen", async () => {
+  const oldList = deferred<Array<{ id: string; comment: string }>>();
+  const oldImage = deferred<CoverData>();
+  const requested: string[] = [];
+  const { editor } = await ready({
+    covers: async (id) => (id === release().summary.id ? oldList.promise : [{ id, comment: "" }]),
+    cover: async (id) => {
+      requested.push(id);
+      return id === "second" ? oldImage.promise : { mimeType: "image/png", data: [3] };
+    },
+  });
+  editor.selectRelease("second");
+  await settle();
+  oldList.resolve([{ id: "obsolete", comment: "" }]);
+  await settle();
+  expect(editor.state.covers.map(({ id }) => id)).toEqual(["second"]);
+  expect(requested).toEqual(["second"]);
+  expect(editor.state.loadingCover).toBe(true);
+  editor.close();
+  await editor.open(album);
+  editor.selectRelease("third");
+  await settle();
+  oldImage.resolve({ mimeType: "image/png", data: [2] });
+  await settle();
+  expect(editor.state.selected?.summary.id).toBe("third");
+  expect(editor.state.cover?.data).toEqual([3]);
+  expect(editor.state.loadingCover).toBe(false);
+  expect(editor.state.coverError).toBe("");
+});
+
+it("does not let an obsolete release initialize matching or start cover requests", async () => {
+  const oldRelease = deferred<ReturnType<typeof release>>();
+  const lists: string[] = [];
+  const { editor } = fixture({
+    release: async (id) => (id === "old" ? oldRelease.promise : release(id)),
+    covers: async (id) => {
+      lists.push(id);
+      return [];
+    },
+  });
+  await editor.open(album);
+  editor.selectRelease("old");
+  editor.selectRelease("new");
+  await settle();
+  oldRelease.resolve(release("old"));
+  await settle();
+  expect(editor.state.selected?.summary.id).toBe("new");
+  expect(editor.state.rows).toHaveLength(4);
+  expect(lists).toEqual(["new"]);
+  expect(editor.state.loadingRelease).toBe(false);
+});
+
+it("keeps the confirmed cover through dialog close and partial-save retry, then releases it", async () => {
+  const covers: Array<CoverData | null> = [];
+  let attempt = 0;
+  const { editor } = await ready({
+    covers: async () => [{ id: "front", comment: "" }],
+    save: async (patches, cover) => {
+      covers.push(cover);
+      attempt++;
+      return patches.map(({ trackId }) => result(trackId, attempt > 1 || trackId === 1));
+    },
+  });
+  const cover = editor.state.cover;
+  editor.toggleCover();
+  editor.prepareSave();
+  await editor.save();
+  expect(editor.state.open).toBe(true);
+  expect(editor.state.cover).toBe(cover);
+  editor.prepareSave();
+  await editor.save();
+  expect(covers).toEqual([cover, cover]);
+  expect(editor.state.open).toBe(false);
+  expect(editor.state.cover).toBeNull();
+  await editor.open(album);
+  expect(editor.state.cover).toBeNull();
+  expect(editor.state.confirmSave).toBe(false);
+});

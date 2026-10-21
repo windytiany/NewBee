@@ -104,15 +104,12 @@ async function createQueueArtworkFixture(
       },
     },
   };
-  await loadSourceModules(["features/artwork/useTrackArtwork.ts"], dependencies);
+  await loadSourceModules(["features/artwork/track/useArtwork.ts"], dependencies);
   const artworkModule = dependencies[
-    "@/features/artwork/useTrackArtwork"
-  ] as typeof import("@/features/artwork/useTrackArtwork");
+    "@/features/artwork/track/useArtwork"
+  ] as typeof import("@/features/artwork/track/useArtwork");
   const component = evaluateSource<{ default: Vue.Component }>(
-    compileSfc(
-      await Bun.file("src/features/playback/queue/components/QueueRow.vue").text(),
-      "QueueRow.vue",
-    ),
+    compileSfc(await Bun.file("src/features/playback/queue/QueueRow.vue").text(), "QueueRow.vue"),
     dependencies,
   ).default;
   return {

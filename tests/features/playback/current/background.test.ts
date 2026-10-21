@@ -14,7 +14,7 @@ function createNode(type: string, text = ""): HostNode {
   return { type, text, props: {}, children: [], parent: null, style: { display: "" } };
 }
 const source = await Bun.file(
-  new URL("../../../../src/features/playback/pages/NowPlayingPage.vue", import.meta.url),
+  new URL("../../../../src/features/playback/NowPlayingPage.vue", import.meta.url),
 ).text();
 const apps: Vue.App[] = [];
 const pendingLeaves: Array<() => void> = [];
@@ -51,7 +51,7 @@ function mountPage(enabled = true) {
   const presentation = Vue.ref("track");
   const placeholder = Vue.defineComponent(() => () => Vue.h("div"));
   const { default: Page } = evaluateSource<{ default: Vue.Component }>(
-    compileSfc(source, "src/features/playback/pages/NowPlayingPage.vue"),
+    compileSfc(source, "src/features/playback/NowPlayingPage.vue"),
     {
       vue: { ...Vue, Transition: transition },
       "@lucide/vue": { Columns2: placeholder, DiscAlbum: placeholder, ListMusic: placeholder },
@@ -61,10 +61,10 @@ function mountPage(enabled = true) {
           state: { currentTrack, playbackStatus: Vue.ref(null), isSeeking: Vue.ref(false) },
         }),
       },
-      "@/features/settings/composables/useCoverBackground": {
+      "@/features/settings/appearance/useCoverBackground": {
         useCoverBackground: () => Vue.readonly(preference),
       },
-      "@/features/artwork/useTrackArtwork": {
+      "@/features/artwork/track/useArtwork": {
         useTrackArtwork(selection: () => number | null, size: number, purpose: string) {
           expect(size).toBe(32);
           expect(purpose).toBe("background");
@@ -96,7 +96,7 @@ function mountPage(enabled = true) {
         },
       },
       "@/features/playback/current/useDisplayMode": { useDisplayMode: () => ({ presentation }) },
-      "@/features/lyrics/composables/useLyrics": {
+      "@/features/lyrics/useLyrics": {
         useLyrics: () => ({
           retry() {},
           state: Vue.ref({ status: "idle" }),
@@ -105,7 +105,7 @@ function mountPage(enabled = true) {
         }),
       },
       "@/features/lyrics/seek": { canSeekLyrics: () => false, seekToLyric: async () => false },
-      "@/features/lyrics/components/LyricsView.vue": placeholder,
+      "@/features/lyrics/LyricsView.vue": placeholder,
       "@/features/playback/current/TrackPresentation.vue": placeholder,
     },
   );

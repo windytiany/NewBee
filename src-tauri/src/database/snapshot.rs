@@ -25,7 +25,11 @@ pub(crate) fn validate_backup_database(path: &Path) -> Result<Connection, String
     let expected_version: i64 = expected
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .map_err(|error| error.to_string())?;
-    if version != expected_version {
+    if version == 3 {
+        expected
+            .execute_batch(crate::library::synchronization::migration::DIRECTORIES)
+            .map_err(|error| error.to_string())?;
+    } else if version != expected_version {
         return Err("备份数据库与当前版本不兼容".into());
     }
     super::schema::validation::validate(&connection, &expected)?;

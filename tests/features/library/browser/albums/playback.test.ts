@@ -18,7 +18,7 @@ const modules: Record<string, unknown> = {
     }),
   },
   vue: Vue,
-  "@/features/metadata/releases/components/ReleaseMenuItem.vue": passive,
+  "@/features/metadata/releases/ReleaseMenuItem.vue": passive,
   "@/features/artwork/artist/PhotoEditor.vue": passive,
   "@/features/library/statistics/LibraryStatistics.vue": passive,
   "@lucide/vue": {
@@ -29,7 +29,7 @@ const modules: Record<string, unknown> = {
     Pause: playbackIcon("Pause"),
   },
   "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
-  "@/features/artwork/useAlbumArtwork": {
+  "@/features/artwork/album/useArtwork": {
     useAlbumArtwork: () => ({
       status: Vue.ref("fallback"),
       url: Vue.ref(null),
@@ -38,7 +38,7 @@ const modules: Record<string, unknown> = {
     }),
   },
   "@/features/artwork/background": { ALBUM_BACKGROUND_SAMPLE_SIZE: 32 },
-  "@/features/settings/composables/useCoverBackground": {
+  "@/features/settings/appearance/useCoverBackground": {
     useCoverBackground: () => Vue.ref(false),
   },
   "@/shared/interaction/item/useSelection": {
@@ -60,12 +60,12 @@ const modules: Record<string, unknown> = {
   },
   "@/features/library/browser/albums/useTrackColumns": { useTrackColumns: () => Vue.ref(2) },
   "@/features/library/browser/albums/AlbumTrack.vue": passive,
-  "@/features/metadata/manual/components/EditMenuItem.vue": passive,
+  "@/features/metadata/manual/EditMenuItem.vue": passive,
   "@/features/tracks/presentation/RereadMenuItem.vue": passive,
-  "@/features/loudness/AnalysisMenuItem.vue": passive,
-  "@/features/loudness/RestoreMenuItem.vue": passive,
+  "@/features/metadata/replaygain/AnalysisMenuItem.vue": passive,
+  "@/features/metadata/replaygain/RemovalMenuItem.vue": passive,
   "@/features/lyrics/download/DownloadMenuItem.vue": passive,
-  "@/features/playback/queue/components/SkipMenuItem.vue": passive,
+  "@/features/playback/queue/SkipMenuItem.vue": passive,
   "@/features/library/browser/albums/AlbumContextMenu.vue": passive,
   "@/features/playlist/creation/CreatePlaylistDialog.vue": passive,
 };

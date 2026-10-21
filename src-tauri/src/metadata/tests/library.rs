@@ -61,6 +61,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         .manage(Database::open(":memory:").unwrap())
         .manage(WriteState::default())
         .manage(crate::settings::SettingsState::load(fixture.0.join("settings.json")).unwrap())
+        .manage(crate::library::synchronization::SynchronizationState::default())
         .invoke_handler(tauri::generate_handler![
             crate::playback::session::runtime::playback_session_command,
             crate::playback::session::runtime::playback_session_progress,
@@ -78,7 +79,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
             playlist::remove_playlist_items,
             queue::set_tracks_skipped,
             queue::list_skipped_track_ids,
-            commands::migrate_library_paths,
+            crate::remapping::remap_paths,
             commands::remove_track_from_library,
             crate::metadata::get_editable_tracks,
             crate::lyrics::embedded::get_track_lyrics,
@@ -223,7 +224,7 @@ fn offline_library_commands_browse_and_organize_without_inspecting_original_file
         .into_owned();
     assert_eq!(
         call(
-            "migrate_library_paths",
+            "remap_paths",
             json!({"oldPath":original_root,"newPath":new_root})
         ),
         2
@@ -406,10 +407,11 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
     let database_path = fixture.0.join("library.sqlite3");
     let cache_path = fixture.0.join("cache");
     let database = Database::open_with_cache(&database_path, &cache_path).unwrap();
-    database
-        .add_music_library_directory(&std::fs::canonicalize(&fixture.0).unwrap().to_string_lossy())
-        .unwrap();
     let app = tauri::test::mock_builder()
+        .manage(crate::library::synchronization::tests::support::settings(
+            &fixture.0,
+        ))
+        .manage(crate::library::synchronization::SynchronizationState::default())
         .manage(database)
         .manage(WriteState::default())
         .invoke_handler(tauri::generate_handler![
@@ -418,11 +420,13 @@ fn scanned_shared_cover_survives_targeted_file_save_and_cold_thumbnail_reuse() {
         .build(tauri::generate_context!())
         .unwrap();
     let scan = || {
-        tauri::async_runtime::block_on(crate::library::import::directory::scan_music_library(
-            None,
-            app.handle().clone(),
-            app.state(),
-        ))
+        tauri::async_runtime::block_on(
+            crate::library::synchronization::commands::synchronize_library(
+                None,
+                app.handle().clone(),
+                app.state(),
+            ),
+        )
         .unwrap()
     };
     assert_eq!(serde_json::to_value(scan()).unwrap()["added"], 2);

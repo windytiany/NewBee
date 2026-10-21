@@ -9,7 +9,7 @@ import type { EffectScope, Ref } from "vue";
 import type { PlaybackCommandInvoker, PlaybackStatus } from "@/features/playback/types";
 
 import type { LyricLine, TrackLyrics } from "@/features/lyrics/types";
-import type { useLyrics as usePlayingLyricsComposable } from "@/features/lyrics/composables/useLyrics";
+import type { useLyrics as usePlayingLyricsComposable } from "@/features/lyrics/useLyrics";
 
 type TestTrack = Readonly<{ trackId: number; title: string }>;
 type InvokeCall = { command: string; args?: Record<string, unknown> };
@@ -82,12 +82,10 @@ const syncedLyrics: TrackLyrics = {
 };
 
 const { getActiveLyricIndices, useLyrics } = evaluateSource<
-  typeof import("@/features/lyrics/composables/useLyrics")
+  typeof import("@/features/lyrics/useLyrics")
 >(
   transpileScript(
-    await Bun.file(
-      new URL("../../../src/features/lyrics/composables/useLyrics.ts", import.meta.url),
-    ).text(),
+    await Bun.file(new URL("../../../src/features/lyrics/useLyrics.ts", import.meta.url)).text(),
   ),
   {
     vue: Vue,

@@ -71,8 +71,8 @@
 import { t } from "@/shared/i18n/locale";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { usePaneSizes } from "@/app/shell/usePaneSizes";
-import ResizeHandle from "@/shared/components/ResizeHandle.vue";
-import SidePane from "@/shared/components/SidePane.vue";
+import ResizeHandle from "@/shared/interaction/resize/ResizeHandle.vue";
+import SidePane from "@/shared/layout/SidePane.vue";
 
 const props = withDefaults(defineProps<{ mode?: "workspace" | "playing" }>(), {
   mode: "workspace",

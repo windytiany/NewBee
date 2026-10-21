@@ -32,10 +32,10 @@ function fixture() {
   >(output, {
     "@tauri-apps/api/core": { invoke: invokeCommand },
 
-    "@/features/artwork/useTrackArtwork": {
+    "@/features/artwork/track/useArtwork": {
       invalidateTrackArtworkCache: (ids: number[]) => events.push(`track-artwork:${ids.join(",")}`),
     },
-    "@/features/artwork/useAlbumArtwork": {
+    "@/features/artwork/album/useArtwork": {
       invalidateAlbumArtworkCache: () => events.push("album-artwork"),
     },
   });

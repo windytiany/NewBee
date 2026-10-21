@@ -62,7 +62,6 @@ export const playbackMessages: Record<string, string> = {
   工具: "Tools",
   导入音频文件: "Import audio files",
   扫描文件夹: "Scan folder",
-  路径迁移: "Migrate paths",
   播放统计: "Playback statistics",
   歌曲名: "Title",
   专辑名: "Album",

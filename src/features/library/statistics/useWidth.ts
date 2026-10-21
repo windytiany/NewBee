@@ -1,7 +1,7 @@
 import { computed, ref, watch } from "vue";
 import type { Ref } from "vue";
-import { ALBUM_COLUMN_WIDTH } from "@/features/library/browser/albums/layout";
-import { layoutDensity } from "@/features/settings/layout";
+import { ALBUM_COLUMN_WIDTH } from "@/features/library/layout";
+import { layoutDensity } from "@/features/settings/appearance/layout";
 import { logger } from "@/shared/logging/logger";
 
 const STORAGE_KEY = "newbee.library.statistics.width";

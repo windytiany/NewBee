@@ -102,8 +102,13 @@ pub(super) fn read(path: &Path) -> Result<Manifest, String> {
             row.get(0)
         })
         .map_err(|error| error.to_string())?;
-    let manifest: Manifest =
+    let mut value: serde_json::Value =
         serde_json::from_str(&serialized).map_err(|error| format!("备份清单无效：{error}"))?;
+    if let Some(settings) = value.get_mut("settings") {
+        crate::settings::migration::convert(settings)?;
+    }
+    let manifest: Manifest =
+        serde_json::from_value(value).map_err(|error| format!("备份清单无效：{error}"))?;
     manifest.validate()?;
     Ok(manifest)
 }

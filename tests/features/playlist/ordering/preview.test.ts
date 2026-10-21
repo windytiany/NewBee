@@ -55,7 +55,7 @@ function createPlaylistBrowserComponent(source: string) {
   const icon = createIcon();
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/features/metadata/releases/components/ReleaseMenuItem.vue": Vue.defineComponent({
+    "@/features/metadata/releases/ReleaseMenuItem.vue": Vue.defineComponent({
       setup: () => () => null,
     }),
     "@/features/playlist/tracks/AppendMenuItem.vue": Vue.defineComponent({
@@ -68,12 +68,12 @@ function createPlaylistBrowserComponent(source: string) {
       setup: () => () => null,
     }),
     "@lucide/vue": { DiscAlbum: icon, Play: icon, Files: icon, X: icon },
-    "@/features/metadata/manual/components/EditMenuItem.vue": icon,
+    "@/features/metadata/manual/EditMenuItem.vue": icon,
     "@/features/tracks/presentation/RereadMenuItem.vue": icon,
-    "@/features/loudness/AnalysisMenuItem.vue": icon,
-    "@/features/loudness/RestoreMenuItem.vue": icon,
+    "@/features/metadata/replaygain/AnalysisMenuItem.vue": icon,
+    "@/features/metadata/replaygain/RemovalMenuItem.vue": icon,
     "@/features/lyrics/download/DownloadMenuItem.vue": icon,
-    "@/features/playback/queue/components/SkipMenuItem.vue": icon,
+    "@/features/playback/queue/SkipMenuItem.vue": icon,
     "@/shared/interaction/useContextMenu": {
       useContextMenu: () => ({
         request: Vue.ref(null),
@@ -122,7 +122,7 @@ function createPlaylistBrowserComponent(source: string) {
         },
       }),
     },
-    "@/features/artwork/components/TrackArtwork.vue": {
+    "@/features/artwork/track/TrackArtwork.vue": {
       __esModule: true,
       default: Vue.defineComponent({
         setup:

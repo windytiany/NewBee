@@ -11,6 +11,7 @@ pub mod lyrics;
 mod metadata;
 mod playback;
 mod playlist;
+mod remapping;
 mod settings;
 mod shortcuts;
 mod tracks;
@@ -24,7 +25,7 @@ pub fn run() {
         .manage(locking::WriteState::default())
         .manage(artwork::artist::LookupState::default())
         .manage(backup::BackupState::default())
-        .manage(library::monitoring::MonitoringState::default())
+        .manage(library::synchronization::SynchronizationState::default())
         .manage(lyrics::batch::LyricsBatchState::default())
         .setup(|app| {
             use tauri::Manager;
@@ -60,8 +61,12 @@ pub fn run() {
                 let settings = app.state::<settings::SettingsState>().get()?;
                 app.state::<playback::PlaybackState>()
                     .set_replay_gain(settings.replay_gain, settings.replay_gain_preamp);
-                stage = "library_monitoring";
-                library::monitoring::initialize(app.handle())?;
+                stage = "library_synchronization";
+                library::synchronization::migration::run(
+                    &app.state::<database::Database>(),
+                    &app.state::<settings::SettingsState>(),
+                )?;
+                library::synchronization::initialize(app.handle())?;
                 stage = "playback_statistics";
                 playback::statistics::initialize(app.handle());
                 stage = "playback_session";
@@ -108,8 +113,10 @@ pub fn run() {
             window::lightweight::cancel_lightweight,
             settings::get_settings,
             settings::save_settings,
-            library::monitoring::get_library_monitoring,
-            library::monitoring::resolve_library_monitoring,
+            library::synchronization::get_library_synchronization,
+            library::synchronization::resolve_library_synchronization,
+            library::synchronization::commands::get_synchronization_folders,
+            library::synchronization::commands::save_synchronization_folders,
             backup::export_backup,
             backup::inspect_backup,
             backup::restore_backup,
@@ -120,11 +127,8 @@ pub fn run() {
             shortcuts::run_shortcut,
             shortcuts::set_shortcuts_suspended,
             shortcuts::get_shortcuts_error,
-            library::commands::list_music_library_directories,
-            library::commands::add_music_library_directory,
-            library::commands::remove_music_library_directory,
-            library::commands::migrate_library_paths,
-            library::import::directory::scan_music_library,
+            remapping::remap_paths,
+            library::synchronization::commands::synchronize_library,
             tracks::discovery::supported_audio_extensions,
             tracks::discovery::readable_audio_files,
             tracks::discovery::preview_local_drop,
@@ -228,7 +232,8 @@ pub fn run() {
             }
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
-                app.state::<library::monitoring::MonitoringState>().stop();
+                app.state::<library::synchronization::SynchronizationState>()
+                    .stop();
                 app.state::<tracks::ConfirmationState>().stop();
             }
         });

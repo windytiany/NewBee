@@ -45,16 +45,15 @@ impl ArtworkLibrary {
     fn new() -> Self {
         let files = TestFiles::new();
         let database = Database::open(files.0.join("library.sqlite")).unwrap();
-        database
-            .add_music_library_directory(
-                &std::fs::canonicalize(&files.0).unwrap().to_string_lossy(),
-            )
-            .unwrap();
         let app = tauri::test::mock_builder()
+            .manage(crate::library::synchronization::tests::support::settings(
+                &files.0,
+            ))
+            .manage(crate::library::synchronization::SynchronizationState::default())
             .manage(database)
             .manage(WriteState::default())
             .invoke_handler(tauri::generate_handler![
-                crate::library::import::directory::scan_music_library,
+                crate::library::synchronization::commands::synchronize_library,
                 crate::library::import::files::import_music_files,
                 crate::artwork::track::commands::get_track_artwork,
                 crate::artwork::track::commands::get_album_artwork,
@@ -73,7 +72,7 @@ impl ArtworkLibrary {
     fn scan(&self) -> serde_json::Value {
         invoke(
             &self.webview,
-            "scan_music_library",
+            "synchronize_library",
             serde_json::json!({"operationId":null}),
         )
         .deserialize()

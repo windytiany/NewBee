@@ -1,0 +1,182 @@
+import { t } from "@/shared/i18n/locale";
+import { selectArtworkSize } from "@/features/artwork/size";
+import { invoke } from "@tauri-apps/api/core";
+import { onScopeDispose, readonly, ref, toValue, watch } from "vue";
+import type { MaybeRefOrGetter, Ref } from "vue";
+import type { TrackArtwork } from "@/features/artwork/resources";
+import { createArtworkResource } from "@/features/artwork/resources";
+import type {
+  ArtworkResource,
+  ArtworkResourceSnapshot,
+  DecodedArtwork,
+} from "@/features/artwork/resources";
+import { createArtworkBackground } from "@/features/artwork/background";
+import type { AlbumBackground } from "@/features/artwork/background";
+import { logger } from "@/shared/logging/logger";
+import { notify } from "@/shared/notifications/center";
+
+export type TrackArtworkStatus = "loading" | "ready" | "fallback";
+
+type SharedArtwork = {
+  trackId: number;
+  resource: ArtworkResource;
+  subscriptions: number;
+};
+
+const sharedArtworkByKey = new Map<string, SharedArtwork>();
+const thumbnailLoads: Array<() => void> = [];
+const THUMBNAIL_CONCURRENCY = 2;
+let activeThumbnailLoads = 0;
+
+export function useTrackArtwork(
+  trackId: MaybeRefOrGetter<number | null>,
+  size: MaybeRefOrGetter<number | null> = null,
+  purpose: "cover" | "background" = "cover",
+): {
+  status: Readonly<Ref<TrackArtworkStatus>>;
+  url: Readonly<Ref<string | null>>;
+  content: Readonly<Ref<TrackArtwork | null>>;
+  error: Readonly<Ref<string>>;
+  background: Readonly<Ref<AlbumBackground | null>>;
+  /** Pins the current decoded URL without adding a loading subscription. */
+  retain(): () => void;
+} {
+  const status = ref<TrackArtworkStatus>("fallback");
+  const url = ref<string | null>(null);
+  const content = ref<TrackArtwork | null>(null);
+  const error = ref("");
+  const background = ref<AlbumBackground | null>(null);
+  let image: DecodedArtwork | null = null;
+  let unsubscribe: (() => void) | null = null;
+  const stop = watch(
+    [() => toValue(trackId), () => selectArtworkSize(toValue(size))],
+    ([nextTrackId, nextSize]) => {
+      unsubscribe?.();
+      unsubscribe = null;
+      image = null;
+      url.value = null;
+      content.value = null;
+      error.value = "";
+      background.value = null;
+      if (nextTrackId === null) {
+        status.value = "fallback";
+        return;
+      }
+      status.value = "loading";
+      if (nextSize === 0) return;
+      unsubscribe = subscribeToTrackArtwork(nextTrackId, nextSize, (snapshot) => {
+        image = snapshot.image;
+        url.value = image?.url ?? null;
+        content.value = image?.content ?? null;
+        error.value = snapshot.error;
+        background.value = null;
+        if (purpose === "background" && image) {
+          try {
+            background.value = createArtworkBackground(image.decoder);
+          } catch (cause) {
+            logger.warn("artwork", "background_generation_failed", cause, { trackId: nextTrackId });
+            notify({
+              type: "warning",
+              message: t("生成专辑背景失败"),
+              key: "artwork-background",
+            });
+            error.value = `生成背景失败：${cause instanceof Error ? cause.message : String(cause)}`;
+          }
+        }
+        status.value = snapshot.status;
+      });
+    },
+    { immediate: true, flush: "sync" },
+  );
+  onScopeDispose(() => {
+    stop();
+    unsubscribe?.();
+    unsubscribe = null;
+    image = null;
+  });
+  return {
+    status: readonly(status),
+    url: readonly(url),
+    content: readonly(content),
+    error: readonly(error),
+    background: readonly(background),
+    retain: () => image?.retain() ?? (() => {}),
+  };
+}
+
+/** Reloads subscribed artwork, optionally restricted to changed tracks. */
+export function invalidateTrackArtworkCache(trackIds?: readonly number[]) {
+  const changedIds = trackIds === undefined ? null : new Set(trackIds);
+  for (const entry of [...sharedArtworkByKey.values()]) {
+    if (changedIds === null || changedIds.has(entry.trackId)) entry.resource.reload();
+  }
+}
+
+function subscribeToTrackArtwork(
+  trackId: number,
+  size: number | null,
+  subscriber: (snapshot: ArtworkResourceSnapshot) => void,
+) {
+  const key = `${size === null ? "original" : size}:${trackId}`;
+  let entry = sharedArtworkByKey.get(key);
+  if (!entry) {
+    entry = {
+      trackId,
+      subscriptions: 0,
+      resource: createArtworkResource(
+        async () => {
+          if (await invoke<boolean>("is_track_metadata_pending", { trackId })) return null;
+          return invoke<TrackArtwork>("get_track_artwork", { trackId, size });
+        },
+        (error) => {
+          const message = error instanceof Error ? error.message : String(error ?? "未知错误");
+          logger.warn("artwork", "read_failed", error, { trackId });
+          notify({
+            type: "warning",
+            message: t("封面加载失败"),
+            key: "artwork-read",
+          });
+          return `读取封面失败，已显示占位图：${message}`;
+        },
+        (run, isCurrent) => scheduleArtworkLoad(size, run, isCurrent),
+      ),
+    };
+    sharedArtworkByKey.set(key, entry);
+  }
+  const subscribedEntry = entry;
+  subscribedEntry.subscriptions++;
+  const unsubscribe = subscribedEntry.resource.subscribe(subscriber);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    unsubscribe(false);
+    if (--subscribedEntry.subscriptions === 0 && sharedArtworkByKey.get(key) === subscribedEntry)
+      sharedArtworkByKey.delete(key);
+  };
+}
+
+function scheduleArtworkLoad(
+  size: number | null,
+  run: () => Promise<void>,
+  isCurrent: () => boolean,
+) {
+  if (size === null) {
+    if (isCurrent()) void run();
+    return;
+  }
+  thumbnailLoads.push(() => {
+    if (!isCurrent()) return;
+    activeThumbnailLoads++;
+    void run().finally(() => {
+      activeThumbnailLoads--;
+      drainThumbnailLoads();
+    });
+  });
+  drainThumbnailLoads();
+}
+function drainThumbnailLoads() {
+  while (activeThumbnailLoads < THUMBNAIL_CONCURRENCY && thumbnailLoads.length > 0) {
+    thumbnailLoads.shift()?.();
+  }
+}

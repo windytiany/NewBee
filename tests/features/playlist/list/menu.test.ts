@@ -80,7 +80,7 @@ const playlistItem = createComponent(
   {
     vue: Vue,
     "@lucide/vue": { DiscAlbum: icon },
-    "@/features/artwork/components/TrackArtwork.vue": { __esModule: true, default: TrackArtwork },
+    "@/features/artwork/track/TrackArtwork.vue": { __esModule: true, default: TrackArtwork },
   },
 );
 const playlistList = createComponent(

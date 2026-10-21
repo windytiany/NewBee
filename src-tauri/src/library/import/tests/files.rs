@@ -27,10 +27,6 @@ fn imports_multiple_files_and_preserves_original_locations() {
         assert_eq!(metadata["channels"], 1);
         assert_eq!(metadata["durationMs"], 1000);
     }
-    assert!(database
-        .list_music_library_directories()
-        .unwrap()
-        .is_empty());
 }
 
 #[test]
@@ -151,7 +147,7 @@ fn canonicalizes_selected_paths_and_deduplicates_aliases() {
 #[cfg(any(unix, windows))]
 #[test]
 fn follows_selected_file_links_and_deduplicates_the_target() {
-    use super::support::link_file;
+    use crate::fixtures::link_file;
     let files = TestFiles::new();
     let target = files.wav("song.wav");
     let link = files.0.join("selected.wav");

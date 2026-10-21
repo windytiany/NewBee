@@ -10,6 +10,7 @@ mod library;
 mod lyrics;
 mod metadata;
 mod playlist;
+mod remapping;
 mod schema;
 mod skip;
 pub(crate) mod snapshot;

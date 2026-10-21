@@ -36,12 +36,12 @@ const modules: Record<string, unknown> = {
   vue: Vue,
   "@lucide/vue": { ChevronRight: Vue.defineComponent({ setup: () => () => null }) },
   "@/shared/interaction/useContextMenu": contextMenuModule,
-  "@/features/metadata/releases/components/ReleaseMenuItem.vue": Vue.defineComponent({
+  "@/features/metadata/releases/ReleaseMenuItem.vue": Vue.defineComponent({
     props: ["album"],
     setup: (props) => () =>
       Vue.h("button", { "data-update-album": JSON.stringify(props.album) }, "根据专辑更新标签"),
   }),
-  "@/features/metadata/manual/components/EditMenuItem.vue": Vue.defineComponent({
+  "@/features/metadata/manual/EditMenuItem.vue": Vue.defineComponent({
     props: ["album"],
     setup: (props) => () =>
       Vue.h("button", { "data-edit-album": JSON.stringify(props.album) }, "编辑"),

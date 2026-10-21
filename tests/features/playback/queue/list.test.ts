@@ -9,7 +9,7 @@ import {
   visit,
 } from "../../../support/host/renderer";
 
-const source = await Bun.file("src/features/playback/queue/components/QueueList.vue").text();
+const source = await Bun.file("src/features/playback/queue/QueueList.vue").text();
 const originals = new Map(
   ["document", "window", "Node", "HTMLElement", "innerWidth", "innerHeight"].map((key) => [
     key,
@@ -140,12 +140,12 @@ async function mount(selected: string[] = [], registered = true) {
             selection.contextMenuTargets(scope, key, keys),
         }),
       },
-      "@/features/playback/queue/components/QueueRow.vue": row,
-      "@/features/playback/queue/components/SkipMenuItem.vue": item("跳过"),
-      "@/features/metadata/manual/components/EditMenuItem.vue": item("编辑"),
+      "@/features/playback/queue/QueueRow.vue": row,
+      "@/features/playback/queue/SkipMenuItem.vue": item("跳过"),
+      "@/features/metadata/manual/EditMenuItem.vue": item("编辑"),
       "@/features/tracks/presentation/RereadMenuItem.vue": item("重新读取标签"),
-      "@/features/loudness/AnalysisMenuItem.vue": item("分析响度"),
-      "@/features/loudness/RestoreMenuItem.vue": item("恢复原始响度"),
+      "@/features/metadata/replaygain/AnalysisMenuItem.vue": item("分析 ReplayGain"),
+      "@/features/metadata/replaygain/RemovalMenuItem.vue": item("移除 ReplayGain 标签"),
     },
   ).default;
   const root = new Scene("root");
@@ -229,12 +229,12 @@ it("supports immediate playback of a single path-backed row and collapses unsele
   if (!update) throw new Error("Missing tag update submenu");
   dispatch(update, "onMouseenter");
   await settle();
-  const analysis = context.button("分析响度");
+  const analysis = context.button("分析 ReplayGain");
   expect(analysis?.props.paths).toEqual(["C:\\second.flac"]);
   expect(analysis?.props["data-targets"]).toBe("[]");
-  const restoration = context.button("恢复原始响度");
-  expect(restoration?.props.paths).toEqual(["C:\\second.flac"]);
-  expect(restoration?.props["data-targets"]).toBe("[]");
+  const removal = context.button("移除 ReplayGain 标签");
+  expect(removal?.props.paths).toEqual(["C:\\second.flac"]);
+  expect(removal?.props["data-targets"]).toBe("[]");
   dispatch(play, "onClick");
   await settle();
   expect(context.played).toEqual(["second"]);

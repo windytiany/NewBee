@@ -287,6 +287,7 @@ fn accent_color_persists_normalized_and_loads_from_disk() {
     let state = SettingsState::load(path.clone()).unwrap();
     assert_eq!(state.get().unwrap().accent_color, "#a6e3a1");
     let app = tauri::test::mock_builder()
+        .manage(crate::locking::WriteState::default())
         .manage(state)
         .manage(crate::playback::PlaybackState::default())
         .manage(crate::shortcuts::ShortcutsState::default())
@@ -494,6 +495,7 @@ fn reduced_motion_persists_and_loads_from_disk() {
     let state = SettingsState::load(path.clone()).unwrap();
     assert!(!state.get().unwrap().reduced_motion);
     let app = tauri::test::mock_builder()
+        .manage(crate::locking::WriteState::default())
         .manage(state)
         .manage(crate::playback::PlaybackState::default())
         .manage(crate::shortcuts::ShortcutsState::default())
@@ -549,6 +551,7 @@ fn locale_persists_and_loads_from_disk() {
     let path = std::env::temp_dir().join(format!("newbee-locale-{}.json", std::process::id()));
     let state = SettingsState::load(path.clone()).unwrap();
     let app = tauri::test::mock_builder()
+        .manage(crate::locking::WriteState::default())
         .manage(state)
         .manage(crate::playback::PlaybackState::default())
         .manage(crate::shortcuts::ShortcutsState::default())

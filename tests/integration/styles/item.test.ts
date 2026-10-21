@@ -27,7 +27,7 @@ const componentPaths = [
   "../../../src/features/artists/navigation/ArtistRow.vue",
   "../../../src/features/library/browser/albums/AlbumCard.vue",
   "../../../src/features/library/browser/albums/AlbumTrack.vue",
-  "../../../src/features/playback/queue/components/QueueRow.vue",
+  "../../../src/features/playback/queue/QueueRow.vue",
 ] as const;
 const componentFiles: SfcFile[] = await Promise.all(
   componentPaths.map(async (path) => {
@@ -105,7 +105,7 @@ describe("列表条目状态样式", () => {
     }
     for (const path of [
       "../../../src/features/playlist/tracks/PlaylistBrowser.vue",
-      "../../../src/features/inbox/pages/InboxPage.vue",
+      "../../../src/features/inbox/InboxPage.vue",
     ]) {
       const source = await Bun.file(new URL(path, import.meta.url)).text();
       const { descriptor } = parse(source, { filename: path });

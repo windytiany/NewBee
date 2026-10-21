@@ -2,13 +2,11 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { transpileScript, evaluateSource } from "../../support/module/loader";
 
-import type { PlaylistAvailability } from "@/features/playlist/composables/useState";
-import type { usePlaylistPage } from "@/features/playlist/composables/usePage";
+import type { PlaylistAvailability } from "@/features/playlist/usePlaylistState";
+import type { usePlaylist } from "@/features/playlist/usePlaylist";
 
 const output = transpileScript(
-  await Bun.file(
-    new URL("../../../src/features/playlist/composables/usePage.ts", import.meta.url),
-  ).text(),
+  await Bun.file(new URL("../../../src/features/playlist/usePlaylist.ts", import.meta.url)).text(),
 );
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
@@ -26,6 +24,12 @@ function createPage(initialActive: boolean) {
   let availability!: Readonly<Vue.Ref<PlaylistAvailability>>;
   const changes: unknown[] = [];
   const state = {
+    playlists: Vue.ref([]),
+    pendingPlaylistIds: Vue.ref([]),
+    playlistsError: Vue.ref(""),
+    playlistTracksError: Vue.ref(""),
+    trackMetadataError: Vue.ref(""),
+    playlistActionError: Vue.ref(""),
     updateTrackMetadata: (change: unknown) => changes.push(change),
     refreshPlaylists: async (playlistId?: number, force?: boolean) => {
       refreshes.push([playlistId, force]);
@@ -33,8 +37,9 @@ function createPage(initialActive: boolean) {
   };
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/features/playback/session": { usePlaybackSession: () => ({ state: {} }) },
     "@/features/tracks/events": { TRACKS_CHANGED_EVENT: "newbee:tracks-changed" },
-    "@/features/playlist/composables/useState": {
+    "@/features/playlist/usePlaylistState": {
       usePlaylistState: (value: typeof availability) => {
         availability = value;
         Vue.watch(value, (mode) => modes.push(mode), { immediate: true, flush: "sync" });
@@ -42,8 +47,8 @@ function createPage(initialActive: boolean) {
       },
     },
   };
-  const { usePlaylistPage: createPlaylistPage } = evaluateSource<{
-    usePlaylistPage: typeof usePlaylistPage;
+  const { usePlaylist: createPlaylistPage } = evaluateSource<{
+    usePlaylist: typeof usePlaylist;
   }>(output, modules);
   const renderer = Vue.createRenderer<object>({
     patchProp: () => {},
@@ -57,10 +62,10 @@ function createPage(initialActive: boolean) {
     parentNode: () => null,
     nextSibling: () => null,
   });
-  let page!: ReturnType<typeof usePlaylistPage>;
+  let page!: ReturnType<typeof import("@/features/playlist/usePlaylistState").usePlaylistState>;
   const app = renderer.createApp({
     setup() {
-      page = createPlaylistPage(active);
+      page = Vue.toRaw(createPlaylistPage(active)).page as unknown as typeof page;
       expect(availability.value).toBe("unavailable");
       return () => null;
     },
@@ -81,7 +86,7 @@ function createPage(initialActive: boolean) {
   };
 }
 
-describe("歌单页面 lifecycle adapter", () => {
+describe("歌单页面 coordination", () => {
   it("保持同一份状态，仅向 module 传递可用性变化", () => {
     const harness = createPage(true);
     harness.active.value = false;

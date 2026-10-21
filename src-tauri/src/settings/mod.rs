@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{Manager, State};
 
+pub(crate) mod migration;
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub enum Locale {
     #[default]
@@ -109,7 +111,7 @@ pub struct Settings {
     #[serde(deserialize_with = "deserialize_replay_gain_preamp")]
     pub replay_gain_preamp: f64,
     pub scan_replay_gain: bool,
-    pub(crate) monitoring_folders: Vec<crate::library::monitoring::configuration::Folder>,
+    pub(crate) synchronization_folders: Vec<crate::library::synchronization::configuration::Folder>,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
     #[serde(default = "crate::lyrics::default_providers")]
@@ -136,7 +138,7 @@ impl Default for Settings {
             replay_gain: true,
             replay_gain_preamp: 0.0,
             scan_replay_gain: false,
-            monitoring_folders: Vec::new(),
+            synchronization_folders: Vec::new(),
             album_sort_by: AlbumSortBy::default(),
             album_sort_order: AlbumSortOrder::default(),
             lyrics_providers: crate::lyrics::default_providers(),
@@ -152,18 +154,27 @@ pub struct SettingsState {
 
 impl SettingsState {
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut migrated = false;
         let settings = match std::fs::read(&path) {
-            Ok(data) => serde_json::from_slice(&data)?,
+            Ok(data) => {
+                let mut value = serde_json::from_slice(&data)?;
+                migrated = migration::convert(&mut value)?;
+                serde_json::from_value(value)?
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Settings {
                 shortcuts: crate::shortcuts::ShortcutSettings::defaults(),
                 ..Settings::default()
             },
             Err(error) => return Err(error.into()),
         };
-        Ok(Self {
+        let state = Self {
             settings: Mutex::new(settings),
             path,
-        })
+        };
+        if migrated {
+            state.persist(&state.get()?)?;
+        }
+        Ok(state)
     }
 
     pub fn get(&self) -> Result<Settings, String> {
@@ -189,11 +200,34 @@ impl SettingsState {
             .settings
             .lock()
             .map_err(|error| format!("Could not update settings: {error}"))?;
-        crate::library::monitoring::configuration::normalize(
-            &mut settings.monitoring_folders,
-            &current.monitoring_folders,
+        crate::library::synchronization::configuration::normalize(
+            &mut settings.synchronization_folders,
+            &current.synchronization_folders,
         )?;
-        let data = serde_json::to_vec_pretty(&settings)
+        self.persist(&settings)?;
+        *current = settings;
+        Ok(())
+    }
+
+    pub(crate) fn update_folders(
+        &self,
+        update: impl FnOnce(
+            &mut Vec<crate::library::synchronization::configuration::Folder>,
+        ) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let mut current = self.settings.lock().map_err(|error| error.to_string())?;
+        let mut next = current.clone();
+        update(&mut next.synchronization_folders)?;
+        if next == *current {
+            return Ok(());
+        }
+        self.persist(&next)?;
+        *current = next;
+        Ok(())
+    }
+
+    fn persist(&self, settings: &Settings) -> Result<(), String> {
+        let data = serde_json::to_vec_pretty(settings)
             .map_err(|error| format!("Could not serialize settings: {error}"))?;
         let temporary = self.path.with_extension("json.tmp");
         std::fs::write(&temporary, data)
@@ -206,7 +240,6 @@ impl SettingsState {
                 }
                 format!("Could not save settings: {error}")
             })?;
-        *current = settings;
         Ok(())
     }
 
@@ -236,6 +269,7 @@ async fn save_settings_for_app<R: tauri::Runtime>(
     settings: Settings,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let _guard = app.state::<crate::locking::WriteState>().acquire()?;
         let locale = settings.locale;
         let replay_gain = settings.replay_gain;
         let replay_gain_preamp = settings.replay_gain_preamp;

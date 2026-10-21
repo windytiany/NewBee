@@ -2,7 +2,7 @@ import { setLocale } from "@/shared/i18n/locale";
 import { isTauri } from "@tauri-apps/api/core";
 import { logger } from "@/shared/logging/logger";
 import { createSettingsApi } from "@/features/settings/api";
-import { applyAppearance } from "@/features/settings/appearance";
+import { applyAppearance } from "@/features/settings/appearance/apply";
 
 const api = createSettingsApi();
 

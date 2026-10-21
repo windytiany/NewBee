@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { nextTick } from "vue";
 import { createArtworkResource } from "@/features/artwork/resources";
 import type { ArtworkResourceSnapshot } from "@/features/artwork/resources";
-import type { TrackArtwork } from "@/features/artwork/types";
+import type { TrackArtwork } from "@/features/artwork/resources";
 
 function deferred<Value>() {
   let resolve!: (value: Value) => void;

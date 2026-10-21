@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { loadSourceModules } from "../../../support/module/loader";
 import * as backgroundModule from "@/features/artwork/background";
-import type { AlbumArtworkSelection } from "@/features/artwork/useAlbumArtwork";
-import type { TrackArtwork } from "@/features/artwork/types";
+import type { AlbumArtworkSelection } from "@/features/artwork/album/useArtwork";
+import type { TrackArtwork } from "@/features/artwork/resources";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 function deferred<Value>() {
@@ -58,10 +58,10 @@ const dependencies: Record<string, unknown> = {
     },
   },
 };
-await loadSourceModules(["features/artwork/useAlbumArtwork.ts"], dependencies);
+await loadSourceModules(["features/artwork/album/useArtwork.ts"], dependencies);
 const { useAlbumArtwork, invalidateAlbumArtworkCache } = dependencies[
-  "@/features/artwork/useAlbumArtwork"
-] as typeof import("@/features/artwork/useAlbumArtwork");
+  "@/features/artwork/album/useArtwork"
+] as typeof import("@/features/artwork/album/useArtwork");
 const available: TrackArtwork = new Uint8Array([1, 2, 3]).buffer;
 const album = { albumArtist: "Artist", album: "Album" };
 

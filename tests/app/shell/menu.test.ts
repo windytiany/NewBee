@@ -161,7 +161,7 @@ describe("brand menu", () => {
     fire(menu.button("工具").parent!, "onMouseenter");
     await Vue.nextTick();
     expect(menu.button("文件").props["aria-expanded"]).toBe(false);
-    expect(menu.button("路径迁移").closest('[role="menu"]')?.props.id).toBe("brand-menu-tools");
+    expect(menu.button("路径重映射").closest('[role="menu"]')?.props.id).toBe("brand-menu-tools");
     expect(menu.button("快捷键总览").closest('[role="menu"]')?.props.id).toBe("brand-menu-tools");
     expect(getTextContent(menu.menu())).not.toContain("播放统计");
     expect(getTextContent(menu.menu())).not.toContain("导入音频文件");
@@ -173,7 +173,7 @@ describe("brand menu", () => {
   for (const [group, label, action] of [
     ["文件", "导入音频文件", "import"],
     ["文件", "扫描文件夹", "scan"],
-    ["工具", "路径迁移", "migrate"],
+    ["工具", "路径重映射", "remap"],
     [null, "设置", "settings"],
     [null, "命令面板", "commands"],
     ["工具", "快捷键总览", "shortcuts"],
@@ -235,7 +235,7 @@ describe("brand menu", () => {
     await menu.key("ArrowDown");
     expect(focused).toBe(menu.button("工具"));
     await menu.key("ArrowRight");
-    expect(focused).toBe(menu.button("路径迁移"));
+    expect(focused).toBe(menu.button("路径重映射"));
     await menu.key("Escape");
     expect(focused).toBe(menu.button("工具"));
     await menu.key("Escape");

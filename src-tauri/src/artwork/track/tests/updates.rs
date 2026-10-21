@@ -2,7 +2,7 @@ use super::ipc::{assert_color, fixture, invoke};
 use crate::{
     database::Database,
     fixtures::TestFiles,
-    library::import::{directory::scan_music_library, files::import_music_files},
+    library::{import::files::import_music_files, synchronization::commands::synchronize_library},
     locking::WriteState,
     metadata::{
         files,
@@ -23,10 +23,11 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
     let green = fixture(Rgba([0, 255, 0, 255]));
     let cover = music.write("cover.png", &red);
     let database = Database::open(":memory:").unwrap();
-    database
-        .add_music_library_directory(&std::fs::canonicalize(&music.0).unwrap().to_string_lossy())
-        .unwrap();
     let app = tauri::test::mock_builder()
+        .manage(crate::library::synchronization::tests::support::settings(
+            &music.0,
+        ))
+        .manage(crate::library::synchronization::SynchronizationState::default())
         .manage(database)
         .manage(WriteState::default())
         .invoke_handler(tauri::generate_handler![
@@ -68,7 +69,7 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
             .0
     };
     let scan = |updated| {
-        let result = tauri::async_runtime::block_on(scan_music_library(
+        let result = tauri::async_runtime::block_on(synchronize_library(
             None,
             app.handle().clone(),
             app.state(),
@@ -136,9 +137,12 @@ fn scan_and_embedded_writes_refresh_thumbnails_without_destroying_other_shared_r
 
     // Failed scans preserve both previously confirmed cover snapshots.
     std::fs::write(&cover, b"broken image").unwrap();
-    let failed =
-        tauri::async_runtime::block_on(scan_music_library(None, app.handle().clone(), app.state()))
-            .unwrap();
+    let failed = tauri::async_runtime::block_on(synchronize_library(
+        None,
+        app.handle().clone(),
+        app.state(),
+    ))
+    .unwrap();
     assert_eq!(serde_json::to_value(failed).unwrap()["failed"], 2);
     assert_eq!(read(1), shared_green);
     assert_eq!(read(2), shared_green);

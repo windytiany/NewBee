@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { effectScope, nextTick, ref } from "vue";
 import type { Ref } from "vue";
-import type { TrackArtwork } from "@/features/artwork/types";
+import type { TrackArtwork } from "@/features/artwork/resources";
 import { loadSourceModules } from "../../../support/module/loader";
 
 type Deferred<Value> = {
@@ -95,17 +95,17 @@ async function createPresentationFixture({
   await loadSourceModules(
     [
       "features/artwork/resources.ts",
-      "features/artwork/useTrackArtwork.ts",
-      "features/artwork/useTrackArtworkPresentation.ts",
+      "features/artwork/track/useArtwork.ts",
+      "features/artwork/track/usePresentation.ts",
     ],
     dependencies,
   );
   const { useTrackArtworkPresentation } = dependencies[
-    "@/features/artwork/useTrackArtworkPresentation"
-  ] as typeof import("@/features/artwork/useTrackArtworkPresentation");
+    "@/features/artwork/track/usePresentation"
+  ] as typeof import("@/features/artwork/track/usePresentation");
   const { invalidateTrackArtworkCache } = dependencies[
-    "@/features/artwork/useTrackArtwork"
-  ] as typeof import("@/features/artwork/useTrackArtwork");
+    "@/features/artwork/track/useArtwork"
+  ] as typeof import("@/features/artwork/track/useArtwork");
 
   function mount(trackId: Ref<number | null>, size: number | null = null) {
     const scope = effectScope();

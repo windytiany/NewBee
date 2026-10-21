@@ -1,5 +1,5 @@
 <script lang="ts">
-export type AppMenuAction = "import" | "scan" | "migrate" | "settings" | "commands" | "shortcuts";
+export type AppMenuAction = "import" | "scan" | "remap" | "settings" | "commands" | "shortcuts";
 </script>
 
 <script setup lang="ts">
@@ -32,7 +32,7 @@ const groups = [
     id: "tools",
     label: "工具",
     items: [
-      { action: "migrate", label: "路径迁移" },
+      { action: "remap", label: "路径重映射" },
       { action: "shortcuts", label: "快捷键总览" },
     ],
   },

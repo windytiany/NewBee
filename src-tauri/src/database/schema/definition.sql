@@ -76,11 +76,6 @@ CREATE TABLE IF NOT EXISTS track_artwork_sources (
     UNIQUE (artwork_id)
 );
 
-CREATE TABLE IF NOT EXISTS music_library_directories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    path TEXT NOT NULL UNIQUE
-);
-
 CREATE TABLE IF NOT EXISTS playlists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL

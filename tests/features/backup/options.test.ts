@@ -4,9 +4,9 @@ import { compileSfc, evaluateSource } from "../../support/module/loader";
 import type { NotificationInput } from "@/shared/notifications/center";
 
 const source = await Bun.file(
-  new URL("../../../src/features/backup/components/BackupOptions.vue", import.meta.url),
+  new URL("../../../src/features/backup/BackupOptions.vue", import.meta.url),
 ).text();
-const output = compileSfc(source, "src/features/backup/components/BackupOptions.vue", {
+const output = compileSfc(source, "src/features/backup/BackupOptions.vue", {
   inlineTemplate: false,
 });
 type Bindings = {

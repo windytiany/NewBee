@@ -8,14 +8,15 @@ fn scanned_directory_cover_survives_missing_external_and_audio_files() {
     let cover = include_bytes!("../../../../fixtures/cover.png");
     fixture.write("CoVeR.PNG", cover);
     let database = Database::open(":memory:").unwrap();
-    database
-        .add_music_library_directory(&std::fs::canonicalize(&fixture.0).unwrap().to_string_lossy())
-        .unwrap();
     let app = tauri::test::mock_builder()
+        .manage(crate::library::synchronization::tests::support::settings(
+            &fixture.0,
+        ))
+        .manage(crate::library::synchronization::SynchronizationState::default())
         .manage(database)
         .manage(WriteState::default())
         .invoke_handler(tauri::generate_handler![
-            crate::library::import::directory::scan_music_library,
+            crate::library::synchronization::commands::synchronize_library,
             crate::artwork::track::commands::get_track_artwork,
             crate::artwork::track::commands::get_album_artwork
         ])
@@ -26,7 +27,7 @@ fn scanned_directory_cover_survives_missing_external_and_audio_files() {
         .unwrap();
     let scan = invoke(
         &webview,
-        "scan_music_library",
+        "synchronize_library",
         serde_json::json!({"operationId":null}),
     )
     .deserialize::<serde_json::Value>()

@@ -3,8 +3,6 @@ use crate::library::model::ImportResult;
 use crate::tracks::model::TrackWriteOutcome;
 use std::path::Path;
 
-pub(crate) mod directory;
-mod error;
 pub(crate) mod files;
 #[cfg(test)]
 mod tests;

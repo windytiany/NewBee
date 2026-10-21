@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { AlbumSummary } from "@/features/library/types";
-import ResizeHandle from "@/shared/components/ResizeHandle.vue";
+import ResizeHandle from "@/shared/interaction/resize/ResizeHandle.vue";
 import { useWidth } from "@/features/library/statistics/useWidth";
 import { useStatistics } from "@/features/library/statistics/useStatistics";
 import { t } from "@/shared/i18n/locale";

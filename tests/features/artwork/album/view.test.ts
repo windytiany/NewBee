@@ -8,7 +8,7 @@ import {
   visit,
 } from "../../../support/host/renderer";
 import type { HostNode } from "../../../support/host/renderer";
-import type { AlbumArtworkSelection } from "@/features/artwork/useAlbumArtwork";
+import type { AlbumArtworkSelection } from "@/features/artwork/album/useArtwork";
 import type { AlbumBackground } from "@/features/artwork/background";
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -21,15 +21,15 @@ const icon = Vue.defineComponent(() => () => null);
 const passiveComponent = { __esModule: true, default: icon };
 const dependencies: Record<string, unknown> = {
   vue: Vue,
-  "@/features/metadata/releases/components/ReleaseMenuItem.vue": passiveComponent,
-  "@/features/loudness/AnalysisMenuItem.vue": passiveComponent,
-  "@/features/loudness/RestoreMenuItem.vue": passiveComponent,
+  "@/features/metadata/releases/ReleaseMenuItem.vue": passiveComponent,
+  "@/features/metadata/replaygain/AnalysisMenuItem.vue": passiveComponent,
+  "@/features/metadata/replaygain/RemovalMenuItem.vue": passiveComponent,
   "@/features/artwork/artist/PhotoEditor.vue": Vue.defineComponent({
     props: ["artist"],
     setup: (props) => () => Vue.h("photo", { "data-artist": props.artist }),
   }),
   "@lucide/vue": { ChevronRight: icon, Play: icon, Pause: icon, X: icon, DiscAlbum: icon },
-  "@/features/settings/composables/useCoverBackground": {
+  "@/features/settings/appearance/useCoverBackground": {
     useCoverBackground: (setting: string) => {
       expect(setting).toBe("albumCoverBackground");
       return backgroundEnabled;
@@ -37,7 +37,7 @@ const dependencies: Record<string, unknown> = {
   },
   "@/features/artwork/background": { ALBUM_BACKGROUND_SAMPLE_SIZE: 32 },
   "@/features/artwork/useArtworkSize": { useArtworkSize: () => Vue.ref(160) },
-  "@/features/artwork/useAlbumArtwork": {
+  "@/features/artwork/album/useArtwork": {
     useAlbumArtwork(
       selection: Vue.MaybeRefOrGetter<AlbumArtworkSelection | null>,
       purpose: "cover" | "background",
@@ -90,10 +90,10 @@ const dependencies: Record<string, unknown> = {
           }),
     }),
   },
-  "@/features/metadata/manual/components/EditMenuItem.vue": passiveComponent,
+  "@/features/metadata/manual/EditMenuItem.vue": passiveComponent,
   "@/features/tracks/presentation/RereadMenuItem.vue": passiveComponent,
   "@/features/lyrics/download/DownloadMenuItem.vue": passiveComponent,
-  "@/features/playback/queue/components/SkipMenuItem.vue": passiveComponent,
+  "@/features/playback/queue/SkipMenuItem.vue": passiveComponent,
   "@/features/library/browser/albums/AlbumContextMenu.vue": passiveComponent,
   "@/features/library/statistics/LibraryStatistics.vue": passiveComponent,
   "@/features/playlist/creation/CreatePlaylistDialog.vue": passiveComponent,

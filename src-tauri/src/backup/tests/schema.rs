@@ -94,7 +94,6 @@ fn equivalent_schema_spelling_can_be_imported_and_restores_deleted_album() {
                     "digest",
                     "content_id",
                     "idx_artwork_images_digest",
-                    "music_library_directories",
                     "playlists",
                     "playlist_items",
                     "track_editing",

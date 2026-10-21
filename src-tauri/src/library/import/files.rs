@@ -14,8 +14,8 @@ pub async fn import_music_files<R: tauri::Runtime>(
     operation_id: Option<String>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
-) -> Result<ImportResult, super::error::CommandError> {
-    use super::error::CommandError;
+) -> Result<ImportResult, crate::library::error::CommandError> {
+    use crate::library::error::CommandError;
     let guard = write.acquire().map_err(CommandError::busy)?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::logging::with_operation(operation_id.clone(), || {

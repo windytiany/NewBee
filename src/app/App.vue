@@ -9,19 +9,19 @@ import { useDropImport } from "@/features/import/useDropImport";
 import { usePersistentActivePage } from "@/app/pages";
 import { useShortcuts } from "@/features/shortcuts/useShortcuts";
 import type { PlaylistCatalog } from "@/features/playlist/types";
-import LibraryPage from "@/features/library/pages/LibraryPage.vue";
-import PlaylistPage from "@/features/playlist/pages/PlaylistPage.vue";
-import InboxPage from "@/features/inbox/pages/InboxPage.vue";
-import NowPlayingPage from "@/features/playback/pages/NowPlayingPage.vue";
+import LibraryPage from "@/features/library/LibraryPage.vue";
+import PlaylistPage from "@/features/playlist/PlaylistPage.vue";
+import InboxPage from "@/features/inbox/InboxPage.vue";
+import NowPlayingPage from "@/features/playback/NowPlayingPage.vue";
 import PlaybackBar from "@/features/playback/controls/PlaybackBar.vue";
 import NotificationHost from "@/shared/notifications/NotificationHost.vue";
-import MonitoringDialog from "@/features/library/monitoring/MonitoringDialog.vue";
+import MissingFilesDialog from "@/features/library/synchronization/MissingFilesDialog.vue";
 import LyricsDownloadDialog from "@/features/lyrics/download/LyricsDownloadDialog.vue";
-import LoudnessConfirmationDialog from "@/features/loudness/ConfirmationDialog.vue";
-import TagEditorDialog from "@/features/metadata/manual/components/TagEditorDialog.vue";
-import ReleaseTagDialog from "@/features/metadata/releases/components/ReleaseTagDialog.vue";
+import ReplayGainConfirmationDialog from "@/features/metadata/replaygain/ConfirmationDialog.vue";
+import TagEditorDialog from "@/features/metadata/manual/TagEditorDialog.vue";
+import ReleaseTagDialog from "@/features/metadata/releases/ReleaseTagDialog.vue";
 import AppShell from "@/app/shell/AppShell.vue";
-import QueuePanel from "@/features/playback/queue/components/QueuePanel.vue";
+import QueuePanel from "@/features/playback/queue/QueuePanel.vue";
 import TrackInfoPanel from "@/features/playback/current/TrackInfoPanel.vue";
 import TitleBar from "@/app/shell/TitleBar.vue";
 
@@ -84,10 +84,10 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
     <PlaybackBar />
     <TagEditorDialog />
     <LyricsDownloadDialog />
-    <LoudnessConfirmationDialog />
+    <ReplayGainConfirmationDialog />
     <ReleaseTagDialog />
     <NotificationHost />
-    <MonitoringDialog />
+    <MissingFilesDialog />
     <div
       v-if="dropHighlight"
       data-drop-import

@@ -1,7 +1,7 @@
 import { expect, it } from "bun:test";
 import { effectScope } from "vue";
 import { playbackFixture } from "../../support/playback/session";
-import { useLyrics } from "@/features/lyrics/composables/useLyrics";
+import { useLyrics } from "@/features/lyrics/useLyrics";
 import { TRACKS_CHANGED_EVENT } from "@/features/tracks/events";
 import type { PlaybackDisplayTrack } from "@/features/playback/types";
 import type { TrackLyrics } from "@/features/lyrics/types";

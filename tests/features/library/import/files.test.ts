@@ -40,10 +40,10 @@ function createImport({
   const events: string[] = [];
   const effects: string[] = [];
   const changes = evaluateSource<typeof LibraryChanges>(changesOutput, {
-    "@/features/artwork/useAlbumArtwork": {
+    "@/features/artwork/album/useArtwork": {
       invalidateAlbumArtworkCache: () => effects.push("albums"),
     },
-    "@/features/artwork/useTrackArtwork": {
+    "@/features/artwork/track/useArtwork": {
       invalidateTrackArtworkCache: () => effects.push("artwork"),
     },
   });
