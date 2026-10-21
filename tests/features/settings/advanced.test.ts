@@ -5,9 +5,8 @@ import { createEditor, defaults } from "../../support/settings/editor";
 import type { Settings } from "@/features/settings/types";
 
 describe("settings advanced", () => {
-  it("defaults legacy startup checks to enabled and persists the user's choice", async () => {
-    let persisted: Settings = { ...defaults };
-    Reflect.deleteProperty(persisted, "checkUpdatesOnStartup");
+  it("loads startup checks and persists the user's choice", async () => {
+    let persisted: Settings = { ...defaults, checkUpdatesOnStartup: true };
     const { bindings } = createEditor(async (command, args) => {
       if (command === "get_settings") return persisted;
       if (command === "save_settings") persisted = (args as { settings: Settings }).settings;

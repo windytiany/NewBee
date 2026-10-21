@@ -25,6 +25,17 @@ fn shortcuts_default_only_for_a_missing_settings_file() {
 }
 
 #[test]
+fn rejects_old_monitoring_configuration_without_rewriting_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    let original =
+        br#"{"monitoringFolders":[{"path":"/offline/music","mode":"startup","enabled":false}]}"#;
+    std::fs::write(&path, original).unwrap();
+    assert!(SettingsState::load(path.clone()).is_err());
+    assert_eq!(std::fs::read(path).unwrap(), original);
+}
+
+#[test]
 fn theme_mode_defaults_to_system_and_persists() {
     assert_eq!(Settings::default().theme_mode, ThemeMode::System);
     assert_eq!(

@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{Manager, State};
 
-pub(crate) mod migration;
-
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub enum Locale {
     #[default]
@@ -154,27 +152,18 @@ pub struct SettingsState {
 
 impl SettingsState {
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut migrated = false;
         let settings = match std::fs::read(&path) {
-            Ok(data) => {
-                let mut value = serde_json::from_slice(&data)?;
-                migrated = migration::convert(&mut value)?;
-                serde_json::from_value(value)?
-            }
+            Ok(data) => serde_json::from_slice(&data)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Settings {
                 shortcuts: crate::shortcuts::ShortcutSettings::defaults(),
                 ..Settings::default()
             },
             Err(error) => return Err(error.into()),
         };
-        let state = Self {
+        Ok(Self {
             settings: Mutex::new(settings),
             path,
-        };
-        if migrated {
-            state.persist(&state.get()?)?;
-        }
-        Ok(state)
+        })
     }
 
     pub fn get(&self) -> Result<Settings, String> {

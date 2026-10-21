@@ -2,6 +2,51 @@ use super::*;
 use crate::backup::restore;
 
 #[test]
+fn rejects_old_database_versions_without_rewriting_backups() {
+    let directory = Directory::new();
+    let file = directory.0.join("backup.newbee");
+    make_backup(&directory.0, &file);
+    for version in 1..=3 {
+        let connection = Connection::open(&file).unwrap();
+        connection
+            .pragma_update(None, "user_version", version)
+            .unwrap();
+        drop(connection);
+        let original = fs::read(&file).unwrap();
+        assert_eq!(
+            archive::read(&file).err().unwrap(),
+            "备份数据库与当前版本不兼容"
+        );
+        assert_eq!(fs::read(&file).unwrap(), original);
+    }
+}
+
+#[test]
+fn rejects_old_settings_without_rewriting_backups() {
+    let directory = Directory::new();
+    let file = directory.0.join("backup.newbee");
+    make_backup(&directory.0, &file);
+    let mut value = serde_json::to_value(manifest()).unwrap();
+    let settings = value["settings"].as_object_mut().unwrap();
+    let folders = settings.remove("synchronizationFolders").unwrap();
+    settings.insert("monitoringFolders".into(), folders);
+    let connection = Connection::open(&file).unwrap();
+    connection
+        .execute(
+            "UPDATE newbee_backup_manifest SET json = ?1",
+            [value.to_string()],
+        )
+        .unwrap();
+    drop(connection);
+    let original = fs::read(&file).unwrap();
+    assert!(archive::read(&file)
+        .err()
+        .unwrap()
+        .contains("monitoringFolders"));
+    assert_eq!(fs::read(&file).unwrap(), original);
+}
+
+#[test]
 fn rejects_invalid_relations_and_session_before_modifying_original_data() {
     let source = Directory::new();
     let target = Directory::new();

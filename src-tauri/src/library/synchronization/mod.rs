@@ -1,7 +1,6 @@
 pub(crate) mod commands;
 pub(crate) mod configuration;
 mod inventory;
-pub(crate) mod migration;
 pub(crate) mod reconciliation;
 mod runtime;
 mod scanning;

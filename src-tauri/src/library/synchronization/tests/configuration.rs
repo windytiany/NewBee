@@ -5,10 +5,11 @@ use super::super::{
 use crate::fixtures::TestFiles;
 
 #[test]
-fn legacy_folders_default_to_enabled_and_explicit_disabling_is_preserved() {
-    let legacy: Folder =
-        serde_json::from_value(serde_json::json!({"path": "D:/Music", "mode": "startup"})).unwrap();
-    assert!(legacy.enabled);
+fn folders_require_enabled_and_preserve_explicit_disabling() {
+    assert!(serde_json::from_value::<Folder>(
+        serde_json::json!({"path": "D:/Music", "mode": "startup"})
+    )
+    .is_err());
     let disabled: Folder = serde_json::from_value(
         serde_json::json!({"path": "D:/Music", "mode": "continuous", "enabled": false}),
     )

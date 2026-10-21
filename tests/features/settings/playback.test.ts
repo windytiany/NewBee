@@ -22,9 +22,9 @@ describe("settings playback", () => {
     expect(saved?.scanReplayGain).toBe(false);
   });
 
-  it("defaults legacy preamp to zero and keeps changes as a draft until saving", async () => {
+  it("loads preamp and keeps changes as a draft until saving", async () => {
     const saved: Settings[] = [];
-    let persisted: Partial<Settings> = { ...defaults, replayGainPreamp: -3.5 };
+    let persisted: Settings = { ...defaults, replayGainPreamp: -3.5 };
     const { bindings } = createEditor(async (command, args) => {
       if (command === "get_settings") return persisted;
       saved.push((args as { settings: Settings }).settings);
@@ -39,7 +39,7 @@ describe("settings playback", () => {
     bindings.draft.replayGain = false;
     await bindings.save();
     expect(saved[0]).toMatchObject({ replayGain: false, replayGainPreamp: -3.5 });
-    persisted = { ...defaults, replayGainPreamp: undefined };
+    persisted = { ...defaults, replayGainPreamp: 0 };
     await bindings.show();
     expect(bindings.draft.replayGainPreamp).toBe(0);
     bindings.draft.replayGainPreamp = 20;

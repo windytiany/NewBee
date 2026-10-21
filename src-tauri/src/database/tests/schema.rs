@@ -1,4 +1,4 @@
-use crate::database::schema::{definition, initialize_schema};
+use crate::database::schema::initialize_schema;
 use rusqlite::Connection;
 
 const SCHEMA_VERSION: i64 = 4;
@@ -24,96 +24,6 @@ fn initializes_new_databases_and_can_reopen_them() {
 }
 
 #[test]
-fn upgrade_clears_legacy_counts_once_and_preserves_library_data() {
-    let mut connection = Connection::open_in_memory().unwrap();
-    connection.execute_batch(definition()).unwrap();
-    connection
-        .execute_batch(
-            "DROP TRIGGER clear_statistics_after_library_removal;
-        INSERT INTO tracks (path, in_library) VALUES ('song.mp3', 1);
-        INSERT INTO track_play_statistics VALUES (1, 8);
-        PRAGMA user_version = 1;",
-        )
-        .unwrap();
-    initialize_schema(&mut connection).unwrap();
-    assert_eq!(
-        connection
-            .query_row("SELECT COUNT(*) FROM track_play_statistics", [], |row| row
-                .get::<_, i64>(
-                0
-            ))
-            .unwrap(),
-        0
-    );
-    assert_eq!(
-        connection
-            .query_row("SELECT path FROM tracks", [], |row| row.get::<_, String>(0))
-            .unwrap(),
-        "song.mp3"
-    );
-    connection
-        .execute("INSERT INTO track_play_statistics VALUES (1, 1)", [])
-        .unwrap();
-    initialize_schema(&mut connection).unwrap();
-    assert_eq!(
-        connection
-            .query_row("SELECT play_count FROM track_play_statistics", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-        1
-    );
-    connection
-        .execute("UPDATE tracks SET in_library = 0", [])
-        .unwrap();
-    assert_eq!(
-        connection
-            .query_row("SELECT COUNT(*) FROM track_play_statistics", [], |row| row
-                .get::<_, i64>(
-                0
-            ))
-            .unwrap(),
-        0
-    );
-}
-
-#[test]
-fn upgrade_from_version_two_adds_scan_cache_without_clearing_counts() {
-    let mut connection = Connection::open_in_memory().unwrap();
-    connection.execute_batch(definition()).unwrap();
-    connection
-        .execute_batch(
-            "DROP TABLE track_scan;
-        INSERT INTO tracks (path, in_library) VALUES ('song.mp3', 1);
-        INSERT INTO track_play_statistics VALUES (1, 8);
-        PRAGMA user_version = 2;",
-        )
-        .unwrap();
-    initialize_schema(&mut connection).unwrap();
-    assert_eq!(
-        connection
-            .query_row("SELECT play_count FROM track_play_statistics", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap(),
-        8
-    );
-    assert_eq!(
-        connection
-            .query_row("SELECT COUNT(*) FROM track_scan", [], |row| row
-                .get::<_, i64>(0))
-            .unwrap(),
-        0
-    );
-    assert_eq!(
-        connection
-            .pragma_query_value::<i64, _>(None, "user_version", |row| row.get(0))
-            .unwrap(),
-        SCHEMA_VERSION
-    );
-}
-
-#[test]
 fn rejects_old_schema_without_modifying_it() {
     let mut connection = Connection::open_in_memory().unwrap();
     connection.execute_batch("CREATE TABLE tracks (id INTEGER PRIMARY KEY, path TEXT); INSERT INTO tracks VALUES (42, 'song.mp3');").unwrap();
@@ -129,7 +39,7 @@ fn rejects_old_schema_without_modifying_it() {
 
 #[test]
 fn rejects_other_versions_without_changing_snapshots_or_schema() {
-    for version in [0, SCHEMA_VERSION + 1, SCHEMA_VERSION + 2] {
+    for version in [0, 1, 2, 3, SCHEMA_VERSION + 1, SCHEMA_VERSION + 2] {
         let mut connection = Connection::open_in_memory().unwrap();
         connection.execute_batch("CREATE TABLE tracks (id INTEGER PRIMARY KEY, path TEXT, title TEXT); INSERT INTO tracks VALUES (42, 'song.mp3', 'Stored'); PRAGMA foreign_keys = ON;").unwrap();
         connection

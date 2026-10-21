@@ -7,7 +7,6 @@ use support::*;
 mod artwork;
 mod export;
 mod locking;
-mod migration;
 mod restore;
 mod schema;
 mod snapshot;

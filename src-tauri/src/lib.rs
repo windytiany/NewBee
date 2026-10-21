@@ -62,10 +62,6 @@ pub fn run() {
                 app.state::<playback::PlaybackState>()
                     .set_replay_gain(settings.replay_gain, settings.replay_gain_preamp);
                 stage = "library_synchronization";
-                library::synchronization::migration::run(
-                    &app.state::<database::Database>(),
-                    &app.state::<settings::SettingsState>(),
-                )?;
                 library::synchronization::initialize(app.handle())?;
                 stage = "playback_statistics";
                 playback::statistics::initialize(app.handle());

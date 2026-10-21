@@ -14,12 +14,7 @@ pub(crate) enum Mode {
 pub(crate) struct Folder {
     pub(crate) path: String,
     pub(crate) mode: Mode,
-    #[serde(default = "default_enabled")]
     pub(crate) enabled: bool,
-}
-
-fn default_enabled() -> bool {
-    true
 }
 
 pub(crate) fn normalize(folders: &mut [Folder], previous: &[Folder]) -> Result<(), String> {

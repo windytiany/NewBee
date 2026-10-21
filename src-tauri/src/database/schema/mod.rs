@@ -13,15 +13,6 @@ pub(super) fn initialize_schema(connection: &mut Connection) -> rusqlite::Result
     if version == SCHEMA_VERSION {
         return Ok(());
     }
-    if (1..SCHEMA_VERSION).contains(&version) {
-        let transaction = connection.transaction()?;
-        if version == 1 {
-            transaction.execute("DELETE FROM track_play_statistics", [])?;
-        }
-        transaction.execute_batch(definition())?;
-        transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-        return transaction.commit();
-    }
     let has_tables: bool = connection.query_row(
         "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%')",
         [], |row| row.get(0),

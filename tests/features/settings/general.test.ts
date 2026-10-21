@@ -9,10 +9,10 @@ import { locale, setLocale } from "@/shared/i18n/locale";
 import type { Settings } from "@/features/settings/types";
 
 describe("settings general", () => {
-  it("defaults lightweight mode off for legacy settings and persists the explicit preference", async () => {
+  it("loads lightweight mode and persists the explicit preference", async () => {
     let saved: Settings | undefined;
     const { bindings } = createEditor(async (command, args) => {
-      if (command === "get_settings") return { ...defaults, lightweightOnClose: undefined };
+      if (command === "get_settings") return { ...defaults, lightweightOnClose: false };
       if (command === "save_settings") saved = (args as { settings: Settings }).settings;
     });
     await bindings.show();

@@ -154,8 +154,8 @@ export function useEditor(
       if (requestId !== loadRequestSequence) return;
       draft.locale = settings.locale;
       draft.closeBehavior = settings.closeBehavior;
-      draft.lightweightOnClose = settings.lightweightOnClose ?? false;
-      draft.checkUpdatesOnStartup = settings.checkUpdatesOnStartup ?? true;
+      draft.lightweightOnClose = settings.lightweightOnClose;
+      draft.checkUpdatesOnStartup = settings.checkUpdatesOnStartup;
       draft.themeMode = settings.themeMode;
       draft.accentColor = settings.accentColor;
       draft.reducedMotion = settings.reducedMotion;
@@ -163,10 +163,10 @@ export function useEditor(
       draft.albumCoverBackground = settings.albumCoverBackground;
       draft.playingCoverBackground = settings.playingCoverBackground;
       draft.showPlaybackStatistics = settings.showPlaybackStatistics;
-      draft.replayGain = settings.replayGain ?? true;
-      draft.replayGainPreamp = settings.replayGainPreamp ?? 0;
-      draft.scanReplayGain = settings.scanReplayGain ?? false;
-      draft.synchronizationFolders = (settings.synchronizationFolders ?? []).map((folder) => ({
+      draft.replayGain = settings.replayGain;
+      draft.replayGainPreamp = settings.replayGainPreamp;
+      draft.scanReplayGain = settings.scanReplayGain;
+      draft.synchronizationFolders = settings.synchronizationFolders.map((folder) => ({
         ...folder,
       }));
       draft.albumSortBy = settings.albumSortBy;
