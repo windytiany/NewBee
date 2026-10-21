@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+      pull-requests: read
     defaults:
       run:
         shell: pwsh
@@ -26,6 +27,8 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - name: Validate version
         id: version
         run: |
@@ -54,6 +57,17 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
+        with:
+          version: v2.14.2
+          config: github-keepachangelog
+          args: >-
+            --unreleased --tag ${{ steps.version.outputs.tag }}
+            --tag-pattern '^v[0-9]+\.[0-9]+\.[0-9]+$' --use-branch-tags
+            --github-repo ${{ github.repository }} --strip header
+        env:
+          OUTPUT: ${{ runner.temp }}/notes.md
       - name: Build installer
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -87,7 +101,7 @@ jobs:
           }
           $manifestPath = Join-Path $env:RUNNER_TEMP 'latest.json'
           $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding utf8NoBOM
-          gh release create $env:RELEASE_TAG $installer.FullName $signaturePath $manifestPath --target $env:GITHUB_SHA --title "NewBee $env:RELEASE_TAG" --generate-notes --draft
+          gh release create $env:RELEASE_TAG $installer.FullName $signaturePath $manifestPath --target $env:GITHUB_SHA --title "NewBee $env:RELEASE_TAG" --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md') --draft
           if ($LASTEXITCODE -ne 0) { throw "Failed to create release or upload updater artifacts." }
           gh release edit $env:RELEASE_TAG --draft=false --latest
           if ($LASTEXITCODE -ne 0) { throw "Failed to publish release." }

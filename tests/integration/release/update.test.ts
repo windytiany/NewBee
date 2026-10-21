@@ -7,13 +7,40 @@ const config = JSON.parse(await Bun.file("src-tauri/tauri.conf.json").text());
 const capability = JSON.parse(await Bun.file("src-tauri/capabilities/default.json").text());
 const workflow = Bun.YAML.parse(await Bun.file(".github/workflows/release.yml").text()) as {
   jobs: {
-    release: { steps: Array<{ name?: string; run?: string; env?: Record<string, string> }> };
+    release: {
+      permissions: Record<string, string>;
+      steps: Array<{
+        name?: string;
+        uses?: string;
+        run?: string;
+        env?: Record<string, string>;
+        with?: Record<string, unknown>;
+      }>;
+    };
   };
 };
 const steps = workflow.jobs.release.steps;
 const publish = steps.find((step) => step.name === "Publish release")!;
 
 describe("signed Windows update release", () => {
+  it("generates PR and commit notes from full history before building", () => {
+    const checkout = steps.find((step) => step.uses?.startsWith("actions/checkout@"))!;
+    expect(checkout.with?.["fetch-depth"]).toBe(0);
+    expect(workflow.jobs.release.permissions["pull-requests"]).toBe("read");
+    const notes = steps.find((step) => step.name === "Generate release notes")!;
+    expect(notes.uses).toBe("orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff");
+    expect(notes.with?.version).toBe("v2.14.2");
+    expect(notes.with?.config).toBe("github-keepachangelog");
+    expect(notes.with?.args).toContain("--unreleased --tag ${{ steps.version.outputs.tag }}");
+    expect(notes.with?.args).toContain("--tag-pattern '^v[0-9]+\\.[0-9]+\\.[0-9]+$'");
+    expect(notes.with?.args).toContain("--use-branch-tags");
+    expect(notes.with?.args).toContain("--github-repo ${{ github.repository }}");
+    expect(notes.env?.OUTPUT).toBe("${{ runner.temp }}/notes.md");
+    expect(steps.indexOf(notes)).toBeLessThan(
+      steps.findIndex((step) => step.name === "Build installer"),
+    );
+  });
+
   it("configures a public HTTPS stable feed, signature verification and minimum permissions", () => {
     expect(config.bundle.createUpdaterArtifacts).toBe(true);
     expect(config.plugins.updater.endpoints).toEqual([
@@ -88,6 +115,9 @@ ${publish.run}
         expect(calls[0]).toContain(join(bundles, `${name}.sig`));
         expect(calls[0]).toContain(join(directory, "latest.json"));
         expect(calls[0]).toContain("--draft");
+        expect(calls[0]).toContain("--notes-file");
+        expect(calls[0]).toContain(join(directory, "notes.md"));
+        expect(calls[0]).not.toContain("--generate-notes");
         expect(calls[1]).toEqual(["release", "edit", "v0.2.0", "--draft=false", "--latest"]);
         rmSync(join(bundles, `${name}.sig`));
         const unsigned = Bun.spawnSync(["pwsh", "-NoProfile", "-File", "publish.ps1"], {
