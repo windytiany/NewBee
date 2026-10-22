@@ -267,7 +267,9 @@ describe("lyrics batch", () => {
     expect(result.batch.state.failed).toBe(1);
     expect(result.batch.state.instrumental).toBe(1);
     expect(result.messages[0]?.message).toContain("1 首失败");
-    expect(result.outcomes).toEqual([{ type: "warning", message: result.messages[0]?.message }]);
+    expect(result.outcomes).toEqual([undefined]);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.type).toBe("warning");
   });
 
   it("rejects playback preparation explicitly without committing and continues later requests", async () => {

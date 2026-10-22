@@ -1,9 +1,12 @@
-import { expect, it } from "bun:test";
+import { beforeEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import type { invoke } from "@tauri-apps/api/core";
 import type { taskInvoke } from "@/features/tasks/commands";
 import { createWriteQueue } from "@/features/tasks/queue";
 import { createTaskCenter } from "@/shared/tasks/state";
+import { notifications } from "@/shared/notifications/center";
+
+beforeEach(() => notifications.clear());
 import { evaluateSource, transpileScript } from "../../support/module/loader";
 
 const output = transpileScript(await Bun.file("src/features/tasks/commands.ts").text());
@@ -81,14 +84,15 @@ it("freezes queued metadata payloads, reserves revisions and reports actual prog
   expect(test.center.active.value).toEqual([]);
 });
 
-it("retains partial failures in the task center without blocking subsequent work", async () => {
+it("toasts partial failures and removes tasks without blocking subsequent work", async () => {
   const test = setup(async () => [
     { trackId: 7, databaseUpdated: false, fileWritten: false, error: "readonly" },
   ]);
   await test.invoke("save_track_metadata", { request: { trackIds: [7] } });
-  expect(JSON.parse(JSON.stringify(test.center.items.value[0]?.result))).toMatchObject({
+  expect(test.center.items.value).toEqual([]);
+  expect(notifications.items.value[0]).toMatchObject({
     type: "warning",
-    details: ["readonly"],
+    message: "1 项处理失败",
   });
   expect(test.queue.active.value).toBe(false);
 });

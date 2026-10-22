@@ -573,7 +573,7 @@ it("cancels a queued folder drop without registering or appending it", async () 
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(drop.calls.filter(([command]) => command === "register_local_tracks")).toHaveLength(1);
   expect(drop.calls.filter(([command]) => command === "queue")).toHaveLength(1);
-  expect(drop.tasks.items.value[0]?.result?.message).toBe("任务已取消");
+  expect(drop.tasks.items.value).toEqual([]);
   expect(drop.notices).toEqual([]);
   drop.unmount();
 });

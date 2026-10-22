@@ -4,11 +4,11 @@ import { evaluateSource, transpileScript } from "../../../support/module/loader"
 import type * as State from "@/features/library/synchronization/state";
 import type { SynchronizationSnapshot } from "@/features/library/synchronization/types";
 import { tasks } from "@/shared/tasks/state";
+import { notifications } from "@/shared/notifications/center";
 
 afterEach(() => {
   tasks.finish("library-synchronization");
-  tasks.acknowledge();
-  tasks.clearFinished();
+  notifications.clear();
 });
 
 const source = transpileScript(
@@ -38,7 +38,7 @@ it("restores an active background task from a snapshot and removes it on complet
   expect(tasks.items.value.find((task) => task.key === "library-synchronization")).toBeUndefined();
 });
 
-it("retains a failed background scan without marking an already-viewed result unread again", async () => {
+it("toasts a failed background scan once and removes its progress", async () => {
   let snapshot: SynchronizationSnapshot = {
     statuses: [],
     missing: [],
@@ -57,18 +57,18 @@ it("retains a failed background scan without marking an already-viewed result un
   };
   await state.refreshSynchronization();
   expect(tasks.active.value).toEqual([]);
-  expect(tasks.items.value[0]?.result).toEqual({
+  expect(tasks.items.value).toEqual([]);
+  expect(notifications.items.value[0]).toMatchObject({
     type: "error",
     message: "扫描失败",
-    details: ["无法扫描文件夹：music"],
+    count: 1,
   });
-  expect(tasks.unread.value).toBe(true);
-  tasks.acknowledge();
   await state.refreshSynchronization();
-  expect(tasks.unread.value).toBe(false);
+  expect(notifications.items.value).toHaveLength(1);
+  expect(notifications.items.value[0]?.count).toBe(1);
 });
 
-it("reports partial failures as warnings with ReplayGain preservation details and no toast", async () => {
+it("reports partial failures through a warning toast", async () => {
   let snapshot = {
     statuses: [],
     missing: [],
@@ -94,10 +94,10 @@ it("reports partial failures as warnings with ReplayGain preservation details an
   } as SynchronizationSnapshot;
   await state.refreshSynchronization();
   expect(tasks.active.value).toEqual([]);
-  expect(tasks.items.value[0]?.result).toEqual({
+  expect(tasks.items.value).toEqual([]);
+  expect(notifications.items.value[0]).toMatchObject({
     type: "warning",
     message: "扫描完成，1 个文件处理异常",
-    details: ["ReplayGain 失败 1 首，未改写原文件"],
   });
 });
 

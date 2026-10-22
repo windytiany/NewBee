@@ -55,6 +55,7 @@ export async function refreshSynchronization() {
       };
     }
     tasks.finish("library-synchronization", result);
+    return result;
   }
 }
 

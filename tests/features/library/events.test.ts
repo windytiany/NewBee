@@ -257,8 +257,8 @@ describe("媒体库变更", () => {
       expect(harness.calls.filter((command) => command === "list_playlists")).toHaveLength(0);
       expect(harness.calls.filter((command) => command === "list_playlist_tracks")).toHaveLength(0);
       expect(harness.calls.includes("list_artists")).toBe(mode === "Library");
-      expect(harness.notices).toEqual([]);
-      expect(harness.tasks.items.value[0]?.result?.type).toBe("warning");
+      expect(harness.notices[0]?.type).toBe("warning");
+      expect(harness.tasks.items.value).toEqual([]);
     });
   }
 
@@ -268,13 +268,13 @@ describe("媒体库变更", () => {
     await harness.scan.synchronizeLibrary();
     expect(harness.effects).toEqual([]);
     expect(harness.calls).toEqual(["synchronize_library"]);
-    expect(harness.notices).toEqual([]);
-    expect(harness.tasks.items.value[0]?.result?.type).toBe("warning");
+    expect(harness.notices[0]?.type).toBe("warning");
+    expect(harness.tasks.items.value).toEqual([]);
     harness.failScan();
     await harness.scan.synchronizeLibrary();
     expect(harness.effects).toEqual([]);
-    expect(harness.notices).toEqual([]);
-    expect(harness.tasks.items.value[0]?.result?.type).toBe("error");
+    expect(harness.notices[1]?.type).toBe("error");
+    expect(harness.tasks.items.value).toEqual([]);
   });
 
   it("专辑部分删除按批次传播实际删除曲目，队列失败不阻断后台刷新", async () => {

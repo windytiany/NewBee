@@ -1,7 +1,10 @@
-import { expect, it } from "bun:test";
+import { beforeEach, expect, it } from "bun:test";
 import type { invoke } from "@tauri-apps/api/core";
 import { createWriteQueue, TaskCancelled } from "@/features/tasks/queue";
 import { createTaskCenter } from "@/shared/tasks/state";
+import { notifications } from "@/shared/notifications/center";
+
+beforeEach(() => notifications.clear());
 import { createMetadataSave } from "@/features/metadata/save";
 
 function deferred<T = void>() {
@@ -49,7 +52,8 @@ it("executes FIFO, reserves waiting targets immediately, and continues after fai
   expect(await second).toBe(42);
   expect(executed).toEqual(["1", "2"]);
   expect(queue.active.value).toBe(false);
-  expect(center.items.value[0]?.result?.message).toBe("failed");
+  expect(center.items.value).toEqual([]);
+  expect(notifications.items.value[0]?.message).toBe("failed");
 });
 
 it("cancels a queued task immediately without allowing successors to overtake running work", async () => {
@@ -67,6 +71,8 @@ it("cancels a queued task immediately without allowing successors to overtake ru
   await settle();
   center.active.value.find(({ key }) => key === "2")!.cancel!();
   expect(await cancellation).toBeInstanceOf(TaskCancelled);
+  expect(center.items.value.some((task) => task.key === "2")).toBe(false);
+  expect(notifications.items.value).toEqual([]);
   expect(calls.some(({ command, id }) => command === "release_task" && id === "2")).toBe(true);
   expect(executed).toEqual([]);
   gate.resolve();
@@ -96,6 +102,8 @@ it("waits for a running task's safe boundary and cancellation acknowledgement be
   await Promise.all([first, second]);
   expect(nextStarted).toBe(true);
   expect(queue.wasCancelled("1")).toBe(true);
+  expect(center.items.value).toEqual([]);
+  expect(notifications.items.value).toEqual([]);
 });
 
 it("reports cancellation errors and still waits for the running task to end", async () => {
@@ -113,9 +121,24 @@ it("reports cancellation errors and still waits for the running task to end", as
   expect(queue.active.value).toBe(true);
   gate.resolve();
   expect(((await task) as Error).message).toBe("cancel failed");
-  expect(center.items.value[0]?.result?.type).toBe("error");
+  expect(center.items.value).toEqual([]);
+  expect(notifications.items.value[0]).toMatchObject({ type: "error", message: "cancel failed" });
   expect(queue.active.value).toBe(false);
 });
+
+for (const error of ["任务已取消", new TaskCancelled()]) {
+  it(`removes backend cancellation without a failure toast: ${String(error)}`, async () => {
+    const { queue, center } = setup();
+    await expect(
+      queue.run(request("1"), async () => {
+        throw error;
+      }),
+    ).rejects.toBeInstanceOf(TaskCancelled);
+    expect(center.items.value).toEqual([]);
+    expect(notifications.items.value).toEqual([]);
+    expect(queue.wasCancelled("1")).toBe(true);
+  });
+}
 
 it("rejects duplicate submission without executing it twice", async () => {
   const { queue } = setup();

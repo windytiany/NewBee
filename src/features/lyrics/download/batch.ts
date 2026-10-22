@@ -186,10 +186,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
                     })
                   : t("歌词更新完成：写入 {count} 首", { count: state.written }),
       };
-      options.tasks.finish(
-        taskKey,
-        notice.type === "warning" ? { type: notice.type, message: notice.message } : undefined,
-      );
+      options.tasks.finish(taskKey);
       options.notifications.notify(notice);
       state.running = false;
     }

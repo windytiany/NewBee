@@ -1,4 +1,5 @@
-import { computed, readonly, shallowRef } from "vue";
+import { readonly, shallowRef } from "vue";
+import { notify } from "@/shared/notifications/center";
 
 export type TaskProgress = {
   key: string;
@@ -14,49 +15,31 @@ export type TaskResult = {
   message: string;
   details?: readonly string[];
 };
-export type Task = TaskProgress & { result?: TaskResult; unread?: boolean };
+export type Task = TaskProgress;
 
-export function createTaskCenter() {
+export function createTaskCenter(report: typeof notify = notify) {
   const items = shallowRef<Task[]>([]);
-  const active = computed(() => items.value.filter((task) => !task.result));
-  const unread = computed(() => items.value.some((task) => task.unread));
 
   function update(task: TaskProgress) {
     const index = items.value.findIndex((item) => item.key === task.key);
     const previous = items.value[index];
     const next = { ...previous, ...task };
-    delete next.result;
-    delete next.unread;
     if (previous?.cancelling) next.cancelling = true;
     if (index < 0) items.value = [...items.value, next];
     else items.value = items.value.map((item, position) => (position === index ? next : item));
   }
 
   function finish(key: string, result?: TaskResult) {
-    items.value = items.value.flatMap((task) => {
-      if (task.key !== key || task.result) return [task];
-      return result
-        ? [{ ...task, cancel: undefined, cancelling: false, result, unread: true }]
-        : [];
-    });
-  }
-
-  function acknowledge() {
-    items.value = items.value.map((task) => (task.unread ? { ...task, unread: false } : task));
-  }
-
-  function clearFinished() {
-    items.value = items.value.filter((task) => !task.result || task.unread);
+    if (!items.value.some((task) => task.key === key)) return;
+    items.value = items.value.filter((task) => task.key !== key);
+    if (result) report({ type: result.type, message: result.message, key });
   }
 
   return {
     items: readonly(items),
-    active: readonly(active),
-    unread: readonly(unread),
+    active: readonly(items),
     update,
     finish,
-    acknowledge,
-    clearFinished,
   };
 }
 

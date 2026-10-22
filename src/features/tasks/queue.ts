@@ -57,7 +57,7 @@ export function createWriteQueue(
     let cancellation: Promise<void> = Promise.resolve();
     let cancellationFailure: unknown;
     const report = () => {
-      const previous = center.items.value.find((task) => task.key === key && !task.result);
+      const previous = center.items.value.find((task) => task.key === key);
       center.update({
         key,
         message: request.message,
@@ -124,8 +124,7 @@ export function createWriteQueue(
         const result = await execute(id);
         await cancellation;
         if (cancellationFailure) throw cancellationFailure;
-        if (cancelled) center.finish(key, { type: "warning", message: t("任务已取消") });
-        else center.finish(key);
+        center.finish(key);
         return result;
       } catch (error) {
         await cancellation;
@@ -134,15 +133,15 @@ export function createWriteQueue(
           cancelled = true;
           cancelledIds.add(id);
         }
-        center.finish(key, {
-          type: cancelled && !cancellationFailure ? "warning" : "error",
-          message:
-            cancelled && !cancellationFailure
-              ? t("任务已取消")
-              : failure instanceof Error
-                ? failure.message
-                : String(failure),
-        });
+        center.finish(
+          key,
+          cancelled && !cancellationFailure
+            ? undefined
+            : {
+                type: "error",
+                message: failure instanceof Error ? failure.message : String(failure),
+              },
+        );
         if (cancelled && !cancellationFailure) throw new TaskCancelled();
         throw failure;
       } finally {

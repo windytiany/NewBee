@@ -55,8 +55,8 @@ describe("manual synchronization", () => {
     it(`reports partial failure when ${added} tracks were added`, async () => {
       const context = createSynchronization(async () => ({ ...unchanged, added, failed: 1 }));
       await context.scan.synchronizeLibrary();
-      expect(notifications.items.value).toEqual([]);
-      expect(context.tasks.items.value[0]?.result).toMatchObject({
+      expect(context.tasks.items.value).toEqual([]);
+      expect(notifications.items.value[0]).toMatchObject({
         type: "warning",
         message: "扫描完成，1 个文件处理异常",
       });
@@ -82,12 +82,12 @@ describe("manual synchronization", () => {
       }),
     );
     await context.scan.synchronizeLibrary();
-    expect(notifications.items.value).toEqual([]);
-    expect(context.tasks.items.value).toHaveLength(1);
-    expect(context.tasks.items.value[0]?.result).toEqual({
+    expect(context.tasks.items.value).toEqual([]);
+    expect(notifications.items.value).toHaveLength(1);
+    expect(notifications.items.value[0]).toMatchObject({
       type: "warning",
       message: "扫描完成，1 个文件处理异常",
-      details: ["ReplayGain 失败 1 首，未改写原文件"],
+      count: 1,
     });
   });
 
@@ -101,8 +101,7 @@ describe("manual synchronization", () => {
     );
     await context.scan.synchronizeLibrary();
     expect(context.tasks.active.value).toEqual([]);
-    expect(context.tasks.items.value[0]?.result?.type).toBe("warning");
-    expect(notifications.items.value).toEqual([]);
+    expect(notifications.items.value[0]?.type).toBe("warning");
   });
 
   it("reports a busy command as a recoverable warning", async () => {
@@ -130,8 +129,8 @@ describe("manual synchronization", () => {
       };
     });
     await context.scan.synchronizeLibrary();
-    expect(notifications.items.value).toEqual([]);
-    expect(context.tasks.items.value[0]?.result?.message).toBe("扫描失败");
+    expect(context.tasks.items.value).toEqual([]);
+    expect(notifications.items.value[0]?.message).toBe("扫描失败");
   });
 
   it("keeps the failure and releases pending state for a retry", async () => {
@@ -139,8 +138,8 @@ describe("manual synchronization", () => {
       throw new Error("permission denied");
     });
     await context.scan.synchronizeLibrary();
-    expect(notifications.items.value).toEqual([]);
-    expect(context.tasks.items.value[0]?.result).toMatchObject({
+    expect(context.tasks.items.value).toEqual([]);
+    expect(notifications.items.value[0]).toMatchObject({
       type: "error",
       message: "permission denied",
     });

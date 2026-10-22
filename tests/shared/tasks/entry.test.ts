@@ -98,7 +98,7 @@ describe("task entry", () => {
     expect(getTextContent(cancel)).toBe("正在取消…");
   });
 
-  it("retains an unread error, acknowledges on open and clears viewed results on close", async () => {
+  it("removes a failed task immediately without showing result controls", async () => {
     const test = mount();
     test.tasks.update(progress);
     test.tasks.finish("replaygain-analysis", {
@@ -107,39 +107,23 @@ describe("task entry", () => {
       details: ["未改写原文件"],
     });
     await Vue.nextTick();
-    expect(test.entry()).not.toBeNull();
-    expect(
-      findNode(test.entry()!, (node) => node.props["aria-label"] === "任务异常"),
-    ).not.toBeNull();
-    expect(getTextContent(test.panel())).toContain("ReplayGain 分析失败");
-    expect(getTextContent(test.panel())).toContain("未改写原文件");
-    expect(getTextContent(test.panel())).not.toContain("正在分析 ReplayGain…");
-    expect(findNode(test.panel(), (node) => node.type === "progress")).toBeNull();
-    test.toggle("open");
-    await Vue.nextTick();
-    expect(test.tasks.unread.value).toBe(false);
-    test.toggle("closed");
-    await Vue.nextTick();
     expect(test.entry()).toBeNull();
+    expect(test.tasks.items.value).toEqual([]);
   });
 
-  it("acknowledges failures arriving while open and translates controls", async () => {
+  it("keeps only running tasks when a failure arrives while open and translates controls", async () => {
     const test = mount();
     test.tasks.update(progress);
     await Vue.nextTick();
     test.toggle("open");
+    test.tasks.update({ key: "scan", message: "扫描", completed: 0 });
     test.tasks.finish("replaygain-analysis", { type: "warning", message: "1 首失败" });
     await Vue.nextTick();
-    expect(test.tasks.unread.value).toBe(false);
+    expect(test.tasks.items.value.map((task) => task.key)).toEqual(["scan"]);
     setLocale("en");
     await Vue.nextTick();
     expect(getTextContent(test.panel())).toContain("Background tasks");
-    const clear = findNode(
-      test.panel(),
-      (node) => node.type === "button" && getTextContent(node) === "Clear",
-    )!;
-    (clear.props.onClick as () => void)();
-    await Vue.nextTick();
-    expect(test.tasks.items.value).toEqual([]);
+    expect(findNode(test.panel(), (node) => getTextContent(node) === "Clear")).toBeNull();
+    expect(getTextContent(test.panel())).not.toContain("1 首失败");
   });
 });

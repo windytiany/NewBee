@@ -54,20 +54,21 @@ export function useLibrarySynchronization() {
               added: result.added,
               updated: result.updated,
             });
+      tasks.finish("library-synchronization");
+      let snapshotResult;
       try {
-        await refreshSynchronization();
+        snapshotResult = await refreshSynchronization();
       } catch (error) {
         logger.warn("library/synchronization", "snapshot_refresh_failed", error);
       }
       if (writeQueue.wasCancelled(id)) return;
       if (result.failed) {
-        // The snapshot owns detailed warnings. Fall back if it could not supply a result.
-        if (
-          !tasks.items.value.some((task) => task.key === "library-synchronization" && task.result)
-        ) {
-          tasks.update({ key: "library-synchronization", message: t("正在扫描…"), completed: 0 });
-          tasks.finish("library-synchronization", { type: "warning", message });
-        }
+        notify({
+          type: snapshotResult?.type ?? "warning",
+          message: snapshotResult?.message ?? message,
+          key: "library-synchronization",
+        });
+        tasks.finish("library-synchronization");
       } else {
         tasks.finish("library-synchronization");
         notify({ type: "success", message, key: "library-synchronization" });
@@ -83,7 +84,8 @@ export function useLibrarySynchronization() {
         tasks.finish("library-synchronization");
         notify({ type: "warning", message: scanError.value, key: "library-synchronization" });
       } else {
-        tasks.finish("library-synchronization", { type: "error", message: scanError.value });
+        tasks.finish("library-synchronization");
+        notify({ type: "error", message: scanError.value, key: "library-synchronization" });
       }
     } finally {
       isScanning.value = false;
