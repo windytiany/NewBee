@@ -5,18 +5,16 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { resolveDropRegion, type DropRegion } from "@/app/import/target";
 import { useImport } from "@/app/import/useImport";
-import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
-import { t } from "@/shared/i18n/locale";
 
 export function useDropImport() {
-  const { busy, importPaths } = useImport();
+  const { importPaths } = useImport();
   const hasFiles = ref(false);
   const hasDirectories = ref(false);
   const modalOpen = ref(false);
   const region = ref<DropRegion | null>(null);
   const highlight = computed(() => {
-    if (!region.value || modalOpen.value || busy.value) return null;
+    if (!region.value || modalOpen.value) return null;
     if (!hasDirectories.value && (region.value.target.kind === "playlists" || !hasFiles.value))
       return null;
     const { left, top, width, height } = region.value.bounds;
@@ -53,11 +51,6 @@ export function useDropImport() {
     hasFiles.value = false;
     hasDirectories.value = false;
     if (modalOpen.value || (event.type === "drop" && !captured)) return;
-    if (busy.value) {
-      if (event.type === "drop")
-        notify({ type: "info", message: t("操作进行中"), key: "drop-import-busy" });
-      return;
-    }
     if (event.type === "drop") {
       if (!captured || !event.paths.length) return;
       await importPaths(event.paths, captured);

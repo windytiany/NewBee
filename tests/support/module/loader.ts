@@ -1,9 +1,16 @@
 import { loggingDependencies } from "../logging";
 import * as i18n from "@/shared/i18n/locale";
+import * as taskQueue from "@/features/tasks/queue";
+import { taskCommands } from "@/features/tasks/commands";
 
 const sharedDependencies = {
   ...loggingDependencies,
   "@/shared/i18n/locale": i18n,
+  "@/features/tasks/queue": {
+    ...taskQueue,
+    runWriteTask: async <T>(request: { id?: string }, execute: (id: string) => Promise<T>) =>
+      execute(request.id ?? "test-task"),
+  },
   // Window destruction is tested with explicit lifecycle adapters.
   "@/shared/lifecycle/activity": {
     watchActivity: () => () => {},
@@ -39,7 +46,7 @@ export function evaluateModule<Exports = Record<string, unknown>>(
   output: string,
   dependencies: Record<string, unknown>,
 ): Exports {
-  dependencies = { ...sharedDependencies, ...dependencies };
+  dependencies = { ...sharedDependencies, ...commandAdapters(dependencies), ...dependencies };
   const module = { exports: {} as Exports };
   new Function("require", "module", "exports", output)(
     (name: string) => {
@@ -68,6 +75,14 @@ export async function loadSourceModules(
   }
 }
 
+function commandAdapters(dependencies: Record<string, unknown>) {
+  const core = dependencies["@tauri-apps/api/core"] as { invoke?: unknown } | undefined;
+  // Feature fixtures exercise their command payloads. Queue scheduling has its own adapters.
+  return core?.invoke
+    ? { "@/features/tasks/commands": { taskInvoke: core.invoke, taskCommands } }
+    : {};
+}
+
 const compiledSources = new Map<string, string>();
 
 /** Loads real local implementations behind the explicitly supplied test adapters. */
@@ -75,7 +90,7 @@ export function evaluateSource<Exports = Record<string, unknown>>(
   output: string,
   dependencies: Record<string, unknown>,
 ): Exports {
-  dependencies = { ...sharedDependencies, ...dependencies };
+  dependencies = { ...sharedDependencies, ...commandAdapters(dependencies), ...dependencies };
   const modules = new Map<string, { exports: unknown }>();
   function evaluate(source: string, module: { exports: unknown }) {
     new Function("require", "module", "exports", source)(resolve, module, module.exports);

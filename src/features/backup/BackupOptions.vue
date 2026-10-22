@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from "vue";
 import { watchActivity } from "@/shared/lifecycle/activity";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
+import { taskInvoke as invoke } from "@/features/tasks/commands";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { captureInterfaceState } from "@/features/backup/interface";
 import { t } from "@/shared/i18n/locale";
 import { logger } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
+import { TaskCancelled } from "@/features/tasks/queue";
 
 const busy = ref(false);
 watchActivity(busy);
@@ -24,6 +26,7 @@ async function run(operation: () => Promise<void>) {
   try {
     await operation();
   } catch (error) {
+    if (error instanceof TaskCancelled) return;
     logger.error("backup", "operation_failed", error);
     const detail = error instanceof Error ? error.message : typeof error === "string" ? error : "";
     notify({

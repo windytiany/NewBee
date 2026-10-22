@@ -43,6 +43,9 @@ pub(crate) fn discover(paths: &[String]) -> Vec<DiscoveredFile> {
     let mut directories = HashSet::new();
     let mut inputs = HashSet::new();
     for path in paths {
+        if crate::tasks::cancelled() {
+            break;
+        }
         if !inputs.insert(path) {
             continue;
         }
@@ -59,6 +62,9 @@ pub(crate) fn discover(paths: &[String]) -> Vec<DiscoveredFile> {
             collect_directory(&canonical, &mut directories, &mut discovered, true);
             discovered.sort_by(|left, right| left.0.cmp(&right.0));
             for (path, outcome) in discovered {
+                if crate::tasks::cancelled() {
+                    break;
+                }
                 match outcome {
                     Ok(()) => add_file(&path, &mut files, &mut results),
                     Err(error) => results.push(Err(failure(&path, error))),
@@ -119,6 +125,9 @@ fn collect_directory(
     results: &mut Vec<(PathBuf, Result<(), String>)>,
     follow_links: bool,
 ) {
+    if crate::tasks::cancelled() {
+        return;
+    }
     let canonical = match fs::canonicalize(path) {
         Ok(path) => path,
         Err(error) => {
@@ -138,6 +147,9 @@ fn collect_directory(
     };
     let mut sorted = Vec::new();
     for entry in entries {
+        if crate::tasks::cancelled() {
+            break;
+        }
         match entry {
             Ok(entry) => sorted.push(entry.path()),
             Err(error) => results.push((path.to_owned(), Err(error.to_string()))),
@@ -145,6 +157,9 @@ fn collect_directory(
     }
     sorted.sort();
     for entry_path in sorted {
+        if crate::tasks::cancelled() {
+            break;
+        }
         let metadata = if follow_links {
             fs::metadata(&entry_path)
         } else {

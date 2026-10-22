@@ -1,3 +1,4 @@
+import { toRefs } from "vue";
 import { createReleaseState } from "@/features/metadata/releases/state";
 import { createReleaseSearch } from "@/features/metadata/releases/search";
 import { createReleaseArtwork } from "@/features/metadata/releases/artwork";
@@ -6,6 +7,7 @@ import { createReleaseSave } from "@/features/metadata/releases/save";
 import { t } from "@/shared/i18n/locale";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
+import { runWriteTask } from "@/features/tasks/queue";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import type { EditableTrack, MetadataSaveResult } from "@/features/metadata/types";
@@ -26,6 +28,7 @@ import type { MetadataFileEditor } from "@/features/metadata/save";
 import { usePlaybackSession } from "@/features/playback/session";
 
 export type ReleaseEditorOptions = {
+  schedule?: typeof runWriteTask;
   loadAlbum: (album: LibraryAlbumSelection) => Promise<EditableTrack[]>;
   loadTracks: (trackIds: number[]) => Promise<EditableTrack[]>;
   search: (artist: string, album: string, offset: number) => Promise<SearchResults>;
@@ -44,7 +47,7 @@ export type ReleaseEditorOptions = {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createReleaseEditor(options: ReleaseEditorOptions) {
-  const saving = createMetadataSave({ ...options, notifyResult: true });
+  let saving = createMetadataSave({ ...options, notifyResult: true });
   const state = createReleaseState(saving);
   function reportError(event: string, error: unknown, cover = false) {
     const text = message(error);
@@ -70,16 +73,38 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
   } = createReleaseSearch(state, options.search, busy, reportError);
   const artwork = createReleaseArtwork(state, options, reportError);
   const selection = createReleaseSelection(state, options, artwork, reportError);
-  const saveFlow = createReleaseSave(state, options, saving, busy, close, reportError);
-  const { prepareSave, save } = saveFlow;
+  let saveFlow = createReleaseSave(
+    state,
+    options,
+    saving,
+    busy,
+    close,
+    reportError,
+    () => lifetime,
+  );
+  const prepareSave = () => saveFlow.prepareSave();
+  const save = () => saveFlow.save();
   function edited() {
     state.dirty = true;
     state.error = "";
     state.results = [];
   }
   async function open(album: LibraryAlbumSelection, trackIds?: number[]) {
-    if (state.open || state.saving) return;
+    if (state.open) return;
     const generation = ++lifetime;
+    if (saving.state.saving) {
+      saving = createMetadataSave({ ...options, notifyResult: true });
+      Object.assign(state, toRefs(saving.state));
+      saveFlow = createReleaseSave(
+        state,
+        options,
+        saving,
+        busy,
+        close,
+        reportError,
+        () => lifetime,
+      );
+    }
     saving.reset();
     Object.assign(state, {
       open: true,
@@ -109,6 +134,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
       writeCover: false,
       confirmDiscard: false,
       confirmSave: false,
+      writeBlocked: false,
       patches: [],
       results: [],
       completed: 0,
@@ -130,6 +156,7 @@ export function createReleaseEditor(options: ReleaseEditorOptions) {
         )
       )
         throw new Error(t("返回的曲目与编辑目标不匹配。"));
+      state.writeBlocked = tracks.some((track) => track.writePending);
       state.tracks = tracks;
       if (trackIds) {
         state.artist = tracks[0]?.track.albumArtist ?? tracks[0]?.track.artist ?? "";
@@ -271,7 +298,7 @@ let shared: ReturnType<typeof createReleaseEditor> | null = null;
 export function useReleaseEditor() {
   if (shared) return shared;
   const session = usePlaybackSession();
-  const api = createMetadataApi(invoke);
+  const api = createMetadataApi();
   const library = createLibraryApi(invoke);
   const synchronize = createTrackSynchronization(session, invoke);
   shared = createReleaseEditor({
@@ -289,6 +316,7 @@ export function useReleaseEditor() {
       onProgress.onmessage = progress;
       return api.saveRelease(patches, cover, onProgress, operationId);
     },
+    schedule: runWriteTask,
     editFiles: session.withMetadataEditing,
     synchronize: synchronize.refresh,
   });

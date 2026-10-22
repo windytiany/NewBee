@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from "bun:test";
 import * as Vue from "vue";
 import { createTaskCenter } from "@/shared/tasks/state";
+import { createWriteQueue, TaskCancelled } from "@/features/tasks/queue";
 import { operationId } from "@/shared/logging/logger";
 import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
@@ -77,12 +78,14 @@ function createDrop({
   ) => Promise<import("@/features/playlist/types").PlaylistAppendResult[]>;
 } = {}) {
   const tasks = createTaskCenter();
+  const writeQueue = createWriteQueue(async <T>() => null as T, tasks);
   const region = Vue.ref<string | null>("Library");
   const playlistId = Vue.ref(3);
   const importing = Vue.ref(false);
   const inboxPending = Vue.ref(false);
   const scanning = Vue.ref(false);
   const calls: Array<[string, unknown]> = [];
+  const operations: Array<[string, string | undefined]> = [];
   const notices: NotificationInput[] = [];
   let modal = false;
   let mount: () => Promise<void> = async () => {};
@@ -144,7 +147,11 @@ function createDrop({
         }
         if (command === "readable_audio_files") return (await validate()) as T;
         if (command === "playlist_directories") return (await directories()) as T;
-        calls.push([command, args]);
+        operations.push([command, args?.operationId as string | undefined]);
+        calls.push([
+          command,
+          args && Object.fromEntries(Object.entries(args).filter(([key]) => key !== "operationId")),
+        ]);
         if (command === "create_playlist") return (await createPlaylist(args?.name as string)) as T;
         if (command === "register_local_tracks") return (await registration()) as T;
         if (command === "get_tracks") return [{ ...track, title: "Confirmed" }] as T;
@@ -220,12 +227,14 @@ function createDrop({
       notify: (notice: NotificationInput) => notices.push(notice),
     },
     "@/shared/tasks/state": { tasks },
+    "@/features/tasks/queue": { runWriteTask: writeQueue.run, writeQueue, TaskCancelled },
     "@/shared/logging/logger": { logger: { error: () => {} }, operationId },
   });
   const controller = module.useDropImport();
   return {
     ...controller,
     tasks,
+    writeQueue,
     mount,
     unmount,
     region,
@@ -234,6 +243,7 @@ function createDrop({
     inboxPending,
     scanning,
     calls,
+    operations,
     notices,
     coordinates,
     bounds,
@@ -255,7 +265,7 @@ function createDrop({
               ? { type, position: new PhysicalPosition(100, 60) }
               : { type, paths, position: new PhysicalPosition(100, 60) },
       });
-      for (let i = 0; i < 20; i++) await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
     },
   };
 }
@@ -443,7 +453,7 @@ it("continues creating later folders after a playlist creation failure", async (
   drop.unmount();
 });
 
-it("blocks modal drops and reports busy import/scan without executing", async () => {
+it("blocks modal drops but accepts queue drops during other imports and scans", async () => {
   const drop = createDrop();
   await drop.mount();
   await drop.emit("enter");
@@ -452,15 +462,16 @@ it("blocks modal drops and reports busy import/scan without executing", async ()
   await drop.emit("drop");
   expect(drop.calls).toEqual([]);
   drop.setModal(false);
+  drop.region.value = "queue";
   for (const pending of [drop.importing, drop.inboxPending, drop.scanning]) {
     await drop.emit("enter");
     pending.value = true;
-    expect(drop.highlight.value).toBeNull();
+    expect(drop.highlight.value).not.toBeNull();
     await drop.emit("drop");
     pending.value = false;
   }
-  expect(drop.calls).toEqual([]);
-  expect(drop.notices.map((notice) => notice.message)).toEqual(Array(3).fill("操作进行中"));
+  expect(drop.calls.filter(([command]) => command === "register_local_tracks")).toHaveLength(3);
+  expect(drop.notices).toEqual([]);
   drop.unmount();
 });
 it("captures playlist ID before registration and refreshes after appending even if confirmation was early", async () => {
@@ -472,13 +483,14 @@ it("captures playlist ID before registration and refreshes after appending even 
   expect(drop.tasks.active.value).toHaveLength(1);
   drop.playlistId.value = 99;
   drop.region.value = "queue";
-  await drop.emit("drop");
-  expect(drop.notices[drop.notices.length - 1]?.message).toBe("操作进行中");
+  await drop.emit("drop", ["next.wav"]);
+  expect(drop.tasks.active.value).toHaveLength(2);
+  expect(drop.notices).toEqual([]);
   registered.resolve([
     { status: "registered", track, needsMetadata: true },
     { status: "failed", path: "bad", error: "unreadable" },
   ]);
-  for (let i = 0; i < 30; i++) await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   expect(drop.calls).toContainEqual(["append_playlist_tracks", { trackIds: [7], playlistId: 3 }]);
   expect(drop.calls.findIndex(([name]) => name === "get_tracks")).toBeGreaterThan(
     drop.calls.findIndex(([name]) => name === "append_playlist_tracks"),
@@ -487,6 +499,85 @@ it("captures playlist ID before registration and refreshes after appending even 
   expect(drop.tasks.active.value).toEqual([]);
   drop.unmount();
 });
+it("queues consecutive folder drops into playback instead of rejecting the second drop as busy", async () => {
+  const first = deferred<TrackRegistrationResult[]>();
+  let registrations = 0;
+  const secondTrack = { ...track, id: 8, path: "second/song.wav" };
+  const drop = createDrop({
+    registration: () =>
+      ++registrations === 1
+        ? first.promise
+        : Promise.resolve([{ status: "registered", track: secondTrack, needsMetadata: true }]),
+  });
+  await drop.mount();
+  drop.region.value = "queue";
+  await drop.emit("drop", ["first/"]);
+  await drop.emit("drop", ["second/"]);
+  expect(drop.notices.map(({ message }) => message)).not.toContain("操作进行中");
+  expect(registrations).toBe(1);
+  expect(drop.tasks.active.value).toHaveLength(2);
+  expect(drop.tasks.active.value[1]?.phase).toBe("queued");
+  first.resolve([{ status: "registered", track, needsMetadata: true }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(registrations).toBe(2);
+  const ids = drop.operations
+    .filter(([command]) => command === "register_local_tracks")
+    .map(([, id]) => id);
+  expect(ids.every(Boolean)).toBe(true);
+  expect(new Set(ids).size).toBe(2);
+  expect(
+    drop.calls.filter(([command]) => command === "register_local_tracks").map(([, args]) => args),
+  ).toEqual([{ paths: ["first/"] }, { paths: ["second/"] }]);
+  expect(
+    drop.calls
+      .filter(([command]) => command === "queue")
+      .map(([, tracks]) => (tracks as { trackId: number }[]).map(({ trackId }) => trackId)),
+  ).toEqual([[7], [8]]);
+  expect(drop.tasks.active.value).toEqual([]);
+  expect(drop.notices).toEqual([]);
+  drop.unmount();
+});
+
+it("uses the shared task queue when a background task precedes a folder drop", async () => {
+  const gate = deferred<void>();
+  const drop = createDrop();
+  const background = drop.writeQueue.run(
+    { id: "background", message: "background", fingerprint: "background" },
+    () => gate.promise,
+  );
+  await drop.mount();
+  drop.region.value = "queue";
+  await drop.emit("drop", ["folder/"]);
+  expect(drop.calls).toEqual([]);
+  expect(drop.tasks.active.value).toHaveLength(2);
+  expect(drop.tasks.active.value[1]?.phase).toBe("queued");
+  gate.resolve();
+  await background;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(drop.calls.filter(([command]) => command === "queue")).toHaveLength(1);
+  expect(drop.notices).toEqual([]);
+  drop.unmount();
+});
+
+it("cancels a queued folder drop without registering or appending it", async () => {
+  const first = deferred<TrackRegistrationResult[]>();
+  const drop = createDrop({ registration: () => first.promise });
+  await drop.mount();
+  drop.region.value = "queue";
+  await drop.emit("drop", ["first/"]);
+  await drop.emit("drop", ["second/"]);
+  drop.tasks.active.value[1]!.cancel!();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(drop.tasks.active.value).toHaveLength(1);
+  first.resolve([{ status: "registered", track, needsMetadata: true }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(drop.calls.filter(([command]) => command === "register_local_tracks")).toHaveLength(1);
+  expect(drop.calls.filter(([command]) => command === "queue")).toHaveLength(1);
+  expect(drop.tasks.items.value[0]?.result?.message).toBe("任务已取消");
+  expect(drop.notices).toEqual([]);
+  drop.unmount();
+});
+
 it("queue drop uses IDs only and refreshes the DB snapshot after append", async () => {
   const drop = createDrop();
   await drop.mount();

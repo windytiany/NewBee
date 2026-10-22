@@ -1,7 +1,8 @@
 import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
 import { errorMessage, commandFailure } from "@/shared/notifications/error";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
+import { taskInvoke as invoke } from "@/features/tasks/commands";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ref } from "vue";
 import { watchActivity } from "@/shared/lifecycle/activity";
@@ -9,6 +10,7 @@ import type { IngestResult } from "@/features/library/types";
 import { reportLibraryImport } from "@/features/library/events";
 import { notify } from "@/shared/notifications/center";
 import { tasks } from "@/shared/tasks/state";
+import { writeQueue, TaskCancelled } from "@/features/tasks/queue";
 
 const isImporting = ref(false);
 watchActivity(isImporting);
@@ -21,6 +23,7 @@ export function useLibraryFileImport() {
     isImporting.value = true;
     const id = operationId("library-import");
     const started = performance.now();
+    let submitted = false;
     try {
       if (droppedPaths) tasks.update({ key: id, message: t("导入音频文件"), completed: 0 });
       const paths = droppedPaths
@@ -32,13 +35,19 @@ export function useLibraryFileImport() {
       }
       tasks.update({ key: id, message: t("导入音频文件"), completed: 0 });
       logger.debug("library", "import_started", { operationId: id });
-      const result = await invoke<IngestResult>("import_music_files", { paths, operationId: id });
+      const operation = invoke<IngestResult>("import_music_files", { paths, operationId: id });
+      submitted = true;
+      isImporting.value = false;
+      const result = await operation;
       logger.write(result.failed ? "warn" : "info", "library", "import_completed", {
         operationId: id,
         elapsedMs: Math.round(performance.now() - started),
         ...result,
       });
-      if (!droppedPaths || result.added + result.updated > 0 || result.failed > 0)
+      if (
+        !writeQueue.wasCancelled(id) &&
+        (!droppedPaths || result.added + result.updated > 0 || result.failed > 0)
+      )
         notify({
           type: result.failed > 0 ? "warning" : "success",
           message: result.failed
@@ -51,6 +60,7 @@ export function useLibraryFileImport() {
         });
       reportLibraryImport(result);
     } catch (reason) {
+      if (reason instanceof TaskCancelled) return;
       const busy = commandFailure(reason)?.code === "write_busy";
       logger[busy ? "warn" : "error"]("library", "file_import_failed", reason, { operationId: id });
       notify({
@@ -60,7 +70,7 @@ export function useLibraryFileImport() {
       });
     } finally {
       tasks.finish(id);
-      isImporting.value = false;
+      if (!submitted) isImporting.value = false;
     }
   }
 

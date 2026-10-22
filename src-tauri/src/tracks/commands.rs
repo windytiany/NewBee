@@ -4,13 +4,19 @@ use crate::database::blocking;
 #[tauri::command]
 pub async fn register_local_tracks<R: tauri::Runtime>(
     paths: Vec<String>,
+    operation_id: Option<String>,
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<super::model::TrackRegistrationResult>, String> {
     use tauri::Manager;
-    let guard = app.state::<crate::locking::WriteState>().acquire()?;
+    let guard = app
+        .state::<crate::locking::WriteState>()
+        .acquire_task(operation_id.as_deref())
+        .await?;
     let results = blocking(app.clone(), move |database| {
-        let _guard = guard;
-        super::register(database, &paths)
+        crate::tasks::with_operation(operation_id, || {
+            let _guard = guard;
+            super::register(database, &paths)
+        })
     })
     .await?;
     super::confirmation::schedule(

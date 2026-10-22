@@ -14,6 +14,7 @@ mod playlist;
 mod remapping;
 mod settings;
 mod shortcuts;
+mod tasks;
 mod tracks;
 mod window;
 
@@ -102,6 +103,11 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            tasks::reserve_task,
+            tasks::start_task,
+            tasks::cancel_task,
+            tasks::release_task,
+            tasks::occupied_tracks,
             logging::open_logs_directory,
             logging::set_detailed_logging,
             window::show_main_window,
@@ -211,6 +217,14 @@ pub fn run() {
             } = &event
             {
                 if window::lightweight::keep_alive(app) {
+                    api.prevent_exit();
+                }
+            }
+            if let tauri::RunEvent::ExitRequested {
+                code: Some(0), api, ..
+            } = &event
+            {
+                if tasks::exit::intercept(app) {
                     api.prevent_exit();
                 }
             }

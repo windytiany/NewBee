@@ -43,9 +43,12 @@ pub(crate) async fn synchronize_library<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<ImportResult, CommandError> {
-    let guard = write.acquire().map_err(CommandError::busy)?;
+    let guard = write
+        .acquire_task(operation_id.as_deref())
+        .await
+        .map_err(CommandError::busy)?;
     tauri::async_runtime::spawn_blocking(move || {
-        crate::logging::with_operation(operation_id, || {
+        crate::tasks::with_operation(operation_id, || {
             let _guard = guard;
             let settings = app.state::<SettingsState>().get()?;
             let state = app.state::<SynchronizationState>();

@@ -352,6 +352,22 @@ impl LyricsBatchState {
 
     fn cancel(&self, batch_id: u64) -> Result<(), String> {
         let task = self.task(batch_id)?;
+        Self::signal_cancel(&task)
+    }
+
+    pub(crate) fn cancel_active(&self) -> Result<(), String> {
+        let task = self
+            .active
+            .lock()
+            .map_err(|error| error.to_string())?
+            .clone();
+        if let Some(task) = task {
+            Self::signal_cancel(&task)?;
+        }
+        Ok(())
+    }
+
+    fn signal_cancel(task: &Task) -> Result<(), String> {
         // Serialize cancellation with accepting a commit, never with its file I/O.
         let _round = task.lock()?;
         task.cancelled.store(true, Ordering::Release);
@@ -376,7 +392,8 @@ impl LyricsBatchState {
             if active.is_some() {
                 return Err("已有歌词下载任务正在运行".to_owned());
             }
-            let guard = write.acquire()?;
+            crate::tasks::validate(database, &ids, Some(&request.operation_id), &[])?;
+            let guard = write.acquire_registered(Some(&request.operation_id))?;
             let task = Arc::new(Task {
                 id: self.next_id.fetch_add(1, Ordering::Relaxed) + 1,
                 operation_id: request.operation_id.clone(),
@@ -392,7 +409,7 @@ impl LyricsBatchState {
             }
         };
         let task = &lease.task;
-        crate::logging::with_operation(Some(task.operation_id.clone()), || {
+        crate::tasks::with_operation(Some(task.operation_id.clone()), || {
             log::debug!(
                 "event=lyrics_batch_started batchId={} count={}",
                 task.id,
@@ -411,6 +428,9 @@ impl LyricsBatchState {
                     total: ids.len(),
                 })?;
                 for (index, track_id) in ids.into_iter().enumerate() {
+                    if crate::tasks::cancelled() {
+                        task.cancelled.store(true, Ordering::Release);
+                    }
                     if task.cancelled.load(Ordering::Acquire) {
                         break;
                     }
@@ -421,6 +441,9 @@ impl LyricsBatchState {
                         .as_ref()
                         .map_err(Clone::clone)
                         .and_then(|track| lookup(track, &request.providers, &task.cancelled));
+                    if crate::tasks::cancelled() {
+                        task.cancelled.store(true, Ordering::Release);
+                    }
                     if task.cancelled.load(Ordering::Acquire) {
                         break;
                     }

@@ -226,7 +226,8 @@ it("registers picked files and folders and refreshes Inbox without success notic
         "@tauri-apps/api/core": {
           isTauri: () => true,
           invoke: async (command: string, args: unknown) => {
-            expect(tasks.active.value).toHaveLength(command === "register_inbox" ? 1 : 0);
+            // Task registration belongs to the command queue, adapted separately here.
+            expect(tasks.active.value).toHaveLength(0);
             calls.push({ command, args });
             return command === "supported_audio_extensions"
               ? ["wav"]

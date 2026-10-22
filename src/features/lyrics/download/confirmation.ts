@@ -113,7 +113,8 @@ export function useLyricsConfirmation() {
   sharedConfirmation = createLyricsConfirmation({
     targets: api.targets,
     loadAlbum: async (album) => (await library.listAlbumTracks(album)).map(({ id }) => id),
-    running: () => batch.state.running,
+    // The queue serializes batches; another batch need not block selection.
+    running: () => false,
     start: batch.startTracks,
   });
   return sharedConfirmation;

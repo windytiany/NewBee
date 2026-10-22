@@ -89,6 +89,7 @@
           :key="task.key"
           class="min-w-0 space-y-2"
           data-background-task
+          :data-task-key="task.key"
         >
           <div v-if="task.result" role="status" class="flex min-w-0 items-start gap-2">
             <TriangleAlert
@@ -124,9 +125,11 @@
             ></progress>
             <div class="flex items-center justify-between gap-3 text-xs">
               <span class="text-app-muted">{{
-                task.total
-                  ? `${task.completed} / ${task.total} · ${taskPercentage(task)}%`
-                  : t("进行中")
+                task.phase === "queued"
+                  ? t("排队中")
+                  : task.total
+                    ? `${task.completed} / ${task.total} · ${taskPercentage(task)}%`
+                    : t("进行中")
               }}</span>
               <button
                 v-if="task.cancel"
@@ -146,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, useId, watch } from "vue";
 import { LoaderCircle, TriangleAlert, X } from "@lucide/vue";
 import { t } from "@/shared/i18n/locale";
 import { tasks, taskPercentage } from "@/shared/tasks/state";
@@ -155,9 +158,25 @@ const panelId = useId();
 const open = ref(false);
 const singlePercentage = computed(() => {
   const active = tasks.active.value;
-  return active.length === 1 ? taskPercentage(active[0]!) : undefined;
+  return active.length === 1 && active[0]!.phase !== "queued"
+    ? taskPercentage(active[0]!)
+    : undefined;
 });
 const hasFinished = computed(() => tasks.items.value.some((task) => task.result));
+
+function focusTask(event: globalThis.Event) {
+  const panel = globalThis.document?.getElementById(panelId);
+  panel?.showPopover();
+  const key = (event as globalThis.CustomEvent<string>).detail;
+  for (const entry of panel?.querySelectorAll<globalThis.HTMLElement>("[data-task-key]") ?? []) {
+    if (entry.dataset.taskKey === key) {
+      entry.scrollIntoView({ block: "nearest" });
+      break;
+    }
+  }
+}
+onMounted(() => globalThis.window?.addEventListener("newbee:task-focus", focusTask));
+onBeforeUnmount(() => globalThis.window?.removeEventListener("newbee:task-focus", focusTask));
 
 function onToggle(event: globalThis.Event) {
   open.value = (event as globalThis.ToggleEvent).newState === "open";

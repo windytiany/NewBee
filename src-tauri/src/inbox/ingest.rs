@@ -5,6 +5,7 @@ use std::path::Path;
 pub(super) fn ingest(database: &Database, track_ids: Vec<i64>) -> Vec<FileResult> {
     track_ids
         .into_iter()
+        .take_while(|_| !crate::tasks::cancelled())
         .map(|id| {
             let mut path = String::new();
             let outcome = (|| {

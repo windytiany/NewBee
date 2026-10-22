@@ -5,9 +5,10 @@ import { analyzeReplayGain, removeReplayGain } from "@/features/metadata/replayg
 import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import { usePlaybackSession } from "@/features/playback/session";
 import { watchActivity } from "@/shared/lifecycle/activity";
-import { logger } from "@/shared/logging/logger";
+import { logger, operationId } from "@/shared/logging/logger";
+import { writeQueue, TaskCancelled } from "@/features/tasks/queue";
 import { notify } from "@/shared/notifications/center";
-import { tasks, type TaskResult } from "@/shared/tasks/state";
+import type { TaskResult } from "@/shared/tasks/state";
 import { t } from "@/shared/i18n/locale";
 
 const pending = ref(false);
@@ -15,20 +16,16 @@ watchActivity(pending);
 const operations = {
   analyze: {
     update: analyzeReplayGain,
-    taskKey: "replaygain-analysis",
     title: "分析 ReplayGain",
     confirmation: "重新测量并覆盖所选曲目的 ReplayGain 标签？",
-    progress: "正在分析 ReplayGain…",
     success: "ReplayGain 分析完成",
     partial: "{count} 首曲目 ReplayGain 分析失败",
     failure: "ReplayGain 分析失败",
   },
   remove: {
     update: removeReplayGain,
-    taskKey: "replaygain-removal",
     title: "移除 ReplayGain 标签",
     confirmation: "移除所选曲目的 ReplayGain 标签？",
-    progress: "正在移除 ReplayGain 标签…",
     success: "已移除 ReplayGain 标签",
     partial: "{count} 首曲目 ReplayGain 标签移除失败",
     failure: "移除 ReplayGain 标签失败",
@@ -47,24 +44,16 @@ export function useReplayGain() {
     const files = [...new Set(paths)];
     if (pending.value || (!ids.length && !files.length)) return;
     const config = operations[operation];
-    const taskKey = config.taskKey;
     pending.value = true;
     let outcome: TaskResult | undefined;
+    let submitted = false;
     try {
       if (!(await confirmation.ask(config.title, config.confirmation))) return;
-      tasks.update({
-        key: taskKey,
-        message: t(config.progress),
-        completed: 0,
-        total: ids.length + files.length,
-      });
-      const results = await config.update(
-        ids,
-        (progress) => {
-          tasks.update({ key: taskKey, message: t(config.progress), ...progress });
-        },
-        files,
-      );
+      const id = operationId("replaygain");
+      const request = config.update(ids, () => {}, files, id);
+      submitted = true;
+      pending.value = false;
+      const results = await request;
       const failed = results.filter(
         (result) =>
           result.error ||
@@ -92,15 +81,15 @@ export function useReplayGain() {
           ? t("曲目信息刷新失败")
           : t(config.success);
       if (failed.length || refreshFailed) outcome = { type: "warning", message };
-      notify({ type: outcome?.type ?? "success", message });
+      if (!writeQueue.wasCancelled(id)) notify({ type: outcome?.type ?? "success", message });
       return results;
     } catch (error) {
+      if (error instanceof TaskCancelled) return;
       logger.error("metadata/replaygain", `${operation}_failed`, error);
       outcome = { type: "error", message: t(config.failure) };
       notify(outcome);
     } finally {
-      tasks.finish(taskKey, outcome);
-      pending.value = false;
+      if (!submitted) pending.value = false;
     }
   }
   return {

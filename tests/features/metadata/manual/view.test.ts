@@ -82,7 +82,7 @@ function mountDialog(
   readOnly = false,
   marked = false,
   synchronize: () => Promise<void> = async () => {},
-  downloading = false,
+  writePending = false,
   collections?: ArtworkCollection[],
 ) {
   const saved: TagChange[][] = [];
@@ -94,6 +94,7 @@ function mountDialog(
         ...track(id),
         lyrics: marked ? null : track(id).lyrics,
         noLyrics: marked,
+        writePending,
         writableFields: readOnly ? [] : track(id).writableFields,
       })),
     loadCollections: async (ids) =>
@@ -132,9 +133,6 @@ function mountDialog(
       "@tauri-apps/api/core": { isTauri: () => false },
       "@/features/artwork/collection/useDrop": { usePictureDrop: () => Vue.ref(null) },
       "@/features/metadata/manual/useEditor": { useTagEditor: () => editor },
-      "@/features/lyrics/download/batch": {
-        useLyricsBatch: () => ({ state: { running: downloading } }),
-      },
       "@/features/lyrics/download/LyricsSearch.vue": Vue.defineComponent({
         setup: () => () =>
           Vue.h("div", [
@@ -405,10 +403,16 @@ describe("metadata editor views", () => {
     });
   }
 
-  it("keeps saving disabled during lyrics download without explanatory warning text", async () => {
+  it("checks occupation only on opening and keeps saving disabled until the window is reopened", async () => {
     const { editor, root } = mountDialog(false, false, async () => {}, true);
     await editor.openTracks([1, 2]);
     editor.changeLyricsAction("mark");
+    await settle();
+    expect(findNode(root, (node) => node.props.type === "submit")?.props.disabled).toBe(true);
+    expect(findNode(root, (node) => node.props.type === "submit")?.props.title).toBe(
+      "写入正在进行，请完成后重新打开",
+    );
+    for (const track of editor.state.tracks) track.writePending = false;
     await settle();
     expect(findNode(root, (node) => node.props.type === "submit")?.props.disabled).toBe(true);
     expect(getTextContent(root)).not.toContain("暂时无法保存标签");

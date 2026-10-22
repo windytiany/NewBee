@@ -2,6 +2,7 @@ pub(crate) mod files;
 pub(crate) mod model;
 pub(crate) mod releases;
 pub(crate) mod replaygain;
+pub(crate) mod revision;
 pub(crate) mod save;
 #[cfg(test)]
 mod tests;
@@ -22,6 +23,8 @@ pub(crate) struct EditableTrack {
     writable_fields: Vec<MetadataField>,
     values: std::collections::HashMap<MetadataField, String>,
     issue: Option<String>,
+    revision: Option<String>,
+    write_pending: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -45,6 +48,8 @@ pub(crate) async fn get_editable_tracks<R: tauri::Runtime>(
         track_ids
             .into_iter()
             .map(|id| {
+                let write_pending = crate::tasks::validate(&database, &[id], None, &[]).is_err();
+                let revision = revision::read(&database, id).ok();
                 let track = database
                     .get_track(id)?
                     .ok_or_else(|| format!("曲目 {id} 已不在数据库中"))?;
@@ -53,6 +58,8 @@ pub(crate) async fn get_editable_tracks<R: tauri::Runtime>(
                 let writable_fields = metadata.writable_fields;
                 let issue = metadata.issue;
                 Ok(EditableTrack {
+                    revision,
+                    write_pending,
                     track,
                     lyrics: snapshot.text,
                     no_lyrics: snapshot.no_lyrics,
@@ -99,9 +106,21 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
     {
         return Err("歌词仅支持单曲编辑".to_owned());
     }
-    let guard = write.acquire()?;
+    crate::tasks::validate(
+        &app.state::<Database>(),
+        &track_ids,
+        operation_id.as_deref(),
+        &[],
+    )?;
+    let guard = write.acquire_task(operation_id.as_deref()).await?;
+    crate::tasks::validate(
+        &app.state::<Database>(),
+        &track_ids,
+        operation_id.as_deref(),
+        &[],
+    )?;
     tauri::async_runtime::spawn_blocking(move || {
-        crate::logging::with_operation(operation_id.clone(), || {
+        crate::tasks::with_operation(operation_id.clone(), || {
             let _guard = guard;
             let database = app.state::<Database>();
             let mut drafts = std::collections::HashMap::new();
@@ -113,6 +132,7 @@ pub(crate) async fn save_track_metadata<R: tauri::Runtime>(
             }
             let results = track_ids
                 .into_iter()
+                .take_while(|_| !crate::tasks::cancelled())
                 .map(|id| {
                     let prepared = drafts
                         .remove(&id)

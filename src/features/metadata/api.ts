@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
+import type { invoke } from "@tauri-apps/api/core";
+import { taskInvoke } from "@/features/tasks/commands";
 import type { Channel } from "@tauri-apps/api/core";
 import type {
   EditableTrack,
@@ -15,10 +16,22 @@ import type {
 } from "@/features/metadata/releases/types";
 import type { ArtworkDraft } from "@/features/artwork/collection/types";
 
-export function createMetadataApi(invokeCommand: typeof invoke = invoke) {
+export function createMetadataApi(invokeCommand: typeof invoke = taskInvoke) {
+  const revisions = new Map<number, string>();
+  const expected = (ids: number[]) =>
+    ids.flatMap((trackId) => {
+      const value = revisions.get(trackId);
+      return value ? [{ trackId, value }] : [];
+    });
   return {
-    editableTracks: (trackIds: number[]) =>
-      invokeCommand<EditableTrack[]>("get_editable_tracks", { trackIds }),
+    editableTracks: async (trackIds: number[]) => {
+      const tracks = await invokeCommand<EditableTrack[]>("get_editable_tracks", { trackIds });
+      for (const { track, revision } of tracks) {
+        revisions.delete(track.id);
+        if (revision) revisions.set(track.id, revision);
+      }
+      return tracks;
+    },
     saveMetadata: (
       trackIds: number[],
       changes: TagChange[],
@@ -30,6 +43,7 @@ export function createMetadataApi(invokeCommand: typeof invoke = invoke) {
       return invokeCommand<MetadataSaveResult[]>("save_track_metadata", {
         request: { trackIds, changes, lyricsAction, artworkDrafts },
         onProgress,
+        ...(expected(trackIds).length ? { expected: expected(trackIds) } : {}),
         ...(operationId ? { operationId } : {}),
       });
     },
@@ -51,6 +65,9 @@ export function createMetadataApi(invokeCommand: typeof invoke = invoke) {
         patches,
         cover,
         onProgress,
+        ...(expected(patches.map((patch) => patch.trackId)).length
+          ? { expected: expected(patches.map((patch) => patch.trackId)) }
+          : {}),
         ...(operationId ? { operationId } : {}),
       });
     },

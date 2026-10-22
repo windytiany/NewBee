@@ -105,6 +105,9 @@ fn export(app: &AppHandle, destination: &Path, interface: InterfaceState) -> Res
     let manifest = snapshot(app, interface)?;
     let file = workspace.0.join("snapshot.newbee");
     archive::write(&app.state::<Database>(), &manifest, &file)?;
+    if crate::tasks::cancelled() {
+        return Err("任务已取消".into());
+    }
     archive::publish(&file, destination)
 }
 
@@ -134,13 +137,19 @@ pub(crate) async fn export_backup(
     app: AppHandle,
     path: String,
     interface: InterfaceState,
+    operation_id: Option<String>,
 ) -> Result<(), String> {
-    let guard = app.state::<WriteState>().acquire_all()?;
+    let guard = app
+        .state::<WriteState>()
+        .acquire_all_task(operation_id.as_deref())
+        .await?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = guard;
-        let root = data_directory(&app)?;
-        validate_export_destination(&root, Path::new(&path))?;
-        export(&app, Path::new(&path), interface)
+        crate::tasks::with_operation(operation_id, || {
+            let _guard = guard;
+            let root = data_directory(&app)?;
+            validate_export_destination(&root, Path::new(&path))?;
+            export(&app, Path::new(&path), interface)
+        })
     })
     .await
     .map_err(|error| error.to_string())?
@@ -173,6 +182,7 @@ pub(crate) async fn restore_backup(
     interface: InterfaceState,
     backup_current: bool,
 ) -> Result<(), String> {
+    let mut restoring = crate::tasks::restoring()?;
     let guard = app.state::<WriteState>().acquire_all()?;
     let worker_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -205,6 +215,7 @@ pub(crate) async fn restore_backup(
     })
     .await
     .map_err(|error| error.to_string())??;
+    restoring.commit();
     app.request_restart();
     Ok(())
 }

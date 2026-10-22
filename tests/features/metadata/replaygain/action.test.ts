@@ -59,7 +59,10 @@ function setup(
       usePlaybackSession: () => ({ updateTrackMetadata: async () => {} }),
     },
     "@/features/tracks/events": { reportTracksChanged: () => {} },
-    "@/shared/logging/logger": { logger: { error: () => {} } },
+    "@/shared/logging/logger": {
+      logger: { error: () => {} },
+      operationId: () => "replaygain-test",
+    },
     "@/shared/tasks/state": {
       tasks: {
         update: (task: TaskProgress) => tasks.push(task),
@@ -91,8 +94,9 @@ it("requires opt-in, deduplicates targets, reports progress and refreshes succes
   expect(test.calls[0]?.[0]).toBe("analyze_track_loudness");
   expect((test.calls[0]?.[1] as { trackIds: number[] }).trackIds).toEqual([7]);
   expect(test.calls[1]).toEqual(["get_tracks", { trackIds: [7] }]);
-  expect(test.tasks.map(({ completed }) => completed)).toEqual([0, 1]);
-  expect(test.removed).toEqual(["replaygain-analysis"]);
+  // Progress and task lifetime are owned by the shared command queue.
+  expect(test.tasks).toEqual([]);
+  expect(test.removed).toEqual([]);
   expect(test.notices.map(({ message }) => message)).toEqual(["ReplayGain 分析完成"]);
   expect(test.action.pending.value).toBe(false);
 });
@@ -140,13 +144,13 @@ it("reports individual failures while refreshing successful results and always r
   await test.action.analyze([7, 9]);
   expect(test.calls[1]).toEqual(["get_tracks", { trackIds: [7] }]);
   expect(test.notices[0]?.message).toBe("1 首曲目 ReplayGain 分析失败");
-  expect(test.outcomes).toEqual([{ type: "warning", message: "1 首曲目 ReplayGain 分析失败" }]);
+  expect(test.outcomes).toEqual([]);
   const failed = setup({ fail: true });
   await failed.action.analyze([7]);
   expect(failed.notices[0]?.message).toBe("ReplayGain 分析失败");
-  expect(failed.outcomes).toEqual([{ type: "error", message: "ReplayGain 分析失败" }]);
+  expect(failed.outcomes).toEqual([]);
   expect(failed.action.pending.value).toBe(false);
-  expect(failed.removed).toEqual(["replaygain-analysis"]);
+  expect(failed.removed).toEqual([]);
 });
 
 it("removes ReplayGain tags, accepts untagged tracks, deduplicates paths, and refreshes registered tracks", async () => {
@@ -157,7 +161,7 @@ it("removes ReplayGain tags, accepts untagged tracks, deduplicates paths, and re
   expect(test.calls[0]?.[1]).toMatchObject({ trackIds: [7, 9], paths: ["/music/tone.flac"] });
   expect(test.calls[1]).toEqual(["get_tracks", { trackIds: [7, 9] }]);
   expect(test.notices[0]).toMatchObject({ type: "success", message: "已移除 ReplayGain 标签" });
-  expect(test.removed).toEqual(["replaygain-removal"]);
+  expect(test.removed).toEqual([]);
   expect(test.action.pending.value).toBe(false);
 });
 
@@ -195,7 +199,7 @@ for (const operation of ["analyze", "remove"] as const) {
     await test.action[operation]([7]);
     expect(test.calls).toHaveLength(1);
     expect(test.notices[0]?.type).toBe("warning");
-    expect(test.outcomes[0]?.type).toBe("warning");
+    expect(test.outcomes).toEqual([]);
     expect(test.action.pending.value).toBe(false);
   });
 
@@ -257,5 +261,5 @@ it("reports ReplayGain tag removal failures and releases the progress task", asy
   await failed.action.remove([7]);
   expect(failed.notices[0]?.message).toBe("移除 ReplayGain 标签失败");
   expect(failed.action.pending.value).toBe(false);
-  expect(failed.removed).toEqual(["replaygain-removal"]);
+  expect(failed.removed).toEqual([]);
 });

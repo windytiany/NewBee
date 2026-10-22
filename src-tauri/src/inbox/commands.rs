@@ -18,18 +18,21 @@ pub(crate) async fn read_inbox<R: tauri::Runtime>(
 pub(crate) async fn register_inbox<R: tauri::Runtime>(
     paths: Vec<String>,
     directory: bool,
+    operation_id: Option<String>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<Vec<FileResult>, String> {
-    let guard = write.acquire()?;
+    let guard = write.acquire_task(operation_id.as_deref()).await?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = guard;
-        let database = app.state::<Database>();
-        if directory {
-            register_directories(&database, paths)
-        } else {
-            register(&database, paths)
-        }
+        crate::tasks::with_operation(operation_id, || {
+            let _guard = guard;
+            let database = app.state::<Database>();
+            if directory {
+                register_directories(&database, paths)
+            } else {
+                register(&database, paths)
+            }
+        })
     })
     .await
     .map_err(|error| format!("Inbox 登记失败：{error}"))
@@ -55,13 +58,22 @@ pub(crate) async fn remove_inbox<R: tauri::Runtime>(
 #[tauri::command]
 pub(crate) async fn ingest_inbox<R: tauri::Runtime>(
     track_ids: Vec<i64>,
+    operation_id: Option<String>,
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<Vec<FileResult>, String> {
-    let guard = write.acquire()?;
+    crate::tasks::validate(
+        &app.state::<Database>(),
+        &track_ids,
+        operation_id.as_deref(),
+        &[],
+    )?;
+    let guard = write.acquire_task(operation_id.as_deref()).await?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = guard;
-        ingest(&app.state::<Database>(), track_ids)
+        crate::tasks::with_operation(operation_id, || {
+            let _guard = guard;
+            ingest(&app.state::<Database>(), track_ids)
+        })
     })
     .await
     .map_err(|error| format!("Inbox 入库失败：{error}"))

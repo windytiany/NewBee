@@ -1,13 +1,67 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct WriteState {
     data: Arc<AtomicBool>,
     settings: Arc<AtomicBool>,
 }
 
 impl WriteState {
+    pub(crate) fn available(&self) -> bool {
+        !self.data.load(Ordering::Acquire) && !self.settings.load(Ordering::Acquire)
+    }
+
+    pub(crate) async fn acquire_task(&self, operation: Option<&str>) -> Result<WriteGuard, String> {
+        let state = self.clone();
+        let operation = operation.map(str::to_owned);
+        tauri::async_runtime::spawn_blocking(move || state.acquire_registered(operation.as_deref()))
+            .await
+            .map_err(|error| error.to_string())?
+    }
+
+    pub(crate) fn acquire_registered(&self, operation: Option<&str>) -> Result<WriteGuard, String> {
+        let Some(cancelled) = crate::tasks::cancellation(operation)? else {
+            return self.acquire();
+        };
+        loop {
+            if cancelled.load(Ordering::Acquire) {
+                return Err("任务已取消".into());
+            }
+            if let Ok(guard) = self.acquire() {
+                return Ok(guard);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+    }
+
+    pub(crate) async fn acquire_all_task(
+        &self,
+        operation: Option<&str>,
+    ) -> Result<ExclusiveWriteGuard, String> {
+        let Some(cancelled) = crate::tasks::cancellation(operation)? else {
+            return self.acquire_all();
+        };
+        let data = self.data.clone();
+        let settings = self.settings.clone();
+        tauri::async_runtime::spawn_blocking(move || loop {
+            if cancelled.load(Ordering::Acquire) {
+                return Err("任务已取消".into());
+            }
+            if let Ok(data) = Self::acquire_lock(&data) {
+                if let Ok(settings) = Self::acquire_lock(&settings) {
+                    return Ok(ExclusiveWriteGuard {
+                        _data: data,
+                        _settings: settings,
+                    });
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        })
+        .await
+        .map_err(|error| error.to_string())?
+    }
+
     pub(crate) fn acquire(&self) -> Result<WriteGuard, String> {
         Self::acquire_lock(&self.data)
     }

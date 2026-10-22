@@ -247,16 +247,17 @@
       <button
         type="button"
         class="focus-visible:outline-app-accent rounded px-4 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 disabled:opacity-50"
-        :disabled="state.saving || state.importingArtwork || selectingArtwork"
+        :disabled="state.importingArtwork || selectingArtwork"
         @click="requestClose"
       >
-        {{ t("取消") }}
+        {{ state.saving ? t("关闭") : t("取消") }}
       </button>
       <button
         type="submit"
         form="metadata-editor-form"
         class="focus-visible:outline-app-accent bg-app-accent text-app-on-accent rounded px-5 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         :disabled="!canSave"
+        :title="state.writeBlocked ? t('写入正在进行，请完成后重新打开') : undefined"
       >
         {{ t("保存") }}
       </button>
@@ -306,13 +307,11 @@ import FieldsPanel from "@/features/metadata/manual/FieldsPanel.vue";
 import CollectionEditor from "@/features/artwork/collection/CollectionEditor.vue";
 import { collectionChanged } from "@/features/artwork/collection/model";
 import LyricsEditor from "@/features/lyrics/LyricsEditor.vue";
-import { useLyricsBatch } from "@/features/lyrics/download/batch";
 
 const editor = useTagEditor();
 const state = editor.state;
 const { artworkReady, pictures, displayPicture } = editor;
 const selectingArtwork = ref(false);
-const batch = useLyricsBatch();
 const fieldTabs = ["tags", "additional"] as const;
 type EditorTab = "properties" | (typeof fieldTabs)[number] | "lyrics" | "artwork";
 const activeTab = ref<EditorTab>("tags");
@@ -339,7 +338,7 @@ const canSave = computed(
     !state.saving &&
     !state.importingArtwork &&
     !selectingArtwork.value &&
-    !batch.state.running &&
+    !state.writeBlocked &&
     !state.confirmDiscard &&
     state.tracks.length > 0 &&
     ((artworkReady.value && state.artwork.tracks.some(collectionChanged)) ||

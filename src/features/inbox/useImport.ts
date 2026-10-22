@@ -8,12 +8,14 @@ import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import { t } from "@/shared/i18n/locale";
 import { tasks } from "@/shared/tasks/state";
+import { TaskCancelled } from "@/features/tasks/queue";
 const pending = ref(false);
 watchActivity(pending);
 export function useInboxImport() {
   async function runImport(directory: boolean, droppedPaths?: string[]) {
     if (pending.value || !isTauri()) return;
     pending.value = true;
+    let submitted = false;
     try {
       if (droppedPaths)
         tasks.update({ key: "inbox-import", message: t("导入音频文件"), completed: 0 });
@@ -21,11 +23,14 @@ export function useInboxImport() {
         ? await invoke<string[]>("readable_audio_files", { paths: droppedPaths })
         : await pickFiles(directory);
       if (!picked || picked.length === 0) return;
-      tasks.update({ key: "inbox-import", message: t("导入音频文件"), completed: 0 });
-      const results = await createInboxApi().register(
+      tasks.finish("inbox-import");
+      const operation = createInboxApi().register(
         Array.isArray(picked) ? picked : [picked],
         directory,
       );
+      submitted = true;
+      pending.value = false;
+      const results = await operation;
       for (const result of results)
         if (result.error)
           logger.warn("inbox", "register_failed", result.error, {
@@ -43,11 +48,14 @@ export function useInboxImport() {
       if (results.some((result) => result.success)) reportLibraryMembershipChanged();
       globalThis.window.dispatchEvent(new globalThis.Event(INBOX_CHANGED_EVENT));
     } catch (error) {
+      if (error instanceof TaskCancelled) return;
       logger.error("inbox", "register_failed", error);
       notify({ type: "error", message: t("导入失败。无法完成扫描。"), key: "inbox-import" });
     } finally {
-      tasks.finish("inbox-import");
-      pending.value = false;
+      if (!submitted) {
+        tasks.finish("inbox-import");
+        pending.value = false;
+      }
     }
   }
   async function pickFiles(directory: boolean) {

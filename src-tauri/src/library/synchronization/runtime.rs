@@ -106,6 +106,10 @@ impl Work {
         if self.failed {
             return Ok(false);
         }
+        if crate::tasks::pending() {
+            self.due = Some(Instant::now() + SETTLE);
+            return Ok(false);
+        }
         let Ok(_guard) = app.state::<WriteState>().acquire() else {
             self.due = Some(Instant::now() + SETTLE);
             return Ok(false);

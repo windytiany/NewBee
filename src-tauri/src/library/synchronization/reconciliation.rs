@@ -15,9 +15,15 @@ pub(super) fn run(
     let mut result = ImportResult::default();
     let mut pending: Vec<_> = folders.iter().filter(|folder| folder.enabled).collect();
     for attempt in 0..STABILITY_ATTEMPTS {
+        if crate::tasks::cancelled() {
+            break;
+        }
         let mut visited = HashSet::new();
         let mut snapshots = Vec::new();
         for folder in pending.drain(..) {
+            if crate::tasks::cancelled() {
+                break;
+            }
             state.status(&folder.path, "scanning", None);
             match inventory::inspect(Path::new(&folder.path)) {
                 Ok(snapshot) => {
@@ -63,6 +69,10 @@ pub(super) fn run(
                 })?;
                 completed += files.len();
             }
+            if crate::tasks::cancelled() {
+                state.status(&folder.path, "idle", None);
+                break;
+            }
             match inventory::inspect(Path::new(&folder.path)) {
                 Ok(after) if before == after => {
                     state.reconcile(&folder.path, &database.library_track_paths()?);
@@ -95,6 +105,11 @@ pub(super) fn run(
         }
         if pending.is_empty() {
             break;
+        }
+    }
+    if crate::tasks::cancelled() {
+        for folder in folders.iter().filter(|folder| folder.enabled) {
+            state.status(&folder.path, "idle", None);
         }
     }
     result.flush_failures();

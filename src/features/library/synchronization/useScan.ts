@@ -1,9 +1,11 @@
 import { computed, ref } from "vue";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
+import { taskInvoke as invoke } from "@/features/tasks/commands";
 import { t } from "@/shared/i18n/locale";
 import { logger, operationId } from "@/shared/logging/logger";
 import { notify } from "@/shared/notifications/center";
 import { tasks } from "@/shared/tasks/state";
+import { TaskCancelled, writeQueue } from "@/features/tasks/queue";
 import { commandFailure, errorMessage } from "@/shared/notifications/error";
 import { watchActivity } from "@/shared/lifecycle/activity";
 import {
@@ -54,6 +56,7 @@ export function useLibrarySynchronization() {
       } catch (error) {
         logger.warn("library/synchronization", "snapshot_refresh_failed", error);
       }
+      if (writeQueue.wasCancelled(id)) return;
       if (result.failed) {
         // The snapshot owns detailed warnings. Fall back if it could not supply a result.
         if (
@@ -67,6 +70,7 @@ export function useLibrarySynchronization() {
         notify({ type: "success", message, key: "library-synchronization" });
       }
     } catch (error) {
+      if (error instanceof TaskCancelled) return;
       scanError.value = errorMessage(error, t("扫描失败"));
       const busy = commandFailure(error)?.code === "write_busy";
       logger[busy ? "warn" : "error"]("library/synchronization", "failed", error, {

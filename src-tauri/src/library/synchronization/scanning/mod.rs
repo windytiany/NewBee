@@ -87,12 +87,16 @@ pub(crate) fn run_with_replay_gain(
     let mut completed = 0;
     progress(0, files.len());
     while completed < files.len() {
+        if crate::tasks::cancelled() {
+            break;
+        }
         let start = completed;
         let mut pending = Vec::new();
         let mut image_bytes = 0;
         while completed < files.len()
             && completed - start < BATCH_TRACKS
             && image_bytes < BATCH_IMAGE_BYTES
+            && !crate::tasks::cancelled()
         {
             let path = files[completed];
             if fill_replay_gain {

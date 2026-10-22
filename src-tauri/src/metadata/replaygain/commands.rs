@@ -85,7 +85,7 @@ fn update_tracks(
         completed: 0,
         total: targets.len(),
     });
-    targets.iter().enumerate().map(|(index, (track_id, path))| {
+    targets.iter().enumerate().take_while(|_| !crate::tasks::cancelled()).map(|(index, (track_id, path))| {
         let mut result = UpdateResult { track_id: *track_id, file_written: false, database_updated: false, error: None };
         let outcome = (|| {
             let path = path.as_ref().map_err(Clone::clone)?;
@@ -111,16 +111,28 @@ pub(crate) async fn analyze_track_loudness<R: tauri::Runtime>(
     track_ids: Vec<i64>,
     paths: Vec<String>,
     on_progress: Channel<Progress>,
+    operation_id: Option<String>,
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<UpdateResult>, String> {
-    let guard = app.state::<WriteState>().acquire()?;
+    crate::tasks::validate(
+        &app.state::<Database>(),
+        &track_ids,
+        operation_id.as_deref(),
+        &[],
+    )?;
+    let guard = app
+        .state::<WriteState>()
+        .acquire_task(operation_id.as_deref())
+        .await?;
     crate::database::blocking(app, move |database| {
-        let _guard = guard;
-        Ok(analyze_tracks(database, track_ids, paths, |progress| {
-            if let Err(error) = on_progress.send(progress) {
-                log::debug!("Could not publish loudness analysis progress: {error}");
-            }
-        }))
+        crate::tasks::with_operation(operation_id, || {
+            let _guard = guard;
+            Ok(analyze_tracks(database, track_ids, paths, |progress| {
+                if let Err(error) = on_progress.send(progress) {
+                    log::debug!("Could not publish loudness analysis progress: {error}");
+                }
+            }))
+        })
     })
     .await
 }
@@ -130,16 +142,28 @@ pub(crate) async fn restore_track_loudness<R: tauri::Runtime>(
     track_ids: Vec<i64>,
     paths: Vec<String>,
     on_progress: Channel<Progress>,
+    operation_id: Option<String>,
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<UpdateResult>, String> {
-    let guard = app.state::<WriteState>().acquire()?;
+    crate::tasks::validate(
+        &app.state::<Database>(),
+        &track_ids,
+        operation_id.as_deref(),
+        &[],
+    )?;
+    let guard = app
+        .state::<WriteState>()
+        .acquire_task(operation_id.as_deref())
+        .await?;
     crate::database::blocking(app, move |database| {
-        let _guard = guard;
-        Ok(restore_tracks(database, track_ids, paths, |progress| {
-            if let Err(error) = on_progress.send(progress) {
-                log::debug!("Could not publish loudness restoration progress: {error}");
-            }
-        }))
+        crate::tasks::with_operation(operation_id, || {
+            let _guard = guard;
+            Ok(restore_tracks(database, track_ids, paths, |progress| {
+                if let Err(error) = on_progress.send(progress) {
+                    log::debug!("Could not publish loudness restoration progress: {error}");
+                }
+            }))
+        })
     })
     .await
 }

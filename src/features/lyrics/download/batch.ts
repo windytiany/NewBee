@@ -1,6 +1,7 @@
 import { t } from "@/shared/i18n/locale";
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { reactive, toRef } from "vue";
+import { reactive, shallowRef, toRef } from "vue";
+import { runWriteTask, TaskCancelled } from "@/features/tasks/queue";
 import { watchActivity } from "@/shared/lifecycle/activity";
 import { createLyricsApi } from "@/features/lyrics/api";
 import { createLyricsBatchCooperation } from "@/features/lyrics/download/cooperation";
@@ -19,9 +20,11 @@ export type LyricsBatchOptions = LyricsBatchCooperationOptions & {
   synchronize: (ids: number[]) => void | Promise<void>;
   notifications: Pick<typeof notifications, "notify">;
   tasks: Pick<typeof tasks, "update" | "finish">;
+  taskKey?: string;
 };
 
 export function createLyricsBatch(options: LyricsBatchOptions) {
+  const taskKey = options.taskKey ?? TASK_KEY;
   // Terminal confirmations also refresh files whose commit reply did not reach the frontend.
   const synchronization = createMetadataSave({ ...options, refreshWrittenFiles: true });
   const state = reactive({
@@ -47,7 +50,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
   }
   function report() {
     options.tasks.update({
-      key: TASK_KEY,
+      key: taskKey,
       message: t("正在更新缺少的歌词 · 已写入 {count} 首", { count: state.written }),
       completed: state.completed,
       total: state.total,
@@ -130,7 +133,12 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
       failure = summary.error || (summary.status === "failed" ? t("歌词下载批次失败。") : "");
       update();
     } catch (error) {
-      failure = error instanceof Error ? error.message : String(error);
+      if (
+        error instanceof TaskCancelled ||
+        (error instanceof Error && error.cause instanceof TaskCancelled)
+      )
+        state.cancelling = true;
+      else failure = error instanceof Error ? error.message : String(error);
     } finally {
       requestCancellation = null;
       const results = [...outcomes.values()].flatMap((outcome) =>
@@ -179,7 +187,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
                   : t("歌词更新完成：写入 {count} 首", { count: state.written }),
       };
       options.tasks.finish(
-        TASK_KEY,
+        taskKey,
         notice.type === "warning" ? { type: notice.type, message: notice.message } : undefined,
       );
       options.notifications.notify(notice);
@@ -201,7 +209,7 @@ export function createLyricsBatch(options: LyricsBatchOptions) {
             type: "warning",
             persistent: true,
             message: t("歌词已保存，但界面刷新仍失败"),
-            key: TASK_KEY,
+            key: taskKey,
           });
       } finally {
         state.running = false;
@@ -215,19 +223,48 @@ export function useLyricsBatch() {
   if (sharedBatch) return sharedBatch;
   const session = usePlaybackSession();
   const api = createLyricsApi(invoke);
-  sharedBatch = createLyricsBatch({
-    run: (ids, receive, id) => {
-      const onProgress = new Channel<LyricsBatchEvent>();
-      onProgress.onmessage = receive;
-      return api.run(ids, onProgress, id);
+  function createBatch() {
+    const taskKey = operationId("lyrics-task");
+    const batch = createLyricsBatch({
+      taskKey,
+      run: (ids, receive, id) =>
+        runWriteTask(
+          {
+            id,
+            key: taskKey,
+            message: t("正在更新缺少的歌词 · 已写入 {count} 首", { count: 0 }),
+            fingerprint: JSON.stringify(["lyrics", [...ids].sort((a, b) => a - b)]),
+            trackIds: ids,
+            cancel: () => batch.cancel(),
+          },
+          () => {
+            const onProgress = new Channel<LyricsBatchEvent>();
+            onProgress.onmessage = receive;
+            return api.run(ids, onProgress, id);
+          },
+        ),
+      commitStep: api.commitStep,
+      completeStep: api.completeStep,
+      editFiles: session.withMetadataEditing,
+      cancel: api.cancel,
+      synchronize: createTrackSynchronization(session, invoke).refresh,
+      notifications,
+      tasks,
+    });
+    return batch;
+  }
+  const current = shallowRef(createBatch());
+  sharedBatch = {
+    get state() {
+      return current.value.state;
     },
-    commitStep: api.commitStep,
-    completeStep: api.completeStep,
-    editFiles: session.withMetadataEditing,
-    cancel: api.cancel,
-    synchronize: createTrackSynchronization(session, invoke).refresh,
-    notifications,
-    tasks,
-  });
+    cancel: () => current.value.cancel(),
+    retrySynchronization: () => current.value.retrySynchronization(),
+    startTracks: (ids) => {
+      const batch = createBatch();
+      current.value = batch;
+      return batch.startTracks(ids);
+    },
+  };
   return sharedBatch;
 }

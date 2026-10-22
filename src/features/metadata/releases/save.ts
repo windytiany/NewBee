@@ -16,6 +16,7 @@ export function createReleaseSave(
   busy: () => boolean,
   close: () => void,
   reportError: ReleaseErrorReporter,
+  version: () => number = () => 0,
 ) {
   let savedCover: CoverData | null = null;
   function confirmPatches() {
@@ -30,7 +31,7 @@ export function createReleaseSave(
     state.confirmSave = true;
   }
   function prepareSave() {
-    if (busy() || state.loadingRelease) return;
+    if (busy() || state.loadingRelease || state.writeBlocked) return;
     state.error = "";
     try {
       if (state.writeCover && (!state.cover || state.loadingCover))
@@ -73,11 +74,13 @@ export function createReleaseSave(
     }
   }
   async function save() {
-    if (!state.confirmSave || state.saving) return;
+    if (!state.confirmSave || state.saving || state.writeBlocked) return;
     const cover = savedCover;
     close();
+    const generation = version();
     if (!state.patches.length) {
       await saving.retrySynchronization();
+      if (generation !== version()) return;
       state.open = Boolean(state.synchronizationError);
       return;
     }
@@ -88,12 +91,15 @@ export function createReleaseSave(
     const targets = patches.map(({ trackId }) => ({
       trackId,
       path: state.tracks.find(({ track }) => track.id === trackId)?.track.path ?? "",
+      revision: state.tracks.find(({ track }) => track.id === trackId)?.revision,
     }));
     const results = await saving.run({
+      fingerprint: JSON.stringify(["release", patches, cover]),
       targets,
       writeTrackIds: patches.map(({ trackId }) => trackId),
       execute: (progress, operationId) => options.save(patches, cover, progress, operationId),
     });
+    if (generation !== version()) return;
     const updated = new Set(
       results.flatMap((result) => (metadataSaved(result) ? [result.trackId] : [])),
     );

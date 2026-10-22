@@ -5,6 +5,8 @@ import { notify } from "@/shared/notifications/center";
 import { logger, operationId } from "@/shared/logging/logger";
 import { createFailures } from "@/shared/logging/aggregation";
 import type { MetadataSaveResult } from "@/features/metadata/types";
+import { writeQueue, TaskCancelled } from "@/features/tasks/queue";
+import type { runWriteTask } from "@/features/tasks/queue";
 
 export function metadataSaved(result: MetadataSaveResult): boolean {
   return result.databaseUpdated;
@@ -15,9 +17,10 @@ export type MetadataFileEditor = <Result>(
   save: () => Promise<Result>,
 ) => Promise<Result>;
 
-type SaveTarget = { trackId: number; path: string };
+type SaveTarget = { trackId: number; path: string; revision?: string | null };
 type SaveRequest = {
   operationId?: string;
+  fingerprint?: string;
   targets: readonly SaveTarget[];
   writeTrackIds: readonly number[];
   prepareWriteTrackIds?: (
@@ -31,6 +34,7 @@ type SaveRequest = {
   reportFailures?: boolean;
 };
 type MetadataSaveOptions = {
+  schedule?: typeof runWriteTask;
   editFiles: MetadataFileEditor;
   synchronize: (trackIds: number[]) => void | Promise<void>;
   refreshWrittenFiles?: boolean;
@@ -120,23 +124,42 @@ export function createMetadataSave(options: MetadataSaveOptions) {
       state.completed = reported.size;
     };
     try {
-      const writeIds = [
-        ...new Set(
-          request.prepareWriteTrackIds
-            ? await request.prepareWriteTrackIds(progress)
-            : request.writeTrackIds,
-        ),
-      ].filter((id) => targets.has(id));
-      const execute = async () => {
-        for (const result of await request.execute(progress, id)) progress(result);
+      const write = async () => {
+        const writeIds = [
+          ...new Set(
+            request.prepareWriteTrackIds
+              ? await request.prepareWriteTrackIds(progress)
+              : request.writeTrackIds,
+          ),
+        ].filter((id) => targets.has(id));
+        const execute = async () => {
+          for (const result of await request.execute(progress, id)) progress(result);
+        };
+        await (writeIds.length ? options.editFiles(writeIds, execute) : execute());
       };
-      await (writeIds.length ? options.editFiles(writeIds, execute) : execute());
+      if (request.fingerprint && options.schedule) {
+        await options.schedule(
+          {
+            id,
+            message: t("保存标签"),
+            fingerprint: request.fingerprint,
+            trackIds: request.targets.map(({ trackId }) => trackId),
+            expected: request.targets.flatMap(({ trackId, revision }) =>
+              revision ? [{ trackId, value: revision }] : [],
+            ),
+          },
+          write,
+        );
+      } else await write();
     } catch (error) {
-      logger.error("metadata", "save_request_failed", error, { operationId: id });
-      state.error = error instanceof Error ? error.message : String(error);
+      if (!(error instanceof TaskCancelled)) {
+        logger.error("metadata", "save_request_failed", error, { operationId: id });
+        state.error = error instanceof Error ? error.message : String(error);
+      }
     } finally {
       accepting = false;
       for (const target of targets.values()) {
+        if (writeQueue.wasCancelled(id) && !reported.has(target.trackId)) continue;
         const result = reported.get(target.trackId) ?? {
           ...target,
           fileWritten: results.get(target.trackId)?.fileWritten ?? false,
@@ -169,7 +192,7 @@ export function createMetadataSave(options: MetadataSaveOptions) {
         }
       }
       state.results = [...results.values()];
-      state.completed = targets.size;
+      state.completed = reported.size;
       if (!request.deferSynchronization) await synchronize(id);
       failures.flush();
       const succeeded = [...reported.values()].filter((result) => metadataSaved(result)).length;

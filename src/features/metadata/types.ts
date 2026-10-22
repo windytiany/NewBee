@@ -13,6 +13,8 @@ export type EditableTrack = {
   writableFields: TagField[];
   issue: string | null;
   values?: Partial<Record<TagField, string>>;
+  revision?: string | null;
+  writePending?: boolean;
 };
 export type IdentifierField =
   | "musicBrainzReleaseId"

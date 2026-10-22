@@ -249,22 +249,22 @@ describe("album tag editing", () => {
     expect(editor.state.results.every(({ databaseUpdated }) => databaseUpdated)).toBe(true);
     expect(editor.state.open).toBe(false);
   });
-  it("closes on confirmation and prevents reopening or saving twice during a write", async () => {
+  it("detaches submitted writes so a different target can be opened without stale completion updates", async () => {
     const pending = deferred<MetadataSaveResult[]>();
     const { editor } = await ready({ save: () => pending.promise });
     editor.prepareSave();
     const saving = editor.save();
-    editor.requestClose();
-    editor.close();
-    await editor.open(album);
+    await editor.openTracks([3]);
     await editor.save();
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.open).toBe(true);
     expect(editor.state.confirmSave).toBe(false);
     expect(editor.state.confirmDiscard).toBe(false);
-    expect(editor.state.saving).toBe(true);
+    expect(editor.state.saving).toBe(false);
     pending.resolve([result(1), result(2)]);
     await saving;
-    expect(editor.state.open).toBe(false);
+    expect(editor.state.open).toBe(true);
+    expect(editor.state.tracks.map(({ track }) => track.id)).toEqual([3]);
+    expect(editor.state.results).toEqual([]);
   });
 });
 

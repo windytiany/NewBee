@@ -78,6 +78,25 @@ async function settle() {
 }
 
 describe("metadata editing", () => {
+  it("latches occupation on opening and only permits saving after reopening", async () => {
+    let occupied = true;
+    const { editor, saves } = fixture({
+      loadTracks: async (ids) => ids.map((id) => ({ ...editable(id), writePending: occupied })),
+    });
+    await editor.openTracks([1]);
+    expect(editor.state.writeBlocked).toBe(true);
+    occupied = false;
+    editor.prepareSave();
+    await settle();
+    expect(saves).toEqual([]);
+    expect(editor.state.writeBlocked).toBe(true);
+    editor.close();
+    await editor.openTracks([1]);
+    expect(editor.state.writeBlocked).toBe(false);
+    occupied = true;
+    expect(editor.state.writeBlocked).toBe(false);
+  });
+
   it("loads file-only fields from the editing snapshot and clears them explicitly", async () => {
     const { editor, saves } = fixture({
       loadTracks: async (ids) =>
@@ -367,7 +386,7 @@ describe("metadata editing", () => {
     ]);
   });
 
-  it("requires discard confirmation only after editing and prevents closing while saving", async () => {
+  it("requires discard confirmation for drafts but permits closing without cancelling a submitted save", async () => {
     let finish: (value: MetadataSaveResult[]) => void = () => {};
     const { editor } = fixture({
       save: () =>
@@ -386,10 +405,64 @@ describe("metadata editing", () => {
     editor.prepareSave();
     editor.requestClose();
     editor.close();
-    expect(editor.state.open).toBe(true);
+    expect(editor.state.open).toBe(false);
     expect(editor.state.saving).toBe(true);
     finish([result(1)]);
     await settle();
+    expect(editor.state.open).toBe(false);
+  });
+
+  it("does not block or close a different track's window when an earlier save finishes", async () => {
+    let finish!: (results: MetadataSaveResult[]) => void;
+    const { editor } = fixture({
+      save: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    });
+    await editor.openTracks([1]);
+    editor.changeField(editor.state.draft[0]!, "Submitted");
+    editor.prepareSave();
+    editor.requestClose();
+    await editor.openTracks([2]);
+    expect(editor.state.writeBlocked).toBe(false);
+    expect(editor.state.saving).toBe(false);
+    finish([result(1)]);
+    await settle();
+    expect(editor.state.open).toBe(true);
+    expect(editor.state.tracks[0]?.track.id).toBe(2);
+    expect(editor.state.writeBlocked).toBe(false);
+    editor.close();
+    await editor.openTracks([2]);
+    expect(editor.state.writeBlocked).toBe(false);
+  });
+
+  it("keeps submitted batches independent when the same editor saves a different target", async () => {
+    const finishers = new Map<number, (results: MetadataSaveResult[]) => void>();
+    const { editor } = fixture({
+      save: (ids) =>
+        new Promise((resolve) => {
+          finishers.set(ids[0]!, resolve);
+        }),
+    });
+    await editor.openTracks([1]);
+    editor.changeField(editor.state.draft[0]!, "First");
+    editor.prepareSave();
+    await settle();
+    editor.requestClose();
+    await editor.openTracks([2]);
+    editor.changeField(editor.state.draft[0]!, "Second");
+    editor.prepareSave();
+    await settle();
+    finishers.get(1)!([result(1)]);
+    await settle();
+    expect(editor.state.open).toBe(true);
+    expect(editor.state.saving).toBe(true);
+    expect(editor.state.results).toEqual([]);
+    finishers.get(2)!([result(2)]);
+    await settle();
+    expect(editor.state.saving).toBe(false);
+    expect(editor.state.results.map(({ trackId }) => trackId)).toEqual([2]);
     expect(editor.state.open).toBe(false);
   });
 
@@ -649,7 +722,7 @@ describe("manual artwork collections", () => {
 });
 
 describe("manual collection refresh boundaries", () => {
-  it("keeps every editing and closing operation gated until saved artwork reload finishes", async () => {
+  it("keeps editing gated but permits closing while saved artwork reload finishes", async () => {
     let reads = 0;
     let finish: (value: ArtworkCollection[]) => void = () => {};
     const { editor, saves } = fixture({
@@ -685,13 +758,13 @@ describe("manual collection refresh boundaries", () => {
     expect(editor.pictures.value.find(({ key }) => key === "common")?.pictureType).toBe(5);
     expect(editor.state.artwork.tracks[0]?.pictures).toHaveLength(2);
     expect(editor.state.artwork.tracks[0]?.displayKey).toBe("common");
-    expect(editor.state.open).toBe(true);
+    expect(editor.state.open).toBe(false);
     expect(editor.state.confirmDiscard).toBe(false);
     expect(saves).toHaveLength(1);
     finish(collections([1]));
     await settle();
     expect(editor.state.saving).toBe(false);
-    expect(editor.state.dirty).toBe(false);
+    expect(editor.state.results[0]?.databaseUpdated).toBe(true);
     expect(editor.state.open).toBe(false);
   });
 

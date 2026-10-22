@@ -252,7 +252,7 @@ describe("audio file import", () => {
     expect(importer.effects).toEqual([]);
   });
 
-  it("blocks concurrent pickers and imports across composable instances", async () => {
+  it("blocks concurrent pickers but permits another submission after files are selected", async () => {
     const selection = deferred<string[]>();
     const completion = deferred<IngestResult>();
     const importer = createImport({
@@ -267,12 +267,13 @@ describe("audio file import", () => {
     expect(importer.tasks.active.value).toEqual([]);
     selection.resolve(["/Music/song.wav"]);
     await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
-    await importer.factory().importMusicFiles();
-    expect(importer.calls).toHaveLength(2);
-    expect(importer.pickerOptions).toHaveLength(1);
-    expect(importer.tasks.active.value).toHaveLength(1);
+    const another = importer.factory().importMusicFiles();
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
+    expect(importer.calls).toHaveLength(4);
+    expect(importer.pickerOptions).toHaveLength(2);
+    expect(importer.tasks.active.value).toHaveLength(2);
     completion.resolve(result);
-    await pending;
+    await Promise.all([pending, another]);
     expect(importer.isImporting.value).toBe(false);
     expect(importer.tasks.active.value).toEqual([]);
   });

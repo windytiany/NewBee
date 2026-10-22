@@ -176,6 +176,9 @@ pub(super) fn publish(source: &Path, destination: &Path) -> Result<(), String> {
             .and_then(|_| output.sync_all())
             .map_err(|error| error.to_string())?;
         drop(output);
+        if crate::tasks::cancelled() {
+            return Err("任务已取消".into());
+        }
         fs::rename(&temporary, destination).map_err(|error| format!("无法写入备份：{error}"))
     })();
     if result.is_err() {

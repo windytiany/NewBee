@@ -5,6 +5,7 @@ export type TaskProgress = {
   message: string;
   completed: number;
   total?: number;
+  phase?: "queued" | "running" | "cancelling";
   cancelling?: boolean;
   cancel?: () => void;
 };
@@ -22,7 +23,11 @@ export function createTaskCenter() {
 
   function update(task: TaskProgress) {
     const index = items.value.findIndex((item) => item.key === task.key);
-    const next = { ...task };
+    const previous = items.value[index];
+    const next = { ...previous, ...task };
+    delete next.result;
+    delete next.unread;
+    if (previous?.cancelling) next.cancelling = true;
     if (index < 0) items.value = [...items.value, next];
     else items.value = items.value.map((item, position) => (position === index ? next : item));
   }

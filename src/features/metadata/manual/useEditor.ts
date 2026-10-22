@@ -3,6 +3,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { computed, reactive, toRefs } from "vue";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
+import { runWriteTask } from "@/features/tasks/queue";
 import type { LibraryAlbumSelection } from "@/features/library/types";
 import { createLibraryApi } from "@/features/library/api";
 import { createMetadataApi } from "@/features/metadata/api";
@@ -43,7 +44,7 @@ function errorMessage(error: unknown) {
 }
 
 export function createTagEditor(options: TagEditorOptions) {
-  const saving = createManualSave(options);
+  let saving = createManualSave(options);
   const state = reactive({
     ...toRefs(saving.state),
     open: false,
@@ -56,6 +57,7 @@ export function createTagEditor(options: TagEditorOptions) {
     artwork: { tracks: [] } as CollectionDraft,
     importingArtwork: false,
     confirmDiscard: false,
+    writeBlocked: false,
   });
   function reportError(event: string, error: unknown) {
     state.error = errorMessage(error);
@@ -72,6 +74,10 @@ export function createTagEditor(options: TagEditorOptions) {
   async function open(loadIds: () => Promise<number[]>, mode: EditMode) {
     if (state.open) return;
     const generation = ++loadGeneration;
+    if (saving.state.saving) {
+      saving = createManualSave(options);
+      Object.assign(state, toRefs(saving.state));
+    }
     saving.reset();
     preparedSave = null;
     Object.assign(state, {
@@ -86,6 +92,7 @@ export function createTagEditor(options: TagEditorOptions) {
       artwork: { tracks: [] },
       importingArtwork: false,
       confirmDiscard: false,
+      writeBlocked: false,
       results: [],
       completed: 0,
       total: 0,
@@ -110,10 +117,11 @@ export function createTagEditor(options: TagEditorOptions) {
       ) {
         throw new Error(t("返回的曲目与编辑目标不匹配。"));
       }
+      state.writeBlocked ||= tracks.some((track) => track.writePending);
       state.tracks = tracks;
       saving.setTargets(
-        tracks.flatMap(({ track }) =>
-          typeof track.id === "number" ? [{ trackId: track.id, path: track.path }] : [],
+        tracks.flatMap(({ track, revision }) =>
+          typeof track.id === "number" ? [{ trackId: track.id, path: track.path, revision }] : [],
         ),
       );
       state.draft = createTagDraft(tracks, mode);
@@ -150,14 +158,18 @@ export function createTagEditor(options: TagEditorOptions) {
   }
 
   function close() {
-    if (state.saving || state.importingArtwork) return;
+    if (state.importingArtwork) return;
     ++loadGeneration;
     state.open = false;
     state.confirmDiscard = false;
   }
 
   function requestClose() {
-    if (state.saving || state.importingArtwork) return;
+    if (state.importingArtwork) return;
+    if (state.saving) {
+      close();
+      return;
+    }
     if (state.dirty) state.confirmDiscard = true;
     else close();
   }
@@ -231,12 +243,13 @@ export function createTagEditor(options: TagEditorOptions) {
 
   async function retrySynchronization() {
     if (state.loading || state.saving || state.importingArtwork) return;
+    const generation = loadGeneration;
     const result = await saving.retrySynchronization(state.artwork);
-    if (!state.dirty && !result.hasError) close();
+    if (generation === loadGeneration && !state.dirty && !result.hasError) close();
   }
 
   function prepareTargetSave(trackIds: number[]) {
-    if (state.loading || state.saving || state.importingArtwork) return;
+    if (state.loading || state.saving || state.importingArtwork || state.writeBlocked) return;
     state.error = "";
     try {
       const pendingTrackIds = saving.remainingIds(trackIds);
@@ -266,8 +279,17 @@ export function createTagEditor(options: TagEditorOptions) {
   }
 
   async function save() {
-    if (state.loading || state.saving || state.importingArtwork || !preparedSave) return;
+    if (
+      state.loading ||
+      state.saving ||
+      state.importingArtwork ||
+      state.writeBlocked ||
+      !preparedSave
+    )
+      return;
+    const generation = loadGeneration;
     const result = await saving.run(preparedSave);
+    if (generation !== loadGeneration) return;
     state.dirty = result.failed;
     if (!state.dirty && !result.hasError) state.open = false;
   }
@@ -300,7 +322,7 @@ let sharedEditor: ReturnType<typeof createTagEditor> | null = null;
 export function useTagEditor() {
   if (sharedEditor) return sharedEditor;
   const session = usePlaybackSession();
-  const api = createMetadataApi(invoke);
+  const api = createMetadataApi();
   const library = createLibraryApi(invoke);
   const artwork = createArtworkCollectionApi(invoke);
   const synchronize = createTrackSynchronization(session, invoke);
@@ -322,6 +344,7 @@ export function useTagEditor() {
         artworkDrafts,
       );
     },
+    schedule: runWriteTask,
     editFiles: session.withMetadataEditing,
     synchronize: synchronize.refresh,
   });

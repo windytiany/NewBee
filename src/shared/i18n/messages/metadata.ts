@@ -1,4 +1,8 @@
 export const metadataMessages: Record<string, string> = {
+  保存标签: "Save tags",
+  关闭: "Close",
+  "写入正在进行，请完成后重新打开": "Writing is in progress. Reopen after it finishes.",
+  "曲目信息已更新，请重新打开": "Track information has changed. Please reopen.",
   "{count} 首曲目保存失败。无法完成写入或同步。":
     "Failed to save {count} tracks. Could not complete the write or synchronization.",
   "元数据已保存，但界面刷新失败。": "Metadata saved, but the interface could not be refreshed.",

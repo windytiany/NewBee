@@ -1,8 +1,5 @@
-import { computed, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { watchActivity } from "@/shared/lifecycle/activity";
 import { useLibraryFileImport } from "@/features/library/import/useFileImport";
-import { useLibrarySynchronization } from "@/features/library/synchronization/useScan";
 import { useInboxImport } from "@/features/inbox/useImport";
 import type { DropTarget } from "@/app/import/target";
 import { createTrackRegistration } from "@/features/tracks/registration";
@@ -11,33 +8,25 @@ import { createPlaylistApi } from "@/features/playlist/api";
 import { createDirectoryPlaylists } from "@/features/playlist/creation/directory";
 import { createPlaylistAppend } from "@/features/playlist/tracks/append";
 import { usePlaybackSession } from "@/features/playback/session";
+import { runWriteTask, TaskCancelled, writeQueue } from "@/features/tasks/queue";
+import { taskCommands } from "@/features/tasks/commands";
 import { notify } from "@/shared/notifications/center";
 import { logger, operationId } from "@/shared/logging/logger";
-import { tasks } from "@/shared/tasks/state";
 import { t } from "@/shared/i18n/locale";
 
 export function useImport() {
   const library = useLibraryFileImport();
   const inbox = useInboxImport();
-  const { isScanning } = useLibrarySynchronization();
   const session = usePlaybackSession();
   const synchronization = createTrackSynchronization(session, invoke);
-  const register = createTrackRegistration(invoke);
-  const playlistApi = createPlaylistApi(invoke);
-  const appendPlaylist = createPlaylistAppend(playlistApi);
-  const importDirectories = createDirectoryPlaylists(playlistApi, (playlistId, paths) =>
-    appendLocal(paths, { kind: "playlist", playlistId }),
-  );
-  const pending = ref(false);
-  watchActivity(pending);
-  const busy = computed(
-    () => pending.value || library.isImporting.value || inbox.pending.value || isScanning.value,
-  );
 
   async function appendLocal(
     paths: readonly string[],
     captured: Extract<DropTarget, { kind: "playlist" }> | { kind: "queue" },
+    command: typeof invoke,
   ) {
+    const register = createTrackRegistration(command);
+    const appendPlaylist = createPlaylistAppend(createPlaylistApi(command));
     const outcome = await register(
       paths,
       async (tracks) => {
@@ -85,24 +74,38 @@ export function useImport() {
   }
 
   async function importPaths(paths: string[], target: DropTarget) {
-    if (busy.value) return;
-    pending.value = true;
-    const taskKey = operationId("local-import");
-    if (target.kind !== "Library" && target.kind !== "Inbox")
-      tasks.update({ key: taskKey, message: t("导入音频文件"), completed: 0 });
+    const sources = [...paths];
+    const captured = { ...target };
     try {
-      if (target.kind === "Library") await library.importPaths(paths);
-      else if (target.kind === "Inbox") await inbox.importPaths(paths);
-      else if (target.kind === "playlists") await importDirectories(paths);
-      else await appendLocal(paths, target);
+      if (captured.kind === "Library") await library.importPaths(sources);
+      else if (captured.kind === "Inbox") await inbox.importPaths(sources);
+      else
+        await runWriteTask(
+          {
+            id: operationId("local-import"),
+            message: t("导入音频文件"),
+            fingerprint: JSON.stringify(["local-import", captured, sources]),
+            paths: sources,
+          },
+          async (id) => {
+            const command = taskCommands(id, invoke);
+            if (captured.kind === "playlists") {
+              const importDirectories = createDirectoryPlaylists(
+                createPlaylistApi(command),
+                (playlistId, files) =>
+                  appendLocal(files, { kind: "playlist", playlistId }, command),
+                () => !writeQueue.wasCancelled(id),
+              );
+              await importDirectories(sources);
+            } else await appendLocal(sources, captured, command);
+          },
+        );
     } catch (error) {
+      if (error instanceof TaskCancelled) return;
       logger.error("import", "drop_failed", error);
       notify({ type: "error", message: t("文件处理失败") });
-    } finally {
-      tasks.finish(taskKey);
-      pending.value = false;
     }
   }
 
-  return { busy, importPaths };
+  return { importPaths };
 }

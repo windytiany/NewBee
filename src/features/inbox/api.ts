@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
+import type { invoke } from "@tauri-apps/api/core";
+import { taskInvoke } from "@/features/tasks/commands";
 
 import type { TrackDetails } from "@/features/tracks/types";
 export type InboxTrack = TrackDetails & { addedAt: number };
@@ -10,7 +11,7 @@ export type InboxResult = {
   error: string | null;
 };
 export type InboxRead = { tracks: InboxTrack[]; failures: InboxResult[] };
-export function createInboxApi(invokeCommand: typeof invoke = invoke) {
+export function createInboxApi(invokeCommand: typeof invoke = taskInvoke) {
   return {
     read: () => invokeCommand<InboxRead>("read_inbox"),
     register: (paths: string[], directory: boolean) =>

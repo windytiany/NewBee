@@ -68,6 +68,7 @@ watch(
             type="button"
             :disabled="
               disabled ||
+              state.writeBlocked ||
               state.loadingRelease ||
               !state.selected ||
               !state.rows.some(
@@ -78,6 +79,7 @@ watch(
               )
             "
             class="bg-app-accent text-app-on-accent rounded px-3 py-1 text-xs font-semibold disabled:opacity-50"
+            :title="state.writeBlocked ? t('写入正在进行，请完成后重新打开') : undefined"
             @click="editor.prepareSave()"
           >
             {{ t("应用") }}

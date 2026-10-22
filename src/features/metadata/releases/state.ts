@@ -39,6 +39,7 @@ export function createReleaseState(saving: ReturnType<typeof createMetadataSave>
     writeCover: false,
     confirmDiscard: false,
     confirmSave: false,
+    writeBlocked: false,
     patches: [] as TrackPatch[],
   });
 }

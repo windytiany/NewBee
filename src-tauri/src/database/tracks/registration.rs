@@ -14,6 +14,9 @@ impl Database {
             .map_err(|error| error.to_string())?;
         let mut results = Vec::with_capacity(files.len());
         for file in files {
+            if crate::tasks::cancelled() {
+                break;
+            }
             let path = match file {
                 Ok(path) => path,
                 Err(failure) => {

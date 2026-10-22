@@ -16,9 +16,12 @@ pub async fn import_music_files<R: tauri::Runtime>(
     write: State<'_, WriteState>,
 ) -> Result<ImportResult, crate::library::error::CommandError> {
     use crate::library::error::CommandError;
-    let guard = write.acquire().map_err(CommandError::busy)?;
+    let guard = write
+        .acquire_task(operation_id.as_deref())
+        .await
+        .map_err(CommandError::busy)?;
     tauri::async_runtime::spawn_blocking(move || {
-        crate::logging::with_operation(operation_id.clone(), || {
+        crate::tasks::with_operation(operation_id.clone(), || {
             let _guard = guard;
             log::debug!("event=import_started");
             use tauri::Manager;
@@ -41,6 +44,9 @@ pub(super) fn run_import(database: &Database, paths: &[String]) -> ImportResult 
     let mut result = ImportResult::default();
     let mut visited = HashSet::new();
     for path in paths {
+        if crate::tasks::cancelled() {
+            break;
+        }
         let path = Path::new(path);
         if !has_supported_extension(path) {
             result.skipped += 1;

@@ -10,6 +10,9 @@ fn directories(paths: Vec<String>) -> Result<Vec<Directory>, String> {
     let mut seen = HashSet::new();
     let mut result = Vec::new();
     for input in paths {
+        if crate::tasks::cancelled() {
+            break;
+        }
         let path = Path::new(&input);
         let canonical = path
             .canonicalize()
@@ -32,10 +35,15 @@ fn directories(paths: Vec<String>) -> Result<Vec<Directory>, String> {
 }
 
 #[tauri::command]
-pub(crate) async fn playlist_directories(paths: Vec<String>) -> Result<Vec<Directory>, String> {
-    tauri::async_runtime::spawn_blocking(move || directories(paths))
-        .await
-        .map_err(|error| format!("Playlist directory discovery task failed: {error}"))?
+pub(crate) async fn playlist_directories(
+    paths: Vec<String>,
+    operation_id: Option<String>,
+) -> Result<Vec<Directory>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::tasks::with_operation(operation_id, || directories(paths))
+    })
+    .await
+    .map_err(|error| format!("Playlist directory discovery task failed: {error}"))?
 }
 
 #[cfg(test)]

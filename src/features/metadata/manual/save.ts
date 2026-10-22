@@ -1,5 +1,6 @@
 import { computed, reactive, toRefs } from "vue";
 import { logger } from "@/shared/logging/logger";
+import type { runWriteTask } from "@/features/tasks/queue";
 import { createMetadataSave, metadataSaved } from "@/features/metadata/save";
 import type { MetadataFileEditor } from "@/features/metadata/save";
 import type { LyricsMarkAction, MetadataSaveResult, TagChange } from "@/features/metadata/types";
@@ -17,6 +18,7 @@ import type {
 } from "@/features/artwork/collection/types";
 
 export type ManualSaveOptions = {
+  schedule?: typeof runWriteTask;
   loadCollections: (trackIds: number[]) => Promise<ArtworkCollection[]>;
   planArtwork: (drafts: ArtworkDraft[]) => Promise<ArtworkWritePlan[]>;
   save: (
@@ -38,7 +40,7 @@ export type ManualSaveRequest = {
 };
 
 export function createManualSave(options: ManualSaveOptions) {
-  const targets = new Map<number, string>();
+  const targets = new Map<number, { path: string; revision?: string | null }>();
   const pendingArtworkReload = new Set<number>();
   const lifecycle = reactive({ busy: false });
   const saving = createMetadataSave({
@@ -56,10 +58,10 @@ export function createManualSave(options: ManualSaveOptions) {
     targets.clear();
     pendingArtworkReload.clear();
   }
-  function setTargets(entries: { trackId: number; path: string }[]) {
+  function setTargets(entries: { trackId: number; path: string; revision?: string | null }[]) {
     if (state.saving) return;
     targets.clear();
-    for (const entry of entries) targets.set(entry.trackId, entry.path);
+    for (const entry of entries) targets.set(entry.trackId, entry);
   }
   function remainingIds(ids: number[]) {
     return ids.filter(
@@ -117,7 +119,12 @@ export function createManualSave(options: ManualSaveOptions) {
     lifecycle.busy = true;
     try {
       await saving.run({
-        targets: ids.map((trackId) => ({ trackId, path: targets.get(trackId) ?? "" })),
+        fingerprint: JSON.stringify(["metadata", ids, changes, action, artworkDrafts]),
+        targets: ids.map((trackId) => ({
+          trackId,
+          path: targets.get(trackId)?.path ?? "",
+          revision: targets.get(trackId)?.revision,
+        })),
         writeTrackIds: ids.filter(() => changes.length || action === "mark"),
         prepareWriteTrackIds: artworkDrafts.length
           ? async (progress) => {
@@ -129,7 +136,7 @@ export function createManualSave(options: ManualSaveOptions) {
                   failed.add(entry.trackId);
                   progress({
                     trackId: entry.trackId,
-                    path: targets.get(entry.trackId) ?? "",
+                    path: targets.get(entry.trackId)?.path ?? "",
                     fileWritten: false,
                     databaseUpdated: false,
                     error: entry.error,

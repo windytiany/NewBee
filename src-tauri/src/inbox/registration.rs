@@ -4,6 +4,7 @@ use crate::{database::Database, tracks::discovery};
 pub(crate) fn register(database: &Database, paths: Vec<String>) -> Vec<FileResult> {
     paths
         .into_iter()
+        .take_while(|_| !crate::tasks::cancelled())
         .map(|path| {
             let outcome = (|| {
                 let canonical = std::fs::canonicalize(&path).map_err(|error| error.to_string())?;
@@ -34,6 +35,9 @@ pub(super) fn register_directories(database: &Database, paths: Vec<String>) -> V
     let mut files = Vec::new();
     let mut results = Vec::new();
     for entry in discovery::discover_directories(&paths) {
+        if crate::tasks::cancelled() {
+            break;
+        }
         match entry {
             Ok(path) => files.push(path),
             Err(failure) => results.push(FileResult {
