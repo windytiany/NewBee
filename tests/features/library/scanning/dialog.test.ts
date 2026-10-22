@@ -10,14 +10,13 @@ import {
 } from "../../../support/host/renderer";
 import { createSynchronization } from "../../../support/library/synchronization";
 import { notifications, notify } from "@/shared/notifications/center";
-import type { SynchronizationFolder } from "@/features/library/synchronization/types";
 import type { IngestResult } from "@/features/library/types";
 
 const output = compileSfc(
-  await Bun.file("src/features/library/synchronization/ScanDialog.vue").text(),
-  "src/features/library/synchronization/ScanDialog.vue",
+  await Bun.file("src/features/library/scanning/ScanDialog.vue").text(),
+  "src/features/library/scanning/ScanDialog.vue",
 );
-const folder: SynchronizationFolder = { path: "/Music", mode: "manual", enabled: true };
+const folder = "/Music";
 const unchanged = { added: 0, updated: 0, skipped: 0, failed: 0 };
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const apps: Array<{ unmount: () => void }> = [];
@@ -33,9 +32,9 @@ afterEach(() => {
 });
 
 function mount(
-  invoke: (command: string, args?: { folders: SynchronizationFolder[] }) => Promise<unknown>,
+  invoke: (command: string, args?: { folders: string[] }) => Promise<unknown>,
   scan = createSynchronization(async () => unchanged).scan,
-  choose = async () => folder.path,
+  choose = async () => folder,
 ) {
   const icon = Vue.defineComponent({ setup: () => () => Vue.h("svg") });
   const component = evaluateSource<{ default: Vue.Component }>(output, {
@@ -90,52 +89,50 @@ async function settle() {
   await Vue.nextTick();
 }
 
-describe("synchronization directory dialog", () => {
+describe("scan directory dialog", () => {
   for (const [path, display] of [
     [String.raw`\\?\D:\Music`, String.raw`D:\Music`],
     [String.raw`\\?\UNC\server\music`, String.raw`\\server\music`],
     ["/Music", "/Music"],
   ]) {
     it(`presents ${path} without changing the stored path`, async () => {
-      const saved = { ...folder, path: path! };
+      const saved = path!;
       const dialog = mount(async () => [saved]);
       await settle();
       expect(getTextContent(dialog.root)).toContain(display!);
-      expect(saved.path).toBe(path);
+      expect(saved).toBe(path);
     });
   }
 
-  it("uses one mode editor and leaves an empty list unable to scan", async () => {
+  it("uses a path-only list and leaves an empty list unable to scan", async () => {
     const dialog = mount(async () => []);
     await settle();
     expect(button(dialog.root, "扫描").props.disabled).toBe(true);
     expect(button(dialog.root, "关闭")).toBeDefined();
-    expect(getTextContent(dialog.root)).toContain("同步文件夹");
+    expect(getTextContent(dialog.root)).not.toContain("同步文件夹");
+    expect(findNode(dialog.root, (node) => node.type === "select")).toBeNull();
     expect(getTextContent(dialog.root)).not.toContain("移除目录不会");
     expect(findNode(dialog.root, (node) => node.props["aria-label"] === "扫描说明")).toBeNull();
   });
 
-  it("persists additions and removals through the same configuration used by settings", async () => {
-    let saved: SynchronizationFolder[] = [];
+  it("persists additions and removals independently of synchronization settings", async () => {
+    let saved: string[] = [];
     const calls: string[] = [];
     const dialog = mount(async (command, args) => {
       calls.push(command);
-      if (command === "save_synchronization_folders") saved = args!.folders;
+      if (command === "save_scan_folders") saved = args!.folders;
       return saved;
     });
     await settle();
     click(button(dialog.root, "添加文件夹"));
     await settle();
     expect(saved).toEqual([folder]);
-    expect(getTextContent(dialog.root)).toContain("手动");
+    expect(getTextContent(dialog.root)).not.toContain("手动");
+    expect(findNode(dialog.root, (node) => node.type === "select")).toBeNull();
     click(button(dialog.root, "移除"));
     await settle();
     expect(saved).toEqual([]);
-    expect(calls).toEqual([
-      "get_synchronization_folders",
-      "save_synchronization_folders",
-      "save_synchronization_folders",
-    ]);
+    expect(calls).toEqual(["get_scan_folders", "save_scan_folders", "save_scan_folders"]);
     expect(notifications.items.value).toEqual([]);
   });
 
@@ -148,14 +145,14 @@ describe("synchronization directory dialog", () => {
     await settle();
     click(button(dialog.root, "添加文件夹"));
     await settle();
-    expect(calls).toEqual(["get_synchronization_folders"]);
+    expect(calls).toEqual(["get_scan_folders"]);
     expect(notifications.items.value).toEqual([]);
   });
 
   it("rolls back edits after saving fails", async () => {
     const dialog = mount(
       async (command) => {
-        if (command === "get_synchronization_folders") return [folder];
+        if (command === "get_scan_folders") return [folder];
         throw new Error("permission denied");
       },
       undefined,
@@ -168,7 +165,7 @@ describe("synchronization directory dialog", () => {
     expect(getTextContent(dialog.root)).not.toContain("/Other");
     expect(notifications.items.value[0]).toMatchObject({
       type: "error",
-      message: "保存同步文件夹失败",
+      message: "保存扫描文件夹失败",
     });
   });
 
@@ -177,17 +174,22 @@ describe("synchronization directory dialog", () => {
       throw new Error("read failed");
     });
     await settle();
-    expect(notifications.items.value[0]?.message).toBe("读取同步文件夹失败");
+    expect(notifications.items.value[0]?.message).toBe("读取扫描文件夹失败");
     expect(button(dialog.root, "扫描").props.disabled).toBe(true);
     expect(findNode(dialog.root, (node) => node.type === "fieldset")?.props.disabled).toBe(true);
   });
 
-  it("does not scan disabled folders", async () => {
+  it("scans exactly the listed paths without consulting synchronization modes", async () => {
     const context = createSynchronization(async () => unchanged);
-    const dialog = mount(async () => [{ ...folder, enabled: false }], context.scan);
+    const dialog = mount(async () => [folder, "/Other"], context.scan);
     await settle();
     click(button(dialog.root, "扫描"));
-    expect(context.calls).toEqual([]);
+    await settle();
+    expect(context.calls).toHaveLength(1);
+    expect(context.calls[0]).toMatchObject({
+      command: "scan_library",
+      args: { paths: [folder, "/Other"] },
+    });
   });
 
   it("closes immediately and keeps the shared operation alive after unmount", async () => {

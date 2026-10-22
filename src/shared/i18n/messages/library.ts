@@ -4,6 +4,8 @@ export const libraryMessages: Record<string, string> = {
   手动: "Manual",
   读取同步文件夹失败: "Could not load sync folders",
   保存同步文件夹失败: "Could not save sync folders",
+  读取扫描文件夹失败: "Could not load scan folders",
+  保存扫描文件夹失败: "Could not save scan folders",
   无: "None",
   启用: "Enabled",
   路径: "Path",

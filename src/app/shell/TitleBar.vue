@@ -42,7 +42,7 @@ import PageTabs from "@/app/shell/PageTabs.vue";
 import WindowControls from "@/app/shell/WindowControls.vue";
 import TaskEntry from "@/shared/tasks/TaskEntry.vue";
 import AppMenu from "@/app/shell/AppMenu.vue";
-import ScanDialog from "@/features/library/synchronization/ScanDialog.vue";
+import ScanDialog from "@/features/library/scanning/ScanDialog.vue";
 import ImportDialog from "@/app/import/ImportDialog.vue";
 import { useInboxImport } from "@/features/inbox/useImport";
 import { computed } from "vue";

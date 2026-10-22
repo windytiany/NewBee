@@ -5,6 +5,7 @@ import { t } from "@/shared/i18n/locale";
 
 const titles: Record<string, string> = {
   synchronize_library: "正在扫描…",
+  scan_library: "正在扫描…",
   import_music_files: "导入音频文件",
   register_inbox: "导入音频文件",
   ingest_inbox: "导入音乐库",
@@ -59,7 +60,9 @@ export async function taskInvoke<T>(
       value instanceof Channel || value === undefined ? value : JSON.parse(JSON.stringify(value)),
     ]),
   );
-  const key = command === "synchronize_library" ? "library-synchronization" : undefined;
+  const key = ["synchronize_library", "scan_library"].includes(command)
+    ? "library-synchronization"
+    : undefined;
   const execute = async (id: string) => {
     if (key) tasks.update({ key, message: t(title), completed: 0, phase: "running" });
     const channel = snapshot.onProgress;

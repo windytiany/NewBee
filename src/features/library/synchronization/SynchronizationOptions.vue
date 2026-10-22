@@ -23,7 +23,7 @@ async function add() {
         return;
       }
       selectedIndex.value = folders.value.length;
-      folders.value = [...folders.value, { path, mode: "manual", enabled: true }];
+      folders.value = [...folders.value, { path, mode: "startup", enabled: true }];
     }
   } catch (error) {
     logger.error("library/synchronization", "choose_folder_failed", error);
@@ -37,7 +37,7 @@ function remove() {
 }
 function changeMode(index: number, event: InstanceType<typeof globalThis.Event>) {
   const mode = (event.target as InstanceType<typeof globalThis.HTMLSelectElement>).value;
-  if (mode !== "none" && mode !== "manual" && mode !== "startup" && mode !== "continuous") return;
+  if (mode !== "none" && mode !== "startup" && mode !== "continuous") return;
   folders.value = folders.value.map((folder, position) => {
     if (position !== index) return folder;
     return mode === "none" ? { ...folder, enabled: false } : { ...folder, enabled: true, mode };
@@ -97,13 +97,12 @@ function changeMode(index: number, event: InstanceType<typeof globalThis.Event>)
             </td>
             <td class="py-2 pr-2 text-right">
               <select
-                :value="folder.enabled ? folder.mode : 'none'"
+                :value="folder.enabled && folder.mode !== 'manual' ? folder.mode : 'none'"
                 :aria-label="t('同步模式')"
                 class="bg-app-interactive focus-visible:outline-app-accent w-full rounded-md border border-white/10 px-2 py-1 text-sm focus-visible:outline-2"
                 @change="changeMode(index, $event)"
               >
                 <option value="none">{{ t("无") }}</option>
-                <option value="manual">{{ t("手动") }}</option>
                 <option value="startup">{{ t("启动时") }}</option>
                 <option value="continuous">{{ t("持续") }}</option>
               </select>

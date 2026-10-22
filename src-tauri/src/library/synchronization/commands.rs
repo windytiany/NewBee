@@ -43,6 +43,15 @@ pub(crate) async fn synchronize_library<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     write: State<'_, WriteState>,
 ) -> Result<ImportResult, CommandError> {
+    run(operation_id, app, write, None).await
+}
+
+pub(crate) async fn run<R: tauri::Runtime>(
+    operation_id: Option<String>,
+    app: tauri::AppHandle<R>,
+    write: State<'_, WriteState>,
+    folders: Option<Vec<Folder>>,
+) -> Result<ImportResult, CommandError> {
     let guard = write
         .acquire_task(operation_id.as_deref())
         .await
@@ -53,8 +62,23 @@ pub(crate) async fn synchronize_library<R: tauri::Runtime>(
             let settings = app.state::<SettingsState>().get()?;
             let state = app.state::<SynchronizationState>();
             let database = app.state::<Database>();
-            let path = settings
-                .synchronization_folders
+            let folders = match folders {
+                Some(mut folders) => {
+                    // Manual selections are not normalized by synchronization settings.
+                    for folder in &mut folders {
+                        let path = std::fs::canonicalize(&folder.path).map_err(|error| {
+                            format!("无法访问扫描文件夹 {}: {error}", folder.path)
+                        })?;
+                        if !path.is_dir() {
+                            return Err("扫描路径必须是文件夹".into());
+                        }
+                        folder.path = path.to_string_lossy().into_owned();
+                    }
+                    folders
+                }
+                None => settings.synchronization_folders,
+            };
+            let path = folders
                 .iter()
                 .find(|folder| folder.enabled)
                 .map(|folder| folder.path.clone())
@@ -63,7 +87,7 @@ pub(crate) async fn synchronize_library<R: tauri::Runtime>(
             let result = reconciliation::run(
                 &database,
                 &state,
-                &settings.synchronization_folders,
+                &folders,
                 settings.scan_replay_gain,
                 |completed, total| {
                     if completed != 0

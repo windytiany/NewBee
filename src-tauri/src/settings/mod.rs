@@ -110,6 +110,7 @@ pub struct Settings {
     pub replay_gain_preamp: f64,
     pub scan_replay_gain: bool,
     pub(crate) synchronization_folders: Vec<crate::library::synchronization::configuration::Folder>,
+    pub(crate) scan_folders: Vec<String>,
     pub album_sort_by: AlbumSortBy,
     pub album_sort_order: AlbumSortOrder,
     #[serde(default = "crate::lyrics::default_providers")]
@@ -137,6 +138,7 @@ impl Default for Settings {
             replay_gain_preamp: 0.0,
             scan_replay_gain: false,
             synchronization_folders: Vec::new(),
+            scan_folders: Vec::new(),
             album_sort_by: AlbumSortBy::default(),
             album_sort_order: AlbumSortOrder::default(),
             lyrics_providers: crate::lyrics::default_providers(),
@@ -189,6 +191,8 @@ impl SettingsState {
             .settings
             .lock()
             .map_err(|error| format!("Could not update settings: {error}"))?;
+        // Scan paths are owned by the scan dialog, not the settings editor.
+        settings.scan_folders = current.scan_folders.clone();
         crate::library::synchronization::configuration::normalize(
             &mut settings.synchronization_folders,
             &current.synchronization_folders,
@@ -210,6 +214,15 @@ impl SettingsState {
         if next == *current {
             return Ok(());
         }
+        self.persist(&next)?;
+        *current = next;
+        Ok(())
+    }
+
+    pub(crate) fn update_scan_folders(&self, folders: Vec<String>) -> Result<(), String> {
+        let mut current = self.settings.lock().map_err(|error| error.to_string())?;
+        let mut next = current.clone();
+        next.scan_folders = folders;
         self.persist(&next)?;
         *current = next;
         Ok(())

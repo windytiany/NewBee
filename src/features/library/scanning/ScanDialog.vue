@@ -3,8 +3,8 @@ import { computed, ref } from "vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { t } from "@/shared/i18n/locale";
 import { useLibrarySynchronization } from "@/features/library/synchronization/useScan";
-import { useDirectories } from "@/features/library/synchronization/useDirectories";
-import SynchronizationOptions from "@/features/library/synchronization/SynchronizationOptions.vue";
+import { useDirectories } from "@/features/library/scanning/useDirectories";
+import ScanFolders from "@/features/library/scanning/ScanFolders.vue";
 
 const dialogElement = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const isTauriApp = isTauri();
@@ -22,8 +22,8 @@ function closeDialog() {
   dialogElement.value?.close();
 }
 function startScan() {
-  if (disabled.value || !folders.value.some(({ enabled }) => enabled)) return;
-  void synchronizeLibrary();
+  if (disabled.value || !folders.value.length) return;
+  void synchronizeLibrary([...folders.value]);
   closeDialog();
 }
 defineExpose({ show });
@@ -42,12 +42,8 @@ defineExpose({ show });
         <h2 id="scan-dialog-title" class="text-lg font-semibold">{{ t("扫描文件夹") }}</h2>
       </header>
       <fieldset :disabled="disabled" class="min-h-48 min-w-0 overflow-y-auto px-5 py-4">
-        <legend class="sr-only">{{ t("同步文件夹") }}</legend>
-        <SynchronizationOptions :model-value="folders" @update:model-value="saveFolders">
-          <template #heading
-            ><h3 class="mr-auto text-sm font-semibold">{{ t("同步文件夹") }}</h3></template
-          >
-        </SynchronizationOptions>
+        <legend class="sr-only">{{ t("扫描文件夹") }}</legend>
+        <ScanFolders :model-value="folders" @update:model-value="saveFolders" />
       </fieldset>
       <footer class="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
         <button
@@ -59,7 +55,7 @@ defineExpose({ show });
         </button>
         <button
           class="bg-app-accent focus-visible:outline-app-accent text-app-on-accent rounded-full px-5 py-2 text-sm font-semibold hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="disabled || !folders.some(({ enabled }) => enabled)"
+          :disabled="disabled || !folders.length"
           type="button"
           @click="startScan"
         >

@@ -26,7 +26,7 @@ const scanResult = ref<IngestResult | null>(null);
 const scanError = ref("");
 
 export function useLibrarySynchronization() {
-  async function synchronizeLibrary() {
+  async function synchronizeLibrary(paths?: string[]) {
     if (!isTauri() || scanActive.value) return;
     isScanning.value = true;
     scanResult.value = null;
@@ -36,7 +36,10 @@ export function useLibrarySynchronization() {
     const started = performance.now();
     try {
       logger.debug("library/synchronization", "started", { operationId: id });
-      const result = await invoke<IngestResult>("synchronize_library", { operationId: id });
+      const result = await invoke<IngestResult>(paths ? "scan_library" : "synchronize_library", {
+        operationId: id,
+        ...(paths ? { paths } : {}),
+      });
       scanResult.value = result;
       logger.write(result.failed ? "warn" : "info", "library/synchronization", "completed", {
         operationId: id,

@@ -70,6 +70,7 @@ it("formats paths in a scrollable two-column table with icon-only toolbar contro
   expect(text).not.toContain("\\\\?\\");
   expect(text).not.toContain("监视中");
   expect(text).toContain("无");
+  expect(text).not.toContain("手动");
   expect(text).not.toContain("启动时扫描一次");
   expect(test.folders.value.map((folder) => folder.path)).toEqual(paths);
   const row = rows(test.root)[0]!;
@@ -127,6 +128,15 @@ it("displays an already disabled folder as None", () => {
   test.unmount();
 });
 
+it("treats legacy manual folders as having no automatic synchronization", () => {
+  const test = mount([{ path: "/music", enabled: true, mode: "manual" }]);
+  expect(findNode(test.root, (node) => node.type === "select")!.props.value).toBe("none");
+  expect(
+    findNode(test.root, (node) => node.type === "option" && node.props.value === "manual"),
+  ).toBeNull();
+  test.unmount();
+});
+
 it("removes only the selected record and disables removal when no row is selected", async () => {
   const first: SynchronizationFolder = { path: "/music/first", enabled: true, mode: "startup" };
   const second: SynchronizationFolder = {
@@ -166,7 +176,7 @@ it("adds enabled folders and selects the new record without changing the list on
   test.select("D:/Music");
   await (button(test.root, "添加文件夹").props.onClick as () => Promise<void>)();
   await Vue.nextTick();
-  expect(test.folders.value).toEqual([{ path: "D:/Music", mode: "manual", enabled: true }]);
+  expect(test.folders.value).toEqual([{ path: "D:/Music", mode: "startup", enabled: true }]);
   expect(rows(test.root)[0]!.props["aria-selected"]).toBe(true);
   test.select(null);
   await (button(test.root, "添加文件夹").props.onClick as () => Promise<void>)();
