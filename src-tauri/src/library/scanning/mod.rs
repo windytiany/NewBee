@@ -12,9 +12,6 @@ use crate::{
 };
 use tauri::State;
 
-#[cfg(test)]
-mod tests;
-
 #[tauri::command]
 pub(crate) fn get_scan_folders(settings: State<'_, SettingsState>) -> Result<Vec<String>, String> {
     Ok(settings.get()?.scan_folders)

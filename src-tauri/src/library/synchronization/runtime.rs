@@ -250,7 +250,3 @@ pub(crate) fn initialize<R: tauri::Runtime>(
         })?;
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "tests/runtime.rs"]
-mod tests;

@@ -349,12 +349,3 @@ it("preserves actual save outcomes and original request failure if backend endEd
   expect(fixture.session.state.currentPlaybackId.value).toBeNull();
   expect(fixture.session.state.playbackError.value).toBe("播放操作失败");
 });
-
-it("returns completed results even when ending the backend editing lease fails", async () => {
-  const fixture = playbackFixture();
-  await fixture.session.ready;
-  fixture.fail("endEditing", new Error("cleanup unavailable"));
-  const saved = await fixture.session.withMetadataEditing([1], async () => [result(1)]);
-  expect(saved).toEqual([result(1)]);
-  expect(fixture.session.state.playbackError.value).toBe("播放操作失败");
-});

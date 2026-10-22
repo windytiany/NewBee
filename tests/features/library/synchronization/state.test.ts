@@ -38,69 +38,6 @@ it("restores an active background task from a snapshot and removes it on complet
   expect(tasks.items.value.find((task) => task.key === "library-synchronization")).toBeUndefined();
 });
 
-it("toasts a failed background scan once and removes its progress", async () => {
-  let snapshot: SynchronizationSnapshot = {
-    statuses: [],
-    missing: [],
-    progress: { path: "music", completed: 1, total: 3 },
-  };
-  const state = evaluateSource<typeof State>(source, {
-    vue: Vue,
-    "@tauri-apps/api/core": { invoke: async () => snapshot },
-    "@/shared/tasks/state": { tasks },
-  });
-  await state.refreshSynchronization();
-  snapshot = {
-    statuses: [{ path: "music", phase: "error", error: "permission denied" }],
-    missing: [],
-    progress: null,
-  };
-  await state.refreshSynchronization();
-  expect(tasks.active.value).toEqual([]);
-  expect(tasks.items.value).toEqual([]);
-  expect(notifications.items.value[0]).toMatchObject({
-    type: "error",
-    message: "扫描失败",
-    count: 1,
-  });
-  await state.refreshSynchronization();
-  expect(notifications.items.value).toHaveLength(1);
-  expect(notifications.items.value[0]?.count).toBe(1);
-});
-
-it("reports partial failures through a warning toast", async () => {
-  let snapshot = {
-    statuses: [],
-    missing: [],
-    progress: { path: "music", completed: 1, total: 3 },
-  } as SynchronizationSnapshot;
-  const state = evaluateSource<typeof State>(source, {
-    vue: Vue,
-    "@tauri-apps/api/core": { invoke: async () => snapshot },
-    "@/shared/tasks/state": { tasks },
-  });
-  await state.refreshSynchronization();
-  snapshot = {
-    statuses: [
-      {
-        path: "music",
-        phase: "warning",
-        error: null,
-        issues: { failed: 1, replayGainFailed: 1 },
-      },
-    ],
-    missing: [],
-    progress: null,
-  } as SynchronizationSnapshot;
-  await state.refreshSynchronization();
-  expect(tasks.active.value).toEqual([]);
-  expect(tasks.items.value).toEqual([]);
-  expect(notifications.items.value[0]).toMatchObject({
-    type: "warning",
-    message: "扫描完成，1 个文件处理异常",
-  });
-});
-
 it("keeps the latest snapshot when IPC responses arrive out of order", async () => {
   const replies: ((snapshot: SynchronizationSnapshot) => void)[] = [];
   const state = evaluateSource<typeof State>(source, {

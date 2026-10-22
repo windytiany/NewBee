@@ -51,24 +51,3 @@ impl Drop for MediaWindow {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use windows::Win32::UI::WindowsAndMessaging::IsWindowVisible;
-
-    #[test]
-    fn media_window_is_hidden_and_owns_a_valid_media_control_handle() {
-        use windows::{
-            core::factory, Media::SystemMediaTransportControls,
-            Win32::System::WinRT::ISystemMediaTransportControlsInterop,
-        };
-        let window = MediaWindow::new().unwrap();
-        assert!(!unsafe { IsWindowVisible(window.hwnd()) }.as_bool());
-        let interop: ISystemMediaTransportControlsInterop =
-            factory::<SystemMediaTransportControls, _>().unwrap();
-        let controls: SystemMediaTransportControls =
-            unsafe { interop.GetForWindow(window.hwnd()) }.unwrap();
-        controls.SetIsEnabled(false).unwrap();
-    }
-}

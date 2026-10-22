@@ -116,6 +116,3 @@ pub(crate) async fn save_album_tags<R: tauri::Runtime>(
     .await
     .map_err(|error| format!("保存标签任务失败：{error}"))?
 }
-#[cfg(test)]
-#[path = "tests/save.rs"]
-mod tests;

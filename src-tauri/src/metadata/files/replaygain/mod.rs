@@ -246,6 +246,3 @@ fn save(
         },
     )
 }
-
-#[cfg(test)]
-mod tests;

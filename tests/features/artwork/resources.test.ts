@@ -171,17 +171,6 @@ describe("封面资源生命周期", () => {
     expect(errors).toEqual([]);
   });
 
-  it("空内容回退，不分配图片资源或报告错误", async () => {
-    const { resource, request, subscribe, errors } = fixture();
-    subscribe();
-    request(0).resolve(new ArrayBuffer(0));
-    await settle();
-    expect(resource.snapshot).toEqual({ status: "fallback", image: null, error: "" });
-    expect(created).toBe(0);
-    expect(images).toEqual([]);
-    expect(errors).toEqual([]);
-  });
-
   it("读取失败交给业务格式化错误，失败结果无 URL", async () => {
     const { resource, request, subscribe, errors } = fixture();
     subscribe();

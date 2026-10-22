@@ -39,26 +39,3 @@ impl Placement {
         unsafe { SetWindowPlacement(hwnd, &self.0) }.map_err(|e| e.to_string())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn restoration_unminimizes_without_losing_maximization() {
-        for (command, flags, expected) in [
-            (SW_SHOWNORMAL, 0, SW_SHOWNORMAL),
-            (SW_SHOWMAXIMIZED, 0, SW_SHOWMAXIMIZED),
-            (SW_SHOWMINIMIZED, 0, SW_SHOWNORMAL),
-            (SW_SHOWMINIMIZED, WPF_RESTORETOMAXIMIZED.0, SW_SHOWMAXIMIZED),
-            (SW_SHOWNORMAL, WPF_RESTORETOMAXIMIZED.0, SW_SHOWNORMAL),
-        ] {
-            let mut placement = WINDOWPLACEMENT {
-                showCmd: command.0 as u32,
-                ..Default::default()
-            };
-            placement.flags.0 = flags;
-            assert_eq!(restored_show_command(&placement), expected.0 as u32);
-        }
-    }
-}

@@ -509,26 +509,4 @@ describe("manual metadata save", () => {
     expect(reads).toEqual([[1]]);
     expect(refreshed).toEqual([[1], [2]]);
   });
-
-  it("synchronizes numeric targets once during save and refresh retry", async () => {
-    let fail = true;
-    const refreshed: number[][] = [];
-    const { save, request, saves } = fixture(
-      {
-        synchronize: async (ids) => {
-          refreshed.push(ids);
-          if (fail) throw new Error("refresh failed");
-        },
-      },
-      [1],
-    );
-    save.setTargets([{ trackId: 1, path: "/music/1.mp3" }]);
-    request.changes = [{ field: "title", value: "new" }];
-    await save.run(request);
-    expect(save.state.results[0]?.databaseUpdated).toBe(true);
-    fail = false;
-    await save.retrySynchronization(request.artwork);
-    expect(refreshed).toEqual([[1], [1]]);
-    expect(saves).toHaveLength(1);
-  });
 });

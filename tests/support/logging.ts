@@ -1,7 +1,6 @@
 import { logger, operationId, describeError, redactText } from "@/shared/logging/logger";
 
-// Most business fixtures run outside a WebView. Real logging is inert there;
-// tests/shared/logging exercises transport failures and duplicate suppression separately.
+// Business fixtures run outside a WebView, where real logging is inert.
 export const loggingDependencies = {
   "@/shared/logging/logger": { logger, operationId, describeError, redactText },
 };

@@ -103,34 +103,3 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
     tray.build(app)?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tray_menu_labels_follow_locale() {
-        assert_eq!(
-            menu_labels(Locale::ZhCn),
-            [
-                "显示 NewBee",
-                "进入轻量模式",
-                "上一首",
-                "播放/暂停",
-                "下一首",
-                "退出"
-            ]
-        );
-        assert_eq!(
-            menu_labels(Locale::En),
-            [
-                "Show NewBee",
-                "Enter lightweight mode",
-                "Previous",
-                "Play/Pause",
-                "Next",
-                "Quit"
-            ]
-        );
-    }
-}

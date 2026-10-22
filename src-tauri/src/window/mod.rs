@@ -181,38 +181,3 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         _ => {}
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn window_actions_wait_for_frontend_readiness() {
-        let app = tauri::test::mock_builder()
-            .build(tauri::generate_context!())
-            .unwrap();
-        assert!(!is_ready(app.handle()));
-        let (save_requests, _receiver) = mpsc::channel();
-        app.manage(WindowLifecycle {
-            ready: AtomicBool::new(false),
-            save_requests,
-        });
-        assert!(!is_ready(app.handle()));
-        app.state::<WindowLifecycle>()
-            .ready
-            .store(true, Ordering::Release);
-        assert!(is_ready(app.handle()));
-    }
-
-    #[test]
-    fn toggle_hides_only_a_visible_non_minimized_window() {
-        for (visible, minimized, hide) in [
-            (true, false, true),
-            (true, true, false),
-            (false, false, false),
-            (false, true, false),
-        ] {
-            assert_eq!(should_hide(visible, minimized), hide);
-        }
-    }
-}

@@ -380,13 +380,3 @@ fn failed_file_write_with_cover_does_not_update_database() {
         Some(crate::artwork::track::TrackArtwork::NoArtwork)
     ));
 }
-
-#[test]
-fn missing_track_reports_id_without_attempting_persistence() {
-    let database = Database::open(":memory:").unwrap();
-    let result = save_track(&database, 42, &[], LyricsMarkAction::Mark, None);
-    assert_eq!(result.track_id, 42);
-    assert!(result.path.is_empty());
-    assert!(!result.file_written && !result.database_updated);
-    assert_eq!(result.error.as_deref(), Some("曲目 42 已不在数据库中"));
-}

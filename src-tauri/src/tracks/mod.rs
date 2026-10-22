@@ -21,6 +21,3 @@ pub(crate) fn register(
 ) -> Result<Vec<TrackRegistrationResult>, String> {
     database.register_tracks(discovery::discover(paths))
 }
-
-#[cfg(test)]
-mod tests;

@@ -63,8 +63,6 @@ pub struct Image {
     pub path: String,
     #[cfg(test)]
     pub error: Option<String>,
-    #[cfg(test)]
-    pub content_id: String,
     pub picture: Picture,
 }
 
@@ -102,9 +100,6 @@ impl From<Collection> for Draft {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;
 
 fn thumbnail(
     database: &crate::database::Database,

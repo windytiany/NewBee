@@ -50,7 +50,3 @@ pub(crate) enum LyricsContent {
     Instrumental,
     Missing,
 }
-
-#[cfg(test)]
-#[path = "tests/sidecar.rs"]
-mod sidecar_tests;

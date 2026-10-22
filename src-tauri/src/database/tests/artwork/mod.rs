@@ -1,4 +1,3 @@
-use super::support;
 use crate::database::Database;
 use crate::fixtures::TestFiles;
 use crate::locking::WriteState;
@@ -78,9 +77,6 @@ impl ArtworkLibrary {
         .deserialize()
         .unwrap()
     }
-    fn storage(&self) -> rusqlite::Connection {
-        rusqlite::Connection::open(self.files.0.join("library.sqlite")).unwrap()
-    }
     fn reopen(&self) {
         let reopened = Database::open(self.files.0.join("library.sqlite")).unwrap();
         std::mem::swap(
@@ -105,24 +101,4 @@ fn image_fixture(color: [u8; 3], format: image::ImageFormat) -> Vec<u8> {
     bytes.into_inner()
 }
 
-fn write_embedded_cover(path: &std::path::Path, bytes: &[u8]) {
-    use lofty::{config::WriteOptions, prelude::*};
-    let mut audio = lofty::read_from_path(path).unwrap();
-    let kind = audio.primary_tag_type();
-    if audio.primary_tag().is_none() {
-        audio.insert_tag(lofty::tag::Tag::new(kind));
-    }
-    let tag = audio.primary_tag_mut().unwrap();
-    while !tag.pictures().is_empty() {
-        tag.remove_picture(0);
-    }
-    if !bytes.is_empty() {
-        tag.push_picture(crate::metadata::files::cover_picture(bytes).unwrap());
-    }
-    tag.save_to_path(path, WriteOptions::default()).unwrap();
-}
-
 mod failures;
-mod scanning;
-mod thumbnails;
-mod writing;

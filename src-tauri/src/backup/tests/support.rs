@@ -77,10 +77,6 @@ pub(super) fn make_backup(root: &Path, destination: &Path) {
     archive::write(&database, &manifest(), destination).unwrap();
 }
 
-pub(super) fn fixture_with_line_endings(root: &Path, ending: &str) -> Database {
-    fixture_with_schema(root, |sql| sql.replace("\r\n", "\n").replace('\n', ending))
-}
-
 pub(super) fn fixture_with_schema(root: &Path, rewrite: impl Fn(&str) -> String) -> Database {
     let expected_file = root.join("expected.sqlite3");
     Database::open(":memory:")
@@ -110,36 +106,4 @@ pub(super) fn fixture_with_schema(root: &Path, rewrite: impl Fn(&str) -> String)
     connection.execute_batch("INSERT INTO tracks (id, path, title, album, in_library) VALUES (1, '/missing/album/song.flac', 'restored song', 'album', 1), (2, '/missing/other/song.flac', 'other song', 'other', 1); INSERT INTO track_play_statistics VALUES (1, 3);").unwrap();
     drop(connection);
     Database::open(path).unwrap()
-}
-
-pub(super) fn rewrite_backup_schema(file: &Path, rewrite: impl Fn(&str) -> String) {
-    let connection = Connection::open(file).unwrap();
-    let objects = connection
-        .prepare("SELECT name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name != 'newbee_backup_manifest'")
-        .unwrap()
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
-        .unwrap()
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .unwrap();
-    connection
-        .pragma_update(None, "writable_schema", true)
-        .unwrap();
-    for (name, sql) in objects {
-        connection
-            .execute(
-                "UPDATE sqlite_schema SET sql = ?1 WHERE name = ?2",
-                [rewrite(&sql), name],
-            )
-            .unwrap();
-    }
-    connection
-        .pragma_update(None, "writable_schema", false)
-        .unwrap();
-    // Reopen to make SQLite parse the rewritten schema, rather than its cached metadata.
-    drop(connection);
-    let connection = Connection::open(file).unwrap();
-    let integrity: String = connection
-        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(integrity, "ok");
 }

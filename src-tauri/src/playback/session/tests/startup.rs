@@ -1,6 +1,6 @@
 use super::*;
 use crate::{database::Database, tracks};
-use tauri::Listener;
+use tauri::{Listener, Manager};
 
 fn registrations(database: &Database, root: &std::path::Path) -> (Vec<i64>, Vec<String>) {
     let paths: Vec<_> = (1..=4)

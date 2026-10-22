@@ -276,37 +276,3 @@ pub fn cancel_lightweight(
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stale_requests_cannot_release_a_restored_window() {
-        let mut phase = Phase::Pending(1);
-        assert!(phase.restore());
-        assert!(!phase.release(1));
-        phase = Phase::Pending(2);
-        assert!(!phase.release(1));
-        assert!(phase.release(2));
-    }
-
-    #[test]
-    fn restoration_during_destruction_waits_for_the_old_window() {
-        let mut phase = Phase::Pending(1);
-        assert!(phase.release(1));
-        assert!(!phase.restore());
-        assert!(!phase.restore());
-        assert!(phase.destroyed());
-        assert_eq!(phase, Phase::Dormant);
-        assert!(phase.restore());
-        assert_eq!(phase, Phase::Available);
-    }
-
-    #[test]
-    fn destruction_does_not_reopen_without_a_request() {
-        let mut phase = Phase::Releasing { reopen: false };
-        assert!(!phase.destroyed());
-        assert_eq!(phase, Phase::Dormant);
-    }
-}

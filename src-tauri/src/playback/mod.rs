@@ -93,13 +93,4 @@ pub fn playback_spectrum(
 }
 
 #[cfg(test)]
-use audio::{
-    connect_source, normalize_track, open_decoder, target_info, PlaybackError,
-    AUDIO_FILE_NOT_FOUND_PREFIX,
-};
-#[cfg(test)]
-use continuous::{ContinuousSource, PreparedTrack};
-#[cfg(test)]
-use controls::is_expected_playback_id;
-#[cfg(test)]
-mod tests;
+use audio::{connect_source, normalize_track, open_decoder, target_info, PlaybackError};

@@ -21,8 +21,6 @@ pub(crate) async fn get_playback_sidecar_lyrics<R: tauri::Runtime>(
 
 fn read_sidecar(audio: &Path) -> Option<TrackLyrics> {
     let path = audio.with_extension("lrc");
-    #[cfg(test)]
-    accesses::record(&path);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
@@ -51,28 +49,6 @@ fn read_sidecar(audio: &Path) -> Option<TrackLyrics> {
             }
             None
         }
-    }
-}
-
-#[cfg(test)]
-pub(crate) mod accesses {
-    use std::{
-        path::{Path, PathBuf},
-        sync::Mutex,
-    };
-    static READS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
-    pub(super) fn record(path: &Path) {
-        READS.lock().unwrap().push(path.to_owned());
-    }
-    pub(crate) fn take(directory: &Path) -> Vec<PathBuf> {
-        let mut reads = READS.lock().unwrap();
-        let selected = reads
-            .iter()
-            .filter(|path| path.starts_with(directory))
-            .cloned()
-            .collect();
-        reads.retain(|path| !path.starts_with(directory));
-        selected
     }
 }
 

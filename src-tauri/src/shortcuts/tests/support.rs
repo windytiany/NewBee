@@ -51,6 +51,3 @@ pub(super) fn ids(bindings: &[Binding]) -> HashSet<u32> {
         .map(|binding| binding.shortcut.id())
         .collect()
 }
-pub(super) fn settings_for_code(code: &str) -> ShortcutSettings {
-    settings(&format!("Ctrl+Alt+Shift+Super+{code}"), "")
-}

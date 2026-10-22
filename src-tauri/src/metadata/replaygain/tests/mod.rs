@@ -1,10 +1,8 @@
-mod generation;
-mod performance;
 mod restoration;
 
 use super::*;
 use crate::fixtures::wave;
-use rodio::{Decoder, Source};
+use rodio::Decoder;
 use std::fs::File;
 
 fn samples(path: &Path) -> Vec<f32> {

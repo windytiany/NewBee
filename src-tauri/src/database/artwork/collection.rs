@@ -4,8 +4,6 @@ use crate::artwork::{
     track::{Collection, Draft, DraftPicture, Image, Picture},
 };
 use crate::database::Database;
-#[cfg(test)]
-use rusqlite::OptionalExtension;
 use rusqlite::{params, Transaction};
 use std::collections::HashSet;
 
@@ -87,8 +85,6 @@ impl Database {
                         path: row.get(7)?,
                         #[cfg(test)]
                         error: row.get(8)?,
-                        #[cfg(test)]
-                        content_id: row.get(0)?,
                         picture: Picture {
                             content: ArtworkContent {
                                 mime_type: row.get(1)?,
@@ -131,36 +127,6 @@ impl Database {
                 )
                 .map_err(|error| error.to_string())?;
         }
-        transaction.commit().map_err(|error| error.to_string())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn sync_artwork_collection(
-        &self,
-        track_id: i64,
-        path: &str,
-        scan: &crate::artwork::track::Scan,
-    ) -> Result<(), String> {
-        let mut connection = self.connection()?;
-        let transaction = connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(|error| error.to_string())?;
-        let current_path: Option<String> = transaction
-            .query_row("SELECT path FROM tracks WHERE id = ?1", [track_id], |row| {
-                row.get(0)
-            })
-            .optional()
-            .map_err(|error| error.to_string())?;
-        if current_path.as_deref() != Some(path) {
-            return Err("Track artwork path changed or track was removed".into());
-        }
-        super::synchronization::sync(&transaction, track_id, path, scan)?;
-        transaction
-            .execute(
-                "DELETE FROM track_artwork_pending WHERE track_id = ?1",
-                [track_id],
-            )
-            .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())
     }
 }

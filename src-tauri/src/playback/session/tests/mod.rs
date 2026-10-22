@@ -1,11 +1,9 @@
 use super::super::persistence::SessionPersistence;
-use super::runtime::{run_worker, system_operation, PlaybackSession};
+use super::runtime::{run_worker, PlaybackSession};
 use super::*;
-use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
 
 #[derive(Default)]
 struct FakeAudio {
@@ -284,8 +282,6 @@ fn boundary(session: &mut Session<FakeAudio>, key: &str) {
 }
 
 mod editing;
-mod failures;
-mod identity;
 mod lifecycle;
 mod persistence;
 mod queue;
@@ -331,32 +327,6 @@ impl SessionAudio for Arc<Mutex<FakeAudio>> {
     }
 }
 
-pub(crate) fn initialize_test_session<R: tauri::Runtime>(app: &AppHandle<R>, path: PathBuf) {
-    let (requests, receiver) = mpsc::channel();
-    let generation = Arc::new(AtomicU64::new(0));
-    let busy = Arc::new(AtomicBool::new(false));
-    app.manage(PlaybackSession {
-        requests,
-        busy: busy.clone(),
-        generation: generation.clone(),
-    });
-    std::thread::spawn(move || {
-        run_worker(
-            FakeAudio::default(),
-            path,
-            generation,
-            busy,
-            receiver,
-            |_| {},
-            (|_| {}, |_| {}),
-        )
-    });
-}
-
-mod performance;
-mod shortcuts;
-mod volume;
 mod worker;
 
-mod metadata;
 mod startup;

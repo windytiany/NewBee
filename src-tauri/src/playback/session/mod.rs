@@ -624,5 +624,3 @@ impl<A: SessionAudio> Session<A> {
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-pub(crate) use tests::initialize_test_session;

@@ -1,7 +1,5 @@
-use super::{
-    commands::*, ingest::ingest, reading::refresh, register, registration::register_directories,
-};
-use crate::{database::Database, locking::WriteState};
+use super::{ingest::ingest, reading::refresh, register};
+use crate::database::Database;
 use crate::{
     fixtures::TestFiles,
     metadata::{
@@ -11,10 +9,7 @@ use crate::{
 };
 use std::path::Path;
 use support::*;
-use tauri::Manager;
 
-mod commands;
 mod ingest;
 mod reading;
-mod register;
 mod support;

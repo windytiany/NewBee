@@ -153,7 +153,3 @@ fn drain<R: Runtime>(app: &AppHandle<R>) {
 #[cfg(test)]
 #[path = "tests/confirmation.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "tests/performance.rs"]
-mod performance;

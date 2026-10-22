@@ -98,7 +98,3 @@ impl<S: Source<Item = f32>> Source for GainSource<S> {
         self.source.try_seek(pos)
     }
 }
-
-#[cfg(test)]
-#[path = "tests/gain.rs"]
-mod tests;

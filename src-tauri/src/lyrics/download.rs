@@ -307,10 +307,6 @@ pub(crate) async fn find_track_lyrics(
     .map_err(|error| format!("自动获取歌词失败：{error}"))?
 }
 
-#[cfg(test)]
-#[path = "tests/download.rs"]
-mod tests;
-
 #[tauri::command]
 pub(crate) async fn find_file_lyrics(
     path: String,

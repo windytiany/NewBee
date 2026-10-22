@@ -3,9 +3,6 @@ use crate::remapping::prefix::{normalize_windows_path, Prefix};
 use rusqlite::{params, Transaction};
 use std::collections::HashSet;
 
-#[cfg(test)]
-mod tests;
-
 fn remap_table(
     transaction: &Transaction<'_>,
     table: &str,

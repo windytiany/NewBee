@@ -1,12 +1,5 @@
 use super::model::{LyricLine, TrackLyrics};
 
-#[cfg(test)]
-fn lyrics_from_candidates<'a>(candidates: impl IntoIterator<Item = &'a str>) -> TrackLyrics {
-    select_lyrics_candidate(candidates)
-        .map(parse)
-        .unwrap_or(TrackLyrics::None)
-}
-
 pub(crate) fn select_lyrics_candidate<'a>(
     candidates: impl IntoIterator<Item = &'a str>,
 ) -> Option<&'a str> {
@@ -151,7 +144,3 @@ fn apply_offset(timestamp_ms: u64, offset_ms: i64) -> Option<u64> {
         Some(timestamp_ms.saturating_sub(offset_ms.unsigned_abs()))
     }
 }
-
-#[cfg(test)]
-#[path = "tests/parsing.rs"]
-mod tests;

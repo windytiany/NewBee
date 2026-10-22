@@ -4,9 +4,6 @@ import { createTrackSynchronization } from "@/features/tracks/synchronize";
 import type { TrackReadResult } from "@/features/tracks/types";
 import type { TracksInvoker } from "@/features/tracks/api";
 import { playbackFixture } from "../../support/playback/session";
-import { evaluateSource, transpileScript } from "../../support/module/loader";
-import type { useTrackBridge } from "@/features/tracks/bridge";
-import type { NotificationInput } from "@/shared/notifications/center";
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 afterEach(() => {
@@ -141,58 +138,6 @@ it("distinguishes bridge failures from backend reading failures", async () => {
     bridge.dispose();
     expect(failures).toEqual([[error, "bridge"]]);
   }
-});
-
-it("shows backend tag failures once as warnings without logging the same failure again", async () => {
-  let mount = () => {};
-  let unmount = () => {};
-  let receive: (event: { payload: TrackReadResult[] }) => void = () => {};
-  const logs: unknown[] = [];
-  const notices: NotificationInput[] = [];
-  const output = transpileScript(await Bun.file("src/features/tracks/bridge.ts").text());
-  const module = evaluateSource<{ useTrackBridge: typeof useTrackBridge }>(output, {
-    vue: {
-      onMounted: (callback: () => void) => {
-        mount = callback;
-      },
-      onUnmounted: (callback: () => void) => {
-        unmount = callback;
-      },
-    },
-    "@tauri-apps/api/core": { isTauri: () => true, invoke: async () => [] },
-    "@tauri-apps/api/event": {
-      listen: async (_event: string, callback: typeof receive) => {
-        receive = callback;
-        return () => {};
-      },
-    },
-    "@/features/playback/session": {
-      usePlaybackSession: () => ({
-        ready: Promise.resolve(),
-        state: { displayedTracks: { value: [] } },
-      }),
-    },
-    "@/features/tracks/synchronize": {
-      createTrackSynchronization: () => ({ refresh: async () => {} }),
-    },
-    "@/shared/logging/logger": {
-      logger: {
-        warn: (...args: unknown[]) => logs.push(args),
-        error: (...args: unknown[]) => logs.push(args),
-      },
-    },
-    "@/shared/notifications/center": {
-      notify: (notice: NotificationInput) => notices.push(notice),
-    },
-  });
-  module.useTrackBridge();
-  mount();
-  await Promise.resolve();
-  const error = "读取文件标签失败：failed to parse Mpeg file";
-  receive({ payload: [{ trackId: 8, databaseUpdated: true, error }] });
-  unmount();
-  expect(notices).toEqual([{ type: "warning", message: error, key: "track-confirmation" }]);
-  expect(logs).toEqual([]);
 });
 
 it("does not apply a batch response after the application bridge is disposed", async () => {

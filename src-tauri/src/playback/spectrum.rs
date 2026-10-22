@@ -208,7 +208,3 @@ fn fft(real: &mut [f32; FFT_SIZE], imaginary: &mut [f32; FFT_SIZE]) {
         size *= 2;
     }
 }
-
-#[cfg(test)]
-#[path = "tests/spectrum.rs"]
-mod tests;

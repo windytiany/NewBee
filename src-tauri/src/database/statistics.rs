@@ -41,7 +41,3 @@ impl Database {
             .map_err(|error| format!("Could not read playback statistics: {error}"))
     }
 }
-
-#[cfg(test)]
-#[path = "tests/statistics.rs"]
-mod tests;

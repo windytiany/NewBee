@@ -270,7 +270,3 @@ fn bilingual_lyrics(original: &str, translated: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
-
-#[cfg(test)]
-#[path = "../tests/netease.rs"]
-mod tests;

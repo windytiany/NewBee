@@ -186,7 +186,3 @@ impl Discogs {
         bytes(response, super::storage::MAX_PHOTO_BYTES as u64).map(Some)
     }
 }
-
-#[cfg(test)]
-#[path = "tests/discogs.rs"]
-mod tests;

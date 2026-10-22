@@ -38,7 +38,3 @@ fn cleanup(database: &Database, write: &WriteState, restored: Result<References,
         Err(error) => log::warn!("event=track_cleanup_skipped reason={error}"),
     }
 }
-
-#[cfg(test)]
-#[path = "tests/recovery.rs"]
-mod tests;

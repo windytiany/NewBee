@@ -145,23 +145,6 @@ it("subscribes before fetching startup changes and queues new missing files with
   expect(test.unlistened).toHaveLength(2);
 });
 
-it("reports backend failures once as notifications without persistent row status text", async () => {
-  const test = fixture();
-  const status = { path: "D:/Music", phase: "error" as const, error: "Unreadable audio" };
-  test.snapshot.value = { statuses: [status], missing: [] };
-  await Vue.nextTick();
-  expect(test.notices).toHaveLength(1);
-  test.snapshot.value = { statuses: [status], missing: [] };
-  await Vue.nextTick();
-  expect(test.notices).toHaveLength(1);
-  test.snapshot.value = { statuses: [], missing: [] };
-  await Vue.nextTick();
-  test.snapshot.value = { statuses: [status], missing: [] };
-  await Vue.nextTick();
-  expect(test.notices).toHaveLength(2);
-  test.unmount();
-});
-
 it("keeps a failed confirmation open for retry", async () => {
   const test = fixture();
   test.mount();

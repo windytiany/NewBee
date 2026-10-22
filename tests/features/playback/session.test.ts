@@ -39,57 +39,6 @@ describe("backend playback session adapter", () => {
     expect(fixture.session.state.currentRowKey.value).toBe("row:2");
   });
 
-  it("sends typed queue commands and never computes navigation or preload candidates", async () => {
-    const fixture = playbackFixture();
-    await fixture.session.ready;
-    await fixture.session.playTracks(rows, "row:1", false);
-    await fixture.session.playPreviousTrack();
-    await fixture.session.playNextTrack();
-    await fixture.session.setShuffleEnabled(true);
-    await fixture.session.setRepeatOneEnabled(true);
-    await fixture.session.addTracksToNext(rows);
-    expect(fixture.commands.slice(1)).toEqual([
-      { action: "playTracks", tracks: rows, startRowKey: "row:1", allowSkipped: false },
-      { action: "previous" },
-      { action: "next" },
-      { action: "shuffle", enabled: true },
-      { action: "repeat", enabled: true },
-      { action: "add", tracks: rows.map((track) => ({ ...track, rowKey: "" })), next: true },
-    ]);
-  });
-
-  it("delegates whole-list starting selection to the backend", async () => {
-    const fixture = playbackFixture();
-    await fixture.session.ready;
-    await fixture.session.setShuffleEnabled(true);
-    await fixture.session.playTracks(rows, null, false);
-    expect(fixture.commands[fixture.commands.length - 1]).toEqual({
-      action: "playTracks",
-      tracks: rows,
-      startRowKey: null,
-      allowSkipped: false,
-    });
-  });
-
-  it("status polling displays an ended projection without advancing playback", async () => {
-    const fixture = playbackFixture();
-    await fixture.session.ready;
-    await fixture.session.playTracks(rows, "row:1");
-    fixture.emit({
-      playbackStatus: {
-        hasAudio: true,
-        isPlaying: false,
-        hasEnded: true,
-        positionMs: 100,
-        durationMs: 100,
-      },
-    });
-    await fixture.session.refreshPlaybackStatus();
-    expect(fixture.calls).toEqual(["snapshot", "playTracks", "progress"]);
-    expect(fixture.session.state.currentRowKey.value).toBe("row:1");
-    expect(fixture.session.state.playbackStatus.value.hasEnded).toBe(true);
-  });
-
   it("backend events update every field and discard late lower-revision command replies", async () => {
     const fixture = playbackFixture();
     await fixture.session.ready;

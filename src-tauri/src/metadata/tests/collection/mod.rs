@@ -1,11 +1,8 @@
 use super::support::{change, Fixture};
 use crate::{
-    artwork::{
-        model::ArtworkContent,
-        track::{
-            commands,
-            editing::{self, PictureDraft, TrackDraft},
-        },
+    artwork::track::{
+        commands,
+        editing::{PictureDraft, TrackDraft},
     },
     database::Database,
     locking::WriteState,
@@ -20,8 +17,5 @@ use std::fs;
 use support::{app, draft, image, save};
 use tauri::Manager;
 
-mod embedded;
 mod failures;
-mod ipc;
-mod linked;
 mod support;

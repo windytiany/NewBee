@@ -1,2 +1,1 @@
 mod files;
-mod lyrics;

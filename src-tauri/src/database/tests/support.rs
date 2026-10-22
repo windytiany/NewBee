@@ -55,30 +55,6 @@ pub(crate) fn embedded(image: Option<&[u8]>) -> crate::artwork::track::Scan {
     }
 }
 
-pub(crate) fn directory(image: Option<&[u8]>, path: &str) -> crate::artwork::track::Scan {
-    crate::artwork::track::Scan {
-        embedded: Ok(Vec::new()),
-        directory: Ok(image
-            .iter()
-            .map(|content| crate::artwork::track::DirectoryPicture {
-                path: path.into(),
-                content: Ok(crate::artwork::model::ArtworkContent {
-                    mime_type: "image/png".into(),
-                    image: content.to_vec(),
-                }),
-            })
-            .collect()),
-    }
-}
-
-pub(crate) fn snapshot(database: &Database, snapshot: &crate::tracks::model::Snapshot) -> i64 {
-    let mut connection = database.connection().unwrap();
-    let transaction = connection.transaction().unwrap();
-    let id = crate::database::tracks::persistence::persist(&transaction, snapshot).unwrap();
-    transaction.commit().unwrap();
-    id
-}
-
 /// Publish a supplied fixture snapshot and Inbox membership through the database interface.
 pub(crate) fn inbox(
     database: &Database,

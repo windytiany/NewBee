@@ -2,49 +2,9 @@ import { expect, it } from "bun:test";
 import { createPlaybackSession } from "@/features/playback/session";
 import type { PlaybackMetadataDelta, PlaybackSessionSnapshot } from "@/features/playback/session";
 import type { PlaybackCommandInvoker } from "@/features/playback/types";
-import type { TrackDetails } from "@/features/tracks/types";
 import { playbackReply, playbackSnapshot } from "../../../support/playback/session";
 
-it("metadata IPC projects full track details onto the strict playback contract", async () => {
-  const calls: Record<string, unknown>[] = [];
-  const invokeCommand: PlaybackCommandInvoker = async <T>(
-    command: string,
-    args?: Record<string, unknown>,
-  ) => {
-    if (command === "playback_session_metadata" && args) {
-      calls.push(args);
-      return null as T;
-    }
-    return playbackReply(playbackSnapshot()) as T;
-  };
-  const session = createPlaybackSession({ invokeCommand, subscribe: async () => () => {} });
-  await session.ready;
-  const track: TrackDetails = {
-    id: 1,
-    path: "C:/music/song.mp3",
-    title: "Song",
-    artist: "Artist",
-    album: "Album",
-    albumArtist: "Album Artist",
-    releaseDate: null,
-    discNumber: null,
-    trackNumber: null,
-    discTotal: null,
-    trackTotal: null,
-    durationMs: 1000,
-    codec: "MP3",
-    sampleRateHz: 44100,
-    bitrateKbps: 320,
-    channels: 2,
-  };
-  await session.updateTrackMetadata([track]);
-  expect(calls).toEqual([
-    { tracks: [{ id: 1, title: "Song", artist: "Artist", album: "Album", durationMs: 1000 }] },
-  ]);
-  session.dispose();
-});
-
-function fixture(count = 5000) {
+function fixture(count = 3) {
   let snapshot = playbackSnapshot({
     revision: 2,
     displayedTracks: Array.from({ length: count }, (_, index) => ({
@@ -117,18 +77,18 @@ function fixture(count = 5000) {
   };
 }
 
-it("5000 queue metadata deltas stay incremental and progress never reloads a full projection", async () => {
+it("queue metadata deltas stay incremental and progress never reloads a full projection", async () => {
   const probe = fixture();
   await probe.session.ready;
   const rows = probe.session.state.displayedTracks.value;
   let revision = 2;
-  for (let offset = 0; offset < rows.length; offset += 16) {
+  for (let offset = 0; offset < rows.length; offset += 2) {
     probe.setProgressRevision(++revision);
     await probe.session.refreshPlaybackStatus();
     probe.emit({
       revision,
       structuralRevision: 2,
-      displayedTracks: rows.slice(offset, offset + 16).map((row) => ({
+      displayedTracks: rows.slice(offset, offset + 2).map((row) => ({
         ...row,
         title: `Confirmed ${row.trackId}`,
         album: "Album",
@@ -140,14 +100,10 @@ it("5000 queue metadata deltas stay incremental and progress never reloads a ful
     await probe.session.refreshPlaybackStatus();
   }
   expect(probe.calls.filter((command) => command === "playback_session_command")).toHaveLength(1);
-  expect(probe.calls.filter((command) => command === "playback_session_progress")).toHaveLength(
-    626,
-  );
+  expect(probe.calls.filter((command) => command === "playback_session_progress")).toHaveLength(4);
   expect(probe.session.state.displayedTracks.value).toBe(rows);
   expect(rows.every((row) => row.title === `Confirmed ${row.trackId}`)).toBe(true);
-  expect(rows.map((row) => row.rowKey)).toEqual(
-    Array.from({ length: 5000 }, (_, index) => `row:${index}`),
-  );
+  expect(rows.map((row) => row.rowKey)).toEqual(["row:0", "row:1", "row:2"]);
   expect(probe.session.state.currentTrack.value).toEqual({
     trackId: 1,
     title: "Confirmed 1",

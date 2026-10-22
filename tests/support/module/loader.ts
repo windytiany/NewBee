@@ -11,14 +11,13 @@ const sharedDependencies = {
     runWriteTask: async <T>(request: { id?: string }, execute: (id: string) => Promise<T>) =>
       execute(request.id ?? "test-task"),
   },
-  // Window destruction is tested with explicit lifecycle adapters.
   "@/shared/lifecycle/activity": {
     watchActivity: () => () => {},
     beforeRelease: () => () => {},
     waitForIdle: async () => {},
   },
   "@tauri-apps/plugin-dialog": { ask: async () => false },
-  // Host-renderer component tests have no DOM. Exercise scroll hooks with event targets separately.
+  // Business fixtures do not mount DOM scroll hooks.
   "@/shared/interaction/scroll/persistence": { vPersistentScroll: {} },
   "@/features/tracks/selection/useKeyboard": { useTrackSelectionKeyboard: () => {} },
 };
@@ -40,40 +39,6 @@ export function compileSfc(
   const { descriptor, errors } = parse(source, { filename });
   if (errors.length) throw new Error(`Cannot compile ${filename}: ${errors.join("\n")}`);
   return transpileScript(compileScript(descriptor, { id, inlineTemplate }).content);
-}
-
-/** Evaluates a fresh module with only the dependencies supplied by its caller. */
-export function evaluateModule<Exports = Record<string, unknown>>(
-  output: string,
-  dependencies: Record<string, unknown>,
-): Exports {
-  dependencies = { ...sharedDependencies, ...commandAdapters(dependencies), ...dependencies };
-  const module = { exports: {} as Exports };
-  new Function("require", "module", "exports", output)(
-    (name: string) => {
-      if (!Object.prototype.hasOwnProperty.call(dependencies, name))
-        throw new Error(`Missing test dependency: ${name}`);
-      return dependencies[name];
-    },
-    module,
-    module.exports,
-  );
-  return module.exports;
-}
-
-/** Paths are relative to src/ and ordered explicitly by the feature fixture. */
-export async function loadSourceModules(
-  paths: readonly string[],
-  dependencies: Record<string, unknown>,
-) {
-  for (const path of paths) {
-    const source = await Bun.file(new URL(`../../../src/${path}`, import.meta.url)).text();
-    const isView = path.endsWith(".vue");
-    const output = isView
-      ? compileSfc(source, `src/${path}`, { id: path })
-      : transpileScript(source);
-    dependencies[`@/${isView ? path : path.slice(0, -3)}`] = evaluateSource(output, dependencies);
-  }
 }
 
 function commandAdapters(dependencies: Record<string, unknown>) {

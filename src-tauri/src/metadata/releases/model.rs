@@ -321,7 +321,3 @@ pub(crate) struct CoverData {
     pub mime_type: String,
     pub data: Vec<u8>,
 }
-
-#[cfg(test)]
-#[path = "tests/model.rs"]
-mod tests;

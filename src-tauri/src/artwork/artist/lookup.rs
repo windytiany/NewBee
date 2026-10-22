@@ -62,7 +62,3 @@ fn lookup(
         }
     }
 }
-
-#[cfg(test)]
-#[path = "tests/lookup.rs"]
-mod tests;

@@ -1,4 +1,5 @@
 use super::*;
+use std::path::PathBuf;
 
 fn temporary_path() -> PathBuf {
     let unique = std::time::SystemTime::now()

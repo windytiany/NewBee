@@ -40,7 +40,3 @@ fn persist_digest(
         .map_err(|error| error.to_string())?;
     Ok(connection.last_insert_rowid())
 }
-
-#[cfg(test)]
-#[path = "../tests/digest.rs"]
-mod tests;

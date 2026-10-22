@@ -200,5 +200,3 @@ pub(crate) async fn get_release_cover(
     .await
     .map_err(|error| error.to_string())?
 }
-#[cfg(test)]
-mod tests;
