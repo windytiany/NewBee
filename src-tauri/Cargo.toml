@@ -1,6 +1,6 @@
 [package]
 name = "newbee"
-version = "0.1.5"
+version = "0.2.0"
 description = "Desktop app for organizing and playing a local music library."
 authors = ["you"]
 edition = "2021"
