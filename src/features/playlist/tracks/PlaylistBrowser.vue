@@ -236,6 +236,7 @@ import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { useTrackSelectionKeyboard } from "@/features/tracks/selection/useKeyboard";
 import { useContextCommands } from "@/features/shortcuts/context";
 import { createPlaylistDragReorder } from "@/features/playlist/ordering/drag";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
@@ -385,6 +386,7 @@ const keyboard = createItemKeyboard({
   },
 });
 
+useTrackSelectionKeyboard(trackListElement, keyboard);
 useContextCommands(trackListElement, () => {
   if (props.isLoadingTracks || props.isPlaylistActionPending || dragPreview.value) return {};
   const selected = playlistTrackFocus.getSelectedItemKeys(visibleTrackKeys.value);

@@ -250,6 +250,7 @@ import { ChevronRight, Pause, Play, X } from "@lucide/vue";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { useTrackSelectionKeyboard } from "@/features/tracks/selection/useKeyboard";
 import { useContextCommands } from "@/features/shortcuts/context";
 import type { ItemSelectionModifiers } from "@/shared/interaction/item/useSelection";
 import type { AlbumSummary } from "@/features/library/types";
@@ -376,7 +377,10 @@ const visibleTrackKeys = computed(() =>
 );
 
 const trackKeyboard = createItemKeyboard({
-  getItemKeys: () => visibleTrackKeys.value,
+  getItemKeys: () =>
+    props.tracksLoading || props.trackActionPending || props.playbackCommandPending
+      ? []
+      : visibleTrackKeys.value,
   getSelectedItemKeys: () => trackFocus.getSelectedItemKeys(visibleTrackKeys.value),
   itemSelector: "button[data-album-track-row]",
   grid: true,
@@ -393,6 +397,7 @@ const trackKeyboard = createItemKeyboard({
   onEscape: () => emit("close"),
 });
 
+useTrackSelectionKeyboard(trackListElement, trackKeyboard);
 useContextCommands(trackListElement, () => {
   if (props.tracksLoading || props.trackActionPending || props.playbackCommandPending) return {};
   const selected = trackFocus.getSelectedItemKeys(visibleTrackKeys.value);

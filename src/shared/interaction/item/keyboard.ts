@@ -58,6 +58,31 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
     }
   }
 
+  function onSelectAllKeydown(event: KeyboardEvent) {
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      event.metaKey ||
+      event.isComposing ||
+      !event.ctrlKey ||
+      event.shiftKey ||
+      event.key.toLowerCase() !== "a" ||
+      !options.onSelectAll
+    )
+      return;
+    if (
+      event.target instanceof HTMLElement &&
+      (event.target.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName))
+    )
+      return;
+    const keys = options.getItemKeys();
+    if (!keys.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    options.onSelectAll(keys);
+  }
+
   function onKeydown(event: KeyboardEvent) {
     if (event.defaultPrevented || event.altKey || event.metaKey || event.isComposing) return;
     if (
@@ -69,23 +94,8 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
     const target = getTarget(event);
     if (!target) return;
     const { items, index, key } = target;
-    if (
-      event.ctrlKey &&
-      !event.shiftKey &&
-      event.key.toLowerCase() === "a" &&
-      options.onSelectAll
-    ) {
-      if (
-        event.target instanceof HTMLElement &&
-        (event.target.isContentEditable ||
-          ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName))
-      )
-        return;
-      event.preventDefault();
-      event.stopPropagation();
-      options.onSelectAll(options.getItemKeys());
-      return;
-    }
+    onSelectAllKeydown(event);
+    if (event.defaultPrevented) return;
     if (event.ctrlKey && !event.shiftKey && event.key === " " && options.onSelectAll) {
       event.preventDefault();
       event.stopPropagation();
@@ -156,5 +166,5 @@ export function createItemKeyboard(options: ItemKeyboardOptions) {
     items[nextIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
-  return { onKeydown, onFocusin };
+  return { onKeydown, onFocusin, onSelectAllKeydown };
 }

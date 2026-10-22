@@ -19,6 +19,7 @@ import CreatePlaylistDialog from "@/features/playlist/creation/CreatePlaylistDia
 import { reportPlaylistChanged } from "@/features/playlist/events";
 import { useItemSelection } from "@/shared/interaction/item/useSelection";
 import { createItemKeyboard } from "@/shared/interaction/item/keyboard";
+import { useTrackSelectionKeyboard } from "@/features/tracks/selection/useKeyboard";
 import { useContextCommands } from "@/features/shortcuts/context";
 import { useContextMenu } from "@/shared/interaction/useContextMenu";
 import { vPersistentScroll } from "@/shared/interaction/scroll/persistence";
@@ -92,6 +93,7 @@ const keyboard = createItemKeyboard({
     void inbox.play(Number(key), keys.value.map(Number));
   },
 });
+useTrackSelectionKeyboard(list, keyboard);
 useContextCommands(list, () => {
   if (state.loading || state.pending) return {};
   const selected = selection.getSelectedItemKeys(keys.value);

@@ -139,11 +139,11 @@ function createHarness(
   options: {
     grid?: boolean;
     callbacks?: boolean;
-    keys?: string[];
+    keys?: readonly string[];
     getSelectedItemKeys?: () => readonly string[];
   } = {},
 ) {
-  const keys = options.keys ?? ["a", "b", "c"];
+  const keys = [...(options.keys ?? ["a", "b", "c"])];
   const items = keys.map(() => new TestElement(itemSelector));
   const container = new TestElement();
   container.children.push(...items);
@@ -230,6 +230,38 @@ describe("Item 列表键盘", () => {
       expect(item.focus).not.toHaveBeenCalled();
       expect(item.scrollIntoView).not.toHaveBeenCalled();
     }
+  });
+
+  it("页面级全选不要求曲目焦点或已有选择", () => {
+    const selection = createItemSelection();
+    const harness = createHarness();
+    harness.onSelectAll.mockImplementation((keys) => selection.selectAll("tracks", keys));
+    const event = new TestKeyboardEvent("a", harness.container, null, { ctrlKey: true });
+    harness.keyboard.onSelectAllKeydown(event);
+    expect(selection.getSelectedItemKeys("tracks", harness.keys)).toEqual(harness.keys);
+    expect(event.defaultPrevented).toBe(true);
+    expect(harness.onFocus).not.toHaveBeenCalled();
+    expect(harness.onMove).not.toHaveBeenCalled();
+  });
+
+  it.each(["INPUT", "TEXTAREA", "SELECT", "editable"])(
+    "页面级全选保留 %s 的原生行为",
+    (tagName) => {
+      const harness = createHarness();
+      const input = new TestElement();
+      input.tagName = tagName;
+      input.isContentEditable = tagName === "editable";
+      const event = new TestKeyboardEvent("a", input, null, { ctrlKey: true });
+      harness.keyboard.onSelectAllKeydown(event);
+      expectUnhandled(event, harness);
+    },
+  );
+
+  it.each([{ keys: [] }, { callbacks: false }])("页面级全选忽略不可用列表 %j", (options) => {
+    const harness = createHarness(options);
+    const event = new TestKeyboardEvent("a", harness.container, null, { ctrlKey: true });
+    harness.keyboard.onSelectAllKeydown(event);
+    expectUnhandled(event, harness);
   });
 
   it.each(["INPUT", "TEXTAREA", "SELECT", "editable"])("保留行内 %s 的原生 Ctrl+A", (tagName) => {

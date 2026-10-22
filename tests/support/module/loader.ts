@@ -20,6 +20,7 @@ const sharedDependencies = {
   "@tauri-apps/plugin-dialog": { ask: async () => false },
   // Host-renderer component tests have no DOM. Exercise scroll hooks with event targets separately.
   "@/shared/interaction/scroll/persistence": { vPersistentScroll: {} },
+  "@/features/tracks/selection/useKeyboard": { useTrackSelectionKeyboard: () => {} },
 };
 import { readFileSync } from "node:fs";
 import { compileScript, parse } from "@vue/compiler-sfc";
