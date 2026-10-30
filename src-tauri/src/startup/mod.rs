@@ -22,7 +22,7 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
         Instant::now(),
     ))));
     window::initialize(app.handle());
-    WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
+    let splash = WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
         .title("NewBee")
         .inner_size(280.0, 240.0)
         .decorations(false)
@@ -36,6 +36,10 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
         .visible(false)
         .center()
         .build()?;
+    #[cfg(windows)]
+    window::prepare_borderless(&splash)?;
+    #[cfg(not(windows))]
+    let _ = splash;
     let app = app.handle().clone();
     std::thread::spawn(move || {
         let result =

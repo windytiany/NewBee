@@ -3,6 +3,9 @@ pub(crate) mod lightweight;
 mod placement;
 pub(crate) mod tray;
 
+#[cfg(windows)]
+pub(crate) use placement::prepare_borderless;
+
 use crate::settings::{CloseBehavior, SettingsState};
 use std::{
     sync::{

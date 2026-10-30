@@ -3,11 +3,31 @@ use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_CLOAK, DWMWA_TRANSITIONS_FORCEDISABLED,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowPlacement, SetWindowPlacement, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWNORMAL,
+    GetWindowPlacement, SetWindowPlacement, SetWindowPos, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWNORMAL,
     WINDOWPLACEMENT, WPF_RESTORETOMAXIMIZED,
 };
 
 pub(super) struct Placement(WINDOWPLACEMENT);
+
+pub(crate) fn prepare_borderless(window: &WebviewWindow) -> Result<(), String> {
+    let hwnd = windows::Win32::Foundation::HWND(window.hwnd().map_err(|e| e.to_string())?.0);
+    // Recalculate the hidden window's client area before the WebView lays out.
+    // Otherwise its first show removes the cached caption/border insets and
+    // resizes the viewport after the logo is already visible.
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        )
+    }
+    .map_err(|error| error.to_string())
+}
 
 pub(super) fn cloak(window: &WebviewWindow, cloaked: bool) -> Result<(), String> {
     let hwnd = windows::Win32::Foundation::HWND(window.hwnd().map_err(|e| e.to_string())?.0);
