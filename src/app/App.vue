@@ -16,6 +16,7 @@ import InboxPage from "@/features/inbox/InboxPage.vue";
 import NowPlayingPage from "@/features/playback/NowPlayingPage.vue";
 import PlaybackBar from "@/features/playback/controls/PlaybackBar.vue";
 import NotificationHost from "@/shared/notifications/NotificationHost.vue";
+import UpdateDialog from "@/shared/update/UpdateDialog.vue";
 import MissingFilesDialog from "@/features/library/synchronization/MissingFilesDialog.vue";
 import LyricsDownloadDialog from "@/features/lyrics/download/LyricsDownloadDialog.vue";
 import ReplayGainConfirmationDialog from "@/features/metadata/replaygain/ConfirmationDialog.vue";
@@ -30,7 +31,7 @@ useTrackBridge();
 usePlaybackLyrics();
 const { activePage } = usePersistentActivePage();
 const titleBar = shallowRef<InstanceType<typeof TitleBar> | null>(null);
-useStartupUpdates(() => void titleBar.value?.showSettings("advanced"));
+useStartupUpdates();
 const commandDialog = shallowRef<InstanceType<typeof CommandDialog> | null>(null);
 usePageFocus();
 const { bindings, run } = useShortcuts(
@@ -89,6 +90,7 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
     <ReplayGainConfirmationDialog />
     <ReleaseTagDialog />
     <NotificationHost />
+    <UpdateDialog />
     <MissingFilesDialog />
     <div
       v-if="dropHighlight"

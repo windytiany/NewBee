@@ -2,7 +2,7 @@
 import { t } from "@/shared/i18n/locale";
 import type { Settings } from "@/features/settings/types";
 import BackupOptions from "@/features/backup/BackupOptions.vue";
-import UpdatePanel from "@/shared/update/UpdatePanel.vue";
+import UpdateButton from "@/shared/update/UpdateButton.vue";
 import type { useDiagnostics } from "@/features/settings/useDiagnostics";
 const draft = defineModel<Settings>("draft", { required: true });
 const props = defineProps<{
@@ -28,7 +28,7 @@ const emit = defineEmits<{ busy: [value: boolean] }>();
       />
       {{ t("启动时自动检查更新") }}
     </label>
-    <UpdatePanel />
+    <UpdateButton />
   </fieldset>
   <fieldset :disabled="!isTauriApp || isBackingUp">
     <legend class="sr-only">{{ t("诊断日志") }}</legend>

@@ -15,6 +15,7 @@ const DOWNLOAD_TIMEOUT_MS = 300_000;
 export function createUpdater(dependencies: Dependencies) {
   const phase = ref<Phase>("idle");
   const version = ref("");
+  const dialogOpen = ref(false);
   const error = ref("");
   const downloaded = ref(0);
   const total = ref<number>();
@@ -44,6 +45,7 @@ export function createUpdater(dependencies: Dependencies) {
       resource = await dependencies.check({ timeout: CHECK_TIMEOUT_MS });
       version.value = resource?.version ?? "";
       phase.value = resource ? "available" : "latest";
+      dialogOpen.value = resource !== null;
     } catch (reason) {
       dependencies.failed("check_failed", reason);
       error.value = "检查更新失败，请稍后重试";
@@ -54,7 +56,11 @@ export function createUpdater(dependencies: Dependencies) {
   function check() {
     if (!dependencies.supported) return Promise.resolve();
     if (checking) return checking;
-    if (busy.value || phase.value === "ready") return Promise.resolve();
+    if (phase.value === "ready") {
+      dialogOpen.value = true;
+      return Promise.resolve();
+    }
+    if (busy.value) return Promise.resolve();
     checking = performCheck().finally(() => {
       checking = undefined;
     });
@@ -101,7 +107,19 @@ export function createUpdater(dependencies: Dependencies) {
     }
   }
 
+  async function update() {
+    if (phase.value === "available") await download();
+    if (phase.value === "ready") await install();
+  }
+
+  function dismiss() {
+    if (!busy.value) dialogOpen.value = false;
+  }
+
   return {
+    dialogOpen: readonly(dialogOpen),
+    dismiss,
+    update,
     supported: dependencies.supported,
     phase: readonly(phase),
     version: readonly(version),

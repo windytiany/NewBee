@@ -39,6 +39,8 @@ export const settingsMessages: Record<string, string> = {
   "正在检查更新…": "Checking for updates…",
   已是最新版本: "Up to date",
   "发现新版本 {version}": "Version {version} is available",
+  "发现新版本 {version}，是否更新？": "Version {version} is available. Update now?",
+  重试: "Retry",
   "正在下载更新…": "Downloading update…",
   下载进度: "Download progress",
   更新已就绪: "Update ready",
