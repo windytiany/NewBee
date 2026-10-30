@@ -26,6 +26,7 @@ const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 pub(super) struct Manifest {
     pub format_version: u32,
     pub app_version: String,
+    #[serde(deserialize_with = "crate::settings::deserialize")]
     pub settings: Settings,
     pub session: SavedSession,
     pub interface: InterfaceState,

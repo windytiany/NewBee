@@ -2,6 +2,7 @@
 use super::media;
 use super::spectrum::BAND_COUNT;
 use super::{PlaybackState, PlaybackStatus};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 pub(crate) fn set_volume(volume: u8, state: &PlaybackState) -> Result<(), String> {
@@ -34,7 +35,9 @@ pub(crate) fn pause(_app: &tauri::AppHandle, state: &PlaybackState) -> Result<()
     let playback = active
         .as_ref()
         .ok_or_else(|| "No audio is loaded".to_owned())?;
-    playback.player.pause();
+    playback
+        .player
+        .set_playing(false, state.playback_fade_out.load(Ordering::Relaxed));
     #[cfg(windows)]
     media::set_playback(_app, true, false);
     Ok(())
@@ -48,7 +51,9 @@ pub(crate) fn resume(_app: &tauri::AppHandle, state: &PlaybackState) -> Result<(
     let playback = active
         .as_ref()
         .ok_or_else(|| "No audio is loaded".to_owned())?;
-    playback.player.play();
+    playback
+        .player
+        .set_playing(true, state.playback_fade_in.load(Ordering::Relaxed));
     #[cfg(windows)]
     media::set_playback(_app, true, !playback.continuous.snapshot().ended);
     Ok(())

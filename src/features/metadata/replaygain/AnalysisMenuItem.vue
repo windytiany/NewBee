@@ -28,6 +28,6 @@ function analyze() {
     "
     @click.stop="analyze"
   >
-    {{ action.pending.value ? t("正在分析 ReplayGain…") : t("分析 ReplayGain") }}
+    {{ action.pending.value ? t("正在分析响度均衡…") : t("分析响度均衡") }}
   </button>
 </template>

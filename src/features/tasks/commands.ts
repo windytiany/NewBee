@@ -11,8 +11,8 @@ const titles: Record<string, string> = {
   ingest_inbox: "导入音乐库",
   save_track_metadata: "保存标签",
   save_album_tags: "保存标签",
-  analyze_track_loudness: "正在分析 ReplayGain…",
-  restore_track_loudness: "正在移除 ReplayGain 标签…",
+  analyze_track_loudness: "正在分析响度均衡…",
+  restore_track_loudness: "正在移除响度均衡标签…",
   export_backup: "导出备份",
 };
 

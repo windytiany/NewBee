@@ -10,23 +10,27 @@ pub(crate) mod session;
 pub(crate) mod skip;
 mod spectrum;
 pub(crate) mod statistics;
+mod transport;
 
 pub(crate) use audio::{play_target, prepare_next_track};
 pub(crate) use controls::{pause, playback_status, resume, seek_to, set_volume, stop_playback};
 
 use continuous::ContinuousPlayback;
-use rodio::{ChannelCount, MixerDeviceSink, Player, SampleRate};
+use rodio::{ChannelCount, MixerDeviceSink, SampleRate};
 use serde::Serialize;
 use spectrum::{SpectrumCapture, BAND_COUNT};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::State;
+use transport::Transport;
 
 pub struct PlaybackState {
     active: Mutex<Option<ActivePlayback>>,
     output: Mutex<Option<MixerDeviceSink>>,
     volume: Mutex<u8>,
     next_playback_id: AtomicU64,
+    playback_fade_in: AtomicBool,
+    playback_fade_out: AtomicBool,
     replay_gain: Arc<AtomicBool>,
     replay_gain_preamp: Arc<AtomicU64>,
 }
@@ -38,6 +42,8 @@ impl Default for PlaybackState {
             output: Mutex::new(None),
             volume: Mutex::new(100),
             next_playback_id: AtomicU64::new(0),
+            playback_fade_in: AtomicBool::new(true),
+            playback_fade_out: AtomicBool::new(true),
             replay_gain: Arc::new(AtomicBool::new(true)),
             replay_gain_preamp: Arc::new(AtomicU64::new(0.0_f64.to_bits())),
         }
@@ -45,6 +51,23 @@ impl Default for PlaybackState {
 }
 
 impl PlaybackState {
+    pub(crate) fn set_playback_fades(&self, fade_in: bool, fade_out: bool) {
+        // Serialize disabling with commands so no ramp can start with a stale setting.
+        let active = self.active.lock().unwrap();
+        self.playback_fade_in.store(fade_in, Ordering::Relaxed);
+        self.playback_fade_out.store(fade_out, Ordering::Relaxed);
+        if let Some(playback) = active.as_ref() {
+            let enabled = if playback.player.is_paused() {
+                fade_out
+            } else {
+                fade_in
+            };
+            if !enabled {
+                playback.player.finish();
+            }
+        }
+    }
+
     pub(crate) fn set_replay_gain(&self, enabled: bool, preamp_db: f64) {
         self.replay_gain_preamp
             .store(preamp_db.to_bits(), Ordering::Relaxed);
@@ -53,7 +76,7 @@ impl PlaybackState {
 }
 
 struct ActivePlayback {
-    player: Player,
+    player: Transport,
     spectrum: Arc<SpectrumCapture>,
     continuous: ContinuousPlayback,
     channels: ChannelCount,

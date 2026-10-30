@@ -203,9 +203,12 @@ fn start_playback(
             );
         }
     });
-    let (player, spectrum) = connect_source(output.mixer(), source, *volume as f32 / 100.0);
+    let fade = state.playback_fade_in.load(Ordering::Relaxed);
+    let volume = *volume as f32 / 100.0;
+    let (player, spectrum) =
+        connect_source(output.mixer(), source, if fade { 0.0 } else { volume });
     *active = Some(ActivePlayback {
-        player,
+        player: super::transport::Transport::new(player, volume, fade),
         spectrum,
         continuous,
         channels,

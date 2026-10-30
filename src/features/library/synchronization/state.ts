@@ -35,9 +35,7 @@ export async function refreshSynchronization() {
     );
     const details = errors.map(({ path }) => t("无法扫描文件夹：{path}", { path }));
     if (issues.replayGainFailed) {
-      details.push(
-        t("ReplayGain 失败 {count} 首，未改写原文件", { count: issues.replayGainFailed }),
-      );
+      details.push(t("响度均衡失败 {count} 首，未改写原文件", { count: issues.replayGainFailed }));
     }
     let result: TaskResult | undefined;
     if (errors.length) {

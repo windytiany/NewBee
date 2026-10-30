@@ -62,6 +62,8 @@ pub fn run() {
                 let settings = app.state::<settings::SettingsState>().get()?;
                 app.state::<playback::PlaybackState>()
                     .set_replay_gain(settings.replay_gain, settings.replay_gain_preamp);
+                app.state::<playback::PlaybackState>()
+                    .set_playback_fades(settings.playback_fade_in, settings.playback_fade_out);
                 stage = "library_synchronization";
                 library::synchronization::initialize(app.handle())?;
                 stage = "playback_statistics";

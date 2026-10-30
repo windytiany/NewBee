@@ -28,6 +28,6 @@ function remove() {
     "
     @click.stop="remove"
   >
-    {{ action.pending.value ? t("正在移除 ReplayGain 标签…") : t("移除 ReplayGain 标签") }}
+    {{ action.pending.value ? t("正在移除响度均衡标签…") : t("移除响度均衡标签") }}
   </button>
 </template>

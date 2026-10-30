@@ -43,6 +43,8 @@ export function useEditor(
     albumCoverBackground: false,
     playingCoverBackground: false,
     showPlaybackStatistics: true,
+    playbackFadeIn: true,
+    playbackFadeOut: true,
     replayGain: true,
     replayGainPreamp: 0,
     scanReplayGain: false,
@@ -79,6 +81,8 @@ export function useEditor(
       albumCoverBackground: draft.albumCoverBackground,
       playingCoverBackground: draft.playingCoverBackground,
       showPlaybackStatistics: draft.showPlaybackStatistics,
+      playbackFadeIn: draft.playbackFadeIn,
+      playbackFadeOut: draft.playbackFadeOut,
       replayGain: draft.replayGain,
       replayGainPreamp: draft.replayGainPreamp,
       scanReplayGain: draft.scanReplayGain,
@@ -163,6 +167,8 @@ export function useEditor(
       draft.albumCoverBackground = settings.albumCoverBackground;
       draft.playingCoverBackground = settings.playingCoverBackground;
       draft.showPlaybackStatistics = settings.showPlaybackStatistics;
+      draft.playbackFadeIn = settings.playbackFadeIn;
+      draft.playbackFadeOut = settings.playbackFadeOut;
       draft.replayGain = settings.replayGain;
       draft.replayGainPreamp = settings.replayGainPreamp;
       draft.scanReplayGain = settings.scanReplayGain;

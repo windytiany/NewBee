@@ -1,6 +1,23 @@
 use super::super::*;
 
 #[test]
+fn legacy_fades_preserve_the_saved_choice_without_overwriting_independent_settings() {
+    let legacy = serde_json::json!({ "playbackFade": false });
+    let migrated = deserialize(legacy.clone()).unwrap();
+    assert!(!migrated.playback_fade_in);
+    assert!(!migrated.playback_fade_out);
+    let mut mixed = legacy;
+    mixed["playbackFadeOut"] = serde_json::json!(true);
+    let migrated = deserialize(mixed).unwrap();
+    assert!(!migrated.playback_fade_in);
+    assert!(migrated.playback_fade_out);
+    let saved = serde_json::to_value(migrated).unwrap();
+    assert!(saved.get("playbackFade").is_none());
+    assert_eq!(saved["playbackFadeIn"], false);
+    assert_eq!(saved["playbackFadeOut"], true);
+}
+
+#[test]
 fn invalid_accent_color_save_preserves_memory_and_disk() {
     let path =
         std::env::temp_dir().join(format!("newbee-invalid-accent-{}.json", std::process::id()));

@@ -109,7 +109,7 @@ pub(crate) fn write(path: &Path, measured: TrackGain, overwrite: bool) -> Result
         return Err("文件为只读".to_owned());
     }
     if !super::is_supported_file_type(original.file_type()) {
-        return Err("此文件格式不支持 ReplayGain 标签写入".to_owned());
+        return Err("此文件格式不支持响度均衡标签写入".to_owned());
     }
     let target_type = preferred_type(&original);
     let mut target = original
@@ -183,7 +183,7 @@ pub(crate) fn remove(path: &Path) -> Result<bool, String> {
         return Err("文件为只读".to_owned());
     }
     if !super::is_supported_file_type(original.file_type()) {
-        return Err("此文件格式不支持 ReplayGain 标签写入".to_owned());
+        return Err("此文件格式不支持响度均衡标签写入".to_owned());
     }
     let tags: Vec<_> = original
         .tags()
@@ -219,7 +219,7 @@ fn save(
                 }
                 destination.rewind().map_err(|error| error.to_string())?;
                 formats::write_tag(destination, original.file_type(), tag, false)
-                    .map_err(|error| format!("写入 ReplayGain 失败，原文件未修改：{error}"))?;
+                    .map_err(|error| format!("写入响度均衡失败，原文件未修改：{error}"))?;
             }
             if original.file_type() == FileType::Aac {
                 formats::aac::verify(copy, destination)?;
@@ -236,7 +236,7 @@ fn save(
                     old.items()
                         .any(|item| !expected.contains(item.key()) && actual.contains(item.key()))
                 }) {
-                    return Err("ReplayGain 标签移除后回读不一致，原文件未修改".to_owned());
+                    return Err("响度均衡标签移除后回读不一致，原文件未修改".to_owned());
                 }
                 if expected.pictures() != actual.pictures() {
                     return Err("写入影响了内嵌封面，原文件未修改".to_owned());

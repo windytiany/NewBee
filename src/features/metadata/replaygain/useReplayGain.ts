@@ -16,19 +16,19 @@ watchActivity(pending);
 const operations = {
   analyze: {
     update: analyzeReplayGain,
-    title: "分析 ReplayGain",
-    confirmation: "重新测量并覆盖所选曲目的 ReplayGain 标签？",
-    success: "ReplayGain 分析完成",
-    partial: "{count} 首曲目 ReplayGain 分析失败",
-    failure: "ReplayGain 分析失败",
+    title: "分析响度均衡",
+    confirmation: "重新测量并覆盖所选曲目的响度均衡标签？",
+    success: "响度均衡分析完成",
+    partial: "{count} 首曲目响度均衡分析失败",
+    failure: "响度均衡分析失败",
   },
   remove: {
     update: removeReplayGain,
-    title: "移除 ReplayGain 标签",
-    confirmation: "移除所选曲目的 ReplayGain 标签？",
-    success: "已移除 ReplayGain 标签",
-    partial: "{count} 首曲目 ReplayGain 标签移除失败",
-    failure: "移除 ReplayGain 标签失败",
+    title: "移除响度均衡标签",
+    confirmation: "移除所选曲目的响度均衡标签？",
+    success: "已移除响度均衡标签",
+    partial: "{count} 首曲目响度均衡标签移除失败",
+    failure: "移除响度均衡标签失败",
   },
 } as const;
 

@@ -23,7 +23,7 @@ defineProps<{ disabled: boolean }>();
         type="checkbox"
         class="accent-app-accent"
       />
-      {{ t("扫描时补齐 ReplayGain 标签") }}
+      {{ t("扫描时补齐响度均衡标签") }}
     </label>
     <h4 class="mt-5 mb-3 text-sm font-semibold">{{ t("专辑排序") }}</h4>
     <div class="grid gap-3 sm:grid-cols-2">

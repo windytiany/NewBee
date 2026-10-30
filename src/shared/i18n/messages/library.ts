@@ -90,8 +90,8 @@ export const libraryMessages: Record<string, string> = {
   部分文件夹扫描失败: "Some folders could not be scanned",
   "无法扫描文件夹：{path}": "Could not scan folder: {path}",
   "扫描完成，{count} 个文件处理异常": "Scan complete; {count} files had issues",
-  "ReplayGain 失败 {count} 首，未改写原文件":
-    "ReplayGain failed for {count} tracks; original files were not modified",
+  "响度均衡失败 {count} 首，未改写原文件":
+    "Replay Gain failed for {count} tracks; original files were not modified",
   数据写入或备份任务正在运行: "A data write or backup task is running",
   "扫描完成：新增 {added} 首，更新 {updated} 首":
     "Scan complete: {added} tracks added, {updated} updated",

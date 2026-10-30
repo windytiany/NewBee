@@ -12,7 +12,7 @@ const playbackLabel = computed(() => (locale.value === "en" ? "Playback" : "播�
 <template>
   <fieldset :disabled="disabled">
     <legend class="sr-only">{{ playbackLabel }}</legend>
-    <h4 id="playback-loudness-label" class="mb-3 text-sm font-semibold">{{ t("响度") }}</h4>
+    <h4 id="playback-loudness-label" class="mb-3 text-sm font-semibold">{{ t("响度均衡") }}</h4>
     <label class="flex items-center gap-3 text-sm">
       <input
         v-model="draft.replayGain"
@@ -20,10 +20,10 @@ const playbackLabel = computed(() => (locale.value === "en" ? "Playback" : "播�
         type="checkbox"
         class="accent-app-accent"
       />
-      {{ t("ReplayGain 响度归一化") }}
+      {{ t("启用响度均衡") }}
     </label>
     <div class="mt-3 ml-7 flex items-center gap-3 text-sm">
-      <label for="replay-gain-preamp">{{ t("ReplayGain 前级增益（dB）") }}</label>
+      <label for="replay-gain-preamp">{{ t("前级增益") }}</label>
       <input
         id="replay-gain-preamp"
         v-model.number="draft.replayGainPreamp"
@@ -45,6 +45,27 @@ const playbackLabel = computed(() => (locale.value === "en" ? "Playback" : "播�
       >
         <RotateCcw :size="16" aria-hidden="true" />
       </button>
+    </div>
+    <h4 class="mt-5 mb-3 text-sm font-semibold">{{ t("效果") }}</h4>
+    <div class="space-y-3">
+      <label class="flex items-center gap-3 text-sm">
+        <input
+          v-model="draft.playbackFadeIn"
+          name="playback-fade-in"
+          type="checkbox"
+          class="accent-app-accent"
+        />
+        {{ t("播放淡入") }}
+      </label>
+      <label class="flex items-center gap-3 text-sm">
+        <input
+          v-model="draft.playbackFadeOut"
+          name="playback-fade-out"
+          type="checkbox"
+          class="accent-app-accent"
+        />
+        {{ t("暂停淡出") }}
+      </label>
     </div>
   </fieldset>
 </template>

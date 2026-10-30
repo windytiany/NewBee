@@ -25,6 +25,8 @@ export type Settings = {
   lightweightOnClose: boolean;
   checkUpdatesOnStartup: boolean;
   showPlaybackStatistics: boolean;
+  playbackFadeIn: boolean;
+  playbackFadeOut: boolean;
   replayGain: boolean;
   replayGainPreamp: number;
   scanReplayGain: boolean;

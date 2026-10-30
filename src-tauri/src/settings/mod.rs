@@ -76,7 +76,7 @@ fn validate_replay_gain_preamp(value: f64) -> Result<(), String> {
     if value.is_finite() && (-20.0..=20.0).contains(&value) && (value * 2.0).fract() == 0.0 {
         Ok(())
     } else {
-        Err("ReplayGain preamp must be between -20 and 20 dB in 0.5 dB steps".to_owned())
+        Err("前级增益必须为 −20 至 +20 dB，步进 0.5 dB".to_owned())
     }
 }
 
@@ -105,6 +105,8 @@ pub struct Settings {
     pub lightweight_on_close: bool,
     pub check_updates_on_startup: bool,
     pub show_playback_statistics: bool,
+    pub playback_fade_in: bool,
+    pub playback_fade_out: bool,
     pub replay_gain: bool,
     #[serde(deserialize_with = "deserialize_replay_gain_preamp")]
     pub replay_gain_preamp: f64,
@@ -134,6 +136,8 @@ impl Default for Settings {
             lightweight_on_close: false,
             check_updates_on_startup: true,
             show_playback_statistics: true,
+            playback_fade_in: true,
+            playback_fade_out: true,
             replay_gain: true,
             replay_gain_preamp: 0.0,
             scan_replay_gain: false,
@@ -147,6 +151,20 @@ impl Default for Settings {
     }
 }
 
+pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Settings, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let mut value = serde_json::Value::deserialize(deserializer)?;
+    if let Some(fields) = value.as_object_mut() {
+        if let Some(enabled) = fields.remove("playbackFade") {
+            fields.entry("playbackFadeIn").or_insert(enabled.clone());
+            fields.entry("playbackFadeOut").or_insert(enabled);
+        }
+    }
+    serde_json::from_value(value).map_err(serde::de::Error::custom)
+}
+
 pub struct SettingsState {
     settings: Mutex<Settings>,
     path: PathBuf,
@@ -155,7 +173,7 @@ pub struct SettingsState {
 impl SettingsState {
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let settings = match std::fs::read(&path) {
-            Ok(data) => serde_json::from_slice(&data)?,
+            Ok(data) => deserialize(serde_json::from_slice::<serde_json::Value>(&data)?)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Settings {
                 shortcuts: crate::shortcuts::ShortcutSettings::defaults(),
                 ..Settings::default()
@@ -275,6 +293,8 @@ async fn save_settings_for_app<R: tauri::Runtime>(
             .state::<crate::locking::WriteState>()
             .acquire_settings()?;
         let locale = settings.locale;
+        let playback_fade_in = settings.playback_fade_in;
+        let playback_fade_out = settings.playback_fade_out;
         let replay_gain = settings.replay_gain;
         let replay_gain_preamp = settings.replay_gain_preamp;
         crate::shortcuts::save_configuration(&app, &settings.shortcuts.clone(), || {
@@ -282,6 +302,8 @@ async fn save_settings_for_app<R: tauri::Runtime>(
         })?;
         app.state::<crate::playback::PlaybackState>()
             .set_replay_gain(replay_gain, replay_gain_preamp);
+        app.state::<crate::playback::PlaybackState>()
+            .set_playback_fades(playback_fade_in, playback_fade_out);
         if let Err(error) = crate::window::tray::update_locale(&app, locale) {
             log::warn!("Could not update tray menu language: {error}");
         }
