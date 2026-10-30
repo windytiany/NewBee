@@ -4,6 +4,7 @@ version = "0.2.0"
 description = "Desktop app for organizing and playing a local music library."
 authors = ["you"]
 edition = "2021"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
