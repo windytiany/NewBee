@@ -63,4 +63,5 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml
 </details>
 
 ## LICENSE
+
 本项目采用 [MIT 许可证](LICENSE)。
