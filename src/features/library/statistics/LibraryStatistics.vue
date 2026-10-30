@@ -16,7 +16,7 @@ const { width, minWidth, maxWidth, resize } = useWidth(paneElement);
   <div
     v-if="visible"
     ref="paneElement"
-    class="flex min-w-0 shrink-0"
+    class="flex min-h-0 min-w-0 shrink-0 overflow-hidden"
     :style="{ width: `${width}px` }"
   >
     <ResizeHandle
@@ -32,7 +32,7 @@ const { width, minWidth, maxWidth, resize } = useWidth(paneElement);
     <aside
       :aria-label="t('最常播放曲目')"
       :aria-busy="isLoading"
-      class="sidebar-scrollbars min-w-0 flex-1 overflow-y-auto border-l border-white/10 px-3 py-3 text-sm"
+      class="sidebar-scrollbars min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain border-l border-white/10 px-3 py-3 text-sm"
     >
       <h2 class="text-app-muted mb-3 font-medium">{{ t("最常播放曲目") }}</h2>
       <p v-if="isLoading && !tracks.length" role="status" class="text-app-muted">

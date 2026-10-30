@@ -45,12 +45,10 @@ export function useStatistics(getAlbums: () => readonly AlbumSummary[]) {
       const albums = new Set(
         getAlbums().map(({ albumArtist, album }) => JSON.stringify([albumArtist, album])),
       );
-      tracks.value = result
-        .filter(
-          (track) =>
-            track.playCount > 0 && albums.has(JSON.stringify([track.albumArtist, track.album])),
-        )
-        .slice(0, 10);
+      tracks.value = result.filter(
+        (track) =>
+          track.playCount > 0 && albums.has(JSON.stringify([track.albumArtist, track.album])),
+      );
       loadFailed.value = false;
     } catch (cause) {
       if (disposed || version !== requestVersion) return;
