@@ -8,6 +8,7 @@ import SidePane from "@/shared/layout/SidePane.vue";
 import ArtistList from "@/features/artists/ArtistList.vue";
 import TrackRow from "@/features/tracks/presentation/TrackRow.vue";
 import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";
+import RevealMenuItem from "@/features/tracks/presentation/RevealMenuItem.vue";
 import ReleaseMenuItem from "@/features/metadata/releases/ReleaseMenuItem.vue";
 import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import DownloadMenuItem from "@/features/lyrics/download/DownloadMenuItem.vue";
@@ -275,6 +276,12 @@ watch(keys, (keys) => {
         {{ t("添加到音乐库") }}
       </button>
       <div class="my-1 border-t border-white/10" role="separator" />
+      <RevealMenuItem
+        v-if="request.payload.itemKey !== null"
+        :track-id="Number(request.payload.itemKey)"
+        :disabled="state.pending"
+        @close="menu.close(true)"
+      />
       <EditMenuItem
         :track-ids="trackIds"
         :disabled="!trackIds.length || state.pending"

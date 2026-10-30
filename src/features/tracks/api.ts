@@ -14,6 +14,8 @@ export function createTracksApi(invokeCommand: TracksInvoker = invoke) {
     getTrack: (trackId: number) => invokeCommand<TrackDetails | null>("get_track", { trackId }),
     getTracks: (trackIds: readonly number[]) =>
       invokeCommand<TrackDetails[]>("get_tracks", { trackIds }),
+    revealFile: (trackId?: number | null, path?: string | null) =>
+      invokeCommand<void>("reveal_track_file", { trackId: trackId ?? null, path: path ?? null }),
     rereadTags: (trackIds: readonly number[]) =>
       invokeCommand<TrackReadResult[]>("reread_track_tags", { trackIds }),
   };

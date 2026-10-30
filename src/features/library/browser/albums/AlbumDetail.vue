@@ -192,6 +192,11 @@
         </button>
       </div>
       <div class="my-1 border-t border-white/10" role="separator"></div>
+      <RevealMenuItem
+        :track-id="Number(contextMenu.payload.itemKey)"
+        :disabled="props.trackActionPending"
+        @close="closeTrackContextMenu(true)"
+      />
       <EditMenuItem
         :track-ids="contextMenu.payload.targetTrackIds"
         :disabled="props.trackActionPending"
@@ -261,6 +266,7 @@ import AlbumTrack from "@/features/library/browser/albums/AlbumTrack.vue";
 import SkipMenuItem from "@/features/playback/queue/SkipMenuItem.vue";
 import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
+import RevealMenuItem from "@/features/tracks/presentation/RevealMenuItem.vue";
 import AnalysisMenuItem from "@/features/metadata/replaygain/AnalysisMenuItem.vue";
 import RemovalMenuItem from "@/features/metadata/replaygain/RemovalMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";

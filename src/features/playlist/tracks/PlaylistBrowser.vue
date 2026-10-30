@@ -150,6 +150,11 @@
           @close="closeContextMenu(true)"
         />
         <div class="my-1 border-t border-white/10" role="separator"></div>
+        <RevealMenuItem
+          :track-id="contextTrack?.trackId"
+          :disabled="props.isPlaylistActionPending"
+          @close="closeContextMenu(true)"
+        />
         <EditMenuItem
           :track-ids="contextTargetTrackIds"
           :disabled="props.isPlaylistActionPending"
@@ -246,6 +251,7 @@ import TrackArtwork from "@/features/artwork/track/TrackArtwork.vue";
 import SkipMenuItem from "@/features/playback/queue/SkipMenuItem.vue";
 import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
+import RevealMenuItem from "@/features/tracks/presentation/RevealMenuItem.vue";
 import AnalysisMenuItem from "@/features/metadata/replaygain/AnalysisMenuItem.vue";
 import RemovalMenuItem from "@/features/metadata/replaygain/RemovalMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";
@@ -352,6 +358,10 @@ const {
   menuElement: contextMenuElement,
   fallbackFocusElement: playlistHeadingElement,
 });
+
+const contextTrack = computed(() =>
+  props.tracks.find((track) => String(track.playlistItemId) === contextMenu.value?.payload.itemKey),
+);
 
 watch(visibleTrackKeys, (itemKeys) => playlistTrackFocus.syncVisibleItems(itemKeys), {
   immediate: true,

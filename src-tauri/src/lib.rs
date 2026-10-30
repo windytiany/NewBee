@@ -171,6 +171,7 @@ pub fn run() {
             playback::skip::list_skipped_track_ids,
             playback::skip::set_tracks_skipped,
             tracks::commands::get_track,
+            tracks::commands::reveal_track_file,
             tracks::commands::get_tracks,
             tracks::commands::register_local_tracks,
             tracks::commands::reread_track_tags,

@@ -73,6 +73,42 @@ pub async fn get_track<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+pub async fn reveal_track_file<R: tauri::Runtime>(
+    track_id: Option<i64>,
+    path: Option<String>,
+    app: tauri::AppHandle<R>,
+) -> Result<(), String> {
+    let path = if let Some(track_id) = track_id {
+        blocking(app, move |database| {
+            database
+                .get_track(track_id)?
+                .map(|track| track.path)
+                .ok_or_else(|| "file_not_found".to_string())
+        })
+        .await?
+    } else {
+        path.filter(|path| !path.is_empty())
+            .ok_or_else(|| "file_not_found".to_string())?
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = std::path::Path::new(&path);
+        let metadata = std::fs::metadata(path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                "file_not_found".to_string()
+            } else {
+                error.to_string()
+            }
+        })?;
+        if !metadata.is_file() {
+            return Err("file_not_found".to_string());
+        }
+        tauri_plugin_opener::reveal_item_in_dir(path).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn reread_track_tags<R: tauri::Runtime>(
     track_ids: Vec<i64>,
     app: tauri::AppHandle<R>,

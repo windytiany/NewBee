@@ -80,6 +80,11 @@
         class="my-1 border-t border-white/10"
         role="separator"
       />
+      <RevealMenuItem
+        :track-id="contextTrack?.trackId"
+        :path="contextTrack?.path"
+        @close="closeQueueContextMenu(true)"
+      />
       <EditMenuItem
         v-if="contextTargetTrackIds.length"
         :track-ids="contextTargetTrackIds"
@@ -130,6 +135,7 @@ import QueueRow from "@/features/playback/queue/QueueRow.vue";
 import SkipMenuItem from "@/features/playback/queue/SkipMenuItem.vue";
 import UpdateMenuItem from "@/features/metadata/tracks/UpdateMenuItem.vue";
 import RereadMenuItem from "@/features/tracks/presentation/RereadMenuItem.vue";
+import RevealMenuItem from "@/features/tracks/presentation/RevealMenuItem.vue";
 import AnalysisMenuItem from "@/features/metadata/replaygain/AnalysisMenuItem.vue";
 import RemovalMenuItem from "@/features/metadata/replaygain/RemovalMenuItem.vue";
 import EditMenuItem from "@/features/metadata/manual/EditMenuItem.vue";
@@ -187,6 +193,9 @@ const displayTitle = computed(() => props.title ?? t("当前曲目列表"));
 const displayEmptyMessage = computed(() => props.emptyMessage ?? t("暂无曲目。"));
 
 const visibleRowKeys = computed(() => props.tracks.map(getTrackRowKey));
+const contextTrack = computed(() =>
+  props.tracks.find((track) => track.rowKey === contextMenu.value?.payload.rowKey),
+);
 const contextTargetTrackIds = computed(() => {
   const rowKeys = new Set(contextMenu.value?.payload.targetRowKeys ?? []);
   return props.tracks
