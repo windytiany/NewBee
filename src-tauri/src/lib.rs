@@ -14,6 +14,7 @@ mod playlist;
 mod remapping;
 mod settings;
 mod shortcuts;
+mod startup;
 mod tasks;
 mod tracks;
 mod window;
@@ -28,67 +29,7 @@ pub fn run() {
         .manage(backup::BackupState::default())
         .manage(library::synchronization::SynchronizationState::default())
         .manage(lyrics::batch::LyricsBatchState::default())
-        .setup(|app| {
-            use tauri::Manager;
-
-            logging::initialize(app.handle());
-            let mut stage = "data_directory";
-            let setup = (|| {
-                let app_data_dir = app.path().app_data_dir()?;
-                std::fs::create_dir_all(&app_data_dir)?;
-                stage = "restore";
-                app.manage(backup::lock_data_directory(&app_data_dir)?);
-                let restoring = match backup::apply_pending_restore(&app_data_dir) {
-                    Ok(restored) => restored,
-                    Err(error) => {
-                        backup::abort_pending_restore(&app_data_dir)?;
-                        log::error!("event=backup_restore_failed error={error}");
-                        app.state::<backup::BackupState>()
-                            .report_restore_error(error)?;
-                        false
-                    }
-                };
-                stage = "database";
-                let database_path = app_data_dir.join("music-library.sqlite3");
-                let cache_directory = app.path().app_cache_dir()?.join("artwork");
-                app.manage(database::Database::open_with_cache(
-                    database_path,
-                    &cache_directory,
-                )?);
-                stage = "settings";
-                app.manage(settings::SettingsState::load(
-                    app_data_dir.join("settings.json"),
-                )?);
-                let settings = app.state::<settings::SettingsState>().get()?;
-                app.state::<playback::PlaybackState>()
-                    .set_replay_gain(settings.replay_gain, settings.replay_gain_preamp);
-                app.state::<playback::PlaybackState>()
-                    .set_playback_fades(settings.playback_fade_in, settings.playback_fade_out);
-                stage = "library_synchronization";
-                library::synchronization::initialize(app.handle())?;
-                stage = "playback_statistics";
-                playback::statistics::initialize(app.handle());
-                stage = "playback_session";
-                playback::session::initialize(
-                    app.handle(),
-                    app_data_dir.join("playback-session.json"),
-                )?;
-                stage = "window";
-                window::initialize(app.handle());
-                window::tray::initialize(app.handle())?;
-                stage = "shortcuts";
-                shortcuts::initialize(app.handle(), restoring);
-                #[cfg(windows)]
-                if let Err(error) = playback::media::initialize(app.handle()) {
-                    log::warn!("Could not initialize Windows media controls: {error}");
-                }
-                Ok::<_, Box<dyn std::error::Error>>(())
-            })();
-            if let Err(error) = &setup {
-                log::error!("event=application_setup_failed stage={stage} error={error}");
-            }
-            setup
-        })
+        .setup(startup::initialize)
         .on_window_event(window::on_window_event)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -102,6 +43,7 @@ pub fn run() {
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window::STATE_FLAGS)
                 .skip_initial_state("main")
+                .with_denylist(&["splash"])
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
@@ -112,7 +54,13 @@ pub fn run() {
             tasks::occupied_tracks,
             logging::open_logs_directory,
             logging::set_detailed_logging,
+            window::prepare_main_window,
             window::show_main_window,
+            startup::startup_status,
+            startup::present_splash,
+            startup::continue_startup,
+            startup::exit_startup,
+            startup::fail_startup,
             window::lightweight::advance_lightweight,
             window::lightweight::cancel_lightweight,
             settings::get_settings,
@@ -230,7 +178,7 @@ pub fn run() {
                 code: Some(0), api, ..
             } = &event
             {
-                if tasks::exit::intercept(app) {
+                if startup::intercept_exit(app) || tasks::exit::intercept(app) {
                     api.prevent_exit();
                 }
             }

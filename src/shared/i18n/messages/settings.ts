@@ -1,5 +1,6 @@
 export const settingsMessages: Record<string, string> = {
   设置: "Settings",
+  启动开屏: "Startup splash",
   响度均衡: "Replay Gain",
   启用响度均衡: "Enable Replay Gain",
   前级增益: "Preamp",

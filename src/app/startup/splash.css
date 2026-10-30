@@ -1,0 +1,73 @@
+@import "../styles/themes.css";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--app-text);
+  font:
+    14px system-ui,
+    sans-serif;
+  user-select: none;
+}
+
+main {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+img {
+  width: 192px;
+  height: 192px;
+  object-fit: contain;
+}
+
+body[data-phase]:not([data-phase="loading"]) main {
+  border-radius: 16px;
+  background: var(--app-base);
+}
+
+body[data-phase]:not([data-phase="loading"]) img {
+  width: 96px;
+  height: 96px;
+}
+
+p {
+  margin: 0;
+}
+
+#actions {
+  display: flex;
+  gap: 10px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 12px;
+  background: var(--app-interactive);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

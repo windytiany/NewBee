@@ -35,6 +35,7 @@ export function useEditor(
     locale: locale.value,
     closeBehavior: "tray",
     lightweightOnClose: false,
+    startupSplash: true,
     checkUpdatesOnStartup: true,
     themeMode: "system",
     accentColor: DEFAULT_ACCENT_COLOR,
@@ -73,6 +74,7 @@ export function useEditor(
       locale: draft.locale,
       closeBehavior: draft.closeBehavior,
       lightweightOnClose: draft.lightweightOnClose,
+      startupSplash: draft.startupSplash,
       checkUpdatesOnStartup: draft.checkUpdatesOnStartup,
       themeMode: draft.themeMode,
       accentColor: draft.accentColor,
@@ -159,6 +161,7 @@ export function useEditor(
       draft.locale = settings.locale;
       draft.closeBehavior = settings.closeBehavior;
       draft.lightweightOnClose = settings.lightweightOnClose;
+      draft.startupSplash = settings.startupSplash;
       draft.checkUpdatesOnStartup = settings.checkUpdatesOnStartup;
       draft.themeMode = settings.themeMode;
       draft.accentColor = settings.accentColor;

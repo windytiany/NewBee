@@ -233,6 +233,8 @@ watch(
 onMounted(() => {
   const layout = layoutElement.value;
   if (layout) {
+    // The startup window may be cloaked, delaying ResizeObserver delivery.
+    updateContainerWidth(layout.getBoundingClientRect().width);
     layoutResizeObserver = new globalThis.ResizeObserver(([entry]) => {
       if (!entry) return;
       updateContainerWidth(entry.contentRect.width);
@@ -242,6 +244,7 @@ onMounted(() => {
 
   const sidebar = sidebarElement.value;
   if (sidebar) {
+    updateContainerHeight(sidebar.getBoundingClientRect().height);
     sidebarResizeObserver = new globalThis.ResizeObserver(([entry]) => {
       if (!entry) return;
       updateContainerHeight(entry.contentRect.height);

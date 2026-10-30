@@ -11,7 +11,7 @@ use std::{
     },
     time::Duration,
 };
-use tauri::{AppHandle, Manager, State, WebviewWindow, Window, WindowEvent};
+use tauri::{AppHandle, Manager, WebviewWindow, Window, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
 pub const STATE_FLAGS: StateFlags = StateFlags::SIZE
@@ -21,6 +21,7 @@ const SAVE_DEBOUNCE: Duration = Duration::from_millis(250);
 
 pub struct WindowLifecycle {
     ready: AtomicBool,
+    prepared: AtomicBool,
     save_requests: Sender<()>,
 }
 
@@ -29,6 +30,7 @@ pub fn initialize(app: &AppHandle) {
     app.manage(lightweight::LightweightState::default());
     app.manage(WindowLifecycle {
         ready: AtomicBool::new(false),
+        prepared: AtomicBool::new(false),
         save_requests,
     });
     let app = app.clone();
@@ -107,36 +109,94 @@ fn save_state(app: &AppHandle) {
     }
 }
 
+async fn on_main_thread(
+    window: WebviewWindow,
+    action: impl FnOnce(WebviewWindow) -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only the main window can change its startup visibility".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let (sender, receiver) = mpsc::channel();
+        let app = window.app_handle().clone();
+        app.run_on_main_thread(move || {
+            let _ = sender.send(action(window));
+        })
+        .map_err(|error| error.to_string())?;
+        receiver.recv().map_err(|error| error.to_string())?
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn prepare_main_window(window: WebviewWindow) -> Result<(), String> {
+    on_main_thread(window, |window| {
+        let lifecycle = window.state::<WindowLifecycle>();
+        if lifecycle.prepared.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        // Maximizing a hidden HWND can make it visible. DWM cloaking keeps it
+        // off screen while Windows and the WebView settle at the final size.
+        #[cfg(windows)]
+        placement::cloak(&window, true)?;
+        if !lightweight::restore_placement(&window)? {
+            window
+                .restore_state(STATE_FLAGS)
+                .map_err(|error| error.to_string())?;
+        }
+        #[cfg(windows)]
+        window
+            .show()
+            .and_then(|_| window.unminimize())
+            .map_err(|error| error.to_string())?;
+        lifecycle.prepared.store(true, Ordering::Release);
+        Ok(())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn show_main_window(
     window: WebviewWindow,
-    lifecycle: State<'_, WindowLifecycle>,
     lightweight_ready: Option<bool>,
 ) -> Result<(), String> {
-    if window.label() != "main" || lifecycle.ready.load(Ordering::Acquire) {
-        return Ok(());
-    }
-    // On Windows, restoring maximization can show even an initially hidden window.
-    // Only restore after the frontend has completed its first painted frame.
-    if !lightweight::restore_placement(&window)? {
+    on_main_thread(window, move |window| {
+        let lifecycle = window.state::<WindowLifecycle>();
+        if lifecycle.ready.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        if !lifecycle.prepared.load(Ordering::Acquire) {
+            return Err("Main window layout has not been prepared".into());
+        }
+        // Completion and splash presentation are serialized on the UI thread.
+        crate::startup::ensure_active(window.app_handle())?;
         window
-            .restore_state(STATE_FLAGS)
-            .map_err(|error| format!("Could not restore main window state: {error}"))?;
-    }
-    window
-        .show()
-        .and_then(|_| window.unminimize())
-        .and_then(|_| window.set_focus())
-        .map_err(|error| format!("Could not restore and show main window: {error}"))?;
-    window
-        .state::<lightweight::LightweightState>()
-        .enabled
-        .store(lightweight_ready.unwrap_or(false), Ordering::Release);
-    lifecycle.ready.store(true, Ordering::Release);
-    Ok(())
+            .show()
+            .and_then(|_| window.unminimize())
+            .map_err(|error| error.to_string())?;
+        #[cfg(windows)]
+        placement::cloak(&window, false)?;
+        window.set_focus().map_err(|error| error.to_string())?;
+        crate::startup::complete(window.app_handle())?;
+        window
+            .state::<lightweight::LightweightState>()
+            .enabled
+            .store(lightweight_ready.unwrap_or(false), Ordering::Release);
+        lifecycle.ready.store(true, Ordering::Release);
+        Ok(())
+    })
+    .await
 }
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
+    if window.label() == "splash" {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            window.app_handle().exit(0);
+        }
+        return;
+    }
     if window.label() != "main" {
         return;
     }

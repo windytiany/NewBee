@@ -176,9 +176,9 @@ pub(super) fn restore_placement(window: &WebviewWindow) -> Result<bool, String> 
 }
 
 pub(crate) fn destroyed(app: &AppHandle) {
-    app.state::<WindowLifecycle>()
-        .ready
-        .store(false, Ordering::Release);
+    let lifecycle = app.state::<WindowLifecycle>();
+    lifecycle.ready.store(false, Ordering::Release);
+    lifecycle.prepared.store(false, Ordering::Release);
     let reopen = match app.state::<LightweightState>().phase.lock() {
         Ok(mut phase) => phase.destroyed(),
         Err(error) => {

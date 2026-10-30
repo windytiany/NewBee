@@ -19,6 +19,15 @@ defineProps<{ disabled: boolean }>();
         <option value="en">English</option>
       </select>
     </label>
+    <label class="mb-5 flex cursor-pointer items-center gap-3 text-sm">
+      <input
+        v-model="draft.startupSplash"
+        name="startup-splash"
+        type="checkbox"
+        class="accent-app-accent"
+      />
+      <span>{{ t("启动开屏") }}</span>
+    </label>
     <p id="close-behavior-description" class="mb-3 text-sm font-semibold">
       {{ t("关闭窗口时") }}
     </p>
