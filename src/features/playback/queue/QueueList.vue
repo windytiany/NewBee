@@ -13,7 +13,11 @@
       {{ displayTitle }}
     </h2>
 
-    <div v-persistent-scroll="'playback:queue'" class="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
+    <div
+      ref="scrollElement"
+      v-persistent-scroll="'playback:queue'"
+      class="min-h-0 flex-1 overflow-y-auto px-1 pb-3"
+    >
       <p
         v-if="!props.isLoading && props.tracks.length === 0"
         class="text-app-muted px-2 py-3 text-sm"
@@ -153,6 +157,7 @@ type QueueContextMenuTrigger = {
 type QueueContextMenuPayload = { rowKey: string; targetRowKeys: string[] };
 const headingElement = ref<InstanceType<typeof globalThis.HTMLHeadingElement> | null>(null);
 const listElement = ref<InstanceType<typeof globalThis.HTMLUListElement> | null>(null);
+const scrollElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const queueContextMenuElement = ref<InstanceType<typeof globalThis.HTMLDivElement> | null>(null);
 const {
   request: contextMenu,
@@ -213,6 +218,23 @@ const contextPaths = computed(() => {
 });
 
 watch(visibleRowKeys, (rowKeys) => queueFocus.syncVisibleItems(rowKeys), { immediate: true });
+
+watch(
+  () => props.currentRowKey,
+  () => {
+    const container = scrollElement.value;
+    const currentRow = listElement.value?.querySelector<
+      InstanceType<typeof globalThis.HTMLLIElement>
+    >(':scope > li[aria-current="true"]');
+    if (!container || !currentRow) return;
+
+    container.scrollTop +=
+      currentRow.getBoundingClientRect().top -
+      container.getBoundingClientRect().top -
+      container.clientTop;
+  },
+  { flush: "post" },
+);
 
 const emit = defineEmits<{
   playQueueItem: [rowKey: string];
