@@ -1,21 +1,25 @@
 use super::*;
 
 #[test]
-fn partial_registration_conflict_rolls_back_without_persisting() {
+fn partial_registration_conflict_preserves_saved_configuration_and_rolls_back_active_bindings() {
     let mut runtime = ShortcutRuntime::default();
     let mut registry = FakeRegistration::default();
     let old = settings("Ctrl+KeyA", "").parse().unwrap();
     runtime.save(old.clone(), &mut registry, || Ok(())).unwrap();
     let new = settings("Ctrl+KeyB", "Ctrl+KeyC").parse().unwrap();
     registry.blocked.insert(new[1].shortcut.id());
-    let error = runtime
-        .save(new, &mut registry, || panic!("must not persist"))
-        .unwrap_err();
-    assert!(error.contains("Ctrl+KeyC"));
+    let mut persisted = false;
+    let error = runtime.save(new.clone(), &mut registry, || {
+        persisted = true;
+        Ok(())
+    });
+    assert!(persisted);
+    assert!(error.unwrap().unwrap().contains("Ctrl+KeyC"));
     assert_eq!(registry.active, ids(&old));
     runtime.set_suspended(true, &mut registry).unwrap();
+    registry.blocked.clear();
     runtime.set_suspended(false, &mut registry).unwrap();
-    assert_eq!(registry.active, ids(&old));
+    assert_eq!(registry.active, ids(&new));
 }
 
 #[test]

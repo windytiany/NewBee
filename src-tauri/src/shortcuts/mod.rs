@@ -98,7 +98,7 @@ pub fn initialize(app: &AppHandle, restoring: bool) {
     });
 }
 
-fn report_error(app: &AppHandle, error: &str) {
+fn report_error<R: Runtime>(app: &AppHandle<R>, error: &str) {
     log::warn!("Shortcut failed: {error}");
     let state = app.state::<ShortcutsState>();
     match state.startup_error.lock() {
@@ -121,8 +121,10 @@ pub(crate) fn save_configuration<R: Runtime>(
         .runtime
         .lock()
         .map_err(|error| format!("Could not update shortcuts: {error}"))?;
-    runtime.save(bindings, &mut AppRegistration(app), persist)?;
-    clear_error(&state);
+    match runtime.save(bindings, &mut AppRegistration(app), persist)? {
+        Some(error) => report_error(app, &error),
+        None => clear_error(&state),
+    }
     Ok(())
 }
 

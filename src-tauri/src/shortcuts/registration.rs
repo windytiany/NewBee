@@ -96,7 +96,10 @@ impl ShortcutRuntime {
         registry: &mut impl Registration,
     ) -> Result<(), String> {
         self.desired = desired.clone();
-        self.save(desired, registry, || Ok(()))
+        match self.save(desired, registry, || Ok(()))? {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 
     pub fn save(
@@ -104,19 +107,20 @@ impl ShortcutRuntime {
         desired: Vec<Binding>,
         registry: &mut impl Registration,
         persist: impl FnOnce() -> Result<(), String>,
-    ) -> Result<(), String> {
+    ) -> Result<Option<String>, String> {
+        persist()?;
         let old = self.active.clone();
         let target: Vec<_> = desired
             .iter()
             .filter(|binding| binding.global)
             .cloned()
             .collect();
-        if let Err(error) = self.transition(&target, registry).and_then(|_| persist()) {
-            return Err(self.rollback(&old, registry, error));
-        }
         self.desired = desired;
+        if let Err(error) = self.transition(&target, registry) {
+            return Ok(Some(self.rollback(&old, registry, error)));
+        }
         self.suspended = false;
-        Ok(())
+        Ok(None)
     }
 
     pub fn set_suspended(
