@@ -2,7 +2,7 @@
   <footer
     data-focus-region
     :aria-label="t('播放控制')"
-    class="bg-app-surface text-app-muted fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 px-4 py-1 sm:h-10 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:gap-x-6 sm:px-6 sm:py-0 md:grid-cols-[minmax(10rem,20rem)_minmax(20rem,1fr)_minmax(9.5rem,14rem)] md:gap-x-[clamp(4px,calc(9.459459459vw-68.64864865px),32px)] md:pr-4 md:pl-8"
+    class="bg-app-surface text-app-muted fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 px-4 py-1 sm:h-(--app-playback-bar-height) sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:gap-x-6 sm:px-6 sm:py-0 md:grid-cols-[minmax(10rem,20rem)_minmax(20rem,1fr)_minmax(9.5rem,14rem)] md:gap-x-[clamp(4px,calc(9.459459459vw-68.64864865px),32px)] md:pr-4 md:pl-8"
   >
     <div class="col-start-1 row-start-1 flex min-w-0 items-center gap-4 md:gap-5">
       <div class="flex items-center gap-1">
@@ -102,7 +102,7 @@
     </div>
 
     <section
-      class="relative col-span-full row-start-2 min-w-0 sm:absolute sm:top-0 sm:left-1/2 sm:col-auto sm:row-auto sm:flex sm:h-full sm:w-[min(24rem,calc(100vw-22.5rem))] sm:-translate-x-1/2 sm:flex-col sm:py-1 md:w-[max(24rem,calc(100vw-41rem))]"
+      class="relative col-span-full row-start-2 min-w-0 sm:absolute sm:top-0 sm:left-1/2 sm:col-auto sm:row-auto sm:flex sm:h-full sm:w-[min(24rem,calc(100vw-22.5rem))] sm:-translate-x-1/2 sm:flex-col sm:justify-center sm:py-2 md:w-[max(24rem,calc(100vw-41rem))]"
     >
       <div class="flex items-center justify-end text-xs sm:h-5">
         <span class="text-app-muted text-right tabular-nums">
@@ -110,7 +110,7 @@
         </span>
       </div>
       <span
-        class="pointer-events-none absolute top-10 left-1/2 w-max max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-1"
+        class="pointer-events-none absolute top-10 left-1/2 w-max max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-[calc(50%-0.75rem)]"
       >
         <template v-if="currentTrack">
           {{ currentTrack.title ?? t("未知曲目") }} - {{ currentTrack.artist ?? t("未知演出者") }}

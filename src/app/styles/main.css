@@ -23,6 +23,10 @@
 }
 
 @layer base {
+  :root {
+    --app-playback-bar-height: 3rem;
+  }
+
   :root[data-layout-density="compact"] {
     font-size: 14px;
     --spacing: 0.2rem;

@@ -19,7 +19,7 @@
         props.horizontal
           ? 'grid grid-cols-2 items-center gap-6 text-left sm:gap-10'
           : props.compact
-            ? 'flex flex-col items-start gap-5 text-left sm:gap-6 md:grid md:h-full md:min-h-0 md:grid-rows-[minmax(0,1fr)_auto]'
+            ? 'flex flex-col items-start gap-5 text-left sm:gap-6 md:h-full md:min-h-0 md:justify-center'
             : 'flex flex-col items-center gap-6 text-center'
       "
     >
@@ -29,7 +29,7 @@
           props.horizontal
             ? 'max-w-md justify-self-center'
             : props.compact
-              ? 'md:@container-size md:h-full md:min-h-0'
+              ? 'md:@container-size md:aspect-square md:min-h-0 md:shrink'
               : ''
         "
       >
@@ -62,7 +62,7 @@
           props.horizontal
             ? 'items-start gap-3'
             : props.compact
-              ? 'w-full items-start gap-2'
+              ? 'w-full shrink-0 items-start gap-2'
               : 'items-center gap-1'
         "
       >

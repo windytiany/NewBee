@@ -182,7 +182,7 @@ onUnmounted(() => {
       v-if="isOpen"
       id="brand-menu"
       ref="menuElement"
-      class="bg-app-interactive absolute top-full left-0 z-50 mt-2 w-44 rounded-lg p-1 shadow-xl ring-1 ring-white/10"
+      class="bg-app-interactive absolute top-full left-0 z-50 mt-2 w-max min-w-44 rounded-lg p-1 shadow-xl ring-1 ring-white/10"
       role="menu"
       :aria-label="t('NewBee 菜单')"
       @keydown.stop="onMenuKeydown"
@@ -190,7 +190,7 @@ onUnmounted(() => {
       <div
         v-for="group in groups"
         :key="group.id"
-        class="relative"
+        class="relative whitespace-nowrap"
         @mouseenter="activeSubmenu = group.id"
       >
         <button
@@ -214,7 +214,7 @@ onUnmounted(() => {
           v-if="activeSubmenu === group.id"
           :id="`brand-menu-${group.id}`"
           :aria-labelledby="`brand-menu-${group.id}-trigger`"
-          class="absolute top-0 left-full w-56 pl-1"
+          class="absolute top-0 left-full w-max min-w-56 pl-1"
           role="menu"
         >
           <div class="bg-app-interactive rounded-lg p-1 shadow-xl ring-1 ring-white/10">
@@ -244,7 +244,7 @@ onUnmounted(() => {
       <button
         v-for="command in commands"
         :key="command.action"
-        class="focus-visible:outline-app-accent flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 focus-visible:outline-2"
+        class="focus-visible:outline-app-accent flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm whitespace-nowrap text-white/90 hover:bg-white/10 focus-visible:outline-2"
         role="menuitem"
         tabindex="-1"
         type="button"

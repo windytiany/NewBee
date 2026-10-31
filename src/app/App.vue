@@ -59,7 +59,9 @@ const playlistCatalog = shallowRef<PlaylistCatalog | null>(null);
       @shortcuts="commandDialog?.show('shortcuts')"
     />
     <CommandDialog ref="commandDialog" :bindings="bindings" :run="run" />
-    <main class="grid min-h-screen place-items-center pt-14 pb-20 sm:pb-10">
+    <main
+      class="grid min-h-screen place-items-center pt-14 pb-20 sm:pb-(--app-playback-bar-height)"
+    >
       <AppShell :mode="activePage === 'Playing' ? 'playing' : 'workspace'">
         <template #workspace>
           <div data-page="Playlist" class="contents">
