@@ -110,14 +110,14 @@
         </span>
       </div>
       <span
-        class="pointer-events-none absolute top-10 left-1/2 w-max max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-[calc(50%-0.75rem)]"
+        class="pointer-events-none absolute top-10 left-1/2 w-max max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-sm font-bold text-white sm:top-[calc(50%-1rem)]"
       >
         <template v-if="currentTrack">
           {{ currentTrack.title ?? t("未知曲目") }} - {{ currentTrack.artist ?? t("未知演出者") }}
         </template>
         <template v-else>{{ t("未选择歌曲") }}</template>
       </span>
-      <div class="bg-app-track relative mt-1 h-1 rounded-full sm:mb-1">
+      <div class="bg-app-track relative mt-1 h-1 rounded-full sm:mb-1 sm:translate-y-[0.25rem]">
         <div class="bg-app-accent h-full rounded-full" :style="{ width: `${progressPercent}%` }" />
         <span
           class="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
