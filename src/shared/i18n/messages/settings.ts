@@ -24,6 +24,8 @@ export const settingsMessages: Record<string, string> = {
     "This replaces your settings and library and restarts the app.",
   设置分类: "Settings categories",
   常规: "General",
+  页面: "Pages",
+  调整顺序: "Reorder",
   外观: "Appearance",
   媒体库: "Library",
   歌词: "Lyrics",

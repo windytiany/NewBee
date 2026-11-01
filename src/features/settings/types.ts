@@ -1,3 +1,4 @@
+import type { PageSetting } from "@/app/pages";
 import type { SynchronizationFolder } from "@/features/library/synchronization/types";
 import type { Locale } from "@/shared/i18n/locale";
 import type { LyricsProvider } from "@/features/lyrics/types";
@@ -13,6 +14,7 @@ export type ShortcutBinding = {
 export type ShortcutSettings = Record<ShortcutAction, ShortcutBinding>;
 
 export type Settings = {
+  pages: PageSetting[];
   shortcuts: ShortcutSettings;
   locale: Locale;
   themeMode: "system" | "light" | "dark";

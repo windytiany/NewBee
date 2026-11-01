@@ -11,10 +11,12 @@ import type { Settings } from "@/features/settings/types";
 import { DEFAULT_SHORTCUTS, cloneShortcuts } from "@/features/shortcuts/bindings";
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from "@/features/settings/appearance/accent";
 import { applyAppearance } from "@/features/settings/appearance/apply";
+import { pageSettings, applyPageSettings } from "@/app/pages";
 
 export const categories = {
   general: "常规",
   appearance: "外观",
+  pages: "页面",
   playback: "播放",
   library: "媒体库",
   lyrics: "歌词",
@@ -32,6 +34,7 @@ export function useEditor(
   const isBackingUp = ref(false);
   const isChangingLogging = ref(false);
   const draft = reactive<Settings>({
+    pages: pageSettings.value.map((page) => ({ ...page })),
     locale: locale.value,
     closeBehavior: "tray",
     lightweightOnClose: false,
@@ -70,6 +73,7 @@ export function useEditor(
 
   function snapshot(): Settings {
     return {
+      pages: draft.pages.map((page) => ({ ...page })),
       shortcuts: cloneShortcuts(draft.shortcuts),
       locale: draft.locale,
       closeBehavior: draft.closeBehavior,
@@ -158,6 +162,7 @@ export function useEditor(
       if (requestId !== loadRequestSequence) return;
       const settings = await api.get();
       if (requestId !== loadRequestSequence) return;
+      draft.pages = settings.pages.map((page) => ({ ...page }));
       draft.locale = settings.locale;
       draft.closeBehavior = settings.closeBehavior;
       draft.lightweightOnClose = settings.lightweightOnClose;
@@ -226,6 +231,7 @@ export function useEditor(
     isSaving.value = true;
     try {
       await api.save({ ...snapshot(), accentColor: color });
+      applyPageSettings(draft.pages);
       setLocale(draft.locale);
       draft.accentColor = color;
       applyAppearance({

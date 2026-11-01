@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { pageNames, pageLabel, type PageName } from "@/app/pages";
+import { visiblePages, pageLabel, type PageName } from "@/app/pages";
 const props = defineProps<{ activePage: PageName }>();
 const emit = defineEmits<{ "update:activePage": [page: PageName] }>();
 </script>
@@ -8,7 +8,7 @@ const emit = defineEmits<{ "update:activePage": [page: PageName] }>();
 <template>
   <nav :aria-label="t('主导航')" class="inline-flex h-full items-stretch border-b border-white/10">
     <button
-      v-for="pageName in pageNames"
+      v-for="pageName in visiblePages"
       :key="pageName"
       :aria-pressed="props.activePage === pageName"
       class="focus-visible:outline-app-accent relative px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 sm:px-5 sm:text-sm"

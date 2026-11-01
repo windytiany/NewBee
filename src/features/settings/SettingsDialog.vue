@@ -5,6 +5,7 @@ import { categories, useEditor } from "@/features/settings/useEditor";
 import { useDiagnostics } from "@/features/settings/useDiagnostics";
 import AppearanceOptions from "@/features/settings/appearance/AppearanceOptions.vue";
 import GeneralOptions from "@/features/settings/GeneralOptions.vue";
+import PageOptions from "@/features/settings/pages/PageOptions.vue";
 import PlaybackOptions from "@/features/settings/PlaybackOptions.vue";
 import LyricsOptions from "@/features/settings/LyricsOptions.vue";
 import LibraryOptions from "@/features/settings/LibraryOptions.vue";
@@ -91,6 +92,11 @@ defineExpose({ show });
           <GeneralOptions
             v-else-if="selectedCategory === 'general'"
             :draft="draft"
+            :disabled="disabled"
+          />
+          <PageOptions
+            v-else-if="selectedCategory === 'pages'"
+            v-model="draft.pages"
             :disabled="disabled"
           />
           <LyricsOptions

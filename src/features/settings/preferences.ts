@@ -1,3 +1,4 @@
+import { applyPageSettings } from "@/app/pages";
 import { setLocale } from "@/shared/i18n/locale";
 import { isTauri } from "@tauri-apps/api/core";
 import { logger } from "@/shared/logging/logger";
@@ -10,6 +11,7 @@ export async function restorePreferences() {
   if (!isTauri()) return;
   try {
     const settings = await api.get();
+    applyPageSettings(settings.pages);
     setLocale(settings.locale);
     applyAppearance(settings);
   } catch (error) {

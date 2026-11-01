@@ -1,3 +1,5 @@
+pub mod pages;
+
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{Manager, State};
@@ -92,6 +94,8 @@ where
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
+    #[serde(deserialize_with = "pages::deserialize")]
+    pub pages: Vec<pages::Page>,
     pub locale: Locale,
     pub theme_mode: ThemeMode,
     pub shortcuts: crate::shortcuts::ShortcutSettings,
@@ -125,6 +129,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            pages: pages::defaults(),
             locale: Locale::default(),
             theme_mode: ThemeMode::default(),
             shortcuts: crate::shortcuts::ShortcutSettings::default(),
@@ -196,6 +201,7 @@ impl SettingsState {
     }
 
     pub(crate) fn save(&self, mut settings: Settings) -> Result<(), String> {
+        pages::validate(&settings.pages)?;
         validate_accent_color(&settings.accent_color)?;
         validate_replay_gain_preamp(settings.replay_gain_preamp)?;
         settings.accent_color.make_ascii_lowercase();
