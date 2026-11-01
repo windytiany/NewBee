@@ -4,7 +4,13 @@ import { logger } from "@/shared/logging/logger";
 const STORAGE_KEY = "newbee.scroll-positions";
 type Position = { top: number; left: number };
 type Positions = Record<string, Position>;
-type ScrollState = { scope: string; restore: () => void; dispose: () => void };
+type ScrollBinding = string | { scope: string; paused: boolean };
+type ScrollState = {
+  scope: string;
+  setPaused: (paused: boolean) => void;
+  restore: () => void;
+  dispose: () => void;
+};
 const elements = new WeakMap<HTMLElement, ScrollState>();
 
 function readPositions(): Positions {
@@ -36,11 +42,15 @@ function readPositions(): Positions {
   }
 }
 
-function attach(element: HTMLElement, scope: string) {
-  const target = readPositions()[scope];
+function options(value: ScrollBinding) {
+  return typeof value === "string" ? { scope: value, paused: false } : value;
+}
+
+function attach(element: HTMLElement, scope: string, paused: boolean) {
+  let target = readPositions()[scope];
   let pending = target !== undefined;
   const restore = () => {
-    if (!pending || !target) return;
+    if (paused || !element.clientHeight || !pending || !target) return;
     // Hidden panes and asynchronously loaded lists may not have enough content yet.
     const maxTop = element.scrollHeight - element.clientHeight;
     const maxLeft = element.scrollWidth - element.clientWidth;
@@ -56,22 +66,29 @@ function attach(element: HTMLElement, scope: string) {
     pending = false;
   };
   const save = () => {
-    if (pending || !Number.isFinite(element.scrollTop) || !Number.isFinite(element.scrollLeft))
+    if (
+      paused ||
+      pending ||
+      !element.clientHeight ||
+      !Number.isFinite(element.scrollTop) ||
+      !Number.isFinite(element.scrollLeft)
+    )
       return;
+    target = {
+      top: Math.max(0, element.scrollTop),
+      left: Math.max(0, element.scrollLeft),
+    };
     try {
       if (!globalThis.localStorage) return;
       const positions = readPositions();
-      positions[scope] = {
-        top: Math.max(0, element.scrollTop),
-        left: Math.max(0, element.scrollLeft),
-      };
+      positions[scope] = target;
       globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
     } catch (error) {
       logger.warn("interaction/scroll", "Could not save scroll positions.", error);
     }
   };
   const interact = () => {
-    pending = false;
+    if (!paused) pending = false;
   };
   element.addEventListener("scroll", save, { passive: true });
   for (const event of ["wheel", "pointerdown", "keydown"])
@@ -87,6 +104,13 @@ function attach(element: HTMLElement, scope: string) {
   restore();
   elements.set(element, {
     scope,
+    setPaused(value) {
+      if (value && !paused) {
+        save();
+        pending = target !== undefined;
+      }
+      paused = value;
+    },
     restore,
     dispose() {
       save();
@@ -99,23 +123,30 @@ function attach(element: HTMLElement, scope: string) {
   });
 }
 
-export const vPersistentScroll: Directive<HTMLElement, string> = {
+export const vPersistentScroll: Directive<HTMLElement, ScrollBinding> = {
   mounted(element, binding) {
-    attach(element, binding.value);
+    const { scope, paused } = options(binding.value);
+    attach(element, scope, paused);
   },
   beforeUpdate(element, binding) {
-    if (binding.value === binding.oldValue) return;
-    elements.get(element)?.dispose();
+    const { scope, paused } = options(binding.value);
+    const current = elements.get(element);
+    if (current?.scope === scope) {
+      current.setPaused(paused);
+      return;
+    }
+    current?.dispose();
     elements.delete(element);
   },
   updated(element, binding) {
+    const { scope, paused } = options(binding.value);
     const current = elements.get(element);
-    if (current?.scope === binding.value) {
+    if (current?.scope === scope) {
       current.restore();
       return;
     }
     current?.dispose();
-    attach(element, binding.value);
+    attach(element, scope, paused);
   },
   beforeUnmount(element) {
     elements.get(element)?.dispose();

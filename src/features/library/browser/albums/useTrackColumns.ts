@@ -19,7 +19,7 @@ export function useTrackColumns(listElement: Ref<HTMLElement | null>) {
   function measureColumns() {
     scheduledHandle = null;
     const list = listElement.value;
-    if (list === null) return;
+    if (list === null || list.clientWidth <= 0) return;
     const requiredWidths = [...list.querySelectorAll<HTMLElement>("[data-album-track-row]")].map(
       (row) => {
         const label = row.querySelector<HTMLElement>("[data-album-track-label]");

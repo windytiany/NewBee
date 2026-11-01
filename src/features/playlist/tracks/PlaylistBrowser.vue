@@ -52,7 +52,11 @@
 
       <div
         ref="trackScrollContainerElement"
-        v-persistent-scroll="JSON.stringify(['playlist', props.playlist?.id])"
+        v-persistent-scroll="{
+          scope: JSON.stringify(['playlist', props.playlist?.id]),
+          paused:
+            !props.active || props.isLoadingTracks || !!props.playlistsError || !!props.tracksError,
+        }"
         class="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8"
         :style="tableStyle"
       >
@@ -267,6 +271,7 @@ import { trackColumns, trackColumnValue } from "@/features/tracks/table/columns"
 
 const props = withDefaults(
   defineProps<{
+    active: boolean;
     playlist: PlaylistSummary | null;
     coverTrackId?: number | null;
     isCoverPending?: boolean;

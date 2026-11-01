@@ -177,7 +177,7 @@ watch(keys, (keys) => {
     </SidePane>
     <section
       ref="root"
-      v-persistent-scroll="scope"
+      v-persistent-scroll="{ scope, paused: !props.active || state.loading || !!state.error }"
       data-focus-region
       data-local-drop="Inbox"
       tabindex="-1"

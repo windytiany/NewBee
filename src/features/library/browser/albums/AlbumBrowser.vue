@@ -246,6 +246,23 @@ const albumKeyboard = createItemKeyboard({
 
 function handleAlbumKeydown(event: InstanceType<typeof globalThis.KeyboardEvent>) {
   if (
+    event.key === "Escape" &&
+    selectedAlbum.value &&
+    !event.defaultPrevented &&
+    !event.isComposing &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.target instanceof globalThis.Element &&
+    !event.target.closest('dialog, [role="menu"], input, textarea, select, [contenteditable]')
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeAlbum(selectedAlbum.value);
+    return;
+  }
+  if (
     !props.selectedAlbum ||
     event.ctrlKey ||
     event.shiftKey ||
@@ -288,6 +305,7 @@ useAlbumScroll({
 
 function updateColumnCount() {
   const width = albumsElement.value?.clientWidth ?? globalThis.window.innerWidth;
+  if (width <= 0) return;
   const compact = layoutDensity.value === "compact";
   columnCount.value = Math.max(
     1,

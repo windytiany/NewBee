@@ -46,6 +46,7 @@ emit("catalog-ready", {
       class="col-start-1 row-start-1 grid h-full min-h-0 min-w-0 place-items-center overflow-hidden text-white md:col-start-3"
     >
       <PlaylistBrowser
+        :active="props.active"
         :playlist="playlist.page.selectedPlaylist"
         :cover-track-id="playlist.page.coverTrackId"
         :is-cover-pending="playlist.page.isCoverPending"
