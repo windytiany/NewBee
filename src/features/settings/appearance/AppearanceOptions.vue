@@ -83,6 +83,18 @@ const normalizedAccentColor = computed(() => normalizeAccentColor(draft.value.ac
         <span class="text-sm font-semibold">{{ t("减少动态效果") }}</span>
       </label>
     </div>
+    <fieldset class="mt-5">
+      <legend class="mb-3 text-sm font-semibold">{{ t("开屏动画") }}</legend>
+      <label class="flex cursor-pointer items-center gap-3 text-sm">
+        <input
+          v-model="draft.startupSplash"
+          name="startup-splash"
+          type="checkbox"
+          class="accent-app-accent"
+        />
+        <span>{{ t("启用") }}</span>
+      </label>
+    </fieldset>
     <div role="group" aria-labelledby="cover-background-label" class="mt-5 space-y-3">
       <h4 id="cover-background-label" class="text-sm font-semibold">{{ t("封面背景") }}</h4>
       <label class="flex cursor-pointer items-start gap-3">
