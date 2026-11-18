@@ -2,12 +2,18 @@ mod state;
 
 use crate::{backup, database, library, logging, playback, settings, shortcuts, window};
 use state::{Progress, Snapshot};
-use std::{sync::Mutex, time::Instant};
+use std::{path::PathBuf, sync::Mutex, time::Instant};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub(crate) struct StartupState(Mutex<Progress>);
 
 pub fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let data_directory = match acquire_data_directory(app.handle()) {
+        Ok(Some(path)) => Ok(path),
+        // Do not enter the normal exit flow: plugins can persist app data on exit.
+        Ok(None) => std::process::exit(0),
+        Err(error) => Err(error),
+    };
     logging::initialize(app.handle());
     // Read only: pending backup recovery still owns all writes to this directory.
     let preferences = app
@@ -42,9 +48,10 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
     let _ = splash;
     let app = app.handle().clone();
     std::thread::spawn(move || {
-        let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| initialize_backend(&app)))
-                .unwrap_or_else(|_| Err("Backend initialization panicked".into()));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            initialize_backend(&app, data_directory?)
+        }))
+        .unwrap_or_else(|_| Err("Backend initialization panicked".into()));
         let handle = app.clone();
         if let Err(error) = app.run_on_main_thread(move || {
             let result = result.and_then(|restoring| {
@@ -80,13 +87,24 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn initialize_backend(app: &AppHandle) -> Result<bool, String> {
-    let mut stage = "data_directory";
+fn acquire_data_directory(app: &AppHandle) -> Result<Option<PathBuf>, String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("data_directory: {error}"))?;
+    std::fs::create_dir_all(&path).map_err(|error| format!("data_directory: {error}"))?;
+    let Some(lease) = backup::try_lock_data_directory(&path)
+        .map_err(|error| format!("data_directory: {error}"))?
+    else {
+        return Ok(None);
+    };
+    app.manage(lease);
+    Ok(Some(path))
+}
+
+fn initialize_backend(app: &AppHandle, app_data_dir: PathBuf) -> Result<bool, String> {
+    let mut stage = "restore";
     let result = (|| {
-        let app_data_dir = app.path().app_data_dir()?;
-        std::fs::create_dir_all(&app_data_dir)?;
-        stage = "restore";
-        app.manage(backup::lock_data_directory(&app_data_dir)?);
         let restoring = match backup::apply_pending_restore(&app_data_dir) {
             Ok(restored) => restored,
             Err(error) => {

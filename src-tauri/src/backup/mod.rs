@@ -32,17 +32,18 @@ pub(crate) struct DataDirectoryLease {
     _file: fs::File,
 }
 
-pub(crate) fn lock_data_directory(root: &Path) -> Result<DataDirectoryLease, String> {
+pub(crate) fn try_lock_data_directory(root: &Path) -> std::io::Result<Option<DataDirectoryLease>> {
     let file = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(root.join("application-data.lock"))
-        .map_err(|error| error.to_string())?;
-    file.try_lock()
-        .map_err(|error| format!("应用数据正在使用中：{error}"))?;
-    Ok(DataDirectoryLease { _file: file })
+        .open(root.join("application-data.lock"))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(DataDirectoryLease { _file: file })),
+        Err(fs::TryLockError::WouldBlock) => Ok(None),
+        Err(fs::TryLockError::Error(error)) => Err(error),
+    }
 }
 
 pub(crate) fn apply_pending_restore(root: &Path) -> Result<bool, String> {
