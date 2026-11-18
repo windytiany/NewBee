@@ -11,7 +11,7 @@
       type="button"
       aria-haspopup="menu"
       :aria-controls="props.isContextMenuOpen ? 'album-context-menu' : undefined"
-      @click="emit('select')"
+      @click="selectAlbum"
       @contextmenu="openAlbumContextMenu"
       @keydown="handleContextMenuKeydown"
     >
@@ -24,7 +24,6 @@
           showFallback || artworkImageLoaded ? 'shadow-lg' : 'shadow-none',
         ]"
         @click.stop="handleCoverClick"
-        @dblclick.stop="playAlbum"
       >
         <img v-if="artworkUrl" :src="artworkUrl" alt="" class="size-full object-cover" />
         <DiscAlbum
@@ -45,7 +44,7 @@
 
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { DiscAlbum } from "@lucide/vue";
 import type { AlbumSummary } from "@/features/library/types";
 import { useArtworkSize } from "@/features/artwork/useArtworkSize";
@@ -68,52 +67,52 @@ const emit = defineEmits<{
   ];
 }>();
 
-const COLLAPSED_COVER_DOUBLE_CLICK_WINDOW_MS = 300;
-const EXPANDED_COVER_DOUBLE_CLICK_WINDOW_MS = 150;
-let coverDoubleClickWindowMs = COLLAPSED_COVER_DOUBLE_CLICK_WINDOW_MS;
+const COVER_DOUBLE_CLICK_WINDOW_MS = 300;
 let pendingCoverClick: ReturnType<typeof globalThis.setTimeout> | undefined;
 let lastCoverClickAt: number | null = null;
-let isCoverDoubleClick = false;
 
 function cancelCoverClick() {
   globalThis.clearTimeout(pendingCoverClick);
   pendingCoverClick = undefined;
+  lastCoverClickAt = null;
+}
+
+function selectAlbum() {
+  cancelCoverClick();
+  emit("select");
 }
 
 function handleCoverClick(event: InstanceType<typeof globalThis.MouseEvent>) {
+  const previousClickAt = lastCoverClickAt;
   cancelCoverClick();
-  isCoverDoubleClick =
-    event.detail === 2 &&
-    lastCoverClickAt !== null &&
-    event.timeStamp - lastCoverClickAt <= coverDoubleClickWindowMs;
+  if (
+    props.isSelected &&
+    previousClickAt !== null &&
+    event.timeStamp - previousClickAt <= COVER_DOUBLE_CLICK_WINDOW_MS
+  ) {
+    emit("play");
+    return;
+  }
   lastCoverClickAt = event.timeStamp;
-  if (isCoverDoubleClick) return;
-  coverDoubleClickWindowMs = props.isSelected
-    ? EXPANDED_COVER_DOUBLE_CLICK_WINDOW_MS
-    : COLLAPSED_COVER_DOUBLE_CLICK_WINDOW_MS;
   if (!props.isSelected) {
     emit("select");
     return;
   }
-  pendingCoverClick = globalThis.setTimeout(() => {
-    pendingCoverClick = undefined;
-    emit("select");
-  }, coverDoubleClickWindowMs);
+  pendingCoverClick = globalThis.setTimeout(selectAlbum, COVER_DOUBLE_CLICK_WINDOW_MS);
 }
 
-function playAlbum() {
-  if (!isCoverDoubleClick) return;
-  cancelCoverClick();
-  isCoverDoubleClick = false;
-  lastCoverClickAt = null;
-  emit("play");
-}
-
+watch(
+  () => props.isSelected,
+  (selected) => {
+    if (!selected) cancelCoverClick();
+  },
+);
 onUnmounted(cancelCoverClick);
 
 function openAlbumContextMenu(event: InstanceType<typeof globalThis.MouseEvent>) {
   event.preventDefault();
   event.stopPropagation();
+  cancelCoverClick();
   emit("contextMenu", {
     x: event.clientX,
     y: event.clientY,
@@ -125,6 +124,7 @@ function handleContextMenuKeydown(event: InstanceType<typeof globalThis.Keyboard
   if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
   event.preventDefault();
   event.stopPropagation();
+  cancelCoverClick();
   const trigger = event.currentTarget as InstanceType<typeof globalThis.HTMLButtonElement>;
   const bounds = trigger.getBoundingClientRect();
   emit("contextMenu", { x: bounds.left, y: bounds.bottom, trigger });
