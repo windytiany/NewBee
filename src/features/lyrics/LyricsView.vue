@@ -1,21 +1,14 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div
-    class="relative w-full"
-    :class="{ 'md:flex md:h-full md:min-h-0 md:flex-col': props.compact }"
-  >
+  <div class="lyrics-view relative h-full min-h-0 w-full">
     <section
       v-show="props.visible"
       ref="containerElement"
       aria-label="LyricsView"
-      class="lyrics-scroll-container focus-visible:outline-app-accent w-full overflow-y-auto py-2 focus-visible:outline-2 focus-visible:outline-offset-2"
-      :class="
-        props.compact
-          ? 'max-h-[min(76vh,52rem)] md:max-h-none md:min-h-0 md:flex-1'
-          : 'max-h-[min(68vh,40rem)]'
-      "
+      class="lyrics-scroll-container h-full w-full overflow-y-auto"
+      :style="fadeStyle"
       tabindex="-1"
-      @scroll.passive="lyricsFollow.handleScroll"
+      @scroll.passive="handleScroll"
       @pointerdown="lyricsFollow.beginInteraction"
       @pointerup="lyricsFollow.endInteraction"
       @pointercancel="lyricsFollow.endInteraction"
@@ -32,29 +25,30 @@
       <div ref="contentElement">
         <div
           v-if="props.lyrics.kind === 'none' || props.lyrics.kind === 'instrumental'"
-          class="text-app-muted/45 mx-auto max-w-5xl leading-tight font-bold tracking-tight"
-          :class="[
-            props.compact ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-3xl sm:text-4xl md:text-5xl',
-            { 'px-6': !props.compact },
-          ]"
+          class="text-app-muted/45 leading-tight font-bold tracking-tight"
+          :class="lyricSize"
         >
           {{ props.lyrics.kind === "instrumental" ? t("此曲目已标记为无歌词") : t("无歌词") }}
         </div>
-        <p
+        <div
           v-else-if="props.lyrics.kind === 'plain'"
-          class="text-app-muted/45 mx-auto max-w-5xl leading-tight font-bold tracking-tight break-words whitespace-pre-wrap"
-          :class="[
-            props.compact ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-3xl sm:text-4xl md:text-5xl',
-            { 'px-6': !props.compact },
-          ]"
+          class="lyric-lines text-app-muted/45 leading-tight font-bold tracking-tight"
+          :class="lyricSize"
         >
-          {{ props.lyrics.text }}
-        </p>
+          <p
+            v-for="(line, index) in props.lyrics.text.split('\n')"
+            :key="index"
+            class="wrap-anywhere whitespace-pre-wrap"
+            :class="{ 'lyric-blank': line.trim().length === 0 }"
+          >
+            {{ line }}
+          </p>
+        </div>
         <ol
           v-else
           ref="listElement"
-          class="mx-auto max-w-5xl space-y-2"
-          :class="{ 'px-6': !props.compact }"
+          class="lyric-lines"
+          :class="lyricSize"
           :style="{
             paddingBlockStart: `${edgePadding.top}px`,
             paddingBlockEnd: `${edgePadding.bottom}px`,
@@ -67,13 +61,10 @@
             :aria-current="index === props.activeIndex ? 'true' : undefined"
             class="leading-tight font-bold tracking-tight transition-colors"
             :class="[
-              props.compact
-                ? 'text-2xl md:text-3xl lg:text-4xl'
-                : 'text-3xl sm:text-4xl md:text-5xl',
               index >= props.activeGroupStartIndex && index <= props.activeIndex
                 ? 'text-white'
                 : 'text-app-muted/45',
-              { 'min-h-[1.25em]': line.text.trim().length === 0 },
+              { 'lyric-blank': line.text.trim().length === 0 },
             ]"
           >
             <button
@@ -81,7 +72,7 @@
               type="button"
               tabindex="-1"
               :disabled="!props.canSeek"
-              class="block w-full cursor-pointer appearance-none border-0 bg-transparent p-0 text-left font-[inherit] text-inherit disabled:cursor-not-allowed"
+              class="block w-full cursor-pointer appearance-none border-0 bg-transparent p-0 text-left font-[inherit] wrap-anywhere text-inherit disabled:cursor-not-allowed"
               @click="emit('seek', line.startMs)"
             >
               {{ line.text }}
@@ -90,24 +81,17 @@
         </ol>
       </div>
     </section>
-    <button
+    <slot
       v-if="props.visible && props.lyrics.kind === 'synced' && followState === 'browsing'"
-      type="button"
-      tabindex="-1"
-      :aria-label="t('恢复歌词跟随')"
-      :title="t('恢复歌词跟随')"
-      class="bg-app-interactive text-app-muted focus-visible:outline-app-accent hover:bg-app-highlight absolute right-4 bottom-4 z-10 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-      @click="returnToCurrentLyric"
-    >
-      <RefreshCw aria-hidden="true" class="size-5" />
-    </button>
+      name="controls"
+      :return-to-current-lyric="lyricsFollow.returnToCurrentLyric"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
-import { ref, shallowRef } from "vue";
-import { RefreshCw } from "@lucide/vue";
+import { computed, ref, shallowRef, watchPostEffect } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useLyricsFollow } from "@/features/lyrics/useFollow";
 import { isLyricsScrollKey } from "@/features/lyrics/scroll";
@@ -135,7 +119,11 @@ const props = withDefaults(
   },
 );
 
+defineSlots<{ controls(props: { returnToCurrentLyric: () => void }): unknown }>();
 const emit = defineEmits<{ seek: [startMs: number] }>();
+const lyricSize = computed(() =>
+  props.compact ? "text-2xl md:text-3xl lg:text-4xl" : "text-3xl sm:text-4xl md:text-5xl",
+);
 const containerElement = shallowRef<BrowserHTMLElement | null>(null);
 const contentElement = shallowRef<BrowserHTMLElement | null>(null);
 const listElement = shallowRef<BrowserHTMLOListElement | null>(null);
@@ -163,7 +151,48 @@ const lyricsFollow = useLyricsFollow({
   },
 });
 const followState = lyricsFollow.state;
+const fadeStyle = shallowRef<Record<string, string>>();
 let touchOrigin: { x: number; y: number } | null = null;
+
+watchPostEffect((onCleanup) => {
+  const container = containerElement.value;
+  const content = contentElement.value;
+  if (!props.visible || container === null || content === null) return;
+
+  const observer = new globalThis.ResizeObserver(updateFades);
+  observer.observe(container);
+  observer.observe(content);
+  onCleanup(() => observer.disconnect());
+});
+watchPostEffect(updateFades);
+
+function updateFades() {
+  // Reading the padding also refreshes the fades when follow alignment changes without scrolling.
+  const { top: paddingTop, bottom: paddingBottom } = edgePadding.value;
+  const container = containerElement.value;
+  const content = contentElement.value;
+  if (!props.visible || container === null || content === null) return;
+
+  const viewport = container.getBoundingClientRect();
+  const lyrics = content.getBoundingClientRect();
+  const synced = props.lyrics.kind === "synced";
+  const above = Math.max(0, viewport.top - lyrics.top - (synced ? paddingTop : 0));
+  const below = Math.max(0, lyrics.bottom - viewport.bottom - (synced ? paddingBottom : 0));
+  const limit = Math.min(48, viewport.height * 0.12);
+  const fadeTop = `${Math.min(limit, above)}px`;
+  const fadeBottom = `${Math.min(limit, below)}px`;
+  if (
+    fadeStyle.value?.["--fade-top"] !== fadeTop ||
+    fadeStyle.value["--fade-bottom"] !== fadeBottom
+  ) {
+    fadeStyle.value = { "--fade-top": fadeTop, "--fade-bottom": fadeBottom };
+  }
+}
+
+function handleScroll() {
+  lyricsFollow.handleScroll();
+  updateFades();
+}
 
 function setLineElement(index: number, element: BrowserElement | ComponentPublicInstance | null) {
   if (element instanceof globalThis.HTMLElement) lineElements.set(index, element);
@@ -203,15 +232,47 @@ function handleKeydown(event: BrowserKeyboardEvent) {
     lyricsFollow.startBrowsing();
   }
 }
-
-function returnToCurrentLyric() {
-  lyricsFollow.returnToCurrentLyric();
-}
 </script>
 
 <style scoped>
+.lyrics-view:has(> .lyrics-scroll-container:focus-visible) {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+
+.lyric-lines {
+  display: flow-root;
+}
+
+.lyric-lines > :not(.lyric-blank) + :not(.lyric-blank) {
+  margin-block-start: 1.2em;
+}
+
+/* A run of blank lines replaces the regular gap with one stanza break. */
+.lyric-blank {
+  height: 1.5em;
+  overflow: hidden;
+}
+
+.lyric-blank + .lyric-blank {
+  height: 0;
+}
+
 .lyrics-scroll-container {
   scrollbar-width: none;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black var(--fade-top, 0px),
+    black calc(100% - var(--fade-bottom, 0px)),
+    transparent
+  );
+}
+
+@media (forced-colors: active) {
+  .lyrics-scroll-container {
+    mask-image: none;
+  }
 }
 
 .lyrics-scroll-container::-webkit-scrollbar {

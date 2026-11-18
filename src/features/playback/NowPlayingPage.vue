@@ -23,18 +23,17 @@
       ></div>
     </Transition>
     <div
-      class="relative flex w-full flex-col items-center justify-center gap-8"
-      :class="[
-        presentation === 'lyrics'
-          ? 'max-w-none px-0 py-8'
-          : presentation === 'both'
-            ? 'max-w-352 px-6 py-12 md:grid md:h-full md:min-h-0 md:w-[88%] md:grid-cols-2 md:grid-rows-[minmax(0,1fr)] md:gap-[clamp(3rem,6vw,7rem)] md:px-0'
-            : 'max-w-6xl px-6 py-8',
-      ]"
+      class="playing-layout relative flex h-full min-h-0 w-full max-w-352 flex-col items-center justify-center gap-8 px-6 md:@container-size md:w-[88%] md:px-0"
+      :class="
+        presentation === 'both'
+          ? 'md:grid md:grid-cols-2 md:grid-rows-[minmax(0,1fr)] md:gap-(--track-lyrics-gap)'
+          : ''
+      "
     >
       <button
         :aria-label="t(nextModeLabel[presentation])"
-        class="bg-app-interactive text-app-muted focus-visible:outline-app-accent hover:bg-app-highlight fixed top-16 right-4 z-40 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-6"
+        class="top-16"
+        :class="viewButtonClass"
         :title="t(nextModeLabel[presentation])"
         type="button"
         @click="cyclePresentation"
@@ -42,25 +41,26 @@
         <component :is="nextModeIcon[presentation]" aria-hidden="true" class="size-5" />
       </button>
 
+      <!-- Keep the cover laid out at its Both size while browsing lyrics. -->
       <TrackPresentation
-        v-if="presentation !== 'lyrics'"
-        :compact="presentation === 'both'"
+        :compact="presentation !== 'track'"
+        :class="{
+          'md:py-12': presentation !== 'track',
+          'invisible absolute inset-y-0 max-md:inset-x-6 max-md:w-auto md:start-0 md:w-(--both-track-column)':
+            presentation === 'lyrics',
+        }"
         :horizontal="presentation === 'track'"
       />
       <div
         v-show="presentation !== 'track'"
-        class="w-full"
-        :class="presentation === 'both' ? 'min-w-0 md:h-full md:min-h-0' : 'max-w-none'"
+        class="h-full min-h-0 w-full min-w-0 flex-1"
+        :class="{ 'combined-lyrics md:w-auto': presentation === 'both' }"
       >
-        <p
-          v-if="lyricsState.status === 'idle'"
-          class="text-app-muted mx-auto max-w-5xl px-6 py-8 text-center text-lg"
-        >
+        <p v-if="lyricsState.status === 'idle'" class="text-app-muted py-8 text-center text-lg">
           {{ t("未选择歌曲") }}
         </p>
         <LyricsView
           v-show="lyricsState.status === 'ready' && presentation !== 'track'"
-          class="max-w-none"
           :compact="presentation === 'both'"
           :lyrics="trackLyrics"
           :active-index="activeIndex"
@@ -70,7 +70,21 @@
           :visible="presentation !== 'track' && lyricsState.status === 'ready'"
           :is-seeking="isSeeking"
           @seek="handleLyricsSeek"
-        />
+        >
+          <template #controls="{ returnToCurrentLyric }">
+            <button
+              type="button"
+              tabindex="-1"
+              :aria-label="t('恢复歌词跟随')"
+              :title="t('恢复歌词跟随')"
+              class="bottom-24 sm:bottom-[calc(var(--app-playback-bar-height)+1rem)]"
+              :class="viewButtonClass"
+              @click="returnToCurrentLyric"
+            >
+              <RefreshCw aria-hidden="true" class="size-5" />
+            </button>
+          </template>
+        </LyricsView>
       </div>
     </div>
   </section>
@@ -79,7 +93,7 @@
 <script setup lang="ts">
 import { t } from "@/shared/i18n/locale";
 import { computed, shallowRef, watch } from "vue";
-import { Columns2, DiscAlbum, ListMusic } from "@lucide/vue";
+import { Columns2, DiscAlbum, ListMusic, RefreshCw } from "@lucide/vue";
 import { usePlaybackSession } from "@/features/playback/session";
 import { ALBUM_BACKGROUND_SAMPLE_SIZE } from "@/features/artwork/background";
 import type { AlbumBackground } from "@/features/artwork/background";
@@ -96,6 +110,8 @@ import {
 } from "@/features/playback/current/useDisplayMode";
 
 const { presentation } = useDisplayMode();
+const viewButtonClass =
+  "bg-app-interactive text-app-muted focus-visible:outline-app-accent hover:bg-app-highlight fixed right-4 z-40 grid size-10 place-items-center rounded-full shadow-lg transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-6";
 const session = usePlaybackSession();
 const { currentTrack, playbackStatus, isSeeking } = session.state;
 const playingCoverBackground = useCoverBackground("playingCoverBackground");
@@ -157,3 +173,38 @@ async function handleLyricsSeek(startMs: number) {
   await seekToLyric(session, lyricsState.value, sourceTrackId, startMs);
 }
 </script>
+
+<style scoped>
+@reference "@/app/styles/main.css";
+
+.playing-layout {
+  --track-lyrics-gap: clamp(3rem, 6vw, 7rem);
+  --both-track-column: calc((100cqw - var(--track-lyrics-gap)) / 2);
+  --both-details-height: 10.5rem;
+  --both-cover-side: clamp(
+    0px,
+    calc(100cqh - 2 * --spacing(12) - var(--both-details-height)),
+    min(var(--both-track-column), 36rem)
+  );
+  --playing-content-gap: 24px;
+}
+
+@variant lg {
+  .playing-layout {
+    --both-details-height: 11.25rem;
+  }
+}
+
+@variant md {
+  .playing-layout {
+    /* Match the visible gap after Both reclaims half of its unused column space. */
+    --playing-content-gap: calc(
+      (var(--both-track-column) + var(--track-lyrics-gap) - var(--both-cover-side)) / 2
+    );
+  }
+
+  .combined-lyrics {
+    margin-inline-start: calc(-1 * var(--playing-content-gap));
+  }
+}
+</style>

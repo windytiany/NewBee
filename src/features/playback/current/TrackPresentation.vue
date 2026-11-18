@@ -4,7 +4,7 @@
     class="w-full"
     :class="
       props.horizontal
-        ? 'max-w-5xl'
+        ? 'min-w-0'
         : props.compact
           ? 'max-w-xl min-w-0 md:h-full md:min-h-0'
           : 'max-w-sm'
@@ -17,7 +17,7 @@
       :class="{ 'md:h-full md:min-h-0': props.compact && !props.horizontal }"
       :content-class="
         props.horizontal
-          ? 'grid grid-cols-2 items-center gap-6 text-left sm:gap-10'
+          ? 'grid grid-cols-[min(28rem,42vw)_minmax(0,1fr)] items-center gap-x-(--playing-content-gap) text-left'
           : props.compact
             ? 'flex flex-col items-start gap-5 text-left sm:gap-6 md:h-full md:min-h-0 md:justify-center'
             : 'flex flex-col items-center gap-6 text-center'
@@ -25,18 +25,11 @@
     >
       <div
         class="w-full"
-        :class="
-          props.horizontal
-            ? 'max-w-md justify-self-center'
-            : props.compact
-              ? 'md:@container-size md:aspect-square md:min-h-0 md:shrink'
-              : ''
-        "
+        :class="props.compact && !props.horizontal ? 'md:w-(--both-cover-side) md:shrink-0' : ''"
       >
         <div
           ref="coverElement"
           class="from-app-interactive to-app-surface via-app-highlight grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-linear-to-br shadow-2xl"
-          :class="{ 'md:w-[min(100cqw,100cqh)]': props.compact && !props.horizontal }"
           :aria-label="artworkStatus === 'fallback' ? t('专辑封面占位图') : undefined"
           :role="artworkStatus === 'fallback' ? 'img' : undefined"
         >
@@ -57,12 +50,12 @@
       </div>
 
       <div
-        class="flex flex-col"
+        class="flex min-w-0 flex-col wrap-anywhere"
         :class="
           props.horizontal
             ? 'items-start gap-3'
             : props.compact
-              ? 'w-full shrink-0 items-start gap-2'
+              ? 'w-full shrink-0 items-start gap-2 *:max-w-full md:w-(--both-cover-side)'
               : 'items-center gap-1'
         "
       >
@@ -70,9 +63,9 @@
           class="font-bold tracking-tight"
           :class="
             props.horizontal
-              ? 'text-4xl sm:text-5xl lg:text-6xl'
+              ? 'text-3xl lg:text-4xl'
               : props.compact
-                ? 'text-3xl lg:text-4xl'
+                ? 'text-3xl md:line-clamp-2 lg:text-4xl'
                 : 'text-3xl sm:text-4xl'
           "
         >
@@ -85,7 +78,7 @@
             props.horizontal
               ? 'text-xl sm:text-2xl'
               : props.compact
-                ? 'text-xl lg:text-2xl'
+                ? 'text-xl md:line-clamp-1 lg:text-2xl'
                 : 'text-base'
           "
         >
@@ -97,7 +90,7 @@
             props.horizontal
               ? 'text-app-muted/70 text-lg sm:text-xl'
               : props.compact
-                ? 'text-app-muted/70 text-lg lg:text-xl'
+                ? 'text-app-muted/70 text-lg md:line-clamp-1 lg:text-xl'
                 : 'text-app-muted/70 text-sm'
           "
         >
