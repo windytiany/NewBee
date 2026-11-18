@@ -27,6 +27,8 @@ export function createLyricsApi(invokeCommand: LyricsInvoker = invoke) {
         provider: candidate.provider,
         candidateId: candidate.id,
       }),
+    linked: (provider: LyricsProvider, link: string) =>
+      invokeCommand<LyricsContent | null>("get_linked_lyrics", { provider, link }),
     automatic: (trackId: number | string) =>
       typeof trackId === "string"
         ? invokeCommand<LyricsContent>("find_file_lyrics", { path: trackId })

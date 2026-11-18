@@ -35,6 +35,12 @@ impl LyricsProviderSet {
     }
 }
 
+pub(super) fn song_id_from_link(provider: LyricsProvider, link: &str) -> Option<i64> {
+    match provider {
+        LyricsProvider::Netease => netease::song_id_from_link(link),
+    }
+}
+
 pub(super) fn search(
     provider: LyricsProvider,
     query: &str,

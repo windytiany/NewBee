@@ -1,5 +1,5 @@
 import { t } from "@/shared/i18n/locale";
-import { reactive } from "vue";
+import { reactive, watch } from "vue";
 import { notify } from "@/shared/notifications/center";
 import { logger } from "@/shared/logging/logger";
 import type {
@@ -17,6 +17,7 @@ export type LyricsSearchOptions = {
     offset: number,
   ) => Promise<LyricsSearchResults>;
   preview: (candidate: LyricsCandidate) => Promise<LyricsContent>;
+  linked: (provider: LyricsProvider, link: string) => Promise<LyricsContent | null>;
   automatic: (trackId: number | string) => Promise<LyricsContent>;
   apply: (text: string) => void;
   mark: () => void;
@@ -26,6 +27,9 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
   const state = reactive({
     query: "",
     provider: null as LyricsProvider | null,
+    mode: "keyword" as "keyword" | "link",
+    link: "",
+    linkProvider: null as LyricsProvider | null,
     candidates: [] as LyricsCandidate[],
     nextOffset: null as number | null,
     selected: null as LyricsCandidate | null,
@@ -48,18 +52,43 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     notify({ type: reason === undefined ? "info" : "warning", message });
   }
 
-  function reset(query: string) {
+  function clearPreview() {
+    previewGeneration++;
+    state.previewing = false;
+    state.selected = null;
+    state.preview = "";
+    state.previewInstrumental = false;
+    state.error = "";
+  }
+  watch(
+    [() => state.link, () => state.linkProvider],
+    () => {
+      if (state.mode === "link") clearPreview();
+    },
+    { flush: "sync" },
+  );
+
+  function setMode(mode: typeof state.mode) {
+    if (mode === state.mode) return;
+    searchGeneration++;
+    state.searching = false;
+    state.candidates = [];
+    state.nextOffset = null;
+    clearPreview();
+    state.mode = mode;
+  }
+  function reset(query: string, linkProvider: LyricsProvider | null) {
     invalidate();
     Object.assign(state, {
       query,
       provider: null,
+      mode: "keyword",
+      link: "",
+      linkProvider,
       candidates: [],
       nextOffset: null,
-      selected: null,
-      preview: "",
-      previewInstrumental: false,
-      error: "",
     });
+    clearPreview();
   }
   function invalidate() {
     searchGeneration++;
@@ -117,26 +146,41 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     if (state.nextOffset === null || state.searching) return;
     return request(searchedQuery, searchedProvider, state.nextOffset, [...state.candidates]);
   }
-  async function select(candidate: LyricsCandidate) {
-    const generation = ++previewGeneration;
+  async function loadPreview(
+    fetch: () => Promise<LyricsContent | null>,
+    candidate: LyricsCandidate | null,
+  ) {
+    clearPreview();
+    const generation = previewGeneration;
     state.selected = candidate;
-    state.preview = "";
-    state.previewInstrumental = false;
     state.previewing = true;
-    state.error = "";
     try {
-      const content = await options.preview(candidate);
+      const content = await fetch();
       if (generation !== previewGeneration) return;
-      if (content.kind === "available") state.preview = content.text;
-      else {
+      if (content === null) state.error = t("请输入所选来源的有效单曲链接。");
+      else if (content.kind === "available") state.preview = content.text;
+      else if (candidate) {
         state.previewInstrumental = content.kind === "instrumental";
         report(contentMessage(content), "preview_unavailable");
-      }
+      } else state.error = contentMessage(content);
     } catch (error) {
-      if (generation === previewGeneration) report(t("歌词预览失败"), "preview_failed", error);
+      if (generation !== previewGeneration) return;
+      if (candidate) report(t("歌词预览失败"), "preview_failed", error);
+      else {
+        state.error = t("歌词获取失败");
+        logger.warn("lyrics", "link_fetch_failed", error);
+      }
     } finally {
       if (generation === previewGeneration) state.previewing = false;
     }
+  }
+  function select(candidate: LyricsCandidate) {
+    return loadPreview(() => options.preview(candidate), candidate);
+  }
+  function fetchLink() {
+    const { link, linkProvider } = state;
+    if (state.mode !== "link" || !linkProvider || !link.trim() || state.previewing) return;
+    return loadPreview(() => options.linked(linkProvider, link.trim()), null);
   }
   async function automatic(trackId: number | string) {
     const generation = ++automaticGeneration;
@@ -162,5 +206,16 @@ export function createLyricsSearch(options: LyricsSearchOptions) {
     if (state.previewInstrumental) options.mark();
     else if (state.preview.trim()) options.apply(state.preview);
   }
-  return { state, reset, invalidate, search, loadMore, select, automatic, usePreview };
+  return {
+    state,
+    reset,
+    invalidate,
+    setMode,
+    search,
+    loadMore,
+    select,
+    fetchLink,
+    automatic,
+    usePreview,
+  };
 }

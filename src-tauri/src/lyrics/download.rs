@@ -115,6 +115,26 @@ pub(crate) async fn get_candidate_lyrics(
         .map_err(|error| format!("歌词预览任务失败：{error}"))?
 }
 
+#[tauri::command]
+pub(crate) async fn get_linked_lyrics(
+    provider: LyricsProvider,
+    link: String,
+    settings: State<'_, SettingsState>,
+) -> Result<Option<LyricsContent>, String> {
+    let provider_set = provider_set(&settings)?;
+    check_provider(provider, provider_set.enabled())?;
+    let link = link.trim();
+    if link.len() > 4096 {
+        return Ok(None);
+    }
+    let Some(id) = providers::song_id_from_link(provider, link) else {
+        return Ok(None);
+    };
+    tauri::async_runtime::spawn_blocking(move || lyrics(&provider_set, provider, id).map(Some))
+        .await
+        .map_err(|error| format!("歌词预览任务失败：{error}"))?
+}
+
 trait LyricsTrack {
     fn path(&self) -> &str;
     fn title(&self) -> Option<&str>;

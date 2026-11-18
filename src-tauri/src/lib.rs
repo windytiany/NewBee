@@ -96,6 +96,7 @@ pub fn run() {
             lyrics::download::get_lyrics_download_targets,
             lyrics::download::search_lyrics_candidates,
             lyrics::download::get_candidate_lyrics,
+            lyrics::download::get_linked_lyrics,
             lyrics::download::find_track_lyrics,
             lyrics::batch::run_lyrics_download,
             lyrics::batch::commit_lyrics_download_step,

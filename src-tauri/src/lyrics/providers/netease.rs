@@ -1,5 +1,8 @@
 use super::{LyricsCandidate, LyricsContent, LyricsSearchResults};
-use reqwest::blocking::{Client, Response};
+use reqwest::{
+    blocking::{Client, Response},
+    Url,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     io::Read,
@@ -92,6 +95,54 @@ struct Artist {
 #[derive(Deserialize)]
 struct Album {
     name: String,
+}
+
+pub(super) fn song_id_from_link(link: &str) -> Option<i64> {
+    let url = Url::parse(link).ok()?;
+    if !matches!(url.scheme(), "http" | "https")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+    {
+        return None;
+    }
+    let song = match (url.host_str()?, url.path()) {
+        ("music.163.com", "/song") | ("y.music.163.com", "/m/song") => url,
+        ("music.163.com", "/") => {
+            let query = url.fragment()?.strip_prefix("/song?")?;
+            let mut song = url.clone();
+            song.set_query(Some(query));
+            song
+        }
+        _ => return None,
+    };
+    let mut pairs = song.query_pairs();
+    let (_, id) = pairs.find(|(key, _)| key == "id")?;
+    if pairs.any(|(key, _)| key == "id") || !id.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    id.parse::<i64>().ok().filter(|id| *id > 0)
+}
+
+#[cfg(test)]
+#[test]
+fn song_links_resolve_only_unambiguous_track_ids() {
+    for link in [
+        "https://music.163.com/song?id=42",
+        "https://music.163.com/#/song?id=42",
+        "https://y.music.163.com/m/song?userid=7&id=42",
+    ] {
+        assert_eq!(song_id_from_link(link), Some(42), "{link}");
+    }
+    for link in [
+        "https://music.163.com/#/playlist?id=42",
+        "https://music.163.com.evil.example/song?id=42",
+        "https://music.163.com/song?id=42&id=7",
+        "https://music.163.com/song?id=0",
+        "https://163cn.tv/example",
+    ] {
+        assert_eq!(song_id_from_link(link), None, "{link}");
+    }
 }
 
 pub(super) fn search(query: &str, offset: u32) -> Result<LyricsSearchResults, String> {

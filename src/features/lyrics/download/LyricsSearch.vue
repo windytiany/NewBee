@@ -10,6 +10,7 @@ import { formatTrackDuration } from "@/features/tracks/format";
 import { createLyricsSearch } from "@/features/lyrics/download/search";
 import { searchQuery } from "@/features/lyrics/download/query";
 import { createLyricsApi } from "@/features/lyrics/api";
+import type { LyricsProvider } from "@/features/lyrics/types";
 import { createSettingsApi } from "@/features/settings/api";
 
 const api = createLyricsApi(invoke);
@@ -19,7 +20,12 @@ const props = defineProps<{ track: EditorTrack; modified: boolean; disabled: boo
 const emit = defineEmits<{ apply: [text: string]; mark: [] }>();
 const searchDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
 const replaceDialog = ref<InstanceType<typeof globalThis.HTMLDialogElement> | null>(null);
-const enabled = ref(false);
+const enabled = ref<LyricsProvider[]>([]);
+const providerLabels = { netease: "网易云音乐" } as const satisfies Record<LyricsProvider, string>;
+const linkCapableProviders: readonly LyricsProvider[] = ["netease"];
+const linkProviders = computed(() =>
+  enabled.value.filter((provider) => linkCapableProviders.includes(provider)),
+);
 const pendingText = ref<string | null>(null);
 const pendingMark = ref(false);
 const preparing = ref(false);
@@ -28,6 +34,7 @@ let alive = true;
 const search = createLyricsSearch({
   search: api.search,
   preview: api.preview,
+  linked: api.linked,
   automatic: api.automatic,
   apply: (text) => {
     if (!alive || props.disabled) return;
@@ -44,16 +51,23 @@ const search = createLyricsSearch({
   },
 });
 const state = search.state;
-const busy = computed(() => props.disabled || !enabled.value || preparing.value || state.automatic);
+const busy = computed(
+  () => props.disabled || !enabled.value.length || preparing.value || state.automatic,
+);
+watch(linkProviders, (providers) => {
+  if (!state.linkProvider || !providers.includes(state.linkProvider)) {
+    state.linkProvider = providers.length === 1 ? (providers[0] ?? null) : null;
+  }
+  if (!providers.length) search.setMode("keyword");
+});
 
 async function loadSettings() {
   const generation = ++settingsGeneration;
-  enabled.value = false;
   try {
     const settings = await settingsApi.get();
     if (!alive || generation !== settingsGeneration) return;
-    enabled.value = settings.lyricsProviders.includes("netease");
-    if (!enabled.value)
+    enabled.value = settings.lyricsProviders;
+    if (!enabled.value.length)
       notify({
         type: "warning",
         message: t("请先在设置中启用歌词来源。"),
@@ -61,6 +75,7 @@ async function loadSettings() {
       });
   } catch (error) {
     if (alive && generation === settingsGeneration) {
+      enabled.value = [];
       logger.warn("lyrics", "settings_failed", error);
       notify({
         type: "warning",
@@ -98,21 +113,21 @@ function confirmReplace() {
   if (pendingMark.value) mark();
   else apply(pendingText.value);
 }
-async function withProvider(action: () => Promise<void>) {
+async function withProvider(action: () => void | Promise<void>) {
   if (preparing.value || state.automatic || props.disabled) return;
   preparing.value = true;
   try {
     await loadSettings();
-    if (alive && !props.disabled && enabled.value) await action();
+    if (alive && !props.disabled && enabled.value.length) await action();
   } finally {
     preparing.value = false;
   }
 }
 function openSearch() {
-  return withProvider(async () => {
-    search.reset(searchQuery(props.track));
+  return withProvider(() => {
+    const providers = linkProviders.value;
+    search.reset(searchQuery(props.track), providers.length === 1 ? (providers[0] ?? null) : null);
     searchDialog.value?.showModal();
-    await search.search();
   });
 }
 function automatic() {
@@ -160,7 +175,29 @@ void loadSettings();
     @mousedown.stop
   >
     <h2 id="lyrics-search-title" class="mb-4 text-lg font-semibold">{{ t("搜索歌词") }}</h2>
-    <form class="mb-4 flex flex-wrap gap-2" @submit.prevent="search.search()">
+    <div v-if="linkProviders.length" class="mb-4 flex gap-2">
+      <button
+        type="button"
+        :aria-pressed="state.mode === 'keyword'"
+        class="focus-visible:outline-app-accent rounded px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 aria-pressed:bg-white/10"
+        @click="search.setMode('keyword')"
+      >
+        {{ t("关键词搜索") }}
+      </button>
+      <button
+        type="button"
+        :aria-pressed="state.mode === 'link'"
+        class="focus-visible:outline-app-accent rounded px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 aria-pressed:bg-white/10"
+        @click="search.setMode('link')"
+      >
+        {{ t("歌曲链接") }}
+      </button>
+    </div>
+    <form
+      v-if="state.mode === 'keyword'"
+      class="mb-4 flex flex-wrap gap-2"
+      @submit.prevent="search.search()"
+    >
       <input
         v-model="state.query"
         autocomplete="off"
@@ -177,7 +214,9 @@ void loadSettings();
         class="bg-app-interactive focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm focus-visible:outline-2"
       >
         <option :value="null">{{ t("所有已启用来源") }}</option>
-        <option value="netease">{{ t("网易云音乐") }}</option>
+        <option v-for="provider in enabled" :key="provider" :value="provider">
+          {{ t(providerLabels[provider]) }}
+        </option>
       </select>
       <button
         type="submit"
@@ -187,8 +226,45 @@ void loadSettings();
         {{ state.searching ? t("搜索中…") : t("搜索") }}
       </button>
     </form>
-    <div class="grid gap-4 md:grid-cols-2">
-      <div class="max-h-96 overflow-y-auto rounded border border-white/10">
+    <form v-else class="mb-4 flex flex-wrap gap-2" @submit.prevent="search.fetchLink()">
+      <label class="self-center text-sm" for="lyrics-song-link">{{ t("歌曲链接") }}</label>
+      <input
+        id="lyrics-song-link"
+        v-model="state.link"
+        autocomplete="off"
+        type="text"
+        inputmode="url"
+        maxlength="4096"
+        class="focus-visible:outline-app-accent min-w-48 flex-1 rounded border border-white/20 bg-black/20 px-3 py-2 text-sm focus-visible:outline-2"
+      />
+      <select
+        v-model="state.linkProvider"
+        :aria-label="t('歌词来源')"
+        class="bg-app-interactive focus-visible:outline-app-accent rounded border border-white/20 px-3 py-2 text-sm focus-visible:outline-2"
+      >
+        <option v-if="linkProviders.length > 1" :value="null" disabled>
+          {{ t("选择歌词来源") }}
+        </option>
+        <option v-for="provider in linkProviders" :key="provider" :value="provider">
+          {{ t(providerLabels[provider]) }}
+        </option>
+      </select>
+      <button
+        type="submit"
+        :disabled="state.previewing || !state.linkProvider || !state.link.trim() || props.disabled"
+        class="focus-visible:outline-app-accent rounded border border-white/20 px-4 py-2 text-sm focus-visible:outline-2 disabled:opacity-50"
+      >
+        {{ t("获取歌词") }}
+      </button>
+    </form>
+    <p v-if="state.mode === 'link' && state.error" role="alert" class="mb-4 text-sm">
+      {{ state.error }}
+    </p>
+    <div class="grid gap-4" :class="{ 'md:grid-cols-2': state.mode === 'keyword' }">
+      <div
+        v-if="state.mode === 'keyword'"
+        class="max-h-96 overflow-y-auto rounded border border-white/10"
+      >
         <p v-if="!state.searching && !state.candidates.length" class="text-app-muted p-3 text-sm">
           {{ t("暂无候选曲目") }}
         </p>
@@ -211,7 +287,7 @@ void loadSettings();
               >
               <span class="text-app-muted block"
                 >{{ formatTrackDuration(candidate.durationMs) ?? "-" }} ·
-                {{ t("网易云音乐") }}</span
+                {{ t(providerLabels[candidate.provider]) }}</span
               >
             </button>
           </li>
@@ -232,8 +308,8 @@ void loadSettings();
           :value="state.preview"
           autocomplete="off"
           readonly
-          :aria-label="t('候选歌词预览')"
-          :placeholder="t('选择曲目以预览歌词')"
+          :aria-label="state.mode === 'keyword' ? t('候选歌词预览') : t('歌词预览')"
+          :placeholder="state.mode === 'keyword' ? t('选择曲目以预览歌词') : undefined"
           class="focus-visible:outline-app-accent min-h-80 w-full resize-y rounded border border-white/10 bg-black/20 p-3 font-mono text-sm focus-visible:outline-2"
         />
       </div>
@@ -256,7 +332,13 @@ void loadSettings();
         class="bg-app-accent focus-visible:outline-app-accent text-app-on-accent rounded px-4 py-2 text-sm font-semibold focus-visible:outline-2 disabled:opacity-50"
         @click="search.usePreview"
       >
-        {{ state.previewInstrumental ? t("标记为无歌词") : t("应用") }}
+        {{
+          state.mode === "link"
+            ? t("使用歌词")
+            : state.previewInstrumental
+              ? t("标记为无歌词")
+              : t("应用")
+        }}
       </button>
     </footer>
   </dialog>
